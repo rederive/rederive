@@ -1,8 +1,8 @@
-// Verified-recompose of colors@1.4.0 `strip` (alias `stripColors`). ZERO dependencies — String/RegExp only.
-// Reconstructed from sir/strip.sir + oracles/strip.json with the ORIGINAL DELETED; 3 independent
-// emissions reached quorum (3/3), 10/10 on a disjoint held-out set. This is a FAITHFUL behavior-lock
-// of the original, including its narrowness — see README "Known limitation": only single-parameter
-// SGR codes (ESC[<digits>m) are removed; combined-SGR / CSI / OSC sequences survive by design.
-export function strip(str: any): string {
+// @sirpm/colors — verified-recompose of strip (colors@1.4.0). ZERO-DEP.
+// Rebuilt locally by 'sirpm resynth': reconstructed from sir/ + oracles/ with the original deleted;
+// quorum 3/3, 10/10 held-out. Trust your own build, not the publisher's.
+export function strip(str: string): string {
   return ('' + str).replace(/\x1B\[\d+m/g, '');
 }
+
+export { strip as stripColors };

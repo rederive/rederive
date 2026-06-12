@@ -7,47 +7,54 @@
  * free) or REBUILDS it locally from the spec (`resynth`, torches tokens, quorum-verified) — never
  * trusting the publisher's binary. The oracle is the independent source of truth nobody upstream can move.
  *
- *   sirpm check   <pkgdir>            verify src/ against the held-out oracle + content hashes  (no tokens)
- *   sirpm vis     <pkgdir>            (re)generate vis.html from the SIR + manifest             (no tokens)
- *   sirpm resynth <pkgdir> [--unit U] re-emit src/ from the spec + oracle, quorum-verify        (torches tokens)
+ *   sirpm check   <pkgdir>             verify src/ against the held-out oracle + content hashes  (no tokens)
+ *   sirpm vis     <pkgdir>             (re)generate vis.html from the SIR + manifest             (no tokens)
+ *   sirpm resynth <pkgdir> [--unit U]  PREPARE a local rebuild: write ready-to-spawn worker prompts + a plan
+ *   sirpm resynth <pkgdir> --apply     APPLY the workers' output: grade vs held-out, pick a quorum
+ *                                      emission, update src/ + manifest, re-verify (deterministic)
+ *
+ * The prepare/apply split is the wiring to the interactive sir-verify skill: a plain CLI cannot spawn
+ * Claude Code subagents, so `resynth` (prepare) emits the prompts and the SKILL spawns N `sir-reemitter`
+ * workers, then `resynth --apply` does the deterministic selection + manifest update.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve, dirname } from 'node:path';
+import { resolve, relative } from 'node:path';
 
 const sha256 = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const eq = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
+const threw = (x: any) => x && typeof x === 'object' && '__throw' in x;
 const C = { g: (s: string) => `\x1b[32m${s}\x1b[39m`, r: (s: string) => `\x1b[31m${s}\x1b[39m`,
   y: (s: string) => `\x1b[33m${s}\x1b[39m`, dim: (s: string) => `\x1b[90m${s}\x1b[39m`, b: (s: string) => `\x1b[1m${s}\x1b[22m` };
 
-function loadManifest(dir: string) {
-  return JSON.parse(readFileSync(resolve(dir, 'sir.manifest.json'), 'utf-8'));
-}
+const loadManifest = (dir: string) => JSON.parse(readFileSync(resolve(dir, 'sir.manifest.json'), 'utf-8'));
+const saveManifest = (dir: string, m: any) => writeFileSync(resolve(dir, 'sir.manifest.json'), JSON.stringify(m, null, 2) + '\n');
 
 async function resolveFn(srcAbs: string, name: string) {
   const mod: any = await import(srcAbs);
   return mod[name] ?? mod.run ?? mod.default ?? Object.values(mod).find((x) => typeof x === 'function');
 }
 
-async function checkUnit(dir: string, u: any) {
-  const oraclePath = resolve(dir, u.oracle), srcPath = resolve(dir, u.src), sirPath = resolve(dir, u.sir);
-  const oracleShaOk = !u.oracleSha256 || sha256(oraclePath) === u.oracleSha256;
-  const srcShaOk = !u.srcSha256 || sha256(srcPath) === u.srcSha256;
-  const sirShaOk = !u.sirSha256 || sha256(sirPath) === u.sirSha256;
-  const oracle = JSON.parse(readFileSync(oraclePath, 'utf-8'));
-  const held = oracle.heldout || oracle.vectors;
-  const fn = await resolveFn(srcPath, u.name);
+async function gradeVs(srcAbs: string, name: string, vectors: any[]) {
+  const fn = await resolveFn(srcAbs, name);
   let pass = 0; const miss: string[] = [];
-  for (const v of held) {
+  for (const v of vectors) {
     let got: any;
     try { got = await fn(...v.args); } catch (e: any) { got = { __throw: String(e?.message ?? e) }; }
-    const threw = (x: any) => x && typeof x === 'object' && '__throw' in x;
     if ((threw(got) && threw(v.expected)) || eq(got, v.expected)) pass++;
     else if (miss.length < 8) miss.push(v.name);
   }
-  const full = pass === held.length;
-  return { name: u.name, kind: u.kind, sig: u.sig, srcShaOk, oracleShaOk, sirShaOk,
-    pass, total: held.length, full, miss, frozen: (oracle.vectors || []).length };
+  return { pass, total: vectors.length, full: pass === vectors.length, miss };
+}
+
+async function checkUnit(dir: string, u: any) {
+  const paths = { oracle: resolve(dir, u.oracle), src: resolve(dir, u.src), sir: resolve(dir, u.sir), spec: u.spec ? resolve(dir, u.spec) : '' };
+  const shaOk = (file: string, want: string | undefined) => !want || sha256(file) === want;
+  const oracle = JSON.parse(readFileSync(paths.oracle, 'utf-8'));
+  const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors);
+  return { name: u.name, kind: u.kind, sig: u.sig, frozen: (oracle.vectors || []).length, ...g,
+    srcShaOk: shaOk(paths.src, u.srcSha256), oracleShaOk: shaOk(paths.oracle, u.oracleSha256),
+    sirShaOk: shaOk(paths.sir, u.sirSha256), specShaOk: !paths.spec || shaOk(paths.spec, u.specSha256) };
 }
 
 async function cmdCheck(dir: string) {
@@ -56,47 +63,105 @@ async function cmdCheck(dir: string) {
   let ok = true;
   for (const u of m.units) {
     const r = await checkUnit(dir, u);
-    const hashes = r.srcShaOk && r.oracleShaOk && r.sirShaOk;
-    const good = r.full && hashes;
-    ok = ok && good;
-    const badge = good ? C.g('✓ VERIFIED') : C.r('✗ FAILED');
-    console.log(`  ${badge}  ${C.b(r.name)} ${C.dim(r.sig)}`);
+    const hashes = r.srcShaOk && r.oracleShaOk && r.sirShaOk && r.specShaOk;
+    const good = r.full && hashes; ok = ok && good;
+    console.log(`  ${good ? C.g('✓ VERIFIED') : C.r('✗ FAILED')}  ${C.b(r.name)} ${C.dim(r.sig)}`);
     console.log(`     held-out ${good ? C.g(`${r.pass}/${r.total}`) : C.r(`${r.pass}/${r.total}` + (r.miss.length ? ` miss=[${r.miss.join(',')}]` : ''))}` +
-      `   hashes ${hashes ? C.g('match') : C.r(`MISMATCH (src:${r.srcShaOk} oracle:${r.oracleShaOk} sir:${r.sirShaOk})`)}` +
-      `   ${C.dim(`(${r.frozen} frozen / ${r.total} held-out, kind ${r.kind})`)}`);
+      `   hashes ${hashes ? C.g('match') : C.r(`MISMATCH (src:${r.srcShaOk} oracle:${r.oracleShaOk} sir:${r.sirShaOk} spec:${r.specShaOk})`)}` +
+      `   ${C.dim(`(${r.frozen} frozen / ${r.total} held-out, ${r.kind})`)}`);
   }
   console.log(ok ? C.g(`\n  ALL UNITS VERIFIED — shipped src matches its contract.`)
-                 : C.r(`\n  VERIFICATION FAILED — do not trust this src; rebuild with: sirpm resynth ${dir}`));
+                 : C.r(`\n  VERIFICATION FAILED — do not trust this src; rebuild with: sirpm resynth ${relative(process.cwd(), dir) || '.'}`));
   return ok ? 0 : 1;
+}
+
+function buildPrompt(dir: string, u: any, outPath: string) {
+  const spec = readFileSync(resolve(dir, u.spec), 'utf-8').trim();
+  const oracle = JSON.parse(readFileSync(resolve(dir, u.oracle), 'utf-8'));
+  const worked = (oracle.vectors || []).map((v: any) =>
+    `  ${u.name}(${(v.args || []).map((a: any) => JSON.stringify(a)).join(', ')}) -> ${JSON.stringify(v.expected)}`).join('\n');
+  return `Unit \`${u.name}\`  signature: ${u.sig}
+
+Spec:
+${spec}
+
+Reconstruct an implementation from the spec + the FROZEN ORACLE below (worked input->output;
+authoritative — reproduce quirks exactly). You will be scored on FRESH held-out inputs you cannot see.
+
+FROZEN ORACLE:
+${worked}
+
+The original source is NOT available and you must NOT look for it (this is an original-deleted
+re-emit). Write a self-contained module exporting \`${u.name}\` to EXACTLY: ${outPath}
+Then report the path and byte size.`;
+}
+
+function cmdResynthPrepare(dir: string, unitName: string | null, n: number) {
+  const m = loadManifest(dir);
+  const units = (unitName ? m.units.filter((u: any) => u.name === unitName) : m.units);
+  if (!units.length) { console.log(C.r(`no unit '${unitName}' in ${m.name}`)); return 1; }
+  const plan: any = { pkg: m.name, n, units: [] };
+  for (const u of units) {
+    const rdir = resolve(dir, '.resynth', u.name);
+    mkdirSync(rdir, { recursive: true });
+    const outs: string[] = [];
+    for (let k = 1; k <= n; k++) {
+      const outAbs = resolve(rdir, `emit_${k}.ts`);
+      writeFileSync(resolve(rdir, `prompt_${k}.txt`), buildPrompt(dir, u, outAbs));
+      outs.push(relative(dir, outAbs));
+    }
+    plan.units.push({ unit: u.name, sig: u.sig, n, promptDir: relative(dir, rdir), emits: outs, heldoutFrom: u.oracle });
+  }
+  writeFileSync(resolve(dir, '.resynth', 'plan.json'), JSON.stringify(plan, null, 2));
+  console.log(`${C.b('sirpm resynth (prepare)')}  ${m.name}   n=${n}`);
+  for (const pu of plan.units) {
+    console.log(`  ${C.dim('•')} ${C.b(pu.unit)} ${C.dim(pu.sig)} → ${n} prompts in ${C.y(pu.promptDir)}/prompt_{1..${n}}.txt`);
+  }
+  console.log(C.dim(`\n  AGENT (sir-verify skill): spawn one \`sir-reemitter\` per prompt_K.txt IN PARALLEL`));
+  console.log(C.dim(`  (Write-only, original-deleted), each writing to its emit_K.ts path. Then:`));
+  console.log(`     ${C.b(`sirpm resynth ${relative(process.cwd(), dir) || '.'} --apply${unitName ? ' --unit ' + unitName : ''}`)}`);
+  console.log(C.dim(`  which grades each emission on the HELD-OUT set, requires quorum (>=2 full), copies the`));
+  console.log(C.dim(`  winner into src/, and updates the manifest srcSha256. plan: .resynth/plan.json`));
+  return 0;
+}
+
+async function cmdResynthApply(dir: string, unitName: string | null) {
+  const m = loadManifest(dir);
+  const units = (unitName ? m.units.filter((u: any) => u.name === unitName) : m.units);
+  let ok = true;
+  for (const u of units) {
+    const rdir = resolve(dir, '.resynth', u.name);
+    const emits = existsSync(rdir) ? readdirSync(rdir).filter((f) => /^emit_\d+\.ts$/.test(f)).sort() : [];
+    if (!emits.length) { console.log(C.r(`  ${u.name}: no emissions in ${relative(dir, rdir)} — run prepare + spawn the workers first`)); ok = false; continue; }
+    const oracle = JSON.parse(readFileSync(resolve(dir, u.oracle), 'utf-8'));
+    const held = oracle.heldout || oracle.vectors;
+    const graded: any[] = [];
+    for (const f of emits) graded.push({ f, ...(await gradeVs(resolve(rdir, f), u.name, held)) });
+    const full = graded.filter((g) => g.full);
+    console.log(`  ${C.b(u.name)}: ` + graded.map((g) => `${g.f.replace('.ts', '')} ${g.full ? C.g(g.pass + '/' + g.total) : C.r(g.pass + '/' + g.total)}`).join('  '));
+    if (full.length < 2) { console.log(C.r(`     NO-QUORUM (${full.length}/${graded.length} full) — not applied. Add coverage or escalate the worker tier.`)); ok = false; continue; }
+    const winner = resolve(rdir, full[0].f);
+    const header = `// @sirpm/${m.name.split('/').pop()} — verified-recompose of ${u.name} (${m.provenance.source}). ZERO-DEP.\n` +
+      `// Rebuilt locally by 'sirpm resynth': reconstructed from sir/ + oracles/ with the original deleted;\n` +
+      `// quorum ${full.length}/${graded.length}, ${held.length}/${held.length} held-out. Trust your own build, not the publisher's.\n`;
+    writeFileSync(resolve(dir, u.src), header + readFileSync(winner, 'utf-8').replace(/^\s+/, ''));
+    u.srcSha256 = sha256(resolve(dir, u.src));
+    u.verified = { ...(u.verified || {}), mode: 'vectors', frozen: (oracle.vectors || []).length, heldout: held.length, quorum: `${full.length}/${graded.length}` };
+    saveManifest(dir, m);
+    console.log(C.g(`     QUORUM ${full.length}/${graded.length} → applied ${full[0].f} to ${u.src}; manifest srcSha256 updated to ${u.srcSha256.slice(0, 12)}`));
+  }
+  console.log(C.dim(`\n  verifying the applied build...`));
+  const code = await cmdCheck(dir);
+  return ok && code === 0 ? 0 : 1;
 }
 
 function cmdVis(dir: string) {
   const m = loadManifest(dir);
-  const units = m.units.map((u: any) => {
-    const sir = (() => { try { return readFileSync(resolve(dir, u.sir), 'utf-8'); } catch { return ''; } })();
-    return { ...u, sirText: sir };
-  });
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const units = m.units.map((u: any) => ({ ...u, sirText: (() => { try { return readFileSync(resolve(dir, u.sir), 'utf-8'); } catch { return ''; } })() }));
   const out = renderVis(m, units, esc);
-  const target = resolve(dir, 'vis.html');
-  writeFileSync(target, out);
-  console.log(`${C.g('wrote')} ${target}  (${out.length} bytes)`);
-  return 0;
-}
-
-function cmdResynth(dir: string, unit: string | null, n: number) {
-  const m = loadManifest(dir);
-  const units = unit ? m.units.filter((u: any) => u.name === unit) : m.units;
-  console.log(`${C.b('sirpm resynth')}  ${m.name}@${m.version}   n=${n}`);
-  console.log(C.y('  This is the token-torching local rebuild: for each unit, re-emit src/ from'));
-  console.log(C.y('  sir/ + oracles/ via N isolated Write-only workers (original deleted), then quorum-verify.'));
-  for (const u of units) {
-    console.log(`  ${C.dim('•')} ${C.b(u.name)} ${C.dim(u.sig)}  ←  ${u.sir} + ${u.oracle}  (held-out ${u.verified?.heldout ?? '?'})`);
-  }
-  console.log(C.dim(`\n  Substrate not wired into this CLI build. Drive the re-emit via either:`));
-  console.log(C.dim(`    • the sir-verify skill (interactive, in Claude Code — cheap, no API key), or`));
-  console.log(C.dim(`    • experiments/sir-toolkit/verify.py <bundle> (claude -p), or a direct Messages-API worker.`));
-  console.log(C.dim(`  Then 'sirpm check ${dir}' must pass and the manifest srcSha256 is updated to the new emission.`));
+  writeFileSync(resolve(dir, 'vis.html'), out);
+  console.log(`${C.g('wrote')} ${resolve(dir, 'vis.html')}  (${out.length} bytes)`);
   return 0;
 }
 
@@ -108,7 +173,7 @@ function renderVis(m: any, units: any[], esc: (s: string) => string) {
       <div class="meta">oracle: <b>${u.verified?.frozen ?? '?'}</b> frozen / <b>${u.verified?.heldout ?? '?'}</b> held-out · quorum <b>${u.verified?.quorum ?? '?'}</b> · zero-dep</div>
       ${(u.knownLimitations || []).map((l: string) => `<div class="limit">⚠ ${esc(l)}</div>`).join('')}
       <pre class="sir">${esc(u.sirText)}</pre>
-      <div class="hashes">src <code>${(u.srcSha256 || '').slice(0, 16)}</code> · oracle <code>${(u.oracleSha256 || '').slice(0, 16)}</code></div>
+      <div class="hashes">src <code>${(u.srcSha256 || '').slice(0, 16)}</code> · oracle <code>${(u.oracleSha256 || '').slice(0, 16)}</code> · spec <code>${(u.specSha256 || '').slice(0, 16)}</code></div>
     </div>`).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(m.name)} — SIR package</title><style>
@@ -143,7 +208,7 @@ ${unitCards}</section>
 <div class="trust"><b>Verify the shipped code</b> against its contract — deterministic, no tokens. Fails loudly if the bytes don't match the held-out oracle or the recorded hashes.
 <div class="cmd">sirpm check .</div></div>
 <div class="trust"><b>Rebuild it yourself</b> from the spec — torch some tokens, regenerate <code>src/</code> from <code>sir/</code> + <code>oracles/</code> via N isolated quorum workers. Trust your own build, not the publisher's.
-<div class="cmd">sirpm resynth . --n 3</div></div>
+<div class="cmd">sirpm resynth .          # prepare worker prompts\nsirpm resynth . --apply  # grade, pick quorum, update src/ + manifest</div></div>
 </section>
 <footer>Generated by <code>sirpm vis</code> from <code>sir.manifest.json</code> + <code>sir/</code> + <code>oracles/</code>. The oracle is the source of truth; the source text is fungible.</footer>
 </div></body></html>`;
@@ -151,14 +216,16 @@ ${unitCards}</section>
 
 async function main() {
   const [cmd, dirArg] = process.argv.slice(2);
-  const dir = resolve(dirArg || '.');
+  const dir = resolve(dirArg && !dirArg.startsWith('--') ? dirArg : '.');
+  const has = (f: string) => process.argv.includes(f);
   const arg = (name: string, d: string) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : d; };
+  const unit = has('--unit') ? arg('--unit', '') : null;
   try {
     if (cmd === 'check') process.exit(await cmdCheck(dir));
     if (cmd === 'vis') process.exit(cmdVis(dir));
-    if (cmd === 'resynth') process.exit(cmdResynth(dir, process.argv.includes('--unit') ? arg('--unit', '') : null, parseInt(arg('--n', '3'), 10)));
-    console.log('usage: sirpm <check|vis|resynth> <pkgdir> [--unit U] [--n 3]');
+    if (cmd === 'resynth') process.exit(has('--apply') ? await cmdResynthApply(dir, unit) : cmdResynthPrepare(dir, unit, parseInt(arg('--n', '3'), 10)));
+    console.log('usage: sirpm <check|vis|resynth> <pkgdir> [--unit U] [--n 3] [--apply]');
     process.exit(2);
-  } catch (e: any) { console.error('sirpm error:', e?.message ?? e); process.exit(1); }
+  } catch (e: any) { console.error('sirpm error:', e?.stack ?? e?.message ?? e); process.exit(1); }
 }
 main();
