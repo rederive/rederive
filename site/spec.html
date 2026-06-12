@@ -151,7 +151,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <a href="#module">9 · Module-level SIR</a>
   <a href="#bundle">10 · The bundle &amp; verification</a>
   <a href="#annotations">11 · Non-normative annotations</a>
-  <a href="#governance">12 · Versioning &amp; governance</a>
+  <a href="#governance">12 · Conformance &amp; governance</a>
 </nav>
 
 <main class="doc-content" id="main">
@@ -383,8 +383,31 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
 <!-- 12 -->
 <section id="governance">
-  <h2>12 · Versioning &amp; governance</h2>
-  <p>Schema v0.1 is <strong>frozen</strong> as of 2026-06-10. Generation targets this document. Every grammar decision in it cites the specimen that forced it — nothing is resolved from taste alone. Changes after this point are <strong>versioned</strong> (v0.2, …), never silent; a package records the schema version it was generated against.</p>
+  <h2>12 · Conformance &amp; governance</h2>
+  <p>This specification is <strong>normative</strong>. The key words <strong>MUST</strong>, <strong>MUST NOT</strong>, <strong>SHOULD</strong>, and <strong>MAY</strong> are interpreted as in RFC&nbsp;2119. SIR is intended to develop as an <strong>open, royalty-free standard</strong> for verified software contracts — implementable by anyone, in any language, without license or fee.</p>
+
+  <h3>Conformance classes</h3>
+  <p>Three independent conformance targets. An implementation may conform as any one of them.</p>
+  <table class="rtable">
+    <thead><tr><th>Target</th><th>Requirements</th></tr></thead>
+    <tbody>
+      <tr><td>conforming bundle</td><td>MUST contain a <code>sir/&lt;unit&gt;.sir</code> per §3–§6 and an <code>oracles/</code> set with <em>disjoint</em> frozen and held-out vectors (§10); MUST record the schema version it targets; every expected value MUST be execution-derived (§2.iv), never hand-authored.</td></tr>
+      <tr><td>conforming checker</td><td>Given a bundle and an implementation, MUST re-run the <em>held-out</em> oracle and MUST verify the recorded content hashes; MUST fail on any held-out miss or hash mismatch; MUST NOT treat a frozen / in-prompt pass as evidence of conformance.</td></tr>
+      <tr><td>conforming producer</td><td>MUST reconstruct an implementation from the bundle alone, with the original deleted (§2.iv); MUST report a unit "verified" only when N≥2 independent emissions agree on the <em>full</em> held-out set (§10).</td></tr>
+    </tbody>
+  </table>
+  <p>The whole pipeline — bundle, checker, and producer — is in scope of the open standard. The standard defines <em>what conformance is</em>; it does not mandate <em>how</em> a producer reconstructs an implementation (the quality of that engine is where implementations compete).</p>
+
+  <h3>Standardization &amp; licensing posture</h3>
+  <p>The intent is a W3C-/IETF-style open standard: the SIR <strong>format</strong> and the <strong><code>rdv</code> reference checker</strong> are open (Apache-2.0 / open specification license) and royalty-free to implement. The originating patents are intended to be <strong>pledged</strong> — a non-assertion covenant — against <em>conforming implementations</em> of this specification, held only as a defensive backstop and a guarantee of the standard's integrity, never as a toll on implementers.</p>
+  <div class="note">
+    <div class="nt">Draft posture — pending counsel</div>
+    The paragraph above states <em>intent</em>, not a binding grant. The operative instrument will be a separate, counsel-reviewed patent non-assertion covenant and conformance-mark policy. Until that is published, no patent license is granted or waived by this document.
+  </div>
+
+  <h3>Versioning</h3>
+  <p>Schema v0.1 is <strong>frozen</strong> as of 2026-06-10; generation targets this document, and every decision in it cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong> (v0.2, …), never silent; a conforming bundle records the version it targets.</p>
+
   <h3>Deferred (named, not frozen)</h3>
   <ul>
     <li><code>PAR</code> verification semantics — frozen as design, awaiting a first concurrency specimen.</li>
@@ -392,7 +415,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <li>An ambient-read tier (<code>env.cwd</code>, locale, timezone).</li>
     <li>The <code>ui</code> domain verbs (a frontend target is a non-goal at this phase).</li>
   </ul>
-  <p style="margin-top:1.5em;color:#808088;font-size:0.9em">SIR is the internal representation of <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine. The format and the <code>rdv</code> verifier are open (Apache-2.0); the engine that <em>produces</em> SIR contracts from source is proprietary. Patent pending.</p>
+  <p style="margin-top:1.5em;color:#808088;font-size:0.9em">SIR is the representation produced by <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine. The format and the <code>rdv</code> checker are open; the engine is a separate implementation that competes on quality, not on access to the standard. Patent pending — see posture above.</p>
 </section>
 
 </main>
