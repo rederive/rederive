@@ -1,0 +1,149 @@
+{
+  "mode": "vectors",
+  "exportName": "strip",
+  "unit": "strip",
+  "vectors": [
+    {
+      "name": "plain_text",
+      "args": [
+        "hello world"
+      ],
+      "expected": "hello world"
+    },
+    {
+      "name": "single_sgr_red",
+      "args": [
+        "\u001b[31mhi\u001b[39m"
+      ],
+      "expected": "hi"
+    },
+    {
+      "name": "bold",
+      "args": [
+        "\u001b[1mhi\u001b[22m"
+      ],
+      "expected": "hi"
+    },
+    {
+      "name": "mid_string",
+      "args": [
+        "a\u001b[32mb\u001b[39mc"
+      ],
+      "expected": "abc"
+    },
+    {
+      "name": "stacked_codes",
+      "args": [
+        "\u001b[31m\u001b[1mhi\u001b[22m\u001b[39m"
+      ],
+      "expected": "hi"
+    },
+    {
+      "name": "only_codes",
+      "args": [
+        "\u001b[31m\u001b[39m"
+      ],
+      "expected": ""
+    },
+    {
+      "name": "trailing_reset",
+      "args": [
+        "text\u001b[0m"
+      ],
+      "expected": "text"
+    },
+    {
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "expected": ""
+    },
+    {
+      "name": "number_coerced",
+      "args": [
+        42
+      ],
+      "expected": "42"
+    },
+    {
+      "name": "high_param_bg",
+      "args": [
+        "\u001b[100mhi\u001b[49m"
+      ],
+      "expected": "hi"
+    }
+  ],
+  "heldout": [
+    {
+      "name": "ho_combined_sgr_leading",
+      "args": [
+        "\u001b[1;31mhi\u001b[0m"
+      ],
+      "expected": "\u001b[1;31mhi"
+    },
+    {
+      "name": "ho_csi_clear_screen",
+      "args": [
+        "\u001b[2Jhi"
+      ],
+      "expected": "\u001b[2Jhi"
+    },
+    {
+      "name": "ho_osc_set_title",
+      "args": [
+        "\u001b]0;pwned\u0007hi"
+      ],
+      "expected": "\u001b]0;pwned\u0007hi"
+    },
+    {
+      "name": "ho_osc_hyperlink",
+      "args": [
+        "\u001b]8;;http://evil\u0007x\u001b]8;;\u0007"
+      ],
+      "expected": "\u001b]8;;http://evil\u0007x\u001b]8;;\u0007"
+    },
+    {
+      "name": "ho_newline_with_codes",
+      "args": [
+        "\u001b[31ma\nb\u001b[39m"
+      ],
+      "expected": "a\nb"
+    },
+    {
+      "name": "ho_only_reset",
+      "args": [
+        "\u001b[0m"
+      ],
+      "expected": ""
+    },
+    {
+      "name": "ho_null_coerced",
+      "args": [
+        null
+      ],
+      "expected": "null"
+    },
+    {
+      "name": "ho_bool_coerced",
+      "args": [
+        true
+      ],
+      "expected": "true"
+    },
+    {
+      "name": "ho_plain_unicode",
+      "args": [
+        "café ✨"
+      ],
+      "expected": "café ✨"
+    },
+    {
+      "name": "ho_adjacent_text_codes",
+      "args": [
+        "x\u001b[33my\u001b[39mz\u001b[1mw\u001b[22m"
+      ],
+      "expected": "xyzw"
+    }
+  ]
+}
