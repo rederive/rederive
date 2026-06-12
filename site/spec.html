@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIR Specification v0.1 — rederive</title>
+<meta name="description" content="The Semantic Intermediate Representation (SIR): the contract format inside every rederive package. A kind-discriminated tree anchored to a differential oracle. Frozen schema v0.1.">
+<link rel="canonical" href="https://rederive.ai/spec.html">
+<meta property="og:title" content="SIR Specification v0.1 — rederive">
+<meta property="og:description" content="The contract format inside every rederive package: a kind-discriminated tree whose ground truth is a held-out, execution-derived oracle.">
+<meta property="og:type" content="article">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}
+a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+/* ---- Nav ---- */
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:1180px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:2em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}
+.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600;transition:background 0.15s}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+/* ---- Doc layout ---- */
+.doc-hero{background:#0a0c12;padding:3em 24px 2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(194,124,78,0.10) 0%,transparent 70%);pointer-events:none}
+.doc-hero-inner{max-width:1180px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.3em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero h1 span{color:#d4956a}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:680px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#0f2417;color:#28c840;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:700;letter-spacing:0.04em;margin-top:1em;font-family:'SF Mono',ui-monospace,monospace}
+.vbadge .dot{width:7px;height:7px;border-radius:50%;background:#28c840}
+
+.doc-wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:3em;padding:2.5em 24px 4em}
+
+/* ---- TOC ---- */
+.toc{position:sticky;top:80px;align-self:start;font-size:0.86em;border-left:1px solid #282c38;padding-left:1.2em;max-height:calc(100vh - 110px);overflow-y:auto}
+.toc .toc-title{font-size:0.72em;text-transform:uppercase;letter-spacing:0.1em;color:#6a6f7e;font-weight:700;margin-bottom:0.8em}
+.toc a{display:block;color:#b0b0b0;padding:0.28em 0;transition:color 0.12s;border-left:2px solid transparent;margin-left:-1.2em;padding-left:1.2em}
+.toc a:hover{color:#fafafa;text-decoration:none}
+.toc a.sub{padding-left:2em;font-size:0.95em;color:#808088}
+
+/* ---- Content ---- */
+.doc-content{min-width:0;max-width:780px}
+.doc-content section{margin-bottom:2.8em;scroll-margin-top:80px}
+.doc-content h2{font-size:1.5em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em;padding-bottom:0.3em;border-bottom:1px solid #282c38}
+.doc-content h3{font-size:1.08em;color:#ecc4aa;font-weight:700;margin:1.6em 0 0.4em}
+.doc-content p{margin-bottom:0.9em;color:#e0e0e0}
+.doc-content ul{margin:0 0 1em 1.3em;color:#e0e0e0}
+.doc-content li{margin-bottom:0.4em}
+.doc-content strong{color:#fafafa}
+.doc-content em{color:#ecc4aa;font-style:normal}
+.lead{font-size:1.08em;color:#e8e8e8}
+
+/* ---- SIR code block ---- */
+.sir{background:#080a10;border:1px solid #282c38;border-radius:8px;padding:1.1em 1.3em;margin:1em 0;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;font-size:0.82em;line-height:1.65;overflow-x:auto;color:#cfcfd6}
+.sir .lbl{display:block;font-size:0.85em;color:#6a6f7e;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.7em;padding-bottom:0.5em;border-bottom:1px solid #1a1d28}
+.sir .k{color:#d4956a;font-weight:600}        /* keyword / leading token */
+.sir .t{color:#ecc4aa}                          /* type / boundary descriptor */
+.sir .c{color:#5d6273;font-style:italic}        /* comment */
+.sir .v{color:#28c840}                           /* verified marker */
+.sir .ph{color:#808088}                          /* placeholder <...> */
+pre.sir{white-space:pre}
+
+/* ---- reference tables ---- */
+.rtable{width:100%;border-collapse:collapse;margin:1em 0;font-size:0.88em}
+.rtable th{text-align:left;padding:0.55em 0.8em;background:#10131c;color:#ecc4aa;font-weight:700;border-bottom:1px solid #282c38;font-size:0.92em}
+.rtable td{padding:0.55em 0.8em;border-bottom:1px solid #1a1d28;color:#e0e0e0;vertical-align:top}
+.rtable td:first-child{font-family:'SF Mono',ui-monospace,monospace;color:#d4956a;white-space:nowrap}
+.rtable tr:last-child td{border-bottom:none}
+
+/* ---- callout ---- */
+.note{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1em 1.3em;margin:1.2em 0;font-size:0.92em}
+.note .nt{font-weight:700;color:#ecc4aa;text-transform:uppercase;letter-spacing:0.04em;font-size:0.8em;margin-bottom:0.3em}
+.note.firewall{border-left-color:#28c840}
+.note.firewall .nt{color:#28c840}
+
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:0.78em;font-weight:700;font-family:'SF Mono',ui-monospace,monospace}
+.pill.eff{background:#2a1410;color:#ff9d7a}
+.pill.fun{background:#0f2417;color:#28c840}
+.pill.sus{background:#231d10;color:#febc2e}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:1180px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-brand{display:flex;align-items:center;gap:0.5em;color:#b0b0b0;font-weight:600}
+.footer-links{display:flex;gap:1.5em}
+.footer-links a{color:#b0b0b0;transition:color 0.15s}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:900px){
+  .doc-wrap{grid-template-columns:1fr;gap:1.5em}
+  .toc{display:none}
+  .doc-content{max-width:100%}
+  .topnav{flex-wrap:wrap;gap:1em}
+}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="index.html#why">Why</a>
+  <a class="nl" href="index.html#how">How it works</a>
+  <a class="nl active" href="spec.html">SIR Spec</a>
+  <a class="nl" href="index.html#packages">Packages</a>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+</nav>
+</div>
+
+<header class="doc-hero">
+  <div class="doc-hero-inner">
+    <div class="eyebrow">Specification</div>
+    <h1>SIR — the <span>Semantic Intermediate Representation</span></h1>
+    <p>The contract format inside every rederive package. A kind-discriminated tree of a unit's behavior, anchored to a held-out, execution-derived oracle. The text is a skeleton; the oracle is the substrate.</p>
+    <div class="vbadge"><span class="dot"></span>SCHEMA v0.1 · FROZEN 2026-06-10</div>
+  </div>
+</header>
+
+<div class="doc-wrap">
+
+<!-- TOC -->
+<nav class="toc" aria-label="Table of contents">
+  <div class="toc-title">On this page</div>
+  <a href="#what">1 · What SIR is</a>
+  <a href="#invariants">2 · The four invariants</a>
+  <a href="#header">3 · The unit header</a>
+  <a href="#kinds">4 · Kinds &amp; the firewall</a>
+  <a href="#control">5 · Control &amp; data nodes</a>
+  <a href="#effects">6 · Effects &amp; the boundary</a>
+  <a href="#oracle">7 · The oracle</a>
+  <a href="#example">8 · Worked example</a>
+  <a href="#module">9 · Module-level SIR</a>
+  <a href="#bundle">10 · The bundle &amp; verification</a>
+  <a href="#annotations">11 · Non-normative annotations</a>
+  <a href="#governance">12 · Versioning &amp; governance</a>
+</nav>
+
+<main class="doc-content" id="main">
+
+<!-- 1 -->
+<section id="what">
+  <h2>1 · What SIR is</h2>
+  <p class="lead">SIR is the format a rederive package ships <em>instead of</em> trusted bytes. Where npm hands you a prebuilt implementation and a name to trust, a rederive package hands you a <strong>contract</strong>: a structural spec (the <code>.sir</code> file) plus a differential oracle (the <code>oracles/</code> vectors). You verify the shipped code against it, or re-derive the code from it.</p>
+  <p>A SIR artifact is <strong>one recursive tree of <code>KIND</code>-discriminated nodes</strong>. It describes a single unit of behavior — a function, a handler, a leaf — at the level of <em>what crosses its boundaries and what shape its control flow takes</em>, not at the level of source syntax. Two implementations in two languages with the same choreography have the same SIR body.</p>
+  <p>Crucially, SIR is <strong>not</strong> a proof system and the prose in it is <strong>not</strong> load-bearing. The ground truth of a unit's behavior is its oracle — input→output (or input→trace) vectors whose expected values were produced by <em>executing the original</em>. The <code>.sir</code> text orients a human and a re-emitter; the oracle is what a build is graded against.</p>
+</section>
+
+<!-- 2 -->
+<section id="invariants">
+  <h2>2 · The four invariants</h2>
+  <p>Everything below is downstream of four rules. They hold for every unit, every package, every version.</p>
+
+  <h3>i. The discriminator leads</h3>
+  <p>Every node declares its <code>KIND</code> first; kind is <em>never</em> inferred from the node's shape. A reader (human or machine) knows whether they are looking at a pure computation or a world effect before parsing anything else.</p>
+
+  <h3>ii. The firewall</h3>
+  <div class="note firewall">
+    <div class="nt">FUNCTIONAL ⊅ EFFECT</div>
+    A <span class="pill fun">FUNCTIONAL</span> subtree may not contain an <span class="pill eff">EFFECT</span>. Purity is a structural property of the tree, not a claim in a comment. If a unit touches the world, every effect is visible at its boundary; if it doesn't, the firewall proves it.
+  </div>
+
+  <h3>iii. The oracle is the substrate</h3>
+  <p>A SIR artifact is self-contained = <strong>spec + frozen differential vectors</strong>. Prose fields (<code>INVARIANT</code>, <code>NOTES</code>) are an unverified prior — useful, optional, never load-bearing. (Proven twice on held-out repos: structural skeleton + coverage reaches 18/18 held-out with the prose stripped — and prose can be outright <em>wrong</em>.)</p>
+
+  <h3>iv. Expecteds are differential, earned with the original deleted</h3>
+  <p>Expected outputs are produced by running the original implementation, never hand-authored. A unit's <em>verified</em> status is earned by passing the held-out round-trip gate <strong>after the original source has been deleted</strong> — the re-emitter reconstructs from the contract alone, so a pass is evidence of the contract, not a copy of the source.</p>
+</section>
+
+<!-- 3 -->
+<section id="header">
+  <h2>3 · The unit header</h2>
+  <p>Every <code>.sir</code> file opens with a fixed header. Fields in <span class="ph">grey</span> are placeholders.</p>
+  <pre class="sir"><span class="lbl">unit header grammar</span><span class="k">SIR</span>     <span class="ph">&lt;name&gt;</span>                          <span class="c"># snake_case; a "name worth saying"</span>
+<span class="k">KIND</span>    FUNCTIONAL | EFFECT
+<span class="k">SRC</span>     <span class="ph">&lt;file&gt;:&lt;Class.&gt;?&lt;symbol&gt;</span>        <span class="c"># provenance; review diffs anchor here</span>
+<span class="k">SIG</span>     (<span class="ph">&lt;params&gt;</span>) -> <span class="ph">&lt;result&gt;</span>
+<span class="k">TRIGGER</span> call | http(<span class="ph">&lt;route&gt;</span>) | cli | cron | <span class="ph">&lt;custom&gt;</span>   <span class="c"># OPTIONAL; default call</span>
+<span class="k">REACH</span>   entry | internal | off-path
+<span class="k">ORACLE</span>  value | trace  @vectors: <span class="ph">&lt;path&gt;</span>  [VERIFIED <span class="ph">&lt;evidence&gt;</span>] | [not captured]</pre>
+
+  <table class="rtable">
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>SIR</td><td>The unit's name. snake_case, and a "name worth saying" — it should appear in algorithm literature, an RFC, a spec, or a canonical library API. Nameable is oracle-able.</td></tr>
+      <tr><td>KIND</td><td>The discriminator. <code>FUNCTIONAL</code> (pure) or <code>EFFECT</code> (touches the world). Leads every node.</td></tr>
+      <tr><td>SRC</td><td>Provenance: the originating file and symbol. Review diffs and the catalog anchor here.</td></tr>
+      <tr><td>SIG</td><td>The signature — parameter and result shapes. Behavioral, not a language type declaration.</td></tr>
+      <tr><td>TRIGGER</td><td>How the unit is invoked: <code>call</code>, <code>http(route)</code>, <code>cli</code>, <code>cron</code>, custom. <strong>Metadata, never structure</strong> — see §6.</td></tr>
+      <tr><td>REACH</td><td>Reachability from the module surface: <code>entry</code> / <code>internal</code> / <code>off-path</code>. See §4.</td></tr>
+      <tr><td>ORACLE</td><td>The oracle mode (<code>value</code> or <code>trace</code>), the path to its vectors, and its verification evidence. See §7.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 4 -->
+<section id="kinds">
+  <h2>4 · Kinds &amp; the firewall</h2>
+  <p>There are two kinds. The firewall (invariant ii) keeps them from mixing. But "is this unit pure?" has a third, honest answer — when a unit looks pure but calls something the analyzer can't see through.</p>
+
+  <h3>The tri-state firewall</h3>
+  <table class="rtable">
+    <thead><tr><th>Bucket</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill eff">EFFECT</span></td><td>Direct or transitive world effect detected.</td></tr>
+      <tr><td><span class="pill fun">FUNCTIONAL</span></td><td>Pure — all external calls on the known-pure allowlist (or none).</td></tr>
+      <tr><td><span class="pill sus">FUNCTIONAL?</span></td><td>Pure-shaped, but has <code>OPAQUE</code> dependencies not on the allowlist. <em>Suspect.</em></td></tr>
+    </tbody>
+  </table>
+  <p>The third bucket exists so that unknown externals <strong>never silently pass as pure</strong> (the soundness fix) and <strong>never falsely claim a world effect</strong> (the noise fix). A suspect unit whose value-oracle round-trip passes is behaviorally pinned even though its purity is only assumed — the passing oracle upgrades <em>trust</em>, not <em>kind</em>.</p>
+  <p>The known-pure allowlist is a versioned artifact (it starts with language builtins, <code>path.*</code>, <code>semver</code>, <code>minimatch</code>, …). Opaque dependencies must be named — see <code>DEPENDS-ON OPAQUE</code> in §5.</p>
+
+  <h3>Reachability (<code>REACH</code>)</h3>
+  <p>The decompiler computes reach from the export table and call graph. Off-path units are <em>kept</em>, not dropped — an exported-but-uncalled function is still part of the public behavior surface, and silently dropping it is API loss in a migration.</p>
+  <table class="rtable">
+    <tbody>
+      <tr><td>entry</td><td>On a public path from the module surface.</td></tr>
+      <tr><td>internal</td><td>Called only by other units.</td></tr>
+      <tr><td>off-path</td><td>Exported but uncalled on any module path. Kept and marked.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 5 -->
+<section id="control">
+  <h2>5 · Control &amp; data nodes</h2>
+
+  <h3>STATE — accumulators are declared once, at unit level</h3>
+  <p>A <code>LOOP</code> gets no first-class accumulator binding. A unit that reads or writes an accumulator declares it once:</p>
+  <pre class="sir"><span class="k">STATE</span>  <span class="ph">&lt;name&gt;</span> (in) | (out) | (in/out)     <span class="c"># e.g. STATE map (in/out)   STATE cache (out)</span></pre>
+  <p>The <em>oracle carries the fold semantics</em> — a unit-level <code>STATE</code> marker plus differential vectors is enough to round-trip a stateful fold (proven on dotenv's <code>parse</code> and editorconfig's caches). A caller-provided accumulator (a passed-in Map/array) is <code>STATE</code>, not a world effect — it stays <code>FUNCTIONAL</code>.</p>
+
+  <h3>BRANCH — including on-error</h3>
+  <p>A <code>BRANCH</code> selects an arm by a predicate. Error handling is <em>not</em> a separate kind — <code>on-error</code> is sugar that desugars to a <code>BRANCH</code> with an error predicate, because an error arm carries the same verification obligation as any branch arm (arm coverage by captured inputs).</p>
+  <pre class="sir"><span class="k">BRANCH</span> on-error(<span class="ph">&lt;op&gt;</span>) { <span class="ph">&lt;arm&gt;</span> -> … }       <span class="c"># desugars to BRANCH with an error predicate</span></pre>
+
+  <h3>DEPENDS-ON — and the OPAQUE rule</h3>
+  <p>In-module dependencies are named so the call graph is explicit. External calls that are <em>not</em> on the known-pure allowlist must be named as <code>OPAQUE</code> — this is what makes the firewall's blind spot visible (the unit becomes <span class="pill sus">FUNCTIONAL?</span>).</p>
+  <pre class="sir"><span class="k">DEPENDS-ON</span> <span class="ph">&lt;unit&gt;</span>, <span class="ph">&lt;unit&gt;</span>                      <span class="c"># in-module units</span>
+<span class="k">DEPENDS-ON</span> OPAQUE(<span class="ph">&lt;module&gt;.&lt;symbol&gt;</span>), …        <span class="c"># external, not on the known-pure allowlist</span></pre>
+</section>
+
+<!-- 6 -->
+<section id="effects">
+  <h2>6 · Effects &amp; the boundary</h2>
+  <p>An <code>EFFECT</code> unit's behavior <em>is</em> its sequence of boundary crossings. Outbound calls are <code>EMIT</code> (recorded, not performed during verification); inbound reads are <code>REQUEST</code> (injected at verify time from the captured trace).</p>
+
+  <pre class="sir"><span class="lbl">boundary grammar</span><span class="k">EMIT</span>    <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>) -> <span class="ph">&lt;name&gt;</span>    <span class="c"># outbound WITH a meaningful reply: one node</span>
+<span class="k">EMIT</span>    <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>)              <span class="c"># outbound, fire-and-forget</span>
+<span class="k">REQUEST</span> <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>) -> <span class="ph">&lt;name&gt;</span>    <span class="c"># purely inbound (fs.read, env.read, clock, rand)</span></pre>
+
+  <p>An outbound call that returns a meaningful reply (a spawn whose stdout you read) is <strong>one</strong> protocol step — the trace records the emission and the injected reply together, so there is no artificial ordering ambiguity.</p>
+
+  <h3>Boundary descriptors are <code>&lt;domain&gt;.&lt;verb&gt;</code>, two levels</h3>
+  <p>Not per-API-function. <code>fs.readFileSync</code> and <code>fs.readFile</code> are both <code>fs.read</code> — sync/async is calling-convention metadata, proven irrelevant to the trace. The args stay on the node, so finer-grained audit is still possible.</p>
+  <table class="rtable">
+    <thead><tr><th>domain ∈</th><th>(closed set, versioned)</th></tr></thead>
+    <tbody>
+      <tr><td>fs env net proc</td><td>filesystem · environment · network · process</td></tr>
+      <tr><td>db time rand log</td><td>database · clock · randomness · logging</td></tr>
+      <tr><td>ipc ui</td><td>inter-process · user interface</td></tr>
+    </tbody>
+  </table>
+  <p>The <em>verb</em> is an operation class: <code>read · write · stat · spawn · query · exec · fetch · set · …</code> A new <code>net.fetch</code> edge appearing in a review diff is exactly the red line an auditor must see.</p>
+
+  <h3>Ordering &amp; PAR</h3>
+  <p>A trace is an <strong>ordered</strong> sequence of <code>EMIT</code>/<code>REQUEST</code> records. Canonicalization may normalize <em>representation</em> (key formatting, serialization) but <strong>never ordering</strong>. The one exception is an explicit unordered window:</p>
+  <pre class="sir"><span class="k">PAR</span> { … }    <span class="c"># within this block the canonical form is the sorted multiset of sub-traces</span></pre>
+  <p>(<code>PAR</code> is frozen as <em>design</em> but currently unvalidated — it awaits a first concurrency specimen before it claims verification semantics.)</p>
+
+  <h3>TRIGGER is metadata, never structure</h3>
+  <div class="note">
+    <div class="nt">The migration invariant</div>
+    A Next.js route handler, a Nest controller method, a CLI subcommand, and a cron job with the same choreography have the <strong>same SIR body</strong> and different <code>TRIGGER</code> lines. A Next→Nest migration is a re-emit with a rewritten <code>TRIGGER</code>, verified against the <em>same</em> frozen trace oracle.
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="oracle">
+  <h2>7 · The oracle</h2>
+  <p>Each unit names exactly one oracle mode.</p>
+  <table class="rtable">
+    <thead><tr><th>Mode</th><th>Asserts</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td>value</td><td>Output equality: <code>input -> expected</code>.</td><td>FUNCTIONAL units (pure computation).</td></tr>
+      <tr><td>trace</td><td>The ordered sequence of emissions and injected replies.</td><td>EFFECT units (world choreography).</td></tr>
+    </tbody>
+  </table>
+  <p>Both are <strong>differential</strong>: the expected value (or trace) is captured by instrumenting and running the original. An oracle asserts <em>behavior</em> — wire bytes, claims, status, the trace shape — and <strong>never</strong> the source library's representation (error-string wording, object-vs-string body). Freezing representation is a trap; freezing behavior is the contract.</p>
+  <p>For greenfield units with no original to run, the oracle can instead be a <code>(generator, properties)</code> pair — round-trip, idempotence, determinism, conservation — verifying <em>correctness-of-contract</em> rather than identity to a reference. (This <em>property mode</em> is part of the rederive toolchain; the frozen <code>.sir</code> grammar above covers the <code>value</code>/<code>trace</code> migration case that ships in today's packages.)</p>
+</section>
+
+<!-- 8 -->
+<section id="example">
+  <h2>8 · Worked example: <code>strip.sir</code></h2>
+  <p>This is the actual SIR shipped in <code>@rederive/colors</code> — the re-derivation of <code>colors.strip</code> from <code>colors@1.4.0</code>, the last release before the January-2022 maintainer sabotage. Eight lines; every one carries weight.</p>
+
+  <pre class="sir"><span class="lbl">packages/colors/sir/strip.sir</span><span class="k">SIR</span>    strip
+<span class="k">KIND</span>   FUNCTIONAL
+<span class="k">SRC</span>    colors@1.4.0 lib/colors.js:strip  <span class="c">(alias stripColors)</span>
+<span class="k">SIG</span>    (str: <span class="t">string</span>) -> <span class="t">string</span>
+<span class="k">REACH</span>  entry
+<span class="k">CONTROL</span> LOOP x1
+<span class="k">ORACLE</span> value @vectors: oracles/strip.json <span class="v">[VERIFIED value 10/10 ho, quorum 3/3, original deleted]</span>
+<span class="c"># Removes single-parameter SGR codes (ESC[&lt;digits&gt;m) only; combined-SGR / CSI / OSC survive (faithful).</span>
+<span class="c"># GENERATED by sir decompile (structural, SIR Schema v0.1) + verified-recompose.</span></pre>
+
+  <p>Reading it as a contract:</p>
+  <ul>
+    <li><strong><code>KIND FUNCTIONAL</code></strong> — pure; the firewall guarantees no file, network, or env access hides inside.</li>
+    <li><strong><code>SIG (str: string) -&gt; string</code></strong> — one string in, one string out.</li>
+    <li><strong><code>ORACLE value … [VERIFIED 10/10 ho, quorum 3/3, original deleted]</code></strong> — the load-bearing line. Ten <em>held-out</em> vectors (disjoint from the ten the re-emitter saw), passed by <strong>three independent re-derivations that agreed</strong>, with the original source deleted before any of them ran.</li>
+    <li><strong>The comment</strong> pins a real finding <em>as a documented limitation</em>: <code>strip</code> removes only single-parameter SGR codes, so combined-SGR / CSI / OSC terminal-injection escapes survive. rederive states that in the contract rather than hiding it — the held-out oracle includes the surviving-escape cases, so the limitation is <em>tested</em>, not just claimed.</li>
+  </ul>
+  <p>The shipped <code>src/strip.ts</code> is graded against <code>oracles/strip.json</code> by <code>rdv check</code>. Anyone who distrusts the shipped bytes runs <code>rdv resynth</code> and re-derives them from this contract locally.</p>
+</section>
+
+<!-- 9 -->
+<section id="module">
+  <h2>9 · Module-level SIR</h2>
+  <p>A multi-unit package also carries a <code>MODULE.sir</code> — the auditor's one-page surface. It draws the firewall cut explicitly, lists every unit and its <code>.sir</code> file, sketches the call tree (marking <code>║CALL</code> across the firewall and <code>·</code> dependencies within <code>FUNCTIONAL</code>), and — the key line for a security review — declares the <strong>effect surface</strong>: the complete set of inbound injections and outbound emissions the whole module's traces may touch. Nothing outside <code>SURFACE</code> is allowed to appear in a trace.</p>
+  <pre class="sir"><span class="lbl">MODULE.sir — the shape (abridged from dotenv-core, the first EFFECT-tier decompile)</span><span class="k">MODULE</span>  dotenv-core
+<span class="k">FIREWALL</span>  FUNCTIONAL ⊅ EFFECT
+  pure   (FUNCTIONAL): parser.ts, common.ts, utils.ts   <span class="c">— no fs / env / process</span>
+  shell  (EFFECT):     index.ts                          <span class="c">— every effect lives here</span>
+
+<span class="k">UNITS</span>
+  <span class="t">EFFECT</span>      load          effect/load.sir       index.ts:DotEnv.load
+  <span class="t">FUNCTIONAL</span>  parse         functional/parse.sir  parser.ts:Parser.parse
+  <span class="c">… one row per unit, with its .sir file and provenance …</span>
+
+<span class="k">SURFACE</span>
+  inbound  (REQUEST, injected at verify):  fs.readFileSync ; child spawn stdout
+  outbound (EMIT, recorded not performed): process.env[set] ; fs.writeFileSync ; console.error</pre>
+  <p>This is the artifact a PR reviewer or a compliance auditor reads first: a new edge in <code>SURFACE</code> — a module that suddenly emits <code>net.fetch</code> — is the diff that must not pass silently.</p>
+</section>
+
+<!-- 10 -->
+<section id="bundle">
+  <h2>10 · The bundle &amp; the verification contract</h2>
+  <p>A self-contained, shippable rederive unit is a bundle:</p>
+  <pre class="sir"><span class="lbl">bundle layout</span>bundle/
+  <span class="k">sir/</span><span class="ph">&lt;unit&gt;</span>.sir            <span class="c"># specs per this schema</span>
+  <span class="k">oracles/</span><span class="ph">&lt;cluster&gt;</span>.json    <span class="c"># { unit, captured_from, vectors: [{name, input|args, expected}] }</span></pre>
+
+  <p>Three rules make the bundle verifiable rather than merely descriptive:</p>
+  <ul>
+    <li><strong>Frozen + held-out.</strong> Vectors are frozen at capture. Coverage rounds may <em>append</em> fresh inputs, but a disjointness guard refuses any held-out string that leaked into the set the re-emitter sees. Train and test never overlap.</li>
+    <li><strong>The original is deleted.</strong> The re-emit gate consumes <em>only</em> the bundle. The implementation is reconstructed from the contract, never copied from the source.</li>
+    <li><strong>Closure by density, not by a single pass.</strong> A round closes only when (a) the <em>full</em> held-out set is re-run — a new vector can regress a previously-passing seam — and (b) <strong>N≥2 independent emissions agree</strong>. One passing emission on an uncovered class is luck; agreement is evidence. Priors are outvoted by evidence density, never overridden by a single contradiction.</li>
+  </ul>
+
+  <div class="note">
+    <div class="nt">This is supervised learning with a held-out test set</div>
+    The frozen vectors are the training set (the re-emitter sees them); the held-out vectors are the test set (it never does); quorum is ensemble agreement; coverage is hard-example mining. An in-prompt pass means nothing — train accuracy is always ~100%. The <strong>held-out pass is the only evidence of generalization</strong>, and that is precisely what <code>rdv check</code> re-runs on your machine.
+  </div>
+</section>
+
+<!-- 11 -->
+<section id="annotations">
+  <h2>11 · Non-normative annotations</h2>
+  <p>Decompilers emit human-facing prose to orient a reader: <code>ABOUT</code>, <code>INVARIANT</code>, <code>NOTES</code>, <code>CONTROL</code>, <code>CHOREOGRAPHY</code>, <code>TRACE-INVARIANT</code>. These are <strong>annotations, not contract</strong>. By invariant iii they carry no verification weight — they can be incomplete, and they have been observed to be <em>wrong</em>. A re-emitter may read them; a verifier ignores them. If an annotation and the oracle disagree, the oracle wins, every time.</p>
+  <p>The practical consequence: never encode a behavioral guarantee in a comment and expect it to hold. If a behavior matters, it belongs in a vector, where execution proves it and the held-out gate enforces it.</p>
+</section>
+
+<!-- 12 -->
+<section id="governance">
+  <h2>12 · Versioning &amp; governance</h2>
+  <p>Schema v0.1 is <strong>frozen</strong> as of 2026-06-10. Generation targets this document. Every grammar decision in it cites the specimen that forced it — nothing is resolved from taste alone. Changes after this point are <strong>versioned</strong> (v0.2, …), never silent; a package records the schema version it was generated against.</p>
+  <h3>Deferred (named, not frozen)</h3>
+  <ul>
+    <li><code>PAR</code> verification semantics — frozen as design, awaiting a first concurrency specimen.</li>
+    <li>Transactions / compensation, multi-process effects.</li>
+    <li>An ambient-read tier (<code>env.cwd</code>, locale, timezone).</li>
+    <li>The <code>ui</code> domain verbs (a frontend target is a non-goal at this phase).</li>
+  </ul>
+  <p style="margin-top:1.5em;color:#808088;font-size:0.9em">SIR is the internal representation of <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine. The format and the <code>rdv</code> verifier are open (Apache-2.0); the engine that <em>produces</em> SIR contracts from source is proprietary. Patent pending.</p>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <span class="footer-brand">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="spec.html">SIR Spec</a>
+      <a href="https://semcom.ai">Semcom</a>
+      <a href="mailto:lane@apilify.com">Contact</a>
+    </div>
+    <span>&copy; 2026 Apilify Inc. &middot; Patent Pending</span>
+  </div>
+</footer>
+
+</body>
+</html>
