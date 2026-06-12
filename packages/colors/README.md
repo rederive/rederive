@@ -1,9 +1,9 @@
-# @sirpm/colors
+# @rederive/colors
 
 A verified-recompose of **`colors@1.4.0`** (github.com/Marak/colors.js) — the last release before the
 maintainer's Jan-2022 sabotage. Zero-dependency core; every unit behavior-locked to a held-out oracle
 and quorum-verified with the original deleted. Ships its contract (`sir/` + `oracles/`); verify or
-rebuild with `sirpm`.
+rebuild with `rdv`.
 
 ## Units
 
@@ -12,7 +12,7 @@ rebuild with `sirpm`.
 | `strip` (alias `stripColors`) | FUNCTIONAL | `(str) => string` | quorum 3/3 · 10 frozen / 10 held-out | ✓ |
 
 ```ts
-import { strip } from '@sirpm/colors';
+import { strip } from '@rederive/colors';
 strip('\x1b[31mhello\x1b[39m'); // 'hello'
 ```
 
@@ -35,9 +35,9 @@ A hardened `sanitize` unit that strips all CSI/OSC is a candidate future unit �
 ## Verify / rebuild
 
 ```bash
-sirpm check .          # held-out oracle + content hashes  → ✓ VERIFIED  (deterministic, no tokens)
-sirpm resynth . --n 3  # rebuild src/ locally from sir/ + oracles/  (torches tokens, quorum-verified)
-sirpm vis .            # regenerate vis.html
+rdv check .          # held-out oracle + content hashes  → ✓ VERIFIED  (deterministic, no tokens)
+rdv resynth . --n 3  # rebuild src/ locally from sir/ + oracles/  (torches tokens, quorum-verified)
+rdv vis .            # regenerate vis.html
 ```
 
 Provenance, hashes, and verify status: `sir.manifest.json`. The oracle's expecteds were stamped by

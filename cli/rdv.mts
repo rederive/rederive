@@ -1,16 +1,16 @@
 #!/usr/bin/env -S npx tsx
 /**
- * sirpm — the trust-nothing package manager.
+ * rederive (CLI: rdv) — the trust-nothing package manager.
  *
  * A SIR package ships its CONTRACT (the SIR spec + a held-out oracle), not trusted bytes.
  * A consumer either VERIFIES the shipped implementation against that contract (`check`, deterministic,
  * free) or REBUILDS it locally from the spec (`resynth`, torches tokens, quorum-verified) — never
  * trusting the publisher's binary. The oracle is the independent source of truth nobody upstream can move.
  *
- *   sirpm check   <pkgdir>             verify src/ against the held-out oracle + content hashes  (no tokens)
- *   sirpm vis     <pkgdir>             (re)generate vis.html from the SIR + manifest             (no tokens)
- *   sirpm resynth <pkgdir> [--unit U]  PREPARE a local rebuild: write ready-to-spawn worker prompts + a plan
- *   sirpm resynth <pkgdir> --apply     APPLY the workers' output: grade vs held-out, pick a quorum
+ *   rdv check   <pkgdir>             verify src/ against the held-out oracle + content hashes  (no tokens)
+ *   rdv vis     <pkgdir>             (re)generate vis.html from the SIR + manifest             (no tokens)
+ *   rdv resynth <pkgdir> [--unit U]  PREPARE a local rebuild: write ready-to-spawn worker prompts + a plan
+ *   rdv resynth <pkgdir> --apply     APPLY the workers' output: grade vs held-out, pick a quorum
  *                                      emission, update src/ + manifest, re-verify (deterministic)
  *
  * The prepare/apply split is the wiring to the interactive sir-verify skill: a plain CLI cannot spawn
@@ -59,7 +59,7 @@ async function checkUnit(dir: string, u: any) {
 
 async function cmdCheck(dir: string) {
   const m = loadManifest(dir);
-  console.log(`${C.b('sirpm check')}  ${m.name}@${m.version}   ${C.dim('source: ' + m.provenance.source)}`);
+  console.log(`${C.b('rdv check')}  ${m.name}@${m.version}   ${C.dim('source: ' + m.provenance.source)}`);
   let ok = true;
   for (const u of m.units) {
     const r = await checkUnit(dir, u);
@@ -71,7 +71,7 @@ async function cmdCheck(dir: string) {
       `   ${C.dim(`(${r.frozen} frozen / ${r.total} held-out, ${r.kind})`)}`);
   }
   console.log(ok ? C.g(`\n  ALL UNITS VERIFIED — shipped src matches its contract.`)
-                 : C.r(`\n  VERIFICATION FAILED — do not trust this src; rebuild with: sirpm resynth ${relative(process.cwd(), dir) || '.'}`));
+                 : C.r(`\n  VERIFICATION FAILED — do not trust this src; rebuild with: rdv resynth ${relative(process.cwd(), dir) || '.'}`));
   return ok ? 0 : 1;
 }
 
@@ -113,13 +113,13 @@ function cmdResynthPrepare(dir: string, unitName: string | null, n: number) {
     plan.units.push({ unit: u.name, sig: u.sig, n, promptDir: relative(dir, rdir), emits: outs, heldoutFrom: u.oracle });
   }
   writeFileSync(resolve(dir, '.resynth', 'plan.json'), JSON.stringify(plan, null, 2));
-  console.log(`${C.b('sirpm resynth (prepare)')}  ${m.name}   n=${n}`);
+  console.log(`${C.b('rdv resynth (prepare)')}  ${m.name}   n=${n}`);
   for (const pu of plan.units) {
     console.log(`  ${C.dim('•')} ${C.b(pu.unit)} ${C.dim(pu.sig)} → ${n} prompts in ${C.y(pu.promptDir)}/prompt_{1..${n}}.txt`);
   }
   console.log(C.dim(`\n  AGENT (sir-verify skill): spawn one \`sir-reemitter\` per prompt_K.txt IN PARALLEL`));
   console.log(C.dim(`  (Write-only, original-deleted), each writing to its emit_K.ts path. Then:`));
-  console.log(`     ${C.b(`sirpm resynth ${relative(process.cwd(), dir) || '.'} --apply${unitName ? ' --unit ' + unitName : ''}`)}`);
+  console.log(`     ${C.b(`rdv resynth ${relative(process.cwd(), dir) || '.'} --apply${unitName ? ' --unit ' + unitName : ''}`)}`);
   console.log(C.dim(`  which grades each emission on the HELD-OUT set, requires quorum (>=2 full), copies the`));
   console.log(C.dim(`  winner into src/, and updates the manifest srcSha256. plan: .resynth/plan.json`));
   return 0;
@@ -141,8 +141,8 @@ async function cmdResynthApply(dir: string, unitName: string | null) {
     console.log(`  ${C.b(u.name)}: ` + graded.map((g) => `${g.f.replace('.ts', '')} ${g.full ? C.g(g.pass + '/' + g.total) : C.r(g.pass + '/' + g.total)}`).join('  '));
     if (full.length < 2) { console.log(C.r(`     NO-QUORUM (${full.length}/${graded.length} full) — not applied. Add coverage or escalate the worker tier.`)); ok = false; continue; }
     const winner = resolve(rdir, full[0].f);
-    const header = `// @sirpm/${m.name.split('/').pop()} — verified-recompose of ${u.name} (${m.provenance.source}). ZERO-DEP.\n` +
-      `// Rebuilt locally by 'sirpm resynth': reconstructed from sir/ + oracles/ with the original deleted;\n` +
+    const header = `// @rederive/${m.name.split('/').pop()} — verified-recompose of ${u.name} (${m.provenance.source}). ZERO-DEP.\n` +
+      `// Rebuilt locally by 'rdv resynth': reconstructed from sir/ + oracles/ with the original deleted;\n` +
       `// quorum ${full.length}/${graded.length}, ${held.length}/${held.length} held-out. Trust your own build, not the publisher's.\n`;
     writeFileSync(resolve(dir, u.src), header + readFileSync(winner, 'utf-8').replace(/^\s+/, ''));
     u.srcSha256 = sha256(resolve(dir, u.src));
@@ -206,11 +206,11 @@ footer{margin-top:30px;color:var(--muted);font-size:12.5px}
 ${unitCards}</section>
 <section><p class="kicker">How to trust this</p><h2>Check it, or rebuild it</h2>
 <div class="trust"><b>Verify the shipped code</b> against its contract — deterministic, no tokens. Fails loudly if the bytes don't match the held-out oracle or the recorded hashes.
-<div class="cmd">sirpm check .</div></div>
+<div class="cmd">rdv check .</div></div>
 <div class="trust"><b>Rebuild it yourself</b> from the spec — torch some tokens, regenerate <code>src/</code> from <code>sir/</code> + <code>oracles/</code> via N isolated quorum workers. Trust your own build, not the publisher's.
-<div class="cmd">sirpm resynth .          # prepare worker prompts\nsirpm resynth . --apply  # grade, pick quorum, update src/ + manifest</div></div>
+<div class="cmd">rdv resynth .          # prepare worker prompts\nrdv resynth . --apply  # grade, pick quorum, update src/ + manifest</div></div>
 </section>
-<footer>Generated by <code>sirpm vis</code> from <code>sir.manifest.json</code> + <code>sir/</code> + <code>oracles/</code>. The oracle is the source of truth; the source text is fungible.</footer>
+<footer>Generated by <code>rdv vis</code> from <code>sir.manifest.json</code> + <code>sir/</code> + <code>oracles/</code>. The oracle is the source of truth; the source text is fungible.</footer>
 </div></body></html>`;
 }
 
@@ -224,8 +224,8 @@ async function main() {
     if (cmd === 'check') process.exit(await cmdCheck(dir));
     if (cmd === 'vis') process.exit(cmdVis(dir));
     if (cmd === 'resynth') process.exit(has('--apply') ? await cmdResynthApply(dir, unit) : cmdResynthPrepare(dir, unit, parseInt(arg('--n', '3'), 10)));
-    console.log('usage: sirpm <check|vis|resynth> <pkgdir> [--unit U] [--n 3] [--apply]');
+    console.log('usage: rdv <check|vis|resynth> <pkgdir> [--unit U] [--n 3] [--apply]');
     process.exit(2);
-  } catch (e: any) { console.error('sirpm error:', e?.stack ?? e?.message ?? e); process.exit(1); }
+  } catch (e: any) { console.error('rdv error:', e?.stack ?? e?.message ?? e); process.exit(1); }
 }
 main();
