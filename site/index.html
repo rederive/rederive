@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rederive — Don't trust packages. Re-derive them.</title>
+<meta name="description" content="rederive is a trust-nothing package manager. Every package ships its contract — a spec and a held-out oracle — not bytes you have to trust. Verify the shipped code, or re-derive it locally from the spec. From Semcom.">
+
+<link rel="canonical" href="https://rederive.ai/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rederive.ai/">
+<meta property="og:title" content="rederive — Don't trust packages. Re-derive them.">
+<meta property="og:description" content="A trust-nothing package manager. Packages ship a contract — a spec + a held-out oracle — not trusted bytes. Verify the shipped code, or re-derive it locally.">
+<meta property="og:site_name" content="rederive">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="rederive — Don't trust packages. Re-derive them.">
+<meta name="twitter:description" content="A trust-nothing package manager. Verify the shipped code against its contract, or re-derive it yourself.">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}
+a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:#e0e0e0;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+/* ---- Nav ---- */
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38}
+.topnav{max-width:960px;margin:0 auto;padding:0.9em 20px;display:flex;align-items:center;gap:2em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a{color:#b0b0b0;transition:color 0.15s}
+.topnav a:hover{color:#fafafa;text-decoration:none}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600;transition:background 0.15s}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+/* ---- Hero ---- */
+.hero-section{background:#0a0c12;color:#e0e0e0;padding:3.8em 24px 3.5em;position:relative;overflow:hidden}
+.hero-section::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:800px;height:520px;background:radial-gradient(ellipse at center,rgba(194,124,78,0.11) 0%,rgba(212,149,106,0.04) 40%,transparent 70%);pointer-events:none}
+.hero-inner{max-width:960px;margin:0 auto;position:relative}
+.hero-inner h1{font-size:2.8em;color:#fafafa;line-height:1.12;margin-bottom:0.35em;font-weight:800;letter-spacing:-0.025em}
+.hero-inner h1 span{color:#d4956a}
+.hero-inner .tagline{font-size:1.18em;color:#e8e8e8;margin-bottom:0.6em;max-width:660px}
+.hero-inner .hook{font-size:1em;color:#b0b0b0;margin-bottom:1.8em;max-width:620px;line-height:1.65}
+.kbadge{display:inline-block;background:#331b12;color:#ecc4aa;padding:0.3em 0.9em;border-radius:4px;font-size:0.82em;font-weight:600;margin-bottom:1.4em;letter-spacing:0.02em}
+.hero-ctas{display:flex;gap:1em;flex-wrap:wrap;margin-bottom:2.5em}
+.hero-ctas a{padding:0.7em 1.5em;border-radius:6px;font-weight:600;font-size:0.95em;transition:all 0.15s}
+.btn-primary{background:#a86539;color:#fff;box-shadow:0 0 20px rgba(194,124,78,0.3)}
+.btn-primary:hover{background:#8b522e;text-decoration:none;box-shadow:0 0 28px rgba(194,124,78,0.45)}
+.btn-secondary{border:1px solid #3a3f4e;color:#e8e8e8}
+.btn-secondary:hover{border-color:#505868;color:#fff;text-decoration:none}
+
+.stats-bar{display:flex;gap:2.5em;flex-wrap:wrap;padding-top:2em;border-top:1px solid #282c38}
+.stat{text-align:center}
+.stat .num{font-size:1.8em;font-weight:700;color:#fafafa;display:block}
+.stat:first-child .num{color:#d4956a}
+.stat .label{font-size:0.78em;color:#b0b0b0;text-transform:uppercase;letter-spacing:0.06em}
+
+/* ---- Sections ---- */
+.section{max-width:960px;margin:0 auto;padding:3.5em 24px}
+.section h2{font-size:1.8em;color:#fafafa;margin-bottom:0.25em;font-weight:800;letter-spacing:-0.02em}
+.section .section-sub{color:#b0b0b0;margin-bottom:1.5em;font-size:1em}
+.section-alt{background:#10131c;border-top:1px solid #282c38;border-bottom:1px solid #282c38}
+
+.alert-box{background:#161924;border-radius:8px;padding:1.5em 1.8em;margin-bottom:2em;border-left:4px solid #d4956a}
+.alert-box .alert-title{font-weight:700;color:#ecc4aa;margin-bottom:0.4em;font-size:0.95em;text-transform:uppercase;letter-spacing:0.04em}
+.alert-box p{color:#e8e8e8;font-size:0.93em;line-height:1.6}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.5em 0}
+.card{padding:1.4em 1.5em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;transition:border-color 0.15s}
+.card:hover{border-color:#c27c4e}
+.card h4{margin:0 0 0.4em;color:#ecc4aa;font-size:1.05em;font-weight:700}
+.card p{margin:0;font-size:0.92em;color:#e8e8e8;line-height:1.6}
+.card code{background:#0e1019}
+
+/* ---- Two paths ---- */
+.paths{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.5em 0}
+.path{background:#1a1d28;border:1px solid #282c38;border-radius:10px;padding:1.5em 1.6em}
+.path .ptag{font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#d4956a;margin-bottom:0.5em}
+.path h4{color:#fafafa;font-size:1.15em;margin-bottom:0.4em}
+.path p{color:#e8e8e8;font-size:0.92em;line-height:1.6;margin-bottom:0.8em}
+.path .pcmd{font-family:'SF Mono',ui-monospace,monospace;font-size:0.85em;background:#080a10;border:1px solid #282c38;border-radius:6px;padding:0.6em 0.8em;color:#d4956a}
+.path .pcost{font-size:0.78em;color:#808088;margin-top:0.5em;text-transform:uppercase;letter-spacing:0.05em}
+
+/* ---- Terminal ---- */
+.terminal{margin:1.5em 0;padding:1.8em;background:#080a10;color:#e0e0e0;border-radius:10px;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;font-size:0.86em;line-height:1.7;overflow-x:auto;border:1px solid #282c38;box-shadow:0 8px 32px rgba(194,124,78,0.06),0 4px 24px rgba(0,0,0,0.4)}
+.terminal-bar{display:flex;gap:6px;margin-bottom:1em;padding-bottom:0.8em;border-bottom:1px solid #282c38}
+.terminal-dot{width:10px;height:10px;border-radius:50%}
+.terminal-dot.red{background:#ff5f57}.terminal-dot.yellow{background:#febc2e}.terminal-dot.green{background:#28c840}
+.terminal .prompt{color:#d4956a}.terminal .output{color:#cfcfd6}.terminal .dim{color:#6a6f7e}
+.terminal .ok{color:#28c840;font-weight:600}.terminal .bad{color:#ff7a72;font-weight:600}.terminal .warn{color:#febc2e}
+
+/* ---- Inventions ---- */
+.invention-grid{display:grid;grid-template-columns:1fr;gap:1em;margin:1.5em 0}
+.invention-card{padding:1.4em 1.8em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;border-left:2px solid #353a48;transition:border-color 0.15s}
+.invention-card:hover{border-left-color:#d4956a}
+.invention-card .inv-num{font-size:0.75em;font-weight:700;color:#d4956a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3em}
+.invention-card h4{color:#fafafa;margin-bottom:0.3em;font-size:1.05em;font-weight:700}
+.invention-card p{font-size:0.92em;color:#e8e8e8;line-height:1.6}
+
+/* ---- Packages ---- */
+.pkg-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1em;margin:1.5em 0}
+.pkg-card{padding:1.3em 1.5em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;transition:transform 0.15s,border-color 0.15s}
+.pkg-card.live:hover{transform:translateY(-2px);border-color:#c27c4e}
+.pkg-card.soon{opacity:0.6}
+.pkg-card .pname{font-family:'SF Mono',ui-monospace,monospace;font-weight:700;color:#fafafa;font-size:0.98em}
+.pkg-card .pstatus{float:right;font-size:0.7em;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 8px;border-radius:999px}
+.pstatus.v{background:#0f2417;color:#28c840}.pstatus.s{background:#1a1d28;color:#808088;border:1px solid #282c38}
+.pkg-card .pdesc{font-size:0.84em;color:#b0b0b0;margin-top:0.5em;line-height:1.5}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:960px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-brand{display:flex;align-items:center;gap:0.5em;color:#b0b0b0;font-weight:600}
+.footer-links{display:flex;gap:1.5em}
+.footer-links a{color:#b0b0b0;transition:color 0.15s}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:768px){
+  .hero-inner h1{font-size:2em}
+  .grid,.paths,.pkg-grid{grid-template-columns:1fr}
+  .stats-bar{gap:1.5em}
+  .topnav{flex-wrap:wrap;gap:1em}
+  .footer-inner{flex-direction:column;text-align:center}
+}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<div class="topnav-wrap">
+<nav class="topnav">
+  <span class="logo">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </span>
+  <a href="#why">Why</a>
+  <a href="#how">How it works</a>
+  <a href="#packages">Packages</a>
+  <a href="https://semcom.ai">semcom.ai</a>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+</nav>
+</div>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="hero-section">
+<div class="hero-inner">
+  <div class="kbadge">A trust-nothing package manager · from Semcom</div>
+  <h1>Don't trust packages.<br><span>Re-derive them.</span></h1>
+  <p class="tagline">Every <code>rederive</code> package ships its <strong>contract</strong> — a spec and a held-out oracle — not bytes you have to trust. Verify the shipped code against it, or re-derive the code yourself from the spec.</p>
+  <p class="hook">The oracle is an independent source of truth no publisher can move. Tamper with a shipped package and it's caught two ways at once: the behavior fails the oracle, and the content hash mismatches.</p>
+
+  <div class="hero-ctas">
+    <a href="#how" class="btn-primary">See it work</a>
+    <a href="#why" class="btn-secondary">Why trust nothing?</a>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat"><span class="num">0</span><span class="label">Deps in the verified core</span></div>
+    <div class="stat"><span class="num">10/10</span><span class="label">Held-out verified</span></div>
+    <div class="stat"><span class="num">3/3</span><span class="label">Quorum re-derivations</span></div>
+    <div class="stat"><span class="num">2-way</span><span class="label">Tamper detection</span></div>
+  </div>
+</div>
+</section>
+
+<!-- WHY -->
+<section class="section" id="why">
+  <h2>You don't audit your dependencies. You trust the publisher.</h2>
+  <p class="section-sub">And the publisher is the attack.</p>
+
+  <div class="alert-box">
+    <div class="alert-title">January 2022 — the colors / faker sabotage</div>
+    <p>A maintainer pushed an infinite loop and garbage output into <code>colors</code> and <code>faker</code> — packages with millions of daily downloads, buried deep in transitive trees — breaking thousands of builds overnight. Nothing was technically "hacked." You ran the bytes the registry handed you, because that's the only thing a package manager ever gives you: <strong>bytes, and a name to trust.</strong></p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h4>Ship the contract, not the bytes</h4>
+      <p>A rederive package carries a structural spec and a <em>held-out</em> oracle — worked input→output examples derived by executing the original. The implementation is something you verify or regenerate, not something you accept on faith.</p>
+    </div>
+    <div class="card">
+      <h4>Verify, deterministically</h4>
+      <p><code>rdv check</code> re-runs the held-out oracle against the shipped code and verifies its content hashes. No tokens, no network, no trust — just a pass/fail against an oracle the publisher can't edit.</p>
+    </div>
+    <div class="card">
+      <h4>Re-derive locally</h4>
+      <p>Don't want to trust the shipped binary at all? <code>rdv resynth</code> regenerates the code from the spec with isolated workers, independently, and accepts it only on quorum. Torch some tokens; trust your own build.</p>
+    </div>
+    <div class="card">
+      <h4>Tamper-evident by construction</h4>
+      <p>Change one byte and it's caught two ways at once: the behavior fails the held-out oracle, <em>and</em> the recorded content hash mismatches. Supply-chain tampering is detected from the contract alone.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section class="section section-alt" id="how">
+  <h2>See it work</h2>
+  <p class="section-sub">A real package: <code>@rederive/colors</code>, a zero-dependency re-derivation of <code>colors@1.4.0</code> — the last release before the sabotage.</p>
+
+  <div class="terminal">
+    <div class="terminal-bar"><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div>
+<span class="dim"># 1. verify the shipped code against its contract — deterministic, no tokens</span><br>
+<span class="prompt">$ rdv check @rederive/colors</span><br>
+<span class="ok">  &check; VERIFIED</span> <span class="output">strip (str) =&gt; string</span><br>
+<span class="output">     held-out 10/10 &nbsp; hashes match &nbsp; (zero-dep, FUNCTIONAL)</span><br>
+<span class="ok">  ALL UNITS VERIFIED — shipped src matches its contract.</span><br>
+<br>
+<span class="dim"># 2. tamper with the shipped code — flip one byte</span><br>
+<span class="prompt">$ rdv check @rederive/colors</span><br>
+<span class="bad">  &cross; FAILED</span> <span class="output">strip</span><br>
+<span class="output">     held-out </span><span class="bad">5/10</span><span class="output"> miss=[csi_clear, osc_set_title, …] &nbsp; hashes </span><span class="bad">MISMATCH (src:false)</span><br>
+<span class="bad">  VERIFICATION FAILED — do not trust this src; rebuild with: rdv resynth</span><br>
+<br>
+<span class="dim"># 3. so don't trust it — re-derive it yourself from the spec</span><br>
+<span class="prompt">$ rdv resynth @rederive/colors --n 3</span><br>
+<span class="output">  spawned 3 isolated workers (original deleted) …</span><br>
+<span class="output">  strip: emit_1 </span><span class="ok">10/10</span><span class="output"> &nbsp; emit_2 </span><span class="ok">10/10</span><span class="output"> &nbsp; emit_3 </span><span class="ok">10/10</span><br>
+<span class="ok">  QUORUM 3/3</span><span class="output"> → applied; manifest srcSha256 updated</span><br>
+<span class="ok">  &check; VERIFIED — trust your own build, not the publisher's.</span>
+  </div>
+  <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">The held-out oracle even documents the original's real limits — <code>colors.strip</code> removes only color codes, so cursor/title-injection escapes survive. rederive pins that in the contract instead of hiding it.</p>
+</section>
+
+<!-- THE TWO PATHS -->
+<section class="section">
+  <h2>Two ways to not trust a package</h2>
+  <p class="section-sub">Both anchored to the same independent oracle. Neither requires trusting the publisher's bytes.</p>
+  <div class="paths">
+    <div class="path">
+      <div class="ptag">The cheap path</div>
+      <h4>Verify</h4>
+      <p>Re-run the held-out oracle against the shipped code and check the content hashes. If the bytes don't match the behavior the contract promises, it fails — loudly.</p>
+      <div class="pcmd">$ rdv check &lt;pkg&gt;</div>
+      <div class="pcost">deterministic · no tokens · offline</div>
+    </div>
+    <div class="path">
+      <div class="ptag">The paranoid path</div>
+      <h4>Re-derive</h4>
+      <p>Regenerate the implementation locally from the spec with N isolated workers — the original never in scope — and accept it only when independent rebuilds agree on the full held-out set.</p>
+      <div class="pcmd">$ rdv resynth &lt;pkg&gt; --n 3</div>
+      <div class="pcost">quorum-verified · your build, not theirs</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS (the ideas) -->
+<section class="section section-alt">
+  <h2>How it works</h2>
+  <p class="section-sub">Three ideas, one principle: the source text is fungible; the executable behavior is fundamental.</p>
+
+  <div class="invention-grid">
+    <div class="invention-card">
+      <div class="inv-num">1 — The contract</div>
+      <h4>SIR spec + a held-out oracle</h4>
+      <p>Each unit decompiles to a structural spec (the SIR graph) and a behavioral oracle whose expected outputs are <em>stamped by executing the original</em> — never hand-authored. A frozen set teaches; a disjoint held-out set grades. Passing the held-out is evidence of behavior, not of matching a snapshot.</p>
+    </div>
+    <div class="invention-card">
+      <div class="inv-num">2 — Quorum re-derivation</div>
+      <h4>Independent rebuilds that must agree</h4>
+      <p>To re-derive, N workers reconstruct the unit from the spec + oracle with the original deleted, in isolation. The build is accepted only when ≥2 independent emissions pass the <em>full</em> held-out set. One passing rebuild is luck; agreement is evidence.</p>
+    </div>
+    <div class="invention-card">
+      <div class="inv-num">3 — An oracle no one can move</div>
+      <h4>Trust anchored to something the publisher can't edit</h4>
+      <p>The verdict isn't the publisher's say-so or even the rebuild's self-report — it's a held-out oracle plus content hashes. A tamper fails the behavior and the hash. Self-consistent verification can rubber-stamp a mistake; an independent oracle is a brake.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PACKAGES -->
+<section class="section" id="packages">
+  <h2>The catalog</h2>
+  <p class="section-sub">Verified re-derivations of the dependencies you can't trust to a maintainer anymore — starting with the abandoned and the once-sabotaged.</p>
+  <div class="pkg-grid">
+    <div class="pkg-card live">
+      <span class="pname">@rederive/colors</span><span class="pstatus v">verified</span>
+      <div class="pdesc">colors@1.4.0, zero-dep core. <code>strip</code> re-derived, quorum 3/3, 10/10 held-out. The last good release before the sabotage.</div>
+    </div>
+    <div class="pkg-card soon">
+      <span class="pname">@rederive/faker</span><span class="pstatus s">queued</span>
+      <div class="pdesc">The other half of the Jan-2022 sabotage. Data generators, behavior-locked.</div>
+    </div>
+    <div class="pkg-card soon">
+      <span class="pname">@rederive/request</span><span class="pstatus s">queued</span>
+      <div class="pdesc">Deprecated, still everywhere. The effectful units re-derived against trace oracles.</div>
+    </div>
+    <div class="pkg-card soon">
+      <span class="pname">@rederive/q</span><span class="pstatus s">queued</span>
+      <div class="pdesc">A dead promise library still in millions of trees. Pure, oracle-rich, re-derivable.</div>
+    </div>
+  </div>
+  <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">Want a specific dead dependency re-derived and behavior-locked? <a href="https://calendly.com/lane-apilify/30min">Tell us which one.</a></p>
+</section>
+
+<!-- COMPLIANCE -->
+<section class="section section-alt">
+  <h2>Built for the audit</h2>
+  <p class="section-sub">Where "we trusted the registry" is no longer an acceptable answer.</p>
+  <div class="grid">
+    <div class="card"><h4>EU Cyber Resilience Act</h4><p>Provenance and integrity for every dependency, with a contract and a deterministic check — not a transitive tree no human can audit.</p></div>
+    <div class="card"><h4>NIST SSDF / SOC 2</h4><p>Each unit ships behavioral test evidence and content hashes as a byproduct of the build, not a separate attestation you have to take on faith.</p></div>
+    <div class="card"><h4>Reproducible by design</h4><p>Re-derive a dependency in your own environment and confirm it satisfies the same contract — supply-chain trust you generate, not import.</p></div>
+    <div class="card"><h4>Tamper-evident SBOM</h4><p>The contract <em>is</em> the bill of materials: spec, oracle, hashes. A poisoned package can't pass a check it didn't author.</p></div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="section">
+  <h2>About</h2>
+  <p style="max-width:680px;margin-bottom:0.5em;color:#e8e8e8">rederive is built on <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine — the same machinery that compiles natural-language intent into verified, dependency-free machine code. <strong style="color:#fafafa">Lane Thompson</strong> is the inventor and CEO of Apilify Inc. The idea is simple and uncomfortable: most tooling makes the publisher's bytes the source of truth. rederive makes an independent oracle the source of truth, and lets you regenerate the bytes yourself.</p>
+  <p><a href="https://semcom.ai">semcom.ai</a> &middot; <a href="https://www.linkedin.com/in/lanestp">LinkedIn</a> &middot; <a href="mailto:lane@apilify.com">lane@apilify.com</a></p>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span class="footer-brand">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <div class="footer-links">
+      <a href="https://semcom.ai">Semcom</a>
+      <a href="#how">How it works</a>
+      <a href="https://www.linkedin.com/in/lanestp">LinkedIn</a>
+      <a href="mailto:lane@apilify.com">Contact</a>
+    </div>
+    <span>&copy; 2026 Apilify Inc. &middot; Patent Pending</span>
+  </div>
+</footer>
+
+</body>
+</html>
