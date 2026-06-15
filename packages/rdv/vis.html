@@ -28,9 +28,9 @@ footer{margin-top:30px;color:var(--muted);font-size:12.5px}
 <p class="lede">Each is a quorum-verified, behavior-locked reconstruction with the original deleted — proven on a held-out set the implementation never saw.</p>
 
     <div class="unit">
-      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3 (rdv resynth — original deleted)</span>
         <code class="uname">eq</code> <span class="sig">(a: any, b: any) =&gt; boolean</span> <span class="kind">FUNCTIONAL</span></div>
-      <div class="meta">oracle: <b>8</b> frozen / <b>9</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      <div class="meta">oracle: <b>8</b> frozen / <b>9</b> held-out · quorum <b>3/3 (rdv resynth — original deleted)</b> · zero-dep</div>
       
       <pre class="sir">SIR    eq
 KIND   FUNCTIONAL
@@ -44,32 +44,33 @@ ORACLE value @vectors: oracles/eq.json [held-out adversarial; verified by rdv ch
 # under grade() — a too-loose eq would let a wrong implementation pass.
 # GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
 </pre>
-      <div class="hashes">src <code>e209af5e479b10d2</code> · oracle <code>45dbb0e086e92f98</code> · spec <code>0e4e5b319d8719d1</code></div>
+      <div class="hashes">src <code>266163854b9e52f3</code> · oracle <code>45dbb0e086e92f98</code> · spec <code>0e4e5b319d8719d1</code></div>
     </div>
     <div class="unit">
-      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+      <div class="uhead"><span class="badge ok">VERIFIED composed on eq leaf (eq: 3/3)</span>
         <code class="uname">grade</code> <span class="sig">(gots: any[], vectors: {name,expected}[]) =&gt; {pass,total,full,miss}</span> <span class="kind">FUNCTIONAL</span></div>
-      <div class="meta">oracle: <b>7</b> frozen / <b>7</b> held-out · quorum <b>pending</b> · zero-dep</div>
-      <div class="limit">⚠ empty vectors =&gt; full:true (vacuous) — a held-out set must be non-empty</div><div class="limit">⚠ miss capped at the first 8 failing names</div>
+      <div class="meta">oracle: <b>8</b> frozen / <b>8</b> held-out · quorum <b>composed on eq leaf (eq: 3/3)</b> · zero-dep</div>
+      <div class="limit">⚠ equality is delegated to the verified eq unit (composition) — grade cannot drift its own equality</div><div class="limit">⚠ empty vectors =&gt; full:true (vacuous) — a held-out set must be non-empty</div><div class="limit">⚠ miss capped at the first 8 failing names</div>
       <pre class="sir">SIR    grade
 KIND   FUNCTIONAL
 SRC    rederive cli/verdict.mts:grade
 SIG    (gots: any[], vectors: {name,expected}[]) -&gt; {pass, total, full, miss}
 REACH  entry
 CONTROL LOOP x1
-DEPENDS-ON eq, threw   (inlined; conceptually the comparison + throw-sentinel primitives)
-ORACLE value @vectors: oracles/grade.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+DEPENDS-ON eq   (the VERIFIED eq unit — COMPOSED, not re-implemented; threw inlined)
+ORACLE value @vectors: oracles/grade.json [held-out adversarial incl. key-order; verified by rdv check + adversarial-smoke; composed on eq (3/3)]
 # The verdict. full = (pass === total); throw matches throw (message NOT compared); miss capped at 8.
-# Vacuous edge pinned by oracle: empty vectors =&gt; full:true. Must NOT short-circuit on the first
-# vector — a non-first mismatch must drop `full`. The single most trust-critical unit in rederive.
+# Vacuous edge pinned by oracle: empty vectors =&gt; full:true. Must NOT short-circuit on the first vector.
+# COMPOSITION FIX: equality is delegated to the verified `eq` leaf, so a re-derivation cannot quietly
+# loosen it — the order-insensitivity drift quorum-3/3 once missed, now pinned by the ho_keyorder vector.
 # GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
 </pre>
-      <div class="hashes">src <code>6ad35a8dff16186a</code> · oracle <code>c489ba095f692708</code> · spec <code>65d69af869af0aed</code></div>
+      <div class="hashes">src <code>ec9a962aace3667d</code> · oracle <code>bbf53bf9087761e7</code> · spec <code>46911682b48de3f0</code></div>
     </div>
     <div class="unit">
-      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3 (rdv resynth — original deleted)</span>
         <code class="uname">quorum</code> <span class="sig">(graded: {full:boolean}[], need=2) =&gt; {fullCount,hasQuorum,winnerIdx}</span> <span class="kind">FUNCTIONAL</span></div>
-      <div class="meta">oracle: <b>6</b> frozen / <b>7</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      <div class="meta">oracle: <b>6</b> frozen / <b>7</b> held-out · quorum <b>3/3 (rdv resynth — original deleted)</b> · zero-dep</div>
       
       <pre class="sir">SIR    quorum
 KIND   FUNCTIONAL
@@ -83,12 +84,12 @@ ORACLE value @vectors: oracles/quorum.json [held-out adversarial; verified by rd
 # [partial, full, full] -&gt; winnerIdx 1.
 # GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
 </pre>
-      <div class="hashes">src <code>3b301b8c55f4ce13</code> · oracle <code>3775a93c345de6bb</code> · spec <code>70c6edbb16d60e73</code></div>
+      <div class="hashes">src <code>d61583c0b9ee451e</code> · oracle <code>3775a93c345de6bb</code> · spec <code>70c6edbb16d60e73</code></div>
     </div>
     <div class="unit">
-      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3 (rdv resynth — original deleted)</span>
         <code class="uname">hashOk</code> <span class="sig">(bytes: any, want?: string) =&gt; boolean</span> <span class="kind">FUNCTIONAL?</span></div>
-      <div class="meta">oracle: <b>4</b> frozen / <b>5</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      <div class="meta">oracle: <b>4</b> frozen / <b>5</b> held-out · quorum <b>3/3 (rdv resynth — original deleted)</b> · zero-dep</div>
       <div class="limit">⚠ NOT zero-dep: SHA-256 delegated to host node:crypto — control logic verified, not the hash primitive (every-byte verification is the enterprise extension)</div>
       <pre class="sir">SIR    hashOk
 KIND   FUNCTIONAL?            # suspect: functional in shape, but with a named opaque dependency
@@ -103,7 +104,7 @@ ORACLE value @vectors: oracles/hashOk.json [held-out adversarial; verified by rd
 # pins the control behavior. Verifying the algorithm + substrate is the every-byte enterprise tier.
 # GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
 </pre>
-      <div class="hashes">src <code>ea9aec37735e039b</code> · oracle <code>e1b0a1069d100df1</code> · spec <code>05929cebd5406567</code></div>
+      <div class="hashes">src <code>35e37cb2582888d3</code> · oracle <code>e1b0a1069d100df1</code> · spec <code>05929cebd5406567</code></div>
     </div></section>
 <section><p class="kicker">How to trust this</p><h2>Check it, or rebuild it</h2>
 <div class="trust"><b>Verify the shipped code</b> against its contract — deterministic, no tokens. Fails loudly if the bytes don't match the held-out oracle or the recorded hashes.

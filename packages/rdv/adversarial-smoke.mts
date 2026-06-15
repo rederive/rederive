@@ -29,6 +29,21 @@ const BROKEN: [string, string, any][] = [
   ['grade', 'first-vector-only (no saturation)', (g: any[], v: any[]) => {
     const ok = v.length === 0 || eqj(g[0], v[0].expected); return { pass: ok ? v.length : 0, total: v.length, full: ok, miss: [] };
   }],
+  // The exact drift the live re-derivation produced: an order-INSENSITIVE deep-equal. Must now be
+  // caught by the ho_keyorder held-out vector added after the composition fix.
+  ['grade', 'order-insensitive-eq (the key-order drift)', (g: any[], v: any[]) => {
+    const eqs = (a: any, b: any): boolean => {
+      if (a === b) return true;
+      if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return a === b;
+      if (Array.isArray(a) !== Array.isArray(b)) return false;
+      const ak = Object.keys(a), bk = Object.keys(b);
+      return ak.length === bk.length && ak.every((k) => eqs(a[k], b[k]));
+    };
+    const thr = (x: any) => x && typeof x === 'object' && '__throw' in x;
+    let pass = 0; const miss: string[] = [];
+    for (let i = 0; i < v.length; i++) { const got = g[i], exp = v[i].expected; if ((thr(got) && thr(exp)) || eqs(got, exp)) pass++; else miss.push(v[i].name); }
+    return { pass, total: v.length, full: pass === v.length, miss };
+  }],
   ['quorum', 'winner-always-0', (g: any[], need = 2) => { const fc = g.filter((x) => x.full).length; return { fullCount: fc, hasQuorum: fc >= need, winnerIdx: fc >= need ? 0 : -1 }; }],
   ['quorum', 'blesses-lone-pass (need=1)', (g: any[], need = 2) => { const fc = g.filter((x) => x.full).length; return { fullCount: fc, hasQuorum: fc >= 1, winnerIdx: fc >= 1 ? g.findIndex((x) => x.full) : -1 }; }],
   ['eq', 'set-equal (order-blind)', (a: any, b: any) => Array.isArray(a) && Array.isArray(b) ? eqj([...a].sort(), [...b].sort()) : eqj(a, b)],

@@ -4,9 +4,10 @@ SRC    rederive cli/verdict.mts:grade
 SIG    (gots: any[], vectors: {name,expected}[]) -> {pass, total, full, miss}
 REACH  entry
 CONTROL LOOP x1
-DEPENDS-ON eq, threw   (inlined; conceptually the comparison + throw-sentinel primitives)
-ORACLE value @vectors: oracles/grade.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+DEPENDS-ON eq   (the VERIFIED eq unit — COMPOSED, not re-implemented; threw inlined)
+ORACLE value @vectors: oracles/grade.json [held-out adversarial incl. key-order; verified by rdv check + adversarial-smoke; composed on eq (3/3)]
 # The verdict. full = (pass === total); throw matches throw (message NOT compared); miss capped at 8.
-# Vacuous edge pinned by oracle: empty vectors => full:true. Must NOT short-circuit on the first
-# vector — a non-first mismatch must drop `full`. The single most trust-critical unit in rederive.
+# Vacuous edge pinned by oracle: empty vectors => full:true. Must NOT short-circuit on the first vector.
+# COMPOSITION FIX: equality is delegated to the verified `eq` leaf, so a re-derivation cannot quietly
+# loosen it — the order-insensitivity drift quorum-3/3 once missed, now pinned by the ho_keyorder vector.
 # GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.

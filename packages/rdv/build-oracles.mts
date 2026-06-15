@@ -50,9 +50,11 @@ const INPUTS: any = {
       { name: 'throw_vs_value', args: [[{ __throw: 'x' }], [{ name: 't', expected: 5 }]] },
       { name: 'obj_match', args: [[{ k: 1 }], [{ name: 'o', expected: { k: 1 } }]] },
       { name: 'single_ok', args: [[7], [{ name: 's', expected: 7 }]] },
+      { name: 'keyorder_reject', args: [[{ a: 1, b: 2 }], [{ name: 'k', expected: { b: 2, a: 1 } }]] },
     ],
     heldout: [
       { name: 'ho_nonfirst_mismatch', args: [[5, 5, 9, 5], [{ name: 'a', expected: 5 }, { name: 'b', expected: 5 }, { name: 'c', expected: 5 }, { name: 'd', expected: 5 }]] },
+      { name: 'ho_keyorder', args: [[{ x: 1, y: 2 }], [{ name: 'ko', expected: { y: 2, x: 1 } }]] },
       { name: 'ho_empty_vacuous', args: [[], []] },
       { name: 'ho_value_vs_throw', args: [[5], [{ name: 't', expected: { __throw: 'x' } }]] },
       { name: 'ho_miss_cap_8', args: [Array(10).fill(9), Array.from({ length: 10 }, (_, i) => ({ name: `v${i + 1}`, expected: i + 1 }))] },
@@ -98,12 +100,14 @@ const INPUTS: any = {
 };
 
 const META: any = {
-  eq: { kind: 'FUNCTIONAL', sig: '(a: any, b: any) => boolean', limits: [] },
+  eq: { kind: 'FUNCTIONAL', sig: '(a: any, b: any) => boolean', limits: [], quorum: '3/3 (rdv resynth — original deleted)' },
   grade: { kind: 'FUNCTIONAL', sig: '(gots: any[], vectors: {name,expected}[]) => {pass,total,full,miss}',
-    limits: ['empty vectors => full:true (vacuous) — a held-out set must be non-empty', 'miss capped at the first 8 failing names'] },
-  quorum: { kind: 'FUNCTIONAL', sig: '(graded: {full:boolean}[], need=2) => {fullCount,hasQuorum,winnerIdx}', limits: [] },
+    limits: ['equality is delegated to the verified eq unit (composition) — grade cannot drift its own equality', 'empty vectors => full:true (vacuous) — a held-out set must be non-empty', 'miss capped at the first 8 failing names'],
+    quorum: 'composed on eq leaf (eq: 3/3)', composedOn: ['eq'] },
+  quorum: { kind: 'FUNCTIONAL', sig: '(graded: {full:boolean}[], need=2) => {fullCount,hasQuorum,winnerIdx}', limits: [], quorum: '3/3 (rdv resynth — original deleted)' },
   hashOk: { kind: 'FUNCTIONAL?', sig: '(bytes: any, want?: string) => boolean',
-    limits: ['NOT zero-dep: SHA-256 delegated to host node:crypto — control logic verified, not the hash primitive (every-byte verification is the enterprise extension)'] },
+    limits: ['NOT zero-dep: SHA-256 delegated to host node:crypto — control logic verified, not the hash primitive (every-byte verification is the enterprise extension)'],
+    quorum: '3/3 (rdv resynth — original deleted)' },
 };
 
 const fns: any = {
@@ -134,7 +138,7 @@ const units = ORDER.map((u) => {
     sir: `sir/${u}.sir`, sirSha256: hfile(`sir/${u}.sir`),
     oracle: `oracles/${u}.json`, oracleSha256: hfile(`oracles/${u}.json`),
     src: `src/${u}.ts`, srcSha256: hfile(`src/${u}.ts`),
-    verified: { mode: 'vectors', frozen: o.vectors.length, heldout: o.heldout.length, heldoutVerified: true, quorum: 'pending', at: '2026-06-15' },
+    verified: { mode: 'vectors', frozen: o.vectors.length, heldout: o.heldout.length, heldoutVerified: true, quorum: META[u].quorum, ...(META[u].composedOn ? { composedOn: META[u].composedOn } : {}), at: '2026-06-15' },
     knownLimitations: META[u].limits,
     spec: `specs/${u}.md`, specSha256: hfile(`specs/${u}.md`),
   };

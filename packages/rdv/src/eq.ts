@@ -1,7 +1,6 @@
-// @rederive/rdv — verified-recompose of rdv's deep-equality primitive (verdict core). ZERO-DEP.
-// Value-based, order-sensitive structural equality via canonical JSON. It is the comparison primitive
-// under grade(): a unit's actual output equals an oracle's expected output iff their JSON forms match.
-// Exactness is the contract — array order AND object key-insertion order are significant.
+// @rederive/rdv — verified-recompose of eq (rederive cli/verdict.mts (rdv verdict core)). ZERO-DEP.
+// Rebuilt locally by 'rdv resynth': reconstructed from sir/ + oracles/ with the original deleted;
+// quorum 3/3, 9/9 held-out. Trust your own build, not the publisher's.
 export function eq(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
