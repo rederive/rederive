@@ -111,10 +111,10 @@ const META: any = {
 };
 
 const fns: any = {
-  eq: (await import(resolve(DIR, 'src/eq.ts'))).eq,
-  grade: (await import(resolve(DIR, 'src/grade.ts'))).grade,
-  quorum: (await import(resolve(DIR, 'src/quorum.ts'))).quorum,
-  hashOk: (await import(resolve(DIR, 'src/hashOk.ts'))).hashOk,
+  eq: (await import(resolve(DIR, 'src/eq.js'))).eq,
+  grade: (await import(resolve(DIR, 'src/grade.js'))).grade,
+  quorum: (await import(resolve(DIR, 'src/quorum.js'))).quorum,
+  hashOk: (await import(resolve(DIR, 'src/hashOk.js'))).hashOk,
 };
 
 const stamp = (fn: any, list: any[]) =>
@@ -137,7 +137,7 @@ const units = ORDER.map((u) => {
     name: u, kind: META[u].kind, sig: META[u].sig,
     sir: `sir/${u}.sir`, sirSha256: hfile(`sir/${u}.sir`),
     oracle: `oracles/${u}.json`, oracleSha256: hfile(`oracles/${u}.json`),
-    src: `src/${u}.ts`, srcSha256: hfile(`src/${u}.ts`),
+    src: `src/${u}.js`, srcSha256: hfile(`src/${u}.js`),
     verified: { mode: 'vectors', frozen: o.vectors.length, heldout: o.heldout.length, heldoutVerified: true, quorum: META[u].quorum, ...(META[u].composedOn ? { composedOn: META[u].composedOn } : {}), at: '2026-06-15' },
     knownLimitations: META[u].limits,
     spec: `specs/${u}.md`, specSha256: hfile(`specs/${u}.md`),
