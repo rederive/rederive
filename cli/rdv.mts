@@ -18,12 +18,10 @@
  * workers, then `resynth --apply` does the deterministic selection + manifest update.
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, existsSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { resolve, relative } from 'node:path';
+import { grade, quorum, hashHex } from './verdict.mts';
 
-const sha256 = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
-const eq = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
-const threw = (x: any) => x && typeof x === 'object' && '__throw' in x;
+const sha256 = (path: string) => hashHex(readFileSync(path));
 const C = { g: (s: string) => `\x1b[32m${s}\x1b[39m`, r: (s: string) => `\x1b[31m${s}\x1b[39m`,
   y: (s: string) => `\x1b[33m${s}\x1b[39m`, dim: (s: string) => `\x1b[90m${s}\x1b[39m`, b: (s: string) => `\x1b[1m${s}\x1b[22m` };
 
@@ -37,14 +35,11 @@ async function resolveFn(srcAbs: string, name: string) {
 
 async function gradeVs(srcAbs: string, name: string, vectors: any[]) {
   const fn = await resolveFn(srcAbs, name);
-  let pass = 0; const miss: string[] = [];
+  const gots: any[] = [];
   for (const v of vectors) {
-    let got: any;
-    try { got = await fn(...v.args); } catch (e: any) { got = { __throw: String(e?.message ?? e) }; }
-    if ((threw(got) && threw(v.expected)) || eq(got, v.expected)) pass++;
-    else if (miss.length < 8) miss.push(v.name);
+    try { gots.push(await fn(...v.args)); } catch (e: any) { gots.push({ __throw: String(e?.message ?? e) }); }
   }
-  return { pass, total: vectors.length, full: pass === vectors.length, miss };
+  return grade(gots, vectors);
 }
 
 async function checkUnit(dir: string, u: any) {
@@ -137,18 +132,19 @@ async function cmdResynthApply(dir: string, unitName: string | null) {
     const held = oracle.heldout || oracle.vectors;
     const graded: any[] = [];
     for (const f of emits) graded.push({ f, ...(await gradeVs(resolve(rdir, f), u.name, held)) });
-    const full = graded.filter((g) => g.full);
+    const q = quorum(graded);
     console.log(`  ${C.b(u.name)}: ` + graded.map((g) => `${g.f.replace('.ts', '')} ${g.full ? C.g(g.pass + '/' + g.total) : C.r(g.pass + '/' + g.total)}`).join('  '));
-    if (full.length < 2) { console.log(C.r(`     NO-QUORUM (${full.length}/${graded.length} full) — not applied. Add coverage or escalate the worker tier.`)); ok = false; continue; }
-    const winner = resolve(rdir, full[0].f);
+    if (!q.hasQuorum) { console.log(C.r(`     NO-QUORUM (${q.fullCount}/${graded.length} full) — not applied. Add coverage or escalate the worker tier.`)); ok = false; continue; }
+    const winnerFile = graded[q.winnerIdx].f;
+    const winner = resolve(rdir, winnerFile);
     const header = `// @rederive/${m.name.split('/').pop()} — verified-recompose of ${u.name} (${m.provenance.source}). ZERO-DEP.\n` +
       `// Rebuilt locally by 'rdv resynth': reconstructed from sir/ + oracles/ with the original deleted;\n` +
-      `// quorum ${full.length}/${graded.length}, ${held.length}/${held.length} held-out. Trust your own build, not the publisher's.\n`;
+      `// quorum ${q.fullCount}/${graded.length}, ${held.length}/${held.length} held-out. Trust your own build, not the publisher's.\n`;
     writeFileSync(resolve(dir, u.src), header + readFileSync(winner, 'utf-8').replace(/^\s+/, ''));
     u.srcSha256 = sha256(resolve(dir, u.src));
-    u.verified = { ...(u.verified || {}), mode: 'vectors', frozen: (oracle.vectors || []).length, heldout: held.length, quorum: `${full.length}/${graded.length}` };
+    u.verified = { ...(u.verified || {}), mode: 'vectors', frozen: (oracle.vectors || []).length, heldout: held.length, quorum: `${q.fullCount}/${graded.length}` };
     saveManifest(dir, m);
-    console.log(C.g(`     QUORUM ${full.length}/${graded.length} → applied ${full[0].f} to ${u.src}; manifest srcSha256 updated to ${u.srcSha256.slice(0, 12)}`));
+    console.log(C.g(`     QUORUM ${q.fullCount}/${graded.length} → applied ${winnerFile} to ${u.src}; manifest srcSha256 updated to ${u.srcSha256.slice(0, 12)}`));
   }
   console.log(C.dim(`\n  verifying the applied build...`));
   const code = await cmdCheck(dir);
