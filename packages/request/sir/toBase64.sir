@@ -1,0 +1,11 @@
+SIR    toBase64
+KIND   FUNCTIONAL
+SRC    request@2.88.2 lib/helpers.js:toBase64
+SIG    (str: string) -> string
+REACH  internal
+CONTROL straight-line
+ORACLE value @vectors: oracles/toBase64.json [held-out adversarial; stamped from real request@2.88.2; verified by rdv check]
+# Buffer.from(str || '', 'utf8').toString('base64'). Falsy input coerces to '' FIRST (null/undefined/''
+# -> ''); a reconstruction without the ||'' guard throws on null/undefined and fails the held-out.
+# Buffer is a node builtin (deterministic) -> FUNCTIONAL. The base64 core of Basic-auth.
+# GENERATED structurally (SIR Schema v0.1); pure leaf carved from request's HTTP effect spine.

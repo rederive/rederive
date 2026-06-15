@@ -1,0 +1,34 @@
+MODULE  request@2.88.2   (the deprecated HTTP client — verified-recompose of the PURE core)
+SRC     npm:request@2.88.2  lib/*.js   (Apache-2.0; npm-deprecated 2020-02)
+ABOUT   A big, effectful library. The SIR firewall carves a thin PURE helper layer out of a large
+        HTTP EFFECT spine. This package verifies the FUNCTIONAL leaves against held-out oracles
+        stamped from the real original; the EFFECT spine is declared here and is trace-oracle work.
+
+# ── the firewall ──────────────────────────────────────────────────────────────
+FIREWALL  FUNCTIONAL ⊅ EFFECT
+  pure    (FUNCTIONAL):  lib/helpers.js — paramsHaveRequestBody, toBase64, copy, isReadStream
+  suspect (FUNCTIONAL?): lib/helpers.js — md5 (OPAQUE node:crypto), safeStringify (OPAQUE json-stringify-safe)
+  shell   (EFFECT):      lib/request.js (http(s).request EMIT / response REQUEST), lib/redirect.js (net),
+                         lib/cookies.js (STATE jar), lib/oauth.js/hawk.js/har.js (crypto/sign),
+                         lib/multipart.js/tunnel.js (io/net), helpers.version (reads process.version =
+                         ambient), helpers.defer (setImmediate/nextTick = scheduling),
+                         auth.basic/bearer (mutate `this` + emit 'error' — a PURE header core wrapped
+                         in an EFFECT method)
+
+# ── verified units (this package — the pure leaves) ───────────────────────────
+UNITS
+  FUNCTIONAL  paramsHaveRequestBody  helpers.js:paramsHaveRequestBody   [leaf]
+  FUNCTIONAL  toBase64               helpers.js:toBase64                [leaf, Buffer]
+
+# ── the EFFECT surface the trace oracle must pin (NOT covered here yet) ────────
+SURFACE
+  outbound (EMIT, recorded):    net.write (http/https request bytes) ; redirect follow
+  inbound  (REQUEST, injected): net.read (response) ; fs.read (multipart file bodies) ;
+                                time (date headers) ; rand (multipart boundary / uuid)
+  => verifying the spine is trace-oracle work (the dotenv / editorconfig EFFECT-tier precedent),
+     filed as the next step. Today's coverage is the PURE core only — honestly partial.
+
+NOTES
+  - request is npm-DEPRECATED (2020) yet still load-bearing in countless dependency trees — a prime
+    re-derive target: pin its behavior, own your build, stop trusting an unmaintained publisher.
+  - the leaves verified here are request's OWN helpers (lib/helpers.js), not its dependencies.

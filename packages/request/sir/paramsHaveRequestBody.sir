@@ -1,0 +1,11 @@
+SIR    paramsHaveRequestBody
+KIND   FUNCTIONAL
+SRC    request@2.88.2 lib/helpers.js:paramsHaveRequestBody
+SIG    (params: object) -> any
+REACH  internal
+CONTROL straight-line (||-chain)
+ORACLE value @vectors: oracles/paramsHaveRequestBody.json [held-out adversarial; stamped from real request@2.88.2; verified by rdv check]
+# Returns the FIRST truthy of body | requestBodyStream | (json && typeof json !== 'boolean') | multipart,
+# else the last falsy (often undefined). Returns the VALUE not a boolean. Quirk: json counts only when
+# non-boolean (json:true -> excluded; json:{} / json:'s' -> counts). undefined != false (held-out pins it).
+# GENERATED structurally (SIR Schema v0.1); pure leaf carved from request's HTTP effect spine.
