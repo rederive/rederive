@@ -1,0 +1,11 @@
+SIR    eq
+KIND   FUNCTIONAL
+SRC    rederive cli/verdict.mts:eq
+SIG    (a: any, b: any) -> boolean
+REACH  internal
+CONTROL straight-line
+ORACLE value @vectors: oracles/eq.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# Value-based structural equality via canonical JSON.stringify. Order-sensitive over arrays AND
+# object keys; rejects type coercion (1 != "1", 0 != false, [] != {}). The comparison primitive
+# under grade() — a too-loose eq would let a wrong implementation pass.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.

@@ -1,0 +1,108 @@
+{
+  "name": "@rederive/rdv",
+  "version": "0.1.0-rdv.1",
+  "zeroDep": false,
+  "provenance": {
+    "source": "rederive cli/verdict.mts (rdv verdict core)",
+    "sourceRepo": "rederive",
+    "sourceSha256": "cf4edaee52dbb84475addc7d42ec703d113ffff10d3cf6188db3cf97fb138700",
+    "note": "the verifier in its own catalog — verdict core extracted and behavior-locked to adversarial held-out oracles; expecteds stamped by execution",
+    "decompiledBy": "sir decompile (SIR Schema v0.1)",
+    "capturedAt": "2026-06-15"
+  },
+  "units": [
+    {
+      "name": "eq",
+      "kind": "FUNCTIONAL",
+      "sig": "(a: any, b: any) => boolean",
+      "sir": "sir/eq.sir",
+      "sirSha256": "ce4560ec9e9d59020cac89158c9b32466e958919756ab51a7ac18cbdb3dd9eb3",
+      "oracle": "oracles/eq.json",
+      "oracleSha256": "45dbb0e086e92f98a61a4f301c84c86cf1d8efc2770ca794194becd04f98bae1",
+      "src": "src/eq.ts",
+      "srcSha256": "e209af5e479b10d2ac9682e15cac250981af3250dbdcbf5436e3b81d49ea1377",
+      "verified": {
+        "mode": "vectors",
+        "frozen": 8,
+        "heldout": 9,
+        "heldoutVerified": true,
+        "quorum": "pending",
+        "at": "2026-06-15"
+      },
+      "knownLimitations": [],
+      "spec": "specs/eq.md",
+      "specSha256": "0e4e5b319d8719d15c037b7f57145d0d9fa0abdde21a11114e46cf22bd62d823"
+    },
+    {
+      "name": "grade",
+      "kind": "FUNCTIONAL",
+      "sig": "(gots: any[], vectors: {name,expected}[]) => {pass,total,full,miss}",
+      "sir": "sir/grade.sir",
+      "sirSha256": "6ffc047331b27dc5f910c66507f3b91ec20af236cd7f9f3fc2f0c6ee53a7ab99",
+      "oracle": "oracles/grade.json",
+      "oracleSha256": "c489ba095f692708b50f63368236199319463c1440e5d66e2fd73b2ca02f9b5d",
+      "src": "src/grade.ts",
+      "srcSha256": "6ad35a8dff16186a8f6f5c8a8a077b20c740f071d26037a026c9a20b63e299d6",
+      "verified": {
+        "mode": "vectors",
+        "frozen": 7,
+        "heldout": 7,
+        "heldoutVerified": true,
+        "quorum": "pending",
+        "at": "2026-06-15"
+      },
+      "knownLimitations": [
+        "empty vectors => full:true (vacuous) — a held-out set must be non-empty",
+        "miss capped at the first 8 failing names"
+      ],
+      "spec": "specs/grade.md",
+      "specSha256": "65d69af869af0aedfb5b5ad2dce80b5da1bffbb1513b715983d0c06a747309c7"
+    },
+    {
+      "name": "quorum",
+      "kind": "FUNCTIONAL",
+      "sig": "(graded: {full:boolean}[], need=2) => {fullCount,hasQuorum,winnerIdx}",
+      "sir": "sir/quorum.sir",
+      "sirSha256": "4081358eb9712b195992480eccf254a6e5fcf6d928c41ccadcab84ccee9980b7",
+      "oracle": "oracles/quorum.json",
+      "oracleSha256": "3775a93c345de6bb1b479ab5a9e0d006ddce4811640d998cd114dfb3abf09f67",
+      "src": "src/quorum.ts",
+      "srcSha256": "3b301b8c55f4ce13656df6759b7acca209a181351dc6c15a1380f71aeaa5689d",
+      "verified": {
+        "mode": "vectors",
+        "frozen": 6,
+        "heldout": 7,
+        "heldoutVerified": true,
+        "quorum": "pending",
+        "at": "2026-06-15"
+      },
+      "knownLimitations": [],
+      "spec": "specs/quorum.md",
+      "specSha256": "70c6edbb16d60e736e4b99796671743dc4fc4084686e490600e61261ade28089"
+    },
+    {
+      "name": "hashOk",
+      "kind": "FUNCTIONAL?",
+      "sig": "(bytes: any, want?: string) => boolean",
+      "sir": "sir/hashOk.sir",
+      "sirSha256": "6ae60804a2ed5a1ec16ef91222076ef4d273a47e88c748a9277b1b3d460b950e",
+      "oracle": "oracles/hashOk.json",
+      "oracleSha256": "e1b0a1069d100df1fc2aca67dd3b91471ce57a676a4459ee4712f657bcd57ddb",
+      "src": "src/hashOk.ts",
+      "srcSha256": "ea9aec37735e039b2866672ab9a660aa0af3104a87f85ddb5d740c2cd3121b2c",
+      "verified": {
+        "mode": "vectors",
+        "frozen": 4,
+        "heldout": 5,
+        "heldoutVerified": true,
+        "quorum": "pending",
+        "at": "2026-06-15"
+      },
+      "knownLimitations": [
+        "NOT zero-dep: SHA-256 delegated to host node:crypto — control logic verified, not the hash primitive (every-byte verification is the enterprise extension)"
+      ],
+      "spec": "specs/hashOk.md",
+      "specSha256": "05929cebd5406567716308314da0c507e752177587f238138010f221b9bff5fa"
+    }
+  ]
+}

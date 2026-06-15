@@ -1,0 +1,12 @@
+SIR    hashOk
+KIND   FUNCTIONAL?            # suspect: functional in shape, but with a named opaque dependency
+SRC    rederive cli/verdict.mts:hashOk
+SIG    (bytes: any, want?: string) -> boolean
+REACH  entry
+CONTROL BRANCH(want-absent)
+DEPENDS-ON OPAQUE(node:crypto.createHash)   # the SHA-256 algorithm is the host's, not verified here
+ORACLE value @vectors: oracles/hashOk.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# Control logic: absent/empty want => true (not pinned); else exact sha256-hex match. One changed
+# byte vs a fixed want => false. The hash PRIMITIVE is host-delegated (out of scope); the oracle
+# pins the control behavior. Verifying the algorithm + substrate is the every-byte enterprise tier.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.

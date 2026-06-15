@@ -1,0 +1,116 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>@rederive/rdv — SIR package</title><style>
+:root{--bg:#f6f3ec;--paper:#fffdf8;--ink:#1b1a17;--muted:#6f6a60;--line:#e6ded0;--clay:#c8553d;--teal:#2f6f63;--teal-soft:#dcebe6;--clay-soft:#f0d9d1}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:0 24px 64px}h1,h2{font-family:Georgia,ui-serif,serif;letter-spacing:-.01em}
+header{padding:56px 0 22px;border-bottom:1px solid var(--line);background:radial-gradient(900px 240px at 15% -40%,var(--clay-soft),transparent 60%)}
+h1{font-size:34px;margin:0 0 6px}.tag{display:inline-block;font:600 12px ui-sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--clay);background:var(--clay-soft);padding:6px 10px;border-radius:999px;margin-bottom:16px}
+.lede{color:var(--muted);max-width:42em}code{font-family:ui-monospace,Menlo,monospace;font-size:.88em}
+.prov{margin-top:18px;font-size:14px;color:var(--muted)}.prov b{color:var(--ink)}
+h2{font-size:22px;margin:34px 0 6px}.kicker{font:600 12px ui-sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:0}
+.unit{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:14px;box-shadow:0 8px 24px rgba(40,30,15,.05)}
+.uhead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.uname{font-size:17px;font-weight:700}.sig{color:var(--muted);font-family:ui-monospace,monospace;font-size:13px}
+.kind{margin-left:auto;font:600 11px ui-monospace;color:var(--muted)}.badge{font:700 11px ui-sans-serif;padding:5px 9px;border-radius:999px}
+.badge.ok{background:var(--teal-soft);color:var(--teal)}.badge.no{background:#f1e3df;color:var(--clay)}
+.meta{margin-top:8px;font-size:13.5px;color:var(--muted)}.limit{margin-top:8px;font-size:13px;color:var(--clay);background:#fbeee9;border-radius:8px;padding:7px 10px}
+pre.sir{margin:10px 0 6px;background:#fbf8f1;border:1px dashed var(--line);border-left:3px solid var(--teal);border-radius:0 8px 8px 0;padding:11px 13px;font-size:12.5px;overflow:auto;white-space:pre-wrap}
+.hashes{font-size:11.5px;color:var(--muted)}.trust{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:14px}
+.trust b{color:var(--teal)}.cmd{font-family:ui-monospace,monospace;background:#1b1a17;color:#f6f3ec;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:8px;white-space:pre-wrap}
+footer{margin-top:30px;color:var(--muted);font-size:12.5px}
+</style></head><body>
+<header><div class="wrap"><span class="tag">SIR package · trust-nothing</span>
+<h1>@rederive/rdv <code style="font-size:18px;color:var(--muted)">@0.1.0-rdv.1</code></h1>
+<p class="lede">A verified-recompose of <b>rederive cli/verdict.mts (rdv verdict core)</b>. This package ships its <b>contract</b> — a SIR spec + a held-out oracle — not bytes you have to trust. Verify the shipped code against the contract, or rebuild it locally from the spec.</p>
+<div class="prov">provenance: <b>rederive cli/verdict.mts (rdv verdict core)</b> · rederive · source sha256 <code>cf4edaee52dbb844…</code><br>the verifier in its own catalog — verdict core extracted and behavior-locked to adversarial held-out oracles; expecteds stamped by execution</div>
+</div></header>
+<div class="wrap">
+<section><p class="kicker">What's in here</p><h2>4 verified units</h2>
+<p class="lede">Each is a quorum-verified, behavior-locked reconstruction with the original deleted — proven on a held-out set the implementation never saw.</p>
+
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+        <code class="uname">eq</code> <span class="sig">(a: any, b: any) =&gt; boolean</span> <span class="kind">FUNCTIONAL</span></div>
+      <div class="meta">oracle: <b>8</b> frozen / <b>9</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      
+      <pre class="sir">SIR    eq
+KIND   FUNCTIONAL
+SRC    rederive cli/verdict.mts:eq
+SIG    (a: any, b: any) -&gt; boolean
+REACH  internal
+CONTROL straight-line
+ORACLE value @vectors: oracles/eq.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# Value-based structural equality via canonical JSON.stringify. Order-sensitive over arrays AND
+# object keys; rejects type coercion (1 != "1", 0 != false, [] != {}). The comparison primitive
+# under grade() — a too-loose eq would let a wrong implementation pass.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
+</pre>
+      <div class="hashes">src <code>e209af5e479b10d2</code> · oracle <code>45dbb0e086e92f98</code> · spec <code>0e4e5b319d8719d1</code></div>
+    </div>
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+        <code class="uname">grade</code> <span class="sig">(gots: any[], vectors: {name,expected}[]) =&gt; {pass,total,full,miss}</span> <span class="kind">FUNCTIONAL</span></div>
+      <div class="meta">oracle: <b>7</b> frozen / <b>7</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      <div class="limit">⚠ empty vectors =&gt; full:true (vacuous) — a held-out set must be non-empty</div><div class="limit">⚠ miss capped at the first 8 failing names</div>
+      <pre class="sir">SIR    grade
+KIND   FUNCTIONAL
+SRC    rederive cli/verdict.mts:grade
+SIG    (gots: any[], vectors: {name,expected}[]) -&gt; {pass, total, full, miss}
+REACH  entry
+CONTROL LOOP x1
+DEPENDS-ON eq, threw   (inlined; conceptually the comparison + throw-sentinel primitives)
+ORACLE value @vectors: oracles/grade.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# The verdict. full = (pass === total); throw matches throw (message NOT compared); miss capped at 8.
+# Vacuous edge pinned by oracle: empty vectors =&gt; full:true. Must NOT short-circuit on the first
+# vector — a non-first mismatch must drop `full`. The single most trust-critical unit in rederive.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
+</pre>
+      <div class="hashes">src <code>6ad35a8dff16186a</code> · oracle <code>c489ba095f692708</code> · spec <code>65d69af869af0aed</code></div>
+    </div>
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+        <code class="uname">quorum</code> <span class="sig">(graded: {full:boolean}[], need=2) =&gt; {fullCount,hasQuorum,winnerIdx}</span> <span class="kind">FUNCTIONAL</span></div>
+      <div class="meta">oracle: <b>6</b> frozen / <b>7</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      
+      <pre class="sir">SIR    quorum
+KIND   FUNCTIONAL
+SRC    rederive cli/verdict.mts:quorum
+SIG    (graded: {full:boolean}[], need=2) -&gt; {fullCount, hasQuorum, winnerIdx}
+REACH  entry
+CONTROL LOOP x1
+ORACLE value @vectors: oracles/quorum.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# hasQuorum = fullCount &gt;= need (default 2). winnerIdx = index of the FIRST full emission (not 0
+# blindly, not last); -1 with no quorum, and the lone pass is not blessed. Discriminating case:
+# [partial, full, full] -&gt; winnerIdx 1.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
+</pre>
+      <div class="hashes">src <code>3b301b8c55f4ce13</code> · oracle <code>3775a93c345de6bb</code> · spec <code>70c6edbb16d60e73</code></div>
+    </div>
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED pending</span>
+        <code class="uname">hashOk</code> <span class="sig">(bytes: any, want?: string) =&gt; boolean</span> <span class="kind">FUNCTIONAL?</span></div>
+      <div class="meta">oracle: <b>4</b> frozen / <b>5</b> held-out · quorum <b>pending</b> · zero-dep</div>
+      <div class="limit">⚠ NOT zero-dep: SHA-256 delegated to host node:crypto — control logic verified, not the hash primitive (every-byte verification is the enterprise extension)</div>
+      <pre class="sir">SIR    hashOk
+KIND   FUNCTIONAL?            # suspect: functional in shape, but with a named opaque dependency
+SRC    rederive cli/verdict.mts:hashOk
+SIG    (bytes: any, want?: string) -&gt; boolean
+REACH  entry
+CONTROL BRANCH(want-absent)
+DEPENDS-ON OPAQUE(node:crypto.createHash)   # the SHA-256 algorithm is the host's, not verified here
+ORACLE value @vectors: oracles/hashOk.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# Control logic: absent/empty want =&gt; true (not pinned); else exact sha256-hex match. One changed
+# byte vs a fixed want =&gt; false. The hash PRIMITIVE is host-delegated (out of scope); the oracle
+# pins the control behavior. Verifying the algorithm + substrate is the every-byte enterprise tier.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
+</pre>
+      <div class="hashes">src <code>ea9aec37735e039b</code> · oracle <code>e1b0a1069d100df1</code> · spec <code>05929cebd5406567</code></div>
+    </div></section>
+<section><p class="kicker">How to trust this</p><h2>Check it, or rebuild it</h2>
+<div class="trust"><b>Verify the shipped code</b> against its contract — deterministic, no tokens. Fails loudly if the bytes don't match the held-out oracle or the recorded hashes.
+<div class="cmd">rdv check .</div></div>
+<div class="trust"><b>Rebuild it yourself</b> from the spec — torch some tokens, regenerate <code>src/</code> from <code>sir/</code> + <code>oracles/</code> via N isolated quorum workers. Trust your own build, not the publisher's.
+<div class="cmd">rdv resynth .          # prepare worker prompts
+rdv resynth . --apply  # grade, pick quorum, update src/ + manifest</div></div>
+</section>
+<footer>Generated by <code>rdv vis</code> from <code>sir.manifest.json</code> + <code>sir/</code> + <code>oracles/</code>. The oracle is the source of truth; the source text is fungible.</footer>
+</div></body></html>

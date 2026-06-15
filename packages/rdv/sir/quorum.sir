@@ -1,0 +1,11 @@
+SIR    quorum
+KIND   FUNCTIONAL
+SRC    rederive cli/verdict.mts:quorum
+SIG    (graded: {full:boolean}[], need=2) -> {fullCount, hasQuorum, winnerIdx}
+REACH  entry
+CONTROL LOOP x1
+ORACLE value @vectors: oracles/quorum.json [held-out adversarial; verified by rdv check; quorum re-derivation pending]
+# hasQuorum = fullCount >= need (default 2). winnerIdx = index of the FIRST full emission (not 0
+# blindly, not last); -1 with no quorum, and the lone pass is not blessed. Discriminating case:
+# [partial, full, full] -> winnerIdx 1.
+# GENERATED structurally (SIR Schema v0.1) from rdv's extracted verdict core.
