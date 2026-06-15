@@ -10,6 +10,11 @@ npm registry:          you install a prebuilt artifact and TRUST the publisher (
 rederive:                 you get a spec + a held-out oracle. You verify the bytes, or regenerate them yourself.
 ```
 
+> **Open core, for real.** The CLI, the SIR format, the verified-recompose loop, and the public
+> catalog are Apache-2.0 and stay that way. What's open and what we'll ever charge for — and the
+> things we promise *never* to do to the community — are written down and binding in
+> **[The rederive Promise](STEWARDSHIP.md)**.
+
 ## The two operations
 
 | command | what it does | tokens |
