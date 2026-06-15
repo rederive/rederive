@@ -3,10 +3,10 @@
 The **verified pure helper core** of [`request@2.88.2`](https://github.com/request/request) — the
 deprecated-but-still-everywhere HTTP client — re-derived from its real behavior.
 
-`request` is a big, *effectful* library. The SIR firewall carves its thin **pure** layer
-(`lib/helpers.js`) out of a large **HTTP effect spine**. This package verifies the pure leaves; the
-effect spine (the actual HTTP, redirects, cookies, multipart, oauth) is declared in `sir/MODULE.sir`
-and is trace-oracle work — **honest scope: pure core only, for now.**
+`request` is a big, *effectful* library. The SIR firewall carves its thin **pure** layer out of a large
+**HTTP effect spine**. This package verifies the pure leaves **and the first effect leaf**; the NET/HTTP
+emit-trace (the actual send) is declared in `sir/MODULE.sir` and remains the frontier — **honest scope:
+pure core + the env-boundary effect leaf, for now.**
 
 Verified units — oracles **stamped by executing the real `request@2.88.2`**, then re-derived with the
 original deleted, **quorum 3/3** on a disjoint held-out set:
@@ -15,6 +15,10 @@ original deleted, **quorum 3/3** on a disjoint held-out set:
   it returns the *value*, not a boolean (`{multipart:[]}` → `[]`), and `json:true` does **not** count
   while `json:{…}` / `json:'s'` do.
 - `toBase64(str)` — the Basic-auth base64 core; `null`/`undefined`/`''` → `''`.
+- `getProxyFromURI(uri, env)` — **EFFECT** unit. The original reads ambient `process.env`; here the env
+  boundary is **injected** as the `env` parameter and verified by record/replay (set the snapshot, run,
+  compare). Reproduces the real proxy logic: `NO_PROXY` wildcard/suffix-match canonicalization
+  (`oogle.com` ≠ `google.com`), `host:port` zones, and `http`/`https` proxy-var precedence.
 
 ```
 npm i -g rederive

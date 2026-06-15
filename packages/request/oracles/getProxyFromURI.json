@@ -1,0 +1,196 @@
+{
+  "mode": "vectors",
+  "exportName": "getProxyFromURI",
+  "unit": "getProxyFromURI",
+  "vectors": [
+    {
+      "name": "http_proxy_set",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "example.com",
+          "port": ""
+        },
+        {
+          "HTTP_PROXY": "http://p:8080"
+        }
+      ],
+      "expected": "http://p:8080"
+    },
+    {
+      "name": "no_proxy_match",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "example.com",
+          "port": ""
+        },
+        {
+          "NO_PROXY": "example.com",
+          "HTTP_PROXY": "http://p:8080"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "no_proxy_wildcard",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "x.com",
+          "port": ""
+        },
+        {
+          "NO_PROXY": "*",
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "https_proxy",
+      "args": [
+        {
+          "protocol": "https:",
+          "hostname": "a.com",
+          "port": ""
+        },
+        {
+          "HTTPS_PROXY": "http://sp"
+        }
+      ],
+      "expected": "http://sp"
+    },
+    {
+      "name": "no_env",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "a.com",
+          "port": ""
+        },
+        {}
+      ],
+      "expected": null
+    },
+    {
+      "name": "https_fallback_http_proxy",
+      "args": [
+        {
+          "protocol": "https:",
+          "hostname": "a.com",
+          "port": ""
+        },
+        {
+          "HTTP_PROXY": "http://hp"
+        }
+      ],
+      "expected": "http://hp"
+    }
+  ],
+  "heldout": [
+    {
+      "name": "ho_suffix_quirk",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "oogle.com",
+          "port": ""
+        },
+        {
+          "NO_PROXY": "google.com",
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": "http://p"
+    },
+    {
+      "name": "ho_subdomain_match",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "sub.example.com",
+          "port": ""
+        },
+        {
+          "NO_PROXY": "example.com",
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "ho_port_match",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "a.com",
+          "port": "8080"
+        },
+        {
+          "NO_PROXY": "a.com:8080",
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "ho_port_mismatch",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "a.com",
+          "port": "9090"
+        },
+        {
+          "NO_PROXY": "a.com:8080",
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": "http://p"
+    },
+    {
+      "name": "ho_lowercase_no_proxy",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "a.com",
+          "port": ""
+        },
+        {
+          "no_proxy": "a.com",
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "ho_unknown_protocol",
+      "args": [
+        {
+          "protocol": "ftp:",
+          "hostname": "a.com",
+          "port": ""
+        },
+        {
+          "HTTP_PROXY": "http://p"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "ho_lowercase_http_proxy",
+      "args": [
+        {
+          "protocol": "http:",
+          "hostname": "a.com",
+          "port": ""
+        },
+        {
+          "http_proxy": "http://lp"
+        }
+      ],
+      "expected": "http://lp"
+    }
+  ]
+}

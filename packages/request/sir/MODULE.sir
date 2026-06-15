@@ -15,18 +15,22 @@ FIREWALL  FUNCTIONAL ⊅ EFFECT
                          auth.basic/bearer (mutate `this` + emit 'error' — a PURE header core wrapped
                          in an EFFECT method)
 
-# ── verified units (this package — the pure leaves) ───────────────────────────
+# ── verified units (this package — pure leaves + the first EFFECT leaf) ───────
 UNITS
   FUNCTIONAL  paramsHaveRequestBody  helpers.js:paramsHaveRequestBody   [leaf]
   FUNCTIONAL  toBase64               helpers.js:toBase64                [leaf, Buffer]
+  EFFECT      getProxyFromURI        getProxyFromURI.js                 [leaf, env boundary — INJECTED, record/replay]
 
 # ── the EFFECT surface the trace oracle must pin (NOT covered here yet) ────────
 SURFACE
-  outbound (EMIT, recorded):    net.write (http/https request bytes) ; redirect follow
-  inbound  (REQUEST, injected): net.read (response) ; fs.read (multipart file bodies) ;
-                                time (date headers) ; rand (multipart boundary / uuid)
-  => verifying the spine is trace-oracle work (the dotenv / editorconfig EFFECT-tier precedent),
-     filed as the next step. Today's coverage is the PURE core only — honestly partial.
+  env boundary  (REQUEST env.read):   COVERED — getProxyFromURI verified by injection / record-replay
+                                      (set the env snapshot, run, compare; the inbound half of the trace).
+  outbound (EMIT, recorded):          net.write (http/https request bytes) ; redirect follow   — FRONTIER
+  inbound  (REQUEST, injected):       net.read (response) ; fs.read (multipart file bodies) ;
+                                      time (date headers) ; rand (multipart boundary / uuid)  — FRONTIER
+  => the ENV boundary is done; the NET/HTTP EMIT trace (the actual send: emit request bytes, inject
+     response, order-sensitive) is the remaining frontier (the dotenv/editorconfig EFFECT-tier precedent).
+     Today: pure core + the env-effect leaf — honestly partial, and one boundary class deeper than before.
 
 NOTES
   - request is npm-DEPRECATED (2020) yet still load-bearing in countless dependency trees — a prime

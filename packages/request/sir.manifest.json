@@ -6,7 +6,7 @@
     "source": "request@2.88.2",
     "sourceRepo": "github.com/request/request",
     "sourceFile": "lib/helpers.js",
-    "note": "pure helper core of the deprecated request HTTP client; oracles stamped by executing the real original, then re-derived original-deleted (quorum). The HTTP EFFECT spine is declared in sir/MODULE.sir and is trace-oracle work (not yet covered).",
+    "note": "pure helper core + one EFFECT leaf (getProxyFromURI, env boundary verified by record/replay injection) of the deprecated request HTTP client; oracles stamped by executing the real original, then re-derived original-deleted (quorum). The NET/HTTP EMIT trace (the actual send) is declared in sir/MODULE.sir and remains the frontier.",
     "decompiledBy": "sir decompile (SIR Schema v0.1)",
     "capturedAt": "2026-06-15"
   },
@@ -53,6 +53,28 @@
       },
       "spec": "specs/toBase64.md",
       "specSha256": "42137bcdd045d9b16f7011aa1f9f3072f9b1efd0ec91234bbdb2548caa6f9a95"
+    },
+    {
+      "name": "getProxyFromURI",
+      "kind": "EFFECT",
+      "sig": "(uri, env) => string | null",
+      "boundary": "env.read (NO_PROXY/HTTP_PROXY/...) — injected as env for record/replay",
+      "sir": "sir/getProxyFromURI.sir",
+      "sirSha256": "24a7f2ecd38490f28db7dee0debc186dd9e9449e76a175216597369c1c75fc34",
+      "oracle": "oracles/getProxyFromURI.json",
+      "oracleSha256": "8d6af4fdf954c9364f46daf17ce87318e176b254ac201bde8073aa01c991ea08",
+      "src": "src/getProxyFromURI.js",
+      "srcSha256": "316535fe7f16a685be21f62a383a1aaacf6bb30577bbc815f673df99d0a1ae60",
+      "verified": {
+        "mode": "vectors",
+        "frozen": 6,
+        "heldout": 7,
+        "quorum": "3/3",
+        "capturedFrom": "request@2.88.2 lib/helpers.js",
+        "at": "2026-06-15"
+      },
+      "spec": "specs/getProxyFromURI.md",
+      "specSha256": "847ad301c35065c871be811f738cc4ca04bb700b03e55bbd3e94808214c15269"
     }
   ]
 }

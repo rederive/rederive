@@ -1,0 +1,13 @@
+SIR    getProxyFromURI
+KIND   EFFECT
+SRC    request@2.88.2 lib/getProxyFromURI.js:getProxyFromURI
+SIG    (uri: {protocol,hostname,port}, env: object) -> string | null
+REACH  internal
+REQUEST env.read(NO_PROXY | no_proxy | HTTP_PROXY | http_proxy | HTTPS_PROXY | https_proxy)   # ambient boundary, INJECTED as `env`
+ORACLE value @vectors: oracles/getProxyFromURI.json [held-out adversarial; env boundary injected (record/replay); stamped from real request@2.88.2; verified by rdv check]
+# The first EFFECT leaf carved from request's spine. The original reads ambient process.env; verified
+# by INJECTING the env snapshot as a parameter — the REQUEST / inbound half of the trace model (no
+# EMIT, no ordering). Logic: NO_PROXY '*' -> null; no-proxy suffix match with '.'-canonicalization
+# ('oogle.com' != 'google.com'); host:port zones; http/https proxy-var precedence + https->HTTP_PROXY
+# fallback; returns null (not undefined). The NET/HTTP EMIT trace (the actual send) remains the frontier.
+# GENERATED structurally (SIR Schema v0.1).

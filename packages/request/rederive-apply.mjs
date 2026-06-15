@@ -24,6 +24,7 @@ async function gradeEmit(emitAbs, name, vectors) {
 const UNITS = [
   { name: 'paramsHaveRequestBody', kind: 'FUNCTIONAL', sig: '(params) => any' },
   { name: 'toBase64', kind: 'FUNCTIONAL', sig: '(str) => string' },
+  { name: 'getProxyFromURI', kind: 'EFFECT', sig: '(uri, env) => string | null', boundary: 'env.read (NO_PROXY/HTTP_PROXY/...) — injected as env for record/replay' },
 ];
 const PROV = 'request@2.88.2 lib/helpers.js';
 mkdirSync(resolve(DIR, 'src'), { recursive: true });
@@ -48,6 +49,7 @@ for (const u of UNITS) {
   console.log(`     QUORUM ${full.length}/${graded.length} -> applied ${full[0].f} -> src/${u.name}.js (${srcSha.slice(0, 12)})`);
   units.push({
     name: u.name, kind: u.kind, sig: u.sig,
+    ...(u.boundary ? { boundary: u.boundary } : {}),
     sir: `sir/${u.name}.sir`, sirSha256: sha(resolve(DIR, 'sir', u.name + '.sir')),
     oracle: `oracles/${u.name}.json`, oracleSha256: sha(resolve(DIR, 'oracles', u.name + '.json')),
     src: `src/${u.name}.js`, srcSha256: srcSha,
@@ -64,7 +66,7 @@ const manifest = {
   name: '@rederive/request', version: '2.88.2-rdv.1', zeroDep: true,
   provenance: {
     source: 'request@2.88.2', sourceRepo: 'github.com/request/request', sourceFile: 'lib/helpers.js',
-    note: 'pure helper core of the deprecated request HTTP client; oracles stamped by executing the real original, then re-derived original-deleted (quorum). The HTTP EFFECT spine is declared in sir/MODULE.sir and is trace-oracle work (not yet covered).',
+    note: 'pure helper core + one EFFECT leaf (getProxyFromURI, env boundary verified by record/replay injection) of the deprecated request HTTP client; oracles stamped by executing the real original, then re-derived original-deleted (quorum). The NET/HTTP EMIT trace (the actual send) is declared in sir/MODULE.sir and remains the frontier.',
     decompiledBy: 'sir decompile (SIR Schema v0.1)', capturedAt: '2026-06-15',
   },
   module: 'sir/MODULE.sir',
