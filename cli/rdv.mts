@@ -1,4 +1,3 @@
-#!/usr/bin/env -S npx tsx
 /**
  * rederive (CLI: rdv) — the trust-nothing package manager.
  *
