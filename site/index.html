@@ -112,6 +112,23 @@ code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:
 .pstatus.v{background:#0f2417;color:#28c840}.pstatus.s{background:#1a1d28;color:#808088;border:1px solid #282c38}
 .pkg-card .pdesc{font-size:0.84em;color:#b0b0b0;margin-top:0.5em;line-height:1.5}
 
+/* ---- Open-core tiers ---- */
+.tiers{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.5em 0}
+.tier{background:#1a1d28;border:1px solid #282c38;border-radius:10px;padding:1.5em 1.6em}
+.tier.open{border-color:rgba(40,200,64,0.35)}
+.tier .ttag{font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.5em}
+.tier.open .ttag{color:#28c840}
+.tier.cloud .ttag{color:#d4956a}
+.tier h4{color:#fafafa;font-size:1.15em;margin-bottom:0.2em}
+.tier .tsub{font-size:0.82em;color:#808088;margin-bottom:0.9em}
+.tier ul{list-style:none;margin:0;padding:0}
+.tier li{font-size:0.9em;color:#e8e8e8;padding:0.3em 0 0.3em 1.5em;position:relative;line-height:1.5}
+.tier.open li::before{content:'✓';position:absolute;left:0;color:#28c840;font-weight:700}
+.tier.cloud li::before{content:'+';position:absolute;left:0;color:#d4956a;font-weight:700}
+.promise-cta{background:#161924;border:1px solid #282c38;border-left:4px solid #28c840;border-radius:0 8px 8px 0;padding:1.3em 1.6em;margin-top:1.5em}
+.promise-cta h4{color:#ecc4aa;font-size:1.05em;margin-bottom:0.3em}
+.promise-cta p{font-size:0.92em;color:#e8e8e8;margin-bottom:0.7em;line-height:1.6}
+
 footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;border-top:1px solid #282c38}
 .footer-inner{max-width:960px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
 .footer-brand{display:flex;align-items:center;gap:0.5em;color:#b0b0b0;font-weight:600}
@@ -137,11 +154,11 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <span class="logo-mark"><span></span><span></span><span></span></span>
     rederive <span class="by">· from Semcom</span>
   </span>
-  <a href="#why">Why</a>
   <a href="#how">How it works</a>
   <a href="spec.html">SIR Spec</a>
+  <a href="#opencore">Open core</a>
+  <a href="promise.html">Promise</a>
   <a href="#packages">Packages</a>
-  <a href="https://semcom.ai">semcom.ai</a>
   <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
 </nav>
 </div>
@@ -151,15 +168,16 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 <!-- HERO -->
 <section class="hero-section">
 <div class="hero-inner">
-  <div class="kbadge">A trust-nothing package manager · from Semcom</div>
+  <div class="kbadge">Open source · Apache-2.0 · a trust-nothing package manager</div>
   <h1>Don't trust packages.<br><span>Re-derive them.</span></h1>
   <p class="tagline">Every <code>rederive</code> package ships its <strong>contract</strong> — a spec and a held-out oracle — not bytes you have to trust. Verify the shipped code against it, or re-derive the code yourself from the spec.</p>
   <p class="hook">The oracle is an independent source of truth no publisher can move. Tamper with a shipped package and it's caught two ways at once: the behavior fails the oracle, and the content hash mismatches.</p>
 
-  <div class="hero-ctas">
+  <div class="hero-ctas" style="margin-bottom:1em">
     <a href="#how" class="btn-primary">See it work</a>
-    <a href="#why" class="btn-secondary">Why trust nothing?</a>
+    <a href="promise.html" class="btn-secondary">Read the Promise</a>
   </div>
+  <p style="font-size:0.85em;color:#808088;margin-bottom:2.5em">Apache-2.0 · the CLI and catalog are free forever · launching on npm soon</p>
 
   <div class="stats-bar">
     <div class="stat"><span class="num">0</span><span class="label">Deps in the verified core</span></div>
@@ -301,15 +319,39 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">Want a specific dead dependency re-derived and behavior-locked? <a href="https://calendly.com/lane-apilify/30min">Tell us which one.</a></p>
 </section>
 
-<!-- COMPLIANCE -->
-<section class="section section-alt">
-  <h2>Built for the audit</h2>
-  <p class="section-sub">Where "we trusted the registry" is no longer an acceptable answer.</p>
-  <div class="grid">
-    <div class="card"><h4>EU Cyber Resilience Act</h4><p>Provenance and integrity for every dependency, with a contract and a deterministic check — not a transitive tree no human can audit.</p></div>
-    <div class="card"><h4>NIST SSDF / SOC 2</h4><p>Each unit ships behavioral test evidence and content hashes as a byproduct of the build, not a separate attestation you have to take on faith.</p></div>
-    <div class="card"><h4>Reproducible by design</h4><p>Re-derive a dependency in your own environment and confirm it satisfies the same contract — supply-chain trust you generate, not import.</p></div>
-    <div class="card"><h4>Tamper-evident SBOM</h4><p>The contract <em>is</em> the bill of materials: spec, oracle, hashes. A poisoned package can't pass a check it didn't author.</p></div>
+<!-- OPEN CORE -->
+<section class="section section-alt" id="opencore">
+  <h2>Open core. Honestly.</h2>
+  <p class="section-sub">The tools that verify trust are free and open, forever. We only ever charge for running them at team scale — never for the core.</p>
+  <div class="tiers">
+    <div class="tier open">
+      <div class="ttag">Free &amp; open · Apache-2.0 · forever</div>
+      <h4>The open core</h4>
+      <div class="tsub">Everything you need to verify or re-derive any package.</div>
+      <ul>
+        <li>The <code>rdv</code> CLI — check, vis, resynth</li>
+        <li>The SIR specification &amp; package format</li>
+        <li>The verified-recompose loop</li>
+        <li>The public <code>@rederive/*</code> catalog</li>
+      </ul>
+    </div>
+    <div class="tier cloud">
+      <div class="ttag">rederive Cloud · for teams, as the core matures</div>
+      <h4>The extra tools that make it better</h4>
+      <div class="tsub">Operating rederive across an org — not gatekeeping the core.</div>
+      <ul>
+        <li>Managed re-derivation — don't run the fleet or spend your own tokens</li>
+        <li>Private catalogs for your internal code</li>
+        <li>Continuous verification &amp; behavioral-drift alerts</li>
+        <li>Governance — SSO, RBAC, policy, audit logs</li>
+        <li>Compliance attestation — EU CRA / SSDF / SOC 2 evidence</li>
+      </ul>
+    </div>
+  </div>
+  <div class="promise-cta">
+    <h4>We wrote down what we'll never do.</h4>
+    <p>We will never paywall the ability to verify or re-derive a public package, never cripple the open core to force an upgrade, and never retroactively relicense what we've released. It binds the company through any funding, board, or acquisition — a written commitment, not a vibe.</p>
+    <a href="promise.html" class="btn-secondary" style="display:inline-block;padding:0.55em 1.2em;border-radius:6px">Read the rederive Promise →</a>
   </div>
 </section>
 
@@ -326,12 +368,12 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <div class="footer-inner">
     <span class="footer-brand">rederive &middot; from Semcom &middot; Apilify Inc.</span>
     <div class="footer-links">
+      <a href="promise.html">The Promise</a>
+      <a href="spec.html">SIR Spec</a>
       <a href="https://semcom.ai">Semcom</a>
-      <a href="#how">How it works</a>
-      <a href="https://www.linkedin.com/in/lanestp">LinkedIn</a>
       <a href="mailto:lane@apilify.com">Contact</a>
     </div>
-    <span>&copy; 2026 Apilify Inc. &middot; Patent Pending</span>
+    <span>&copy; 2026 Apilify Inc. &middot; Open source (Apache-2.0)</span>
   </div>
 </footer>
 

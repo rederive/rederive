@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The rederive Promise — open-core stewardship charter</title>
+<meta name="description" content="A public, binding commitment: what stays open forever, what we charge for, and what we promise never to do to the community. The anti-rug-pull charter for rederive.">
+<link rel="canonical" href="https://rederive.ai/promise.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The rederive Promise">
+<meta property="og:description" content="A startup writing down — bindingly — what it will never do to the open-source community.">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(40,200,64,0.07) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#28c840;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s h2 .n{color:#6a6f7e;font-weight:700;font-size:0.7em;margin-right:0.5em;font-family:'SF Mono',ui-monospace,monospace}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.2em 0}
+.col{border-radius:10px;padding:1.4em 1.5em;border:1px solid #282c38;background:#1a1d28}
+.col.do{border-color:rgba(40,200,64,0.35)}
+.col.dont{border-color:rgba(255,122,114,0.3)}
+.col h3{font-size:1.02em;margin-bottom:0.7em;font-weight:700}
+.col.do h3{color:#28c840}.col.dont h3{color:#ff7a72}
+.col ul{list-style:none;margin:0;padding:0}
+.col li{font-size:0.9em;color:#e8e8e8;padding:0.32em 0 0.32em 1.5em;position:relative;line-height:1.5}
+.col.do li::before{content:'✓';position:absolute;left:0;color:#28c840;font-weight:700}
+.col.dont li::before{content:'✕';position:absolute;left:0;color:#ff7a72;font-weight:700}
+
+ul.plain{margin:0.4em 0 1em 0;padding:0;list-style:none}
+ul.plain li{position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8;font-size:0.95em}
+ul.plain li::before{content:'—';position:absolute;left:0;color:#6a6f7e}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.cols{grid-template-columns:1fr}.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="index.html#how">How it works</a>
+  <a class="nl" href="spec.html">SIR Spec</a>
+  <a class="nl" href="index.html#opencore">Open core</a>
+  <a class="nl active" href="promise.html">Promise</a>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+</nav>
+</div>
+
+<header class="doc-hero">
+  <div class="doc-hero-inner">
+    <div class="eyebrow">Open-Core Stewardship Charter</div>
+    <h1>The rederive Promise</h1>
+    <p>A public, binding commitment — what stays open forever, what we charge for, and what we promise never to do. Written down so it can be held against us.</p>
+    <div class="vbadge">Version 1.0 · 2026-06-15 · Apilify Inc.</div>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+
+<section class="s">
+  <h2><span class="n">0</span>Why this document exists</h2>
+  <p class="lead">rederive's product is <strong>trust</strong>. A "trust-nothing" package manager whose steward can be trusted only on their word is a contradiction — so we are not asking for your word. We are signing ours.</p>
+  <p>We have watched this movie. An open project earns a community, becomes load-bearing infrastructure, and then — under growth pressure or an investor's spreadsheet — relicenses, hobbles the free tier, or quietly betrays the people who built its adoption. (Terraform → BSL → the OpenTofu fork is the canonical case.) The community always knew it was possible, because nothing was ever promised in writing.</p>
+  <p>This charter is that writing. It binds Apilify Inc. regardless of ownership, funding, board, or acquisition.</p>
+</section>
+
+<section class="s">
+  <h2><span class="n">1</span>Make something awesome, first</h2>
+  <p>The mission is to build the best verified-recompose toolchain and the most useful catalog of verified packages in the world — and give it away. Monetization <em>follows</em> adoption; it never precedes it and never compromises it. <strong>If a feature is needed to verify or re-derive software, it lives in the open core — full stop.</strong> Greatness of the free thing is the strategy, not a loss leader for it.</p>
+</section>
+
+<section class="s">
+  <h2><span class="n">2</span>What is open — and stays open</h2>
+  <p>The <strong>open core</strong> is licensed <strong>Apache-2.0</strong> and comprises, at minimum:</p>
+  <ul class="plain">
+    <li>The <code>rdv</code> CLI — <code>check</code>, <code>vis</code>, <code>resynth</code>, and any command required to verify or re-derive a package.</li>
+    <li>The SIR specification and package format — developed as an open standard.</li>
+    <li>The verified-recompose loop — decompile → held-out oracle → quorum re-derivation.</li>
+    <li>The public catalog of <code>@rederive/*</code> verified packages and their contracts.</li>
+  </ul>
+  <div class="callout green">
+    <div class="ct">The durability promise</div>
+    <p style="margin:0"><strong>Released open versions stay open forever</strong> — the Apache-2.0 grant is irrevocable; no change-date, no clawback. <strong>The line moves only outward</strong> — we may open more, never close what is open. <strong>No retroactive relicensing</strong> — any future license change applies only going forward, is announced in advance, and never touches a released version. Your right to fork the last open release is guaranteed by the license and sacred to us.</p>
+  </div>
+</section>
+
+<section class="s">
+  <h2><span class="n">3</span>The catalog is a public good</h2>
+  <p>Re-releasing verified, dependency-free replacements for abandoned, sabotaged, or risky packages is a gift to the commons — and, frankly, our best marketing. Every <code>@rederive/*</code> package is proof the method works, in public, for free.</p>
+  <ul class="plain">
+    <li><strong>The public catalog is free, forever.</strong></li>
+    <li><strong>We will never paywall the ability to verify or re-derive a public package.</strong> If <code>colors</code> is in the catalog, anyone can <code>rdv check</code> or <code>rdv resynth</code> it at no cost, today and always.</li>
+    <li>We publish the contract — spec + held-out oracle + hashes — not just the bytes, so the verification is yours to run, not ours to gatekeep.</li>
+  </ul>
+</section>
+
+<section class="s">
+  <h2><span class="n">4</span>What we charge for — and what we never will</h2>
+  <p>Revenue comes from making rederive better for <strong>teams and enterprises operating it at scale</strong> — value a fork of the CLI does not hand you.</p>
+  <div class="cols">
+    <div class="col do">
+      <h3>Fair to charge for</h3>
+      <ul>
+        <li>Managed re-derivation — hosted, on-demand</li>
+        <li>Private catalogs for internal/proprietary code</li>
+        <li>Continuous verification &amp; drift alerts</li>
+        <li>Governance — SSO/SAML, RBAC, audit logs</li>
+        <li>Compliance attestation — EU CRA / SSDF / SOC 2 evidence</li>
+        <li>Support, SLAs, and indemnification</li>
+      </ul>
+    </div>
+    <div class="col dont">
+      <h3>We will never</h3>
+      <ul>
+        <li>Charge to verify or re-derive a <strong>public</strong> package</li>
+        <li>Remove or degrade a core capability to force an upgrade</li>
+        <li>Ship a deliberately hobbled open version beside a paid one</li>
+        <li>Put the format or spec behind a fee, license, or patent assertion</li>
+        <li>Sell user telemetry or run ads in the open-source tool</li>
+        <li>Use a contributor agreement to privatize contributors' work</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="s">
+  <h2><span class="n">5</span>How we treat the community</h2>
+  <ul class="plain">
+    <li><strong>Contributions are credited.</strong> We use a lightweight DCO model; no CLA that lets us privatize what you gave us.</li>
+    <li><strong>We upstream our fixes</strong> to the open core rather than hoarding them for the paid tier.</li>
+    <li><strong>We don't compete unfairly with our own ecosystem.</strong> If someone builds a great thing on rederive, we don't clone-and-bundle to kill it.</li>
+    <li><strong>Security findings are handled in the open</strong>, with credit, on a responsible-disclosure timeline.</li>
+  </ul>
+</section>
+
+<section class="s">
+  <h2><span class="n">6</span>Monetization timing</h2>
+  <p>We will not introduce paid tiers until the open core is genuinely adopted and <em>loved</em> — measured by real usage, not by our impatience for revenue. When paid tiers arrive, every one of them must pass the same test:</p>
+  <div class="callout">
+    <div class="ct">The test for every paid feature</div>
+    <p style="margin:0">Does this make the team / enterprise experience <strong>better</strong> — without making the individual / open-source experience <strong>worse</strong>? If a feature only works by degrading the free experience, it fails this charter and we don't ship it.</p>
+  </div>
+</section>
+
+<section class="s">
+  <h2><span class="n">7</span>The anti-rug-pull mechanism</h2>
+  <p>These promises are not aspirational; they are a <strong>condition of the trust that is the company's primary asset</strong>. Breaking them does not unlock revenue — it destroys the moat. We state that plainly so that any future pressure to violate this charter meets this sentence: <em>doing so vaporizes the thing that makes rederive valuable.</em></p>
+  <ul class="plain">
+    <li>This charter binds Apilify Inc. through any change of ownership, investment, board composition, or acquisition.</li>
+    <li>Amendments are published openly, take effect only going forward, and never retroactively reduce a freedom already granted.</li>
+    <li>The community's right to fork the open core is permanent and guaranteed by Apache-2.0. We consider a fork the ultimate check on us, and we accept it.</li>
+  </ul>
+  <p style="font-size:0.9em;color:#808088">We additionally commit to evaluate, as the company matures, an <em>eventual-open guarantee</em> — converting commercial source to the open license after a fixed period — recorded here so we are held to the conversation.</p>
+
+  <div class="sig">
+    <p><strong>Signed,</strong><br>Lane Thompson — Founder &amp; CEO, Apilify Inc.</p>
+    <p style="margin-top:0.6em">This is the canonical version and supersedes any contrary statement elsewhere. To report a violation, open an issue or email <a href="mailto:lane@apilify.com">lane@apilify.com</a>.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="spec.html">SIR Spec</a>
+      <a href="https://semcom.ai">Semcom</a>
+      <a href="mailto:lane@apilify.com">Contact</a>
+    </div>
+    <span>&copy; 2026 Apilify Inc. &middot; Open source (Apache-2.0)</span>
+  </div>
+</footer>
+
+</body>
+</html>
