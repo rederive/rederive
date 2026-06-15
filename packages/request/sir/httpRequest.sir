@@ -1,0 +1,15 @@
+SIR    httpRequest
+KIND   EFFECT
+SRC    representative model of request@2.88.2's HTTP spine (NOT request.js verbatim)
+SIG    (reqOpts, body, http) -> Promise<{statusCode, body}>
+REACH  internal
+TRIGGER call
+EMIT     net.request(reqOpts) ; net.write(body)? ; net.end          # outbound, recorded (not performed)
+REQUEST  net.read(response) -> {statusCode, chunks}                 # inbound, injected (replayed)
+ORACLE trace @vectors: oracles/httpRequest.json [ordered EMIT+REQUEST; http transport injected (record/replay); verified by trace-verify.mjs]
+# The capstone effect demo: the FULL ordered EMIT (request / optional write / end) + REQUEST (response)
+# trace, with the http transport injected as a fake that RECORDS emits and REPLAYS a canned response.
+# Order-sensitive: write precedes end; a unit that never ends never resolves (timeout -> caught);
+# falsy/'' body emits no write. REPRESENTATIVE of request's spine — re-deriving the real Request class
+# wholesale is out of scope. rdv check is value-mode; this trace unit is verified by the package harness.
+# GENERATED structurally (SIR Schema v0.1).

@@ -20,17 +20,19 @@ UNITS
   FUNCTIONAL  paramsHaveRequestBody  helpers.js:paramsHaveRequestBody   [leaf]
   FUNCTIONAL  toBase64               helpers.js:toBase64                [leaf, Buffer]
   EFFECT      getProxyFromURI        getProxyFromURI.js                 [leaf, env boundary — INJECTED, record/replay]
+  EFFECT      httpRequest            representative HTTP spine          [TRACE unit, net EMIT+REQUEST — INJECTED; verified by trace-verify.mjs]
 
 # ── the EFFECT surface the trace oracle must pin (NOT covered here yet) ────────
 SURFACE
-  env boundary  (REQUEST env.read):   COVERED — getProxyFromURI verified by injection / record-replay
-                                      (set the env snapshot, run, compare; the inbound half of the trace).
-  outbound (EMIT, recorded):          net.write (http/https request bytes) ; redirect follow   — FRONTIER
-  inbound  (REQUEST, injected):       net.read (response) ; fs.read (multipart file bodies) ;
-                                      time (date headers) ; rand (multipart boundary / uuid)  — FRONTIER
-  => the ENV boundary is done; the NET/HTTP EMIT trace (the actual send: emit request bytes, inject
-     response, order-sensitive) is the remaining frontier (the dotenv/editorconfig EFFECT-tier precedent).
-     Today: pure core + the env-effect leaf — honestly partial, and one boundary class deeper than before.
+  env boundary  (REQUEST env.read):   COVERED — getProxyFromURI, injection / record-replay.
+  net boundary  (EMIT + REQUEST):     DEMONSTRATED — the representative httpRequest trace unit verifies the
+                                      ordered EMIT (request / write / end) + REQUEST (response) with the http
+                                      transport INJECTED (record/replay). Order-sensitive; quorum 3/3.
+  remaining FRONTIER:                 re-deriving request.js's ACTUAL Request class verbatim (redirects,
+                                      cookies STATE, multipart fs.read, oauth/hawk crypto) — out of scope.
+                                      What's proven is the trace-oracle MACHINERY on request's net choreography.
+  => both boundary classes (env, net) are now demonstrated end-to-end via injection; the gap is the size of
+     the real Request class, not the method. Honestly partial — two boundary classes deeper than the pure core.
 
 NOTES
   - request is npm-DEPRECATED (2020) yet still load-bearing in countless dependency trees — a prime

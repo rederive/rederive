@@ -1,0 +1,321 @@
+{
+  "mode": "trace",
+  "exportName": "httpRequest",
+  "unit": "httpRequest",
+  "boundary": "net.request/write/end (EMIT) + net.read (REQUEST, injected)",
+  "vectors": [
+    {
+      "name": "get_200",
+      "args": [
+        {
+          "method": "GET",
+          "host": "x",
+          "path": "/"
+        },
+        null,
+        {
+          "statusCode": 200,
+          "chunks": [
+            "hello",
+            " world"
+          ]
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "GET",
+              "host": "x",
+              "path": "/"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 200,
+          "body": "hello world"
+        }
+      }
+    },
+    {
+      "name": "post_201",
+      "args": [
+        {
+          "method": "POST",
+          "path": "/items"
+        },
+        "payload",
+        {
+          "statusCode": 201,
+          "chunks": [
+            "ok"
+          ]
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "POST",
+              "path": "/items"
+            }
+          },
+          {
+            "op": "write",
+            "data": "payload"
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 201,
+          "body": "ok"
+        }
+      }
+    },
+    {
+      "name": "empty_resp_204",
+      "args": [
+        {
+          "method": "GET",
+          "path": "/empty"
+        },
+        null,
+        {
+          "statusCode": 204,
+          "chunks": []
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "GET",
+              "path": "/empty"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 204,
+          "body": ""
+        }
+      }
+    },
+    {
+      "name": "conn_error",
+      "args": [
+        {
+          "method": "GET",
+          "path": "/err"
+        },
+        null,
+        {
+          "error": "ECONNREFUSED"
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "GET",
+              "path": "/err"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "__throw": "ECONNREFUSED"
+        }
+      }
+    }
+  ],
+  "heldout": [
+    {
+      "name": "ho_get_404",
+      "args": [
+        {
+          "method": "GET",
+          "path": "/missing"
+        },
+        null,
+        {
+          "statusCode": 404,
+          "chunks": [
+            "not",
+            " found"
+          ]
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "GET",
+              "path": "/missing"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 404,
+          "body": "not found"
+        }
+      }
+    },
+    {
+      "name": "ho_post_empty_body",
+      "args": [
+        {
+          "method": "POST",
+          "path": "/x"
+        },
+        "",
+        {
+          "statusCode": 200,
+          "chunks": [
+            "k"
+          ]
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "POST",
+              "path": "/x"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 200,
+          "body": "k"
+        }
+      }
+    },
+    {
+      "name": "ho_multi_chunk",
+      "args": [
+        {
+          "method": "GET",
+          "path": "/big"
+        },
+        null,
+        {
+          "statusCode": 200,
+          "chunks": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ]
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "GET",
+              "path": "/big"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 200,
+          "body": "abcd"
+        }
+      }
+    },
+    {
+      "name": "ho_post_json",
+      "args": [
+        {
+          "method": "POST",
+          "path": "/j"
+        },
+        "{\"k\":1}",
+        {
+          "statusCode": 202,
+          "chunks": [
+            "queued"
+          ]
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "POST",
+              "path": "/j"
+            }
+          },
+          {
+            "op": "write",
+            "data": "{\"k\":1}"
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "statusCode": 202,
+          "body": "queued"
+        }
+      }
+    },
+    {
+      "name": "ho_timeout_error",
+      "args": [
+        {
+          "method": "GET",
+          "path": "/e2"
+        },
+        null,
+        {
+          "error": "ETIMEDOUT"
+        }
+      ],
+      "expected": {
+        "emitted": [
+          {
+            "op": "request",
+            "opts": {
+              "method": "GET",
+              "path": "/e2"
+            }
+          },
+          {
+            "op": "end"
+          }
+        ],
+        "result": {
+          "__throw": "ETIMEDOUT"
+        }
+      }
+    }
+  ]
+}
