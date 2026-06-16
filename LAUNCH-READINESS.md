@@ -29,15 +29,13 @@ publishing. The irreversible launch actions (repo public, deploy, npm publish) a
 
 ## YELLOW — clear before publishing
 
-1. **[blocker] `@rederive/request` ships an un-checkable unit.** The package ships `src/httpRequest.js` +
-   `oracles/httpRequest.json` + `sir/httpRequest.sir`, but the manifest `units[]` lists only the 3 that
-   `rdv check` verifies; `httpRequest` (the NET trace unit) is verified by `trace-verify.mjs`, which is **not
-   published**. So a consumer who installs `@rederive/request` receives an `httpRequest` unit the shipped
-   tooling cannot verify — which undercuts the trust-nothing thesis. **Fix (pick one):** (a) drop
-   `httpRequest` from the published package (ship only the 3 checkable units); (b) add a trace-check mode to
-   `rdv check` and ship the trace harness + a trace oracle entry in `units[]`; (c) clearly mark it in the
-   request README as "trace-verified separately, not by `rdv check`" with a repo pointer. (a) is the cleanest
-   for launch; (b) is the right long-term answer.
+1. **[RESOLVED — option (b)] `@rederive/request`'s `httpRequest` is now verified by `rdv check`.** Trace
+   verification (`mode:trace`) is folded into the **OSS CLI**: the injected-boundary adapter (the HTTP
+   transport fake) lives in `cli/rdv.mts` and bundles into the published `dist/cli.cjs`, so a trust-nothing
+   verifier never runs publisher-shipped harness code to check publisher code. `httpRequest` moved into the
+   manifest `units[]`; `rdv check packages/request` now verifies **all 4 units** (5/5 held-out on the trace
+   unit), and a tampered `httpRequest` (hardcoded statusCode) **fails** (exit 1), restored passes. The
+   package ships only its contract (oracle data + src); the trace harness stays repo-side (capture/stamp).
 2. **[cosmetic] `vis.html` is tracked in git** (a generated artifact); regenerating it produces diffs.
    Either git-ignore it (like `dist/`) or accept it as an intentionally-rendered in-repo report.
 
@@ -56,7 +54,7 @@ publishing. The irreversible launch actions (repo public, deploy, npm publish) a
 
 ## Go / no-go
 
-- **CLI + `@rederive/colors` + `@rederive/rdv`:** GO (mechanically clean, verified).
-- **`@rederive/request`:** NO-GO until the httpRequest un-checkable-unit decision is made.
+- **CLI + `@rederive/colors` + `@rederive/rdv` + `@rederive/request`:** GO (all mechanically clean; request's
+  trace unit now verified by the OSS `rdv check`).
 - **Story:** mechanically launchable as Mode-1; consider folding in `rdv normalize` so the launch reflects
   capability.

@@ -24,7 +24,8 @@ original deleted, **quorum 3/3** on a disjoint held-out set:
   request's HTTP spine, verified by a full record/replay **trace** oracle: the `http` transport is injected;
   the ordered EMIT (`request` → optional `write` → `end`) and the resolved response are checked against the
   recorded trace (order-sensitive — a unit that never `end`s times out, an unconditional `write` is caught).
-  Verified by `trace-verify.mjs` (rdv check is value-mode); not `request.js` verbatim.
+  Verified by **`rdv check` itself**: the trace-boundary adapter lives in the OSS CLI, so the verifier never
+  runs publisher-shipped harness code to check publisher code. (A *representative* model, not `request.js` verbatim.)
 
 ```
 npm i -g rederive

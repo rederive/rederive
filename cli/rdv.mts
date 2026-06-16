@@ -32,11 +32,54 @@ async function resolveFn(srcAbs: string, name: string) {
   return mod[name] ?? mod.run ?? mod.default ?? Object.values(mod).find((x) => typeof x === 'function');
 }
 
-async function gradeVs(srcAbs: string, name: string, vectors: any[]) {
+// ── trace-oracle verification (mode: "trace") — the injected-boundary adapters live HERE, in the OSS CLI,
+// not in the package: a trust-nothing verifier must not run publisher-shipped harness code to check
+// publisher code. The package ships only the oracle (args incl. the scripted boundary + expected
+// {emitted,result}) and src; the CLI rebuilds the fake boundary and grades. New boundary kinds are added
+// to this adapter library. Today: the HTTP transport (net.request/write/end EMIT + injected response). ──
+function makeFakeHttp(script: any) {
+  const emitted: any[] = [];
+  const http = {
+    request(opts: any, cb: any) {
+      emitted.push({ op: 'request', opts });
+      const res: any = { statusCode: script.statusCode, setEncoding() {}, on(ev: string, h: any) { res['_' + ev] = h; return res; } };
+      const req: any = {
+        on(ev: string, h: any) { req['_' + ev] = h; return req; },
+        write(d: any) { emitted.push({ op: 'write', data: String(d) }); return true; },
+        end() {
+          emitted.push({ op: 'end' });
+          queueMicrotask(() => {
+            if (script.error) { if (req._error) req._error(new Error(script.error)); return; }
+            if (cb) cb(res);
+            queueMicrotask(() => { for (const c of (script.chunks || [])) if (res._data) res._data(c); if (res._end) res._end(); });
+          });
+        },
+      };
+      return req;
+    },
+  };
+  return { http, emitted };
+}
+
+async function runTrace(fn: any, args: any[]) {
+  const [a0, a1, script] = args;                                  // last arg = the scripted boundary
+  const { http, emitted } = makeFakeHttp(script || {});
+  let result: any;
+  try {
+    result = await Promise.race([
+      Promise.resolve(fn(a0, a1, http)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout: never resolved')), 800)),
+    ]);
+  } catch (e: any) { result = { __throw: String((e && e.message) || e) }; }
+  return { emitted, result };
+}
+
+async function gradeVs(srcAbs: string, name: string, vectors: any[], mode = 'vectors') {
   const fn = await resolveFn(srcAbs, name);
   const gots: any[] = [];
   for (const v of vectors) {
-    try { gots.push(await fn(...v.args)); } catch (e: any) { gots.push({ __throw: String(e?.message ?? e) }); }
+    try { gots.push(mode === 'trace' ? await runTrace(fn, v.args) : await fn(...v.args)); }
+    catch (e: any) { gots.push({ __throw: String(e?.message ?? e) }); }
   }
   return grade(gots, vectors);
 }
@@ -45,7 +88,7 @@ async function checkUnit(dir: string, u: any) {
   const paths = { oracle: resolve(dir, u.oracle), src: resolve(dir, u.src), sir: resolve(dir, u.sir), spec: u.spec ? resolve(dir, u.spec) : '' };
   const shaOk = (file: string, want: string | undefined) => !want || sha256(file) === want;
   const oracle = JSON.parse(readFileSync(paths.oracle, 'utf-8'));
-  const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors);
+  const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors, oracle.mode);
   return { name: u.name, kind: u.kind, sig: u.sig, frozen: (oracle.vectors || []).length, ...g,
     srcShaOk: shaOk(paths.src, u.srcSha256), oracleShaOk: shaOk(paths.oracle, u.oracleSha256),
     sirShaOk: shaOk(paths.sir, u.sirSha256), specShaOk: !paths.spec || shaOk(paths.spec, u.specSha256) };

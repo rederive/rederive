@@ -7,7 +7,8 @@
 //   node trace-verify.mjs capture                 # run the reference -> write oracles/httpRequest.json
 //   node trace-verify.mjs grade                    # grade .resynth emits, quorum, apply -> src + manifest
 //
-// rdv check is value-mode; this trace unit is verified here (a trace-mode CLI is a future rdv feature).
+// VERIFICATION of this trace unit now lives in `rdv check` (mode:trace; the boundary adapter is in the OSS
+// CLI). This harness is the CAPTURE/stamp + resynth-grade tool only — it writes the oracle and the manifest.
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
@@ -124,9 +125,9 @@ if (mode === 'capture') {
   writeFileSync(resolve(DIR, 'src', 'httpRequest.js'), header + readFileSync(resolve(rdir, winnerFile), 'utf8').replace(/^\s+/, ''));
   const srcSha = sha(resolve(DIR, 'src', 'httpRequest.js'));
   console.log(`     QUORUM ${full.length}/${graded.length} -> applied ${winnerFile} -> src/httpRequest.js (${srcSha.slice(0, 12)})`);
-  // attach as a traceUnit in the manifest (kept separate from the value `units` rdv check verifies)
+  // upsert into the manifest `units` (rdv check verifies trace units in mode:trace, same loop as value units)
   const man = JSON.parse(readFileSync(resolve(DIR, 'sir.manifest.json'), 'utf8'));
-  man.traceUnits = [{
+  const entry = {
     name: 'httpRequest', kind: 'EFFECT', sig: '(reqOpts, body, http) => Promise<{statusCode, body}>',
     boundary: oracle.boundary, representative: 'models request@2.88.2 HTTP spine; not request.js verbatim',
     sir: 'sir/httpRequest.sir', sirSha256: sha(resolve(DIR, 'sir', 'httpRequest.sir')),
@@ -134,9 +135,11 @@ if (mode === 'capture') {
     src: 'src/httpRequest.js', srcSha256: srcSha,
     verified: { mode: 'trace', frozen: oracle.vectors.length, heldout: held.length, quorum: `${full.length}/${graded.length}`, harness: 'trace-verify.mjs', at: '2026-06-15' },
     spec: 'specs/httpRequest.md', specSha256: sha(resolve(DIR, 'specs', 'httpRequest.md')),
-  }];
+  };
+  man.units = (man.units || []).filter((u) => u.name !== 'httpRequest').concat(entry);
+  delete man.traceUnits;
   writeFileSync(resolve(DIR, 'sir.manifest.json'), JSON.stringify(man, null, 2) + '\n');
-  console.log('     manifest.traceUnits updated.');
+  console.log('     manifest.units updated (httpRequest, mode:trace).');
 } else if (mode === 'smoke') {
   // Prove the trace oracle discriminates: known-broken impls must fail the held-out traces.
   const held = JSON.parse(readFileSync(resolve(DIR, 'oracles', 'httpRequest.json'), 'utf8')).heldout;
