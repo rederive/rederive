@@ -415,6 +415,24 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p style="margin-top:1.5em;color:#808088;font-size:0.9em">SIR is the representation produced by <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine. The format and the <code>rdv</code> checker are open (Apache-2.0); the engine is a separate implementation that competes on quality, not on access to the standard.</p>
 </section>
 
+<!-- 13 -->
+<section id="modes">
+  <h2>13 · The two modes — re-derivation &amp; verified normalization</h2>
+  <p>The verified-recompose method runs in two modes, differing in <em>what plays the oracle</em> and <em>whether the original survives</em>. Both produce the same SIR units under the same firewall (§4); only the source of ground truth differs.</p>
+
+  <h3>Mode 1 — catalog re-derivation</h3>
+  <p>What §10's bundle describes: a unit with a compact spec and a <strong>frozen, held-out</strong> oracle. The original is <strong>deleted</strong> before re-emit; N isolated rebuilds must agree on the full held-out set (quorum). This is how the catalog ships verified packages.</p>
+
+  <h3>Mode 2 — verified normalization</h3>
+  <p>For a monolith whose behavior won't compress into a compact contract — a large stateful class, an async state machine, a concurrent coordinator — the original is <strong>retained as a live differential oracle</strong>. You propose a firewall-clean factoring (the same kinds and <code>FUNCTIONAL&nbsp;⊅&nbsp;EFFECT</code> firewall as §4) and verify it reproduces the original on <strong>generated, held-out scenarios it never saw</strong>. Mode&nbsp;1 guards against hallucination; Mode&nbsp;2 guards against an incomplete refactor (regression). A <strong>Phase-0 feasibility gate</strong> decides <em>normalizable vs. genuinely bespoke</em> before any cut: if no faithful, deterministic oracle can be captured, the honest answer is to stop.</p>
+
+  <h3>Effects, time &amp; concurrency under Mode 2</h3>
+  <p>The boundary descriptors of §6 are <strong>injected and replayed</strong>: net/fs/env via record/replay, the clock as a value, and the event loop itself as an injectable scheduler. Timers verify on <strong>virtual time</strong> (a timer race is nondeterministic on the wall clock, deterministic once the loop is owned). Genuinely concurrent units are verified by owning the <strong>message scheduler</strong> and checking the space of interleavings — exhaustively for small inputs, and <strong>partial-order-reduced</strong> beyond (one representative per equivalence class of independent reorderings). A control effect additionally carries a <strong>resource-lifecycle</strong> channel — a cancelled timer, a torn-down subscription — that value-and-order observation alone is blind to.</p>
+
+  <h3>The honest ceiling</h3>
+  <p>Mode&nbsp;2 is <strong>testing, not proof</strong>: a normalized unit is proven-equivalent on the exercised, coverage-reported scenario distribution — dramatically stronger than a blind rewrite, never "provably identical everywhere." The coverage rung reached — exhaustive, sampled, or partial-order-reduced — is reported, never silently assumed.</p>
+</section>
+
 </main>
 </div>
 
