@@ -132,7 +132,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <div class="eyebrow">Specification</div>
     <h1>SIR — the <span>Semantic Intermediate Representation</span></h1>
     <p>The contract format inside every rederive package. A kind-discriminated tree of a unit's behavior, anchored to a held-out, execution-derived oracle. The text is a skeleton; the oracle is the substrate.</p>
-    <div class="vbadge"><span class="dot"></span>SCHEMA v0.1 · FROZEN 2026-06-10</div>
+    <div class="vbadge"><span class="dot"></span>SCHEMA v0.2 · 2026-06-16</div>
   </div>
 </header>
 
@@ -153,6 +153,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <a href="#bundle">10 · The bundle &amp; verification</a>
   <a href="#annotations">11 · Non-normative annotations</a>
   <a href="#governance">12 · Conformance &amp; governance</a>
+  <a href="#modes">13 · The two modes</a>
 </nav>
 
 <main class="doc-content" id="main">
@@ -280,12 +281,16 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
       <tr><td>ipc ui</td><td>inter-process · user interface</td></tr>
     </tbody>
   </table>
-  <p>The <em>verb</em> is an operation class: <code>read · write · stat · spawn · query · exec · fetch · set · …</code> A new <code>net.fetch</code> edge appearing in a review diff is exactly the red line an auditor must see.</p>
+  <p>The <em>verb</em> is an operation class: <code>read · write · stat · spawn · query · exec · fetch · set · timer · …</code> A new <code>net.fetch</code> edge appearing in a review diff is exactly the red line an auditor must see.</p>
 
-  <h3>Ordering &amp; PAR</h3>
-  <p>A trace is an <strong>ordered</strong> sequence of <code>EMIT</code>/<code>REQUEST</code> records. Canonicalization may normalize <em>representation</em> (key formatting, serialization) but <strong>never ordering</strong>. The one exception is an explicit unordered window:</p>
-  <pre class="sir"><span class="k">PAR</span> { … }    <span class="c"># within this block the canonical form is the sorted multiset of sub-traces</span></pre>
-  <p>(<code>PAR</code> is frozen as <em>design</em> but currently unvalidated — it awaits a first concurrency specimen before it claims verification semantics.)</p>
+  <h3>Reading the clock vs. owning it — the scheduler is a control effect</h3>
+  <p>A clock <em>read</em> (<code>REQUEST time.now</code>) returns a value and is injected like any other inbound read. <strong>Scheduling against the clock is a different effect.</strong> A timer (<code>time.timer</code> — <code>setTimer</code>&nbsp;/&nbsp;<code>clearTimer</code>) and the microtask scheduler are not point reads; they are a <strong>control</strong> effect that decides <em>when</em> deferred work runs relative to everything else. A timer <em>race</em> — does a timeout fire before the awaited reply settles? — is nondeterministic on the wall clock, so it is verified on <strong>virtual time</strong>: the event loop is injected as a scheduler the harness drives (<code>schedule</code> for microtasks, <code>setTimer</code>/<code>clearTimer</code>/<code>advance</code> for timers), making resolution order a deterministic, replayable function of the timeline. (Specimens: <code>q</code>'s <code>delay</code>/<code>timeout</code> and its microtask core.)</p>
+
+  <h3>Ordering, PAR &amp; concurrency</h3>
+  <p>A trace is an <strong>ordered</strong> sequence of <code>EMIT</code>/<code>REQUEST</code> records. Canonicalization may normalize <em>representation</em> (key formatting, serialization) but <strong>never ordering</strong>. The one exception is an explicit concurrent window:</p>
+  <pre class="sir"><span class="k">PAR</span> { … }    <span class="c"># a concurrent window: sub-traces whose relative order is not fixed</span></pre>
+  <p><strong>A <code>PAR</code> block's canonical form depends on whether its sub-traces are independent.</strong> When they <em>commute</em> (touch no shared state — order is observationally irrelevant), the canonical form is the <strong>sorted multiset</strong> of sub-traces and verification collapses to one representative. When they are <em>dependent</em> (a shared resource — order changes the observable), sorting is unsound: the unit is verified over the <strong>space of interleavings</strong> against the retained reference's <strong>reachable-outcome set + invariants</strong> (safety, ordering, conservation), with the message-delivery order injected as the boundary the harness owns.</p>
+  <p>Coverage of that space is reported on a ladder: <strong>exhaustive</strong> (small inputs — proven over all interleavings) → <strong>sampled</strong> (coverage-counted, when the space explodes) → <strong>partial-order reduction</strong> (one representative per equivalence class of independent reorderings — cheap exactly when the unit is correctly order-independent, thorough exactly when a refactor is not). A control effect additionally carries a <strong>resource-lifecycle</strong> channel (§7). (Specimens: <code>p-map</code>'s concurrency contract — interleaving-invariant output + a max-concurrency bound — verified exhaustively for small inputs and POR-scaled past 10¹² interleavings; a two-account transfer whose outcome is interleaving-dependent; <code>request</code>'s redirect state machine.)</p>
 
   <h3>TRIGGER is metadata, never structure</h3>
   <div class="note">
@@ -307,6 +312,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   </table>
   <p>Both are <strong>differential</strong>: the expected value (or trace) is captured by instrumenting and running the original. An oracle asserts <em>behavior</em> — wire bytes, claims, status, the trace shape — and <strong>never</strong> the source library's representation (error-string wording, object-vs-string body). Freezing representation is a trap; freezing behavior is the contract.</p>
   <p>For greenfield units with no original to run, the oracle can instead be a <code>(generator, properties)</code> pair — round-trip, idempotence, determinism, conservation — verifying <em>correctness-of-contract</em> rather than identity to a reference. (This <em>property mode</em> is part of the rederive toolchain; the frozen <code>.sir</code> grammar above covers the <code>value</code>/<code>trace</code> migration case that ships in today's packages.)</p>
+  <p>A <strong>control effect</strong> — a timer, a subscription, a lock — carries a second observable beyond value-and-order: its <strong>resource lifecycle</strong> (armed / fired / <em>cancelled</em>; subscribed / torn-down). Cancellation is invisible to the trace: a leaked timer still fires, but its effect is a no-op on already-settled state, so the emit/reply sequence is byte-identical while a real resource leak goes uncaught. The oracle for such a unit therefore also asserts the lifecycle channel — timers cleared, handles closed. (Specimen: <code>request</code>'s redirect <code>timeout</code> — a dropped <code>clearTimer</code> passes value+order but leaks; caught only on the lifecycle channel.)</p>
 </section>
 
 <!-- 8 -->
@@ -403,12 +409,12 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p>SIR is developed as an <strong>open, royalty-free standard</strong>. The format and the <strong><code>rdv</code> reference checker</strong> are licensed <strong>Apache-2.0</strong> and free to implement — in any language, by anyone, with no fee, no license negotiation, and <strong>no patent assertion against conforming implementations</strong>. The format is not encumbered, and our commitment to keep it that way is written down and binding in <a href="promise.html">The rederive Promise</a>.</p>
 
   <h3>Versioning</h3>
-  <p>Schema v0.1 is <strong>frozen</strong> as of 2026-06-10; generation targets this document, and every decision in it cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong> (v0.2, …), never silent; a conforming bundle records the version it targets.</p>
+  <p>Schema <strong>v0.2</strong> (2026-06-16) extends the frozen v0.1 with concurrency verification semantics for <code>PAR</code> (§6), the scheduler/timer control effect and virtual time (§6), and the resource-lifecycle oracle channel (§7) — each forced by a named specimen (<code>p-map</code>, <code>q</code>, a two-account transfer, <code>request</code>'s redirect). Every decision still cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong>, never silent; a conforming bundle records the version it targets.</p>
 
   <h3>Deferred (named, not frozen)</h3>
   <ul>
-    <li><code>PAR</code> verification semantics — frozen as design, awaiting a first concurrency specimen.</li>
-    <li>Transactions / compensation, multi-process effects.</li>
+    <li>Transactions / compensation; multi-process effects <em>across machines</em> — the wire (message loss, partial failure, cross-machine clocks). Intra-process concurrency is addressed in §6; the network boundary stays record/replay-or-bespoke.</li>
+    <li>Optimal source-set DPOR for the interleaving ladder (§6) — sleep/persistent-set reduction is validated; the optimal variant (one explored execution per class) is future.</li>
     <li>An ambient-read tier (<code>env.cwd</code>, locale, timezone).</li>
     <li>The <code>ui</code> domain verbs (a frontend target is a non-goal at this phase).</li>
   </ul>
