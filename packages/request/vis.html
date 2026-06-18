@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>@rederive/request — SIR package</title><style>
+:root{--bg:#f6f3ec;--paper:#fffdf8;--ink:#1b1a17;--muted:#6f6a60;--line:#e6ded0;--clay:#c8553d;--teal:#2f6f63;--teal-soft:#dcebe6;--clay-soft:#f0d9d1}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:0 24px 64px}h1,h2{font-family:Georgia,ui-serif,serif;letter-spacing:-.01em}
+header{padding:56px 0 22px;border-bottom:1px solid var(--line);background:radial-gradient(900px 240px at 15% -40%,var(--clay-soft),transparent 60%)}
+h1{font-size:34px;margin:0 0 6px}.tag{display:inline-block;font:600 12px ui-sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--clay);background:var(--clay-soft);padding:6px 10px;border-radius:999px;margin-bottom:16px}
+.lede{color:var(--muted);max-width:42em}code{font-family:ui-monospace,Menlo,monospace;font-size:.88em}
+.prov{margin-top:18px;font-size:14px;color:var(--muted)}.prov b{color:var(--ink)}
+h2{font-size:22px;margin:34px 0 6px}.kicker{font:600 12px ui-sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:0}
+.unit{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:14px;box-shadow:0 8px 24px rgba(40,30,15,.05)}
+.uhead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.uname{font-size:17px;font-weight:700}.sig{color:var(--muted);font-family:ui-monospace,monospace;font-size:13px}
+.kind{margin-left:auto;font:600 11px ui-monospace;color:var(--muted)}.badge{font:700 11px ui-sans-serif;padding:5px 9px;border-radius:999px}
+.badge.ok{background:var(--teal-soft);color:var(--teal)}.badge.no{background:#f1e3df;color:var(--clay)}
+.meta{margin-top:8px;font-size:13.5px;color:var(--muted)}.limit{margin-top:8px;font-size:13px;color:var(--clay);background:#fbeee9;border-radius:8px;padding:7px 10px}
+pre.sir{margin:10px 0 6px;background:#fbf8f1;border:1px dashed var(--line);border-left:3px solid var(--teal);border-radius:0 8px 8px 0;padding:11px 13px;font-size:12.5px;overflow:auto;white-space:pre-wrap}
+.hashes{font-size:11.5px;color:var(--muted)}.trust{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:14px}
+.trust b{color:var(--teal)}.cmd{font-family:ui-monospace,monospace;background:#1b1a17;color:#f6f3ec;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:8px;white-space:pre-wrap}
+footer{margin-top:30px;color:var(--muted);font-size:12.5px}
+</style></head><body>
+<header><div class="wrap"><span class="tag">SIR package · trust-nothing</span>
+<h1>@rederive/request <code style="font-size:18px;color:var(--muted)">@0.1.0</code></h1>
+<p class="lede">A verified-recompose of <b>request@2.88.2</b>. This package ships its <b>contract</b> — a SIR spec + a held-out oracle — not bytes you have to trust. Verify the shipped code against the contract, or rebuild it locally from the spec.</p>
+<div class="prov">provenance: <b>request@2.88.2</b> · github.com/request/request · <b>zero dependency</b> · source sha256 <code>…</code><br>pure helper core + one EFFECT leaf (getProxyFromURI, env boundary verified by record/replay injection) of the deprecated request HTTP client; oracles stamped by executing the real original, then re-derived original-deleted (quorum). The NET/HTTP EMIT trace (the actual send) is declared in sir/MODULE.sir and remains the frontier.</div>
+</div></header>
+<div class="wrap">
+<section><p class="kicker">What's in here</p><h2>4 verified units</h2>
+<p class="lede">Each is a quorum-verified, behavior-locked reconstruction with the original deleted — proven on a held-out set the implementation never saw.</p>
+
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3</span>
+        <code class="uname">paramsHaveRequestBody</code> <span class="sig">(params) =&gt; any</span> <span class="kind">FUNCTIONAL</span></div>
+      <div class="meta">oracle: <b>6</b> frozen / <b>7</b> held-out · quorum <b>3/3</b> · zero-dep</div>
+      
+      <pre class="sir">SIR    paramsHaveRequestBody
+KIND   FUNCTIONAL
+SRC    request@2.88.2 lib/helpers.js:paramsHaveRequestBody
+SIG    (params: object) -&gt; any
+REACH  internal
+CONTROL straight-line (||-chain)
+ORACLE value @vectors: oracles/paramsHaveRequestBody.json [held-out adversarial; stamped from real request@2.88.2; verified by rdv check]
+# Returns the FIRST truthy of body | requestBodyStream | (json &amp;&amp; typeof json !== 'boolean') | multipart,
+# else the last falsy (often undefined). Returns the VALUE not a boolean. Quirk: json counts only when
+# non-boolean (json:true -&gt; excluded; json:{} / json:'s' -&gt; counts). undefined != false (held-out pins it).
+# GENERATED structurally (SIR Schema v0.1); pure leaf carved from request's HTTP effect spine.
+</pre>
+      <div class="hashes">src <code>3e94f407560bdaac</code> · oracle <code>1fc0004eaf707585</code> · spec <code>b579aa71cd4c327d</code></div>
+    </div>
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3</span>
+        <code class="uname">toBase64</code> <span class="sig">(str) =&gt; string</span> <span class="kind">FUNCTIONAL</span></div>
+      <div class="meta">oracle: <b>4</b> frozen / <b>5</b> held-out · quorum <b>3/3</b> · zero-dep</div>
+      
+      <pre class="sir">SIR    toBase64
+KIND   FUNCTIONAL
+SRC    request@2.88.2 lib/helpers.js:toBase64
+SIG    (str: string) -&gt; string
+REACH  internal
+CONTROL straight-line
+ORACLE value @vectors: oracles/toBase64.json [held-out adversarial; stamped from real request@2.88.2; verified by rdv check]
+# Buffer.from(str || '', 'utf8').toString('base64'). Falsy input coerces to '' FIRST (null/undefined/''
+# -&gt; ''); a reconstruction without the ||'' guard throws on null/undefined and fails the held-out.
+# Buffer is a node builtin (deterministic) -&gt; FUNCTIONAL. The base64 core of Basic-auth.
+# GENERATED structurally (SIR Schema v0.1); pure leaf carved from request's HTTP effect spine.
+</pre>
+      <div class="hashes">src <code>0f9467d61699a673</code> · oracle <code>919322fc3c9141b6</code> · spec <code>42137bcdd045d9b1</code></div>
+    </div>
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3</span>
+        <code class="uname">getProxyFromURI</code> <span class="sig">(uri, env) =&gt; string | null</span> <span class="kind">EFFECT</span></div>
+      <div class="meta">oracle: <b>6</b> frozen / <b>7</b> held-out · quorum <b>3/3</b> · zero-dep</div>
+      
+      <pre class="sir">SIR    getProxyFromURI
+KIND   EFFECT
+SRC    request@2.88.2 lib/getProxyFromURI.js:getProxyFromURI
+SIG    (uri: {protocol,hostname,port}, env: object) -&gt; string | null
+REACH  internal
+REQUEST env.read(NO_PROXY | no_proxy | HTTP_PROXY | http_proxy | HTTPS_PROXY | https_proxy)   # ambient boundary, INJECTED as `env`
+ORACLE value @vectors: oracles/getProxyFromURI.json [held-out adversarial; env boundary injected (record/replay); stamped from real request@2.88.2; verified by rdv check]
+# The first EFFECT leaf carved from request's spine. The original reads ambient process.env; verified
+# by INJECTING the env snapshot as a parameter — the REQUEST / inbound half of the trace model (no
+# EMIT, no ordering). Logic: NO_PROXY '*' -&gt; null; no-proxy suffix match with '.'-canonicalization
+# ('oogle.com' != 'google.com'); host:port zones; http/https proxy-var precedence + https-&gt;HTTP_PROXY
+# fallback; returns null (not undefined). The NET/HTTP EMIT trace (the actual send) remains the frontier.
+# GENERATED structurally (SIR Schema v0.1).
+</pre>
+      <div class="hashes">src <code>316535fe7f16a685</code> · oracle <code>8d6af4fdf954c936</code> · spec <code>847ad301c35065c8</code></div>
+    </div>
+    <div class="unit">
+      <div class="uhead"><span class="badge ok">VERIFIED 3/3</span>
+        <code class="uname">httpRequest</code> <span class="sig">(reqOpts, body, http) =&gt; Promise&lt;{statusCode, body}&gt;</span> <span class="kind">EFFECT</span></div>
+      <div class="meta">oracle: <b>4</b> frozen / <b>5</b> held-out · quorum <b>3/3</b> · zero-dep</div>
+      
+      <pre class="sir">SIR    httpRequest
+KIND   EFFECT
+SRC    representative model of request@2.88.2's HTTP spine (NOT request.js verbatim)
+SIG    (reqOpts, body, http) -&gt; Promise&lt;{statusCode, body}&gt;
+REACH  internal
+TRIGGER call
+EMIT     net.request(reqOpts) ; net.write(body)? ; net.end          # outbound, recorded (not performed)
+REQUEST  net.read(response) -&gt; {statusCode, chunks}                 # inbound, injected (replayed)
+ORACLE trace @vectors: oracles/httpRequest.json [ordered EMIT+REQUEST; http transport injected (record/replay); verified by trace-verify.mjs]
+# The capstone effect demo: the FULL ordered EMIT (request / optional write / end) + REQUEST (response)
+# trace, with the http transport injected as a fake that RECORDS emits and REPLAYS a canned response.
+# Order-sensitive: write precedes end; a unit that never ends never resolves (timeout -&gt; caught);
+# falsy/'' body emits no write. REPRESENTATIVE of request's spine — re-deriving the real Request class
+# wholesale is out of scope. rdv check is value-mode; this trace unit is verified by the package harness.
+# GENERATED structurally (SIR Schema v0.1).
+</pre>
+      <div class="hashes">src <code>ec39b9eaee55c371</code> · oracle <code>a722c184b58929a0</code> · spec <code>1321bacf288d8851</code></div>
+    </div></section>
+<section><p class="kicker">How to trust this</p><h2>Check it, or rebuild it</h2>
+<div class="trust"><b>Verify the shipped code</b> against its contract — deterministic, no tokens. Fails loudly if the bytes don't match the held-out oracle or the recorded hashes.
+<div class="cmd">rdv check .</div></div>
+<div class="trust"><b>Rebuild it yourself</b> from the spec — torch some tokens, regenerate <code>src/</code> from <code>sir/</code> + <code>oracles/</code> via N isolated quorum workers. Trust your own build, not the publisher's.
+<div class="cmd">rdv resynth .          # prepare worker prompts
+rdv resynth . --apply  # grade, pick quorum, update src/ + manifest</div></div>
+</section>
+<footer>Generated by <code>rdv vis</code> from <code>sir.manifest.json</code> + <code>sir/</code> + <code>oracles/</code>. The oracle is the source of truth; the source text is fungible.</footer>
+</div></body></html>
