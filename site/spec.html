@@ -8,19 +8,19 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>SIR Specification v0.2 — rederive</title>
-<meta name="description" content="The Semantic Intermediate Representation (SIR): the contract format inside every rederive package. A kind-discriminated tree anchored to a differential oracle. Schema v0.2 — adds concurrency, the scheduler/timer control effect, and the resource-lifecycle oracle channel.">
+<title>SIR Specification v0.3 — rederive</title>
+<meta name="description" content="The Semantic Intermediate Representation (SIR): the contract format inside every rederive package. A kind-discriminated tree anchored to a differential oracle. Schema v0.3 — adds the token-coordinated ring shape, concurrency/PAR semantics, the scheduler/timer control effect, and the resource-lifecycle oracle channel.">
 <link rel="canonical" href="https://rederive.ai/spec.html">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://rederive.ai/spec.html">
 <meta property="og:site_name" content="rederive">
-<meta property="og:title" content="SIR Specification v0.2 — rederive">
+<meta property="og:title" content="SIR Specification v0.3 — rederive">
 <meta property="og:description" content="The contract format inside every rederive package: a kind-discriminated tree whose ground truth is a held-out, execution-derived oracle.">
 <meta property="og:image" content="https://rederive.ai/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="SIR Specification v0.2 — rederive">
+<meta name="twitter:title" content="SIR Specification v0.3 — rederive">
 <meta name="twitter:description" content="The contract format inside every rederive package: a kind-discriminated tree anchored to a held-out, execution-derived oracle.">
 <meta name="twitter:image" content="https://rederive.ai/og.png">
 
@@ -122,7 +122,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 .skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
 </style>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"TechArticle","headline":"SIR — the Semantic Intermediate Representation (v0.2)","description":"The contract format inside every rederive package: a kind-discriminated tree anchored to a held-out, execution-derived oracle.","url":"https://rederive.ai/spec.html","inLanguage":"en","version":"0.2","datePublished":"2026-06-16","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"},"isPartOf":{"@type":"WebSite","url":"https://rederive.ai/"}}
+{"@context":"https://schema.org","@type":"TechArticle","headline":"SIR — the Semantic Intermediate Representation (v0.3)","description":"The contract format inside every rederive package: a kind-discriminated tree anchored to a held-out, execution-derived oracle.","url":"https://rederive.ai/spec.html","inLanguage":"en","version":"0.3","datePublished":"2026-06-22","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"},"isPartOf":{"@type":"WebSite","url":"https://rederive.ai/"}}
 </script>
 </head>
 <body>
@@ -148,7 +148,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <div class="eyebrow">Specification</div>
     <h1>SIR — the <span>Semantic Intermediate Representation</span></h1>
     <p>The contract format inside every rederive package. A kind-discriminated tree of a unit's behavior, anchored to a held-out, execution-derived oracle. The text is a skeleton; the oracle is the substrate.</p>
-    <div class="vbadge"><span class="dot"></span>SCHEMA v0.2 · 2026-06-16</div>
+    <div class="vbadge"><span class="dot"></span>SCHEMA v0.3 · 2026-06-22</div>
   </div>
 </header>
 
@@ -307,6 +307,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <pre class="sir"><span class="k">PAR</span> { … }    <span class="c"># a concurrent window: sub-traces whose relative order is not fixed</span></pre>
   <p><strong>A <code>PAR</code> block's canonical form depends on whether its sub-traces are independent.</strong> When they <em>commute</em> (touch no shared state — order is observationally irrelevant), the canonical form is the <strong>sorted multiset</strong> of sub-traces and verification collapses to one representative. When they are <em>dependent</em> (a shared resource — order changes the observable), sorting is unsound: the unit is verified over the <strong>space of interleavings</strong> against the retained reference's <strong>reachable-outcome set + invariants</strong> (safety, ordering, conservation), with the message-delivery order injected as the boundary the harness owns.</p>
   <p>Coverage of that space is reported on a ladder: <strong>exhaustive</strong> (small inputs — proven over all interleavings) → <strong>sampled</strong> (coverage-counted, when the space explodes) → <strong>partial-order reduction</strong> (one representative per equivalence class of independent reorderings — cheap exactly when the unit is correctly order-independent, thorough exactly when a refactor is not). A control effect additionally carries a <strong>resource-lifecycle</strong> channel (§7). (Specimens: <code>p-map</code>'s concurrency contract — interleaving-invariant output + a max-concurrency bound — verified exhaustively for small inputs and POR-scaled past 10¹² interleavings; a two-account transfer whose outcome is interleaving-dependent; <code>request</code>'s redirect state machine.)</p>
+  <p><strong>A third option collapses the space at design time: a token <code>RING</code>.</strong> When the unit coordinates through a single circulating permission — only the token-holder acts — the interleaving reduces to a <strong>deterministic schedule</strong> (one outcome per token order; fixed-rotation is one schedule, verified in O(1)). It is the design-time dual of partial-order reduction: POR <em>detects</em> independence to shrink the space; a ring <em>imposes</em> coordination to shrink it. A ring is a behavior <strong>refinement</strong> — <code>R_ring ⊆ R_free</code> always (every ring run is a valid free run, so it can only <em>drop</em> outcomes, never invent one). The decomposer may <em>recognize</em> a ring (verify <code>R_ring = R_free</code>, behavior-preserving) or be <em>directed</em> to impose one — a behavior-changing transform that emits a mandatory <strong>divergence report</strong>, the dropped outcomes split into benign-determinization, <strong>safety-fix</strong> (a dropped outcome violated an invariant — a race removed), and <strong>narrowed-nondeterminism</strong> (a valid alternative dropped — confirm or refactor). (Specimen: <code>ringbuf.js</code>'s SPSC producer protocol, modeled at <code>Atomics</code>-operation granularity — its single-producer <em>contract is the ring</em>; two-producer use admits the lost-write race the ring drops.)</p>
 
   <h3>TRIGGER is metadata, never structure</h3>
   <div class="note">
@@ -425,7 +426,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p>SIR is developed as an <strong>open, royalty-free standard</strong>. The format and the <strong><code>rdv</code> reference checker</strong> are licensed <strong>Apache-2.0</strong> and free to implement — in any language, by anyone, with no fee, no license negotiation, and <strong>no patent assertion against conforming implementations</strong>. The format is not encumbered, and our commitment to keep it that way is written down and binding in <a href="promise.html">The rederive Promise</a>.</p>
 
   <h3>Versioning</h3>
-  <p>Schema <strong>v0.2</strong> (2026-06-16) extends the frozen v0.1 with concurrency verification semantics for <code>PAR</code> (§6), the scheduler/timer control effect and virtual time (§6), and the resource-lifecycle oracle channel (§7) — each forced by a named specimen (<code>p-map</code>, <code>q</code>, a two-account transfer, <code>request</code>'s redirect). Every decision still cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong>, never silent; a conforming bundle records the version it targets.</p>
+  <p>Schema <strong>v0.3</strong> (2026-06-22) adds the token-coordinated <strong><code>RING</code></strong> shape (§6) — concurrency that flows through a single circulating permission, reduced to a deterministic schedule. v0.2 added concurrency/<code>PAR</code> semantics, the scheduler/timer control effect + virtual time, and the resource-lifecycle oracle channel — extending the frozen v0.1. Each is forced by a named specimen (<code>p-map</code>, <code>q</code>, a two-account transfer, <code>request</code>'s redirect, <code>ringbuf.js</code>). Every decision still cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong>, never silent; a conforming bundle records the version it targets.</p>
 
   <h3>Deferred (named, not frozen)</h3>
   <ul>
