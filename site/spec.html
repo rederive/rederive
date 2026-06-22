@@ -170,6 +170,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <a href="#annotations">11 · Non-normative annotations</a>
   <a href="#governance">12 · Conformance &amp; governance</a>
   <a href="#modes">13 · The two modes</a>
+  <a href="#lineage">14 · Lineage</a>
 </nav>
 
 <main class="doc-content" id="main">
@@ -454,6 +455,25 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
   <h3>The honest ceiling</h3>
   <p>Mode&nbsp;2 is <strong>testing, not proof</strong>: a normalized unit is proven-equivalent on the exercised, coverage-reported scenario distribution — dramatically stronger than a blind rewrite, never "provably identical everywhere." The coverage rung reached — exhaustive, sampled, or partial-order-reduced — is reported, never silently assumed.</p>
+</section>
+
+<!-- 14 -->
+<section id="lineage">
+  <h2>14 · Lineage <span style="font-weight:400;color:#808088;font-size:.62em">(non-normative)</span></h2>
+  <p>SIR is assembled from well-understood pieces, not invented whole. Each construct is named here with its origin — both as intellectual honesty and because a <em>named, classical</em> construct is one an implementer and a verifier can actually reason about. The recurrence is no accident: the abstractions that are verifiable are the ones with small, explicit, well-defined semantics — exactly what the classics, born under tight constraints, were forced to produce.</p>
+  <ul>
+    <li><b>The kind-discriminated tree (§3–5)</b> — compiler intermediate representations and the AST; structured / stepwise refinement (Dijkstra; Wirth).</li>
+    <li><b>The <code>FUNCTIONAL ⊅ EFFECT</code> firewall &amp; injected boundaries (§6)</b> — effect systems and <em>algebraic effects &amp; handlers</em> (Plotkin &amp; Power; Plotkin &amp; Pretnar); monads (Moggi; Wadler). "Inject, never ambient" is the <em>object-capability</em> model (Dennis &amp; Van Horn; Miller) and least privilege (Saltzer &amp; Schroeder, 1975).</li>
+    <li><b>The oracle — behavior over text (§7)</b> — denotational semantics (Scott &amp; Strachey); observational equivalence and <em>bisimulation</em> (Milner; Park); <em>property-based testing</em> (QuickCheck — Claessen &amp; Hughes, 2000).</li>
+    <li><b>Quorum re-emission (§10)</b> — <em>N-version programming</em> (Avižienis): independent implementations accepted on agreement; held-out grading is cross-validation.</li>
+    <li><b>PAR &amp; concurrency (§6)</b> — CSP and refinement (Hoare, 1978); <em>Petri nets</em> (Petri, 1962) for the token and place-invariants; <em>model checking</em> (Clarke &amp; Emerson; Queille &amp; Sifakis) and <em>TLA+</em> (Lamport) for interleaving + refinement + invariants; <em>Mazurkiewicz traces</em> (1977) and <em>partial-order reduction</em> (Godefroid; Peled; Abdulla et&nbsp;al.) for the independence collapse.</li>
+    <li><b>The actor shape</b> — the actor model (Hewitt, Bishop &amp; Steiger, 1973); E-language vats (Miller).</li>
+    <li><b>The ring shape</b> — token-passing mutual exclusion (Le&nbsp;Lann; Suzuki &amp; Kasami); <em>Kahn Process Networks</em> (Kahn, 1974) for FIFO determinism-by-construction; the single-writer discipline as <em>linearity</em> (linear logic — Girard; ownership types).</li>
+    <li><b>Verified normalization (Mode&nbsp;2, §13)</b> — <em>term rewriting</em> and confluence / Church–Rosser; Knuth–Bendix completion; the <em>refinement calculus</em> (Back; Morgan).</li>
+    <li><b>The contract &amp; content hashes (§10, §12)</b> — <em>Design by Contract</em> (Meyer / Eiffel) and Hoare logic (1969); <em>content-addressed code</em> (Unison); reproducible builds (Nix — Dolstra).</li>
+    <li><b>The runtime</b> — Forth (Moore) for the concatenative dictionary; Smalltalk (Kay; Goldberg &amp; Robson) for message passing and <code>doesNotUnderstand:</code>, the literal trigger for synthesis.</li>
+  </ul>
+  <p style="color:#808088;font-size:.9em"><b>On the roadmap — <em>definition hardening</em>:</b> lift invariants and refinement into a small declarative property language on the contract (TLA+ / refinement-calculus style), so more verification — and more deterministic codegen — keys off the definition than off hand-written checks; and <em>abstract interpretation</em> (Cousot &amp; Cousot, 1977) as the soundness theory for when sampled coverage is sound.</p>
 </section>
 
 </main>
