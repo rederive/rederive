@@ -74,23 +74,36 @@ async function runTrace(fn: any, args: any[]) {
   return { emitted, result };
 }
 
-// Oracle args may carry non-JSON values the build encoded (e.g. RegExp, which JSON.stringify flattens to {}).
-// A trust-nothing verifier must reconstruct the EXACT call, so revive them before grading.
-// Encoding: { __t: 'regex', source, flags }. Recursive + idempotent on plain values.
+// Oracle args may carry non-JSON values the build encoded (RegExp/Set/Map/Uint8Array flatten under
+// JSON.stringify; bigint THROWS). A trust-nothing verifier must reconstruct the EXACT call, so revive them
+// before grading. Tags: { __t: 'regex'|'bigint'|'set'|'map'|'u8', ... } — kept in lockstep with the factory
+// codec (orchestrator/lib/codec.mjs). Recursive + idempotent on plain values.
 function reviveArg(v: any): any {
   if (Array.isArray(v)) return v.map(reviveArg);
   if (v && typeof v === 'object') {
     if (v.__t === 'regex') return new RegExp(v.source, v.flags);
+    if (v.__t === 'bigint') return BigInt(v.v);
+    if (v.__t === 'set') return new Set((v.values || []).map(reviveArg));
+    if (v.__t === 'map') return new Map((v.entries || []).map(([k, val]: any[]) => [reviveArg(k), reviveArg(val)]));
+    if (v.__t === 'u8') return v.buf ? Buffer.from(v.bytes) : Uint8Array.from(v.bytes);
     const o: any = {}; for (const k of Object.keys(v)) o[k] = reviveArg(v[k]); return o;
   }
   return v;
 }
 const reviveArgs = (args: any[]) => (args || []).map(reviveArg);
-const dispArg = (v: any): string =>
-  (v && typeof v === 'object' && v.__t === 'regex') ? `/${v.source}/${v.flags}`
-    : Array.isArray(v) ? `[${v.map(dispArg).join(', ')}]`
-      : (v && typeof v === 'object') ? `{${Object.keys(v).map((k) => JSON.stringify(k) + ': ' + dispArg(v[k])).join(', ')}}`
-        : JSON.stringify(v);
+function dispArg(v: any): string {
+  if (typeof v === 'bigint') return `${v.toString()}n`;
+  if (v && typeof v === 'object') {
+    if (v.__t === 'regex') return `/${v.source}/${v.flags}`;
+    if (v.__t === 'bigint') return `${v.v}n`;
+    if (v.__t === 'set') return `new Set([${(v.values || []).map(dispArg).join(', ')}])`;
+    if (v.__t === 'map') return `new Map([${(v.entries || []).map(([k, val]: any[]) => `[${dispArg(k)}, ${dispArg(val)}]`).join(', ')}])`;
+    if (v.__t === 'u8') return `${v.buf ? 'Buffer' : 'Uint8Array'}.from([${(v.bytes || []).join(', ')}])`;
+  }
+  if (Array.isArray(v)) return `[${v.map(dispArg).join(', ')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).map((k) => JSON.stringify(k) + ': ' + dispArg(v[k])).join(', ')}}`;
+  return JSON.stringify(v);
+}
 
 async function gradeVs(srcAbs: string, name: string, vectors: any[], mode = 'vectors') {
   const fn = await resolveFn(srcAbs, name);
