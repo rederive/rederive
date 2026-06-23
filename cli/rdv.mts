@@ -103,14 +103,44 @@ async function gradeVs(srcAbs: string, name: string, vectors: any[], mode = 'vec
   return grade(gots, vectors);
 }
 
+// Carried data (constant tables shipped verbatim): verify the content hash AND re-run the independent-authority
+// assertions on the SHIPPED module — a trust-nothing consumer confirms the bytes match a PUBLISHED standard,
+// not the publisher. A carried module with no assertions is NOT independently verifiable -> fails.
+async function checkCarried(dir: string, carriedData: any[]) {
+  if (!carriedData || !carriedData.length) return { ok: true, report: [] as any[] };
+  const report: any[] = []; let ok = true;
+  for (const cd of carriedData) {
+    const p = resolve(dir, cd.file);
+    const hashOk = !cd.sha256 || sha256(p) === cd.sha256;
+    const assertions = cd.authority?.assertions || [];
+    let authOk = false;
+    if (assertions.length) {
+      try {
+        const m: any = await import(p);
+        const names = Object.keys(m).filter((k) => k !== 'default');
+        const vals = names.map((k) => m[k]);
+        authOk = assertions.every((a: any) => {
+          let got: any; try { got = Function(...names, '"use strict"; return (' + a.expr + ');')(...vals); } catch { return false; }
+          return JSON.stringify(got) === JSON.stringify(a.equals);
+        });
+      } catch { authOk = false; }
+    }
+    ok = ok && hashOk && authOk;
+    report.push({ file: cd.file, hashOk, authOk, attested: assertions.length > 0 });
+  }
+  return { ok, report };
+}
+
 async function checkUnit(dir: string, u: any) {
   const paths = { oracle: resolve(dir, u.oracle), src: resolve(dir, u.src), sir: resolve(dir, u.sir), spec: u.spec ? resolve(dir, u.spec) : '' };
   const shaOk = (file: string, want: string | undefined) => !want || sha256(file) === want;
   const oracle = JSON.parse(readFileSync(paths.oracle, 'utf-8'));
   const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors, oracle.mode);
+  const carried = await checkCarried(dir, u.carriedData);
   return { name: u.name, kind: u.kind, sig: u.sig, frozen: (oracle.vectors || []).length, ...g,
     srcShaOk: shaOk(paths.src, u.srcSha256), oracleShaOk: shaOk(paths.oracle, u.oracleSha256),
-    sirShaOk: shaOk(paths.sir, u.sirSha256), specShaOk: !paths.spec || shaOk(paths.spec, u.specSha256) };
+    sirShaOk: shaOk(paths.sir, u.sirSha256), specShaOk: !paths.spec || shaOk(paths.spec, u.specSha256),
+    carriedOk: carried.ok, carriedReport: carried.report };
 }
 
 async function cmdCheck(dir: string) {
@@ -120,11 +150,13 @@ async function cmdCheck(dir: string) {
   for (const u of m.units) {
     const r = await checkUnit(dir, u);
     const hashes = r.srcShaOk && r.oracleShaOk && r.sirShaOk && r.specShaOk;
-    const good = r.full && hashes; ok = ok && good;
+    const good = r.full && hashes && r.carriedOk; ok = ok && good;
     console.log(`  ${good ? C.g('✓ VERIFIED') : C.r('✗ FAILED')}  ${C.b(r.name)} ${C.dim(r.sig)}`);
     console.log(`     held-out ${good ? C.g(`${r.pass}/${r.total}`) : C.r(`${r.pass}/${r.total}` + (r.miss.length ? ` miss=[${r.miss.join(',')}]` : ''))}` +
       `   hashes ${hashes ? C.g('match') : C.r(`MISMATCH (src:${r.srcShaOk} oracle:${r.oracleShaOk} sir:${r.sirShaOk} spec:${r.specShaOk})`)}` +
       `   ${C.dim(`(${r.frozen} frozen / ${r.total} held-out, ${r.kind})`)}`);
+    if (r.carriedReport.length) console.log(`     carried-data ${r.carriedOk ? C.g('attested') : C.r('UNVERIFIED')}   ` +
+      r.carriedReport.map((c: any) => `${c.file} [hash:${c.hashOk ? 'ok' : C.r('BAD')} authority:${c.authOk ? 'ok' : C.r(c.attested ? 'FAIL' : 'none')}]`).join(' '));
   }
   console.log(ok ? C.g(`\n  ALL UNITS VERIFIED — shipped src matches its contract.`)
                  : C.r(`\n  VERIFICATION FAILED — do not trust this src; rebuild with: rdv resynth ${relative(process.cwd(), dir) || '.'}`));
