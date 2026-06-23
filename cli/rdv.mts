@@ -74,11 +74,30 @@ async function runTrace(fn: any, args: any[]) {
   return { emitted, result };
 }
 
+// Oracle args may carry non-JSON values the build encoded (e.g. RegExp, which JSON.stringify flattens to {}).
+// A trust-nothing verifier must reconstruct the EXACT call, so revive them before grading.
+// Encoding: { __t: 'regex', source, flags }. Recursive + idempotent on plain values.
+function reviveArg(v: any): any {
+  if (Array.isArray(v)) return v.map(reviveArg);
+  if (v && typeof v === 'object') {
+    if (v.__t === 'regex') return new RegExp(v.source, v.flags);
+    const o: any = {}; for (const k of Object.keys(v)) o[k] = reviveArg(v[k]); return o;
+  }
+  return v;
+}
+const reviveArgs = (args: any[]) => (args || []).map(reviveArg);
+const dispArg = (v: any): string =>
+  (v && typeof v === 'object' && v.__t === 'regex') ? `/${v.source}/${v.flags}`
+    : Array.isArray(v) ? `[${v.map(dispArg).join(', ')}]`
+      : (v && typeof v === 'object') ? `{${Object.keys(v).map((k) => JSON.stringify(k) + ': ' + dispArg(v[k])).join(', ')}}`
+        : JSON.stringify(v);
+
 async function gradeVs(srcAbs: string, name: string, vectors: any[], mode = 'vectors') {
   const fn = await resolveFn(srcAbs, name);
   const gots: any[] = [];
   for (const v of vectors) {
-    try { gots.push(mode === 'trace' ? await runTrace(fn, v.args) : await fn(...v.args)); }
+    const args = reviveArgs(v.args);
+    try { gots.push(mode === 'trace' ? await runTrace(fn, args) : await fn(...args)); }
     catch (e: any) { gots.push({ __throw: String(e?.message ?? e) }); }
   }
   return grade(gots, vectors);
@@ -116,7 +135,7 @@ function buildPrompt(dir: string, u: any, outPath: string) {
   const spec = readFileSync(resolve(dir, u.spec), 'utf-8').trim();
   const oracle = JSON.parse(readFileSync(resolve(dir, u.oracle), 'utf-8'));
   const worked = (oracle.vectors || []).map((v: any) =>
-    `  ${u.name}(${(v.args || []).map((a: any) => JSON.stringify(a)).join(', ')}) -> ${JSON.stringify(v.expected)}`).join('\n');
+    `  ${u.name}(${(v.args || []).map(dispArg).join(', ')}) -> ${JSON.stringify(v.expected)}`).join('\n');
   return `Unit \`${u.name}\`  signature: ${u.sig}
 
 Spec:
