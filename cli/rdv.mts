@@ -75,14 +75,18 @@ async function runTrace(fn: any, args: any[]) {
 }
 
 // Oracle args may carry non-JSON values the build encoded (RegExp/Set/Map/Uint8Array flatten under
-// JSON.stringify; bigint THROWS). A trust-nothing verifier must reconstruct the EXACT call, so revive them
-// before grading. Tags: { __t: 'regex'|'bigint'|'set'|'map'|'u8', ... } — kept in lockstep with the factory
-// codec (orchestrator/lib/codec.mjs). Recursive + idempotent on plain values.
+// JSON.stringify; bigint THROWS; undefined/NaN/±Infinity -> null; boxed primitives lose class). A trust-nothing
+// verifier must reconstruct the EXACT call, so revive them before grading. Tags: { __t:
+// 'regex'|'bigint'|'num'|'undef'|'boxed'|'set'|'map'|'u8', ... } — kept in lockstep with the factory codec
+// (orchestrator/lib/codec.mjs). Recursive + idempotent on plain values.
 function reviveArg(v: any): any {
   if (Array.isArray(v)) return v.map(reviveArg);
   if (v && typeof v === 'object') {
+    if (v.__t === 'undef') return undefined;
     if (v.__t === 'regex') return new RegExp(v.source, v.flags);
     if (v.__t === 'bigint') return BigInt(v.v);
+    if (v.__t === 'num') return Number(v.v);
+    if (v.__t === 'boxed') { const x = reviveArg(v.v); return v.k === 'Number' ? new Number(x) : v.k === 'String' ? new String(x) : new Boolean(x); }
     if (v.__t === 'set') return new Set((v.values || []).map(reviveArg));
     if (v.__t === 'map') return new Map((v.entries || []).map(([k, val]: any[]) => [reviveArg(k), reviveArg(val)]));
     if (v.__t === 'u8') return v.buf ? Buffer.from(v.bytes) : Uint8Array.from(v.bytes);
@@ -94,8 +98,11 @@ const reviveArgs = (args: any[]) => (args || []).map(reviveArg);
 function dispArg(v: any): string {
   if (typeof v === 'bigint') return `${v.toString()}n`;
   if (v && typeof v === 'object') {
+    if (v.__t === 'undef') return 'undefined';
     if (v.__t === 'regex') return `/${v.source}/${v.flags}`;
     if (v.__t === 'bigint') return `${v.v}n`;
+    if (v.__t === 'num') return `${v.v}`;
+    if (v.__t === 'boxed') return `new ${v.k}(${dispArg(v.v)})`;
     if (v.__t === 'set') return `new Set([${(v.values || []).map(dispArg).join(', ')}])`;
     if (v.__t === 'map') return `new Map([${(v.entries || []).map(([k, val]: any[]) => `[${dispArg(k)}, ${dispArg(val)}]`).join(', ')}])`;
     if (v.__t === 'u8') return `${v.buf ? 'Buffer' : 'Uint8Array'}.from([${(v.bytes || []).join(', ')}])`;
