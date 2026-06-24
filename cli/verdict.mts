@@ -27,7 +27,7 @@ const enc = (v: any): any => {
   if (v instanceof Number || v instanceof String || v instanceof Boolean) return { __t: 'boxed', k: v.constructor.name, v: enc(v.valueOf()) };
   if (v instanceof Set) return { __t: 'set', values: [...v].map(enc) };
   if (v instanceof Map) return { __t: 'map', entries: [...v].map(([k, val]) => [enc(k), enc(val)]) };
-  if (v instanceof Uint8Array) return { __t: 'u8', bytes: Array.from(v), buf: typeof Buffer !== 'undefined' && Buffer.isBuffer(v) };
+  if (v instanceof Uint8Array) { try { return { __t: 'u8', bytes: Array.from(v), buf: typeof Buffer !== 'undefined' && Buffer.isBuffer(v) }; } catch { /* pseudo/detached typed-array: instanceof true, no backing buffer (clone@2 of a Uint8Array) — fall through to generic-object encoding */ } }
   if (Array.isArray(v)) return v.map(enc);
   if (v && typeof v === 'object') { const o: any = {}; for (const k of Object.keys(v)) o[k] = enc(v[k]); return o; }
   return v;
