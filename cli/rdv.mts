@@ -90,6 +90,7 @@ function reviveArg(v: any): any {
     if (v.__t === 'set') return new Set((v.values || []).map(reviveArg));
     if (v.__t === 'map') return new Map((v.entries || []).map(([k, val]: any[]) => [reviveArg(k), reviveArg(val)]));
     if (v.__t === 'u8') return v.buf ? Buffer.from(v.bytes) : Uint8Array.from(v.bytes);
+    if (v.__t === 'sparse') { const a = new Array(v.length); for (const [i, val] of (v.entries || [])) a[i] = reviveArg(val); return a; }
     const o: any = {}; for (const k of Object.keys(v)) o[k] = reviveArg(v[k]); return o;
   }
   return v;
@@ -106,6 +107,7 @@ function dispArg(v: any): string {
     if (v.__t === 'set') return `new Set([${(v.values || []).map(dispArg).join(', ')}])`;
     if (v.__t === 'map') return `new Map([${(v.entries || []).map(([k, val]: any[]) => `[${dispArg(k)}, ${dispArg(val)}]`).join(', ')}])`;
     if (v.__t === 'u8') return `${v.buf ? 'Buffer' : 'Uint8Array'}.from([${(v.bytes || []).join(', ')}])`;
+    if (v.__t === 'sparse') { const parts: string[] = []; let prev = 0; for (const [i, val] of (v.entries || [])) { if (i > prev) parts.push(`<${i - prev} empty>`); parts.push(dispArg(val)); prev = i + 1; } if (v.length > prev) parts.push(`<${v.length - prev} empty>`); return `[${parts.join(', ')}]`; }
   }
   if (Array.isArray(v)) return `[${v.map(dispArg).join(', ')}]`;
   if (v && typeof v === 'object') return `{${Object.keys(v).map((k) => JSON.stringify(k) + ': ' + dispArg(v[k])).join(', ')}}`;

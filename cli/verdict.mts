@@ -29,7 +29,12 @@ const enc = (v: any): any => {
   if (v instanceof Set) return { __t: 'set', values: [...v].map(enc) };
   if (v instanceof Map) return { __t: 'map', entries: [...v].map(([k, val]) => [enc(k), enc(val)]) };
   if (v instanceof Uint8Array) { try { return { __t: 'u8', bytes: Array.from(v), buf: typeof Buffer !== 'undefined' && Buffer.isBuffer(v) }; } catch { /* pseudo/detached typed-array: instanceof true, no backing buffer (clone@2 of a Uint8Array) — fall through to generic-object encoding */ } }
-  if (Array.isArray(v)) return v.map(enc);
+  if (Array.isArray(v)) {
+    let sparse = false; for (let i = 0; i < v.length; i++) { if (!(i in v)) { sparse = true; break; } }
+    if (!sparse) return v.map(enc);
+    const entries: any[] = []; for (let i = 0; i < v.length; i++) { if (i in v) entries.push([i, enc(v[i])]); }
+    return { __t: 'sparse', length: v.length, entries };
+  }
   if (v && typeof v === 'object') { const o: any = {}; for (const k of Object.keys(v)) { if (typeof v[k] === 'function') continue; o[k] = enc(v[k]); } return o; } // skip fn-valued keys (a borrowed toJSON hijacks JSON.stringify; functions aren't JSON-comparable)
   return v;
 };
