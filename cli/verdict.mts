@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto';
 const enc = (v: any): any => {
   if (v === undefined) return { __t: 'undef' };
   if (typeof v === 'bigint') return { __t: 'bigint', v: v.toString() };
+  if (Object.is(v, -0)) return { __t: 'num', v: '-0' };  // -0 collapses to 0 in JSON; lodash special-cases -0 -> "-0"
   if (typeof v === 'number' && !Number.isFinite(v)) return { __t: 'num', v: String(v) };
   if (v instanceof RegExp) return { __t: 'regex', source: v.source, flags: v.flags };
   if (v instanceof Number || v instanceof String || v instanceof Boolean) return { __t: 'boxed', k: v.constructor.name, v: enc(v.valueOf()) };
