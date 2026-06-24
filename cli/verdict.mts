@@ -12,8 +12,29 @@
  */
 import { createHash } from 'node:crypto';
 
-/** Deep structural equality, value-based and order-sensitive. */
-export const eq = (a: any, b: any): boolean => JSON.stringify(a) === JSON.stringify(b);
+/**
+ * JSON-safe normalization for structural comparison. A LIVE call result can carry values that
+ * JSON.stringify would THROW on (bigint) or silently corrupt (NaN/±Infinity → null, undefined,
+ * RegExp/Set/Map/typed-array/boxed-primitive). The stamped oracle stores `expected` in the SAME
+ * tagged form (codec.encode in the toolkit), so we encode the live `got` to match before comparing.
+ * Keep these tags in lockstep with the toolkit codec.encode and rdv.mts reviveArg.
+ */
+const enc = (v: any): any => {
+  if (v === undefined) return { __t: 'undef' };
+  if (typeof v === 'bigint') return { __t: 'bigint', v: v.toString() };
+  if (typeof v === 'number' && !Number.isFinite(v)) return { __t: 'num', v: String(v) };
+  if (v instanceof RegExp) return { __t: 'regex', source: v.source, flags: v.flags };
+  if (v instanceof Number || v instanceof String || v instanceof Boolean) return { __t: 'boxed', k: v.constructor.name, v: enc(v.valueOf()) };
+  if (v instanceof Set) return { __t: 'set', values: [...v].map(enc) };
+  if (v instanceof Map) return { __t: 'map', entries: [...v].map(([k, val]) => [enc(k), enc(val)]) };
+  if (v instanceof Uint8Array) return { __t: 'u8', bytes: Array.from(v), buf: typeof Buffer !== 'undefined' && Buffer.isBuffer(v) };
+  if (Array.isArray(v)) return v.map(enc);
+  if (v && typeof v === 'object') { const o: any = {}; for (const k of Object.keys(v)) o[k] = enc(v[k]); return o; }
+  return v;
+};
+
+/** Deep structural equality, value-based and order-sensitive; robust to non-JSON-safe values. */
+export const eq = (a: any, b: any): boolean => JSON.stringify(enc(a)) === JSON.stringify(enc(b));
 
 /** Is this a captured-throw sentinel produced by the runner when a unit threw? */
 export const threw = (x: any): boolean => x && typeof x === 'object' && '__throw' in x;
