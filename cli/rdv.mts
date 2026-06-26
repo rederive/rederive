@@ -178,16 +178,24 @@ async function checkCarried(dir: string, carriedData: any[]) {
   return { ok, report };
 }
 
-async function checkUnit(dir: string, u: any) {
-  const paths = { oracle: resolve(dir, u.oracle), src: resolve(dir, u.src), sir: resolve(dir, u.sir), spec: u.spec ? resolve(dir, u.spec) : '' };
+// One fidelity variant (or the implicit single `package` variant): grade its src against its oracle + verify hashes.
+async function checkVariant(dir: string, name: string, v: any) {
+  const paths = { oracle: resolve(dir, v.oracle), src: resolve(dir, v.src), sir: resolve(dir, v.sir), spec: v.spec ? resolve(dir, v.spec) : '' };
   const shaOk = (file: string, want: string | undefined) => !want || sha256(file) === want;
   const oracle = JSON.parse(readFileSync(paths.oracle, 'utf-8'));
-  const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors, oracle.mode, oracle.observe);
-  const carried = await checkCarried(dir, u.carriedData);
-  return { name: u.name, kind: u.kind, sig: u.sig, frozen: (oracle.vectors || []).length, ...g,
-    srcShaOk: shaOk(paths.src, u.srcSha256), oracleShaOk: shaOk(paths.oracle, u.oracleSha256),
-    sirShaOk: shaOk(paths.sir, u.sirSha256), specShaOk: !paths.spec || shaOk(paths.spec, u.specSha256),
-    carriedOk: carried.ok, carriedReport: carried.report };
+  const g = await gradeVs(paths.src, name, oracle.heldout || oracle.vectors, oracle.mode, oracle.observe);
+  const carried = await checkCarried(dir, v.carriedData);
+  const sd = { src: shaOk(paths.src, v.srcSha256), oracle: shaOk(paths.oracle, v.oracleSha256), sir: shaOk(paths.sir, v.sirSha256), spec: !paths.spec || shaOk(paths.spec, v.specSha256) };
+  return { frozen: (oracle.vectors || []).length, ...g, sd, hashes: sd.src && sd.oracle && sd.sir && sd.spec, carriedOk: carried.ok, carriedReport: carried.report };
+}
+
+// v0.2 §12: a unit may carry a `variants` map (package | spec | …), each independently verified against its own
+// anchor. Absence ⇒ ONE implicit `package` variant from the unit's own fields (back-compat — the 218 shipped units).
+async function checkUnit(dir: string, u: any) {
+  const entries: [string, any][] = u.variants ? Object.entries(u.variants) : [['package', u]];
+  const variants: any[] = [];
+  for (const [vname, v] of entries) variants.push({ variant: vname, anchor: v.anchor ?? null, ...(await checkVariant(dir, u.name, v)) });
+  return { name: u.name, kind: u.kind, sig: u.sig, variants, ok: variants.every((x) => x.full && x.hashes && x.carriedOk) };
 }
 
 async function cmdCheck(dir: string) {
@@ -198,14 +206,18 @@ async function cmdCheck(dir: string) {
   let ok = true;
   for (const u of m.units) {
     const r = await checkUnit(dir, u);
-    const hashes = r.srcShaOk && r.oracleShaOk && r.sirShaOk && r.specShaOk;
-    const good = r.full && hashes && r.carriedOk; ok = ok && good;
-    console.log(`  ${good ? C.g('✓ VERIFIED') : C.r('✗ FAILED')}  ${C.b(r.name)} ${C.dim(r.sig)}`);
-    console.log(`     held-out ${good ? C.g(`${r.pass}/${r.total}`) : C.r(`${r.pass}/${r.total}` + (r.miss.length ? ` miss=[${r.miss.join(',')}]` : ''))}` +
-      `   hashes ${hashes ? C.g('match') : C.r(`MISMATCH (src:${r.srcShaOk} oracle:${r.oracleShaOk} sir:${r.sirShaOk} spec:${r.specShaOk})`)}` +
-      `   ${C.dim(`(${r.frozen} frozen / ${r.total} held-out, ${r.kind})`)}`);
-    if (r.carriedReport.length) console.log(`     carried-data ${r.carriedOk ? C.g('attested') : C.r('UNVERIFIED')}   ` +
-      r.carriedReport.map((c: any) => `${c.file} [hash:${c.hashOk ? 'ok' : C.r('BAD')} authority:${c.authOk ? 'ok' : C.r(c.attested ? 'FAIL' : 'none')}]`).join(' '));
+    ok = ok && r.ok;
+    const single = r.variants.length === 1 && r.variants[0].variant === 'package';   // back-compat: render exactly as v0.1
+    console.log(`  ${r.ok ? C.g('✓ VERIFIED') : C.r('✗ FAILED')}  ${C.b(r.name)} ${C.dim(r.sig)}`);
+    for (const v of r.variants) {
+      const vgood = v.full && v.hashes && v.carriedOk;
+      const vlabel = single ? '' : `${vgood ? C.g('✓ ') : C.r('✗ ')}${C.b(v.variant)}${v.anchor ? C.dim(` ⟂ ${v.anchor.kind}${v.anchor.ref ? ':' + v.anchor.ref : ''}`) : ''}  `;
+      console.log(`     ${vlabel}held-out ${vgood ? C.g(`${v.pass}/${v.total}`) : C.r(`${v.pass}/${v.total}` + (v.miss.length ? ` miss=[${v.miss.join(',')}]` : ''))}` +
+        `   hashes ${v.hashes ? C.g('match') : C.r(`MISMATCH (src:${v.sd.src} oracle:${v.sd.oracle} sir:${v.sd.sir} spec:${v.sd.spec})`)}` +
+        `   ${C.dim(`(${v.frozen} frozen / ${v.total} held-out, ${r.kind})`)}`);
+      if (v.carriedReport.length) console.log(`     carried-data ${v.carriedOk ? C.g('attested') : C.r('UNVERIFIED')}   ` +
+        v.carriedReport.map((c: any) => `${c.file} [hash:${c.hashOk ? 'ok' : C.r('BAD')} authority:${c.authOk ? 'ok' : C.r(c.attested ? 'FAIL' : 'none')}]`).join(' '));
+    }
   }
   console.log(ok ? C.g(`\n  ALL UNITS VERIFIED — shipped src matches its contract.`)
                  : C.r(`\n  VERIFICATION FAILED — do not trust this src; rebuild with: rdv resynth ${relative(process.cwd(), dir) || '.'}`));
