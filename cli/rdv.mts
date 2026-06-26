@@ -130,13 +130,22 @@ function dispArg(v: any): string {
   return JSON.stringify(v);
 }
 
-async function gradeVs(srcAbs: string, name: string, vectors: any[], mode = 'vectors') {
+// `observe` (SIR v0.2 §11): how the call's behavior is read.
+//   'value'        — the return value (default; legacy/back-compat — every pre-0.2 oracle)
+//   'result+post'  — KIND STATE: { result, post } where post = the (mutated) args. Required for return≠post
+//                    units (pullat-class) whose mutation is invisible to return-only grading; harmless-correct
+//                    for mutate-and-return units (result===post). The oracle's expecteds are stamped to match.
+//   trace mode is handled separately (injected boundary).
+async function gradeVs(srcAbs: string, name: string, vectors: any[], mode = 'vectors', observe = 'value') {
   const fn = await resolveFn(srcAbs, name);
   const gots: any[] = [];
   for (const v of vectors) {
-    const args = reviveArgs(v.args);
-    try { gots.push(mode === 'trace' ? await runTrace(fn, args) : await fn(...args)); }
-    catch (e: any) { gots.push({ __throw: String(e?.message ?? e) }); }
+    const args = reviveArgs(v.args);                       // fresh per vector → one call's mutation can't poison the next
+    try {
+      if (mode === 'trace') gots.push(await runTrace(fn, args));
+      else if (observe === 'result+post') { const result = await fn(...args); gots.push({ result, post: args }); }
+      else gots.push(await fn(...args));
+    } catch (e: any) { gots.push({ __throw: String(e?.message ?? e) }); }
   }
   return grade(gots, vectors);
 }
@@ -173,7 +182,7 @@ async function checkUnit(dir: string, u: any) {
   const paths = { oracle: resolve(dir, u.oracle), src: resolve(dir, u.src), sir: resolve(dir, u.sir), spec: u.spec ? resolve(dir, u.spec) : '' };
   const shaOk = (file: string, want: string | undefined) => !want || sha256(file) === want;
   const oracle = JSON.parse(readFileSync(paths.oracle, 'utf-8'));
-  const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors, oracle.mode);
+  const g = await gradeVs(paths.src, u.name, oracle.heldout || oracle.vectors, oracle.mode, oracle.observe);
   const carried = await checkCarried(dir, u.carriedData);
   return { name: u.name, kind: u.kind, sig: u.sig, frozen: (oracle.vectors || []).length, ...g,
     srcShaOk: shaOk(paths.src, u.srcSha256), oracleShaOk: shaOk(paths.oracle, u.oracleSha256),
