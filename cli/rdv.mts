@@ -27,6 +27,22 @@ const C = { g: (s: string) => `\x1b[32m${s}\x1b[39m`, r: (s: string) => `\x1b[31
 const loadManifest = (dir: string) => JSON.parse(readFileSync(resolve(dir, 'sir.manifest.json'), 'utf-8'));
 const saveManifest = (dir: string, m: any) => writeFileSync(resolve(dir, 'sir.manifest.json'), JSON.stringify(m, null, 2) + '\n');
 
+// SIR Schema version this rdv understands. A package stamps `manifest.specVersion`; a trust-nothing consumer
+// must NOT verify against a contract format it doesn't fully understand, so a NEWER spec halts (upgrade rdv).
+// Absent specVersion = pre-0.2 (v0.1) bundle — verifies normally (back-compat for the existing catalog).
+const SUPPORTED_SPEC = '0.2';
+const cmpVer = (a: string, b: string) => {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return Math.sign(d); }
+  return 0;
+};
+const specStatus = (m: any): { ok: boolean; label: string } => {
+  const v = m.specVersion;
+  if (!v) return { ok: true, label: C.dim('spec v0.1 (legacy/unstamped)') };
+  if (cmpVer(String(v), SUPPORTED_SPEC) > 0) return { ok: false, label: C.r(`spec v${v} > rdv ${SUPPORTED_SPEC}`) };
+  return { ok: true, label: C.dim(`spec v${v}`) };
+};
+
 async function resolveFn(srcAbs: string, name: string) {
   const mod: any = await import(srcAbs);
   return mod[name] ?? mod.run ?? mod.default ?? Object.values(mod).find((x) => typeof x === 'function');
@@ -167,7 +183,9 @@ async function checkUnit(dir: string, u: any) {
 
 async function cmdCheck(dir: string) {
   const m = loadManifest(dir);
-  console.log(`${C.b('rdv check')}  ${m.name}@${m.version}   ${C.dim('source: ' + m.provenance.source)}`);
+  const sv = specStatus(m);
+  console.log(`${C.b('rdv check')}  ${m.name}@${m.version}   ${C.dim('source: ' + m.provenance.source)}   ${sv.label}`);
+  if (!sv.ok) { console.log(C.r(`\n  HALTED — built against SIR spec v${m.specVersion}, newer than this rdv (understands ≤ v${SUPPORTED_SPEC}). Upgrade rdv to verify.`)); return 1; }
   let ok = true;
   for (const u of m.units) {
     const r = await checkUnit(dir, u);
