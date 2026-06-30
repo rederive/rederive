@@ -183,7 +183,11 @@ async function checkVariant(dir: string, name: string, v: any) {
   const paths = { oracle: resolve(dir, v.oracle), src: resolve(dir, v.src), sir: resolve(dir, v.sir), spec: v.spec ? resolve(dir, v.spec) : '' };
   const shaOk = (file: string, want: string | undefined) => !want || sha256(file) === want;
   const oracle = JSON.parse(readFileSync(paths.oracle, 'utf-8'));
-  const g = await gradeVs(paths.src, name, oracle.heldout || oracle.vectors, oracle.mode, oracle.observe);
+  // Grade the SAME export the oracle was stamped against. A unit whose graded seam is a NAMED export (its unit
+  // name != exportName, or a data-object/builder seam exposed under a named export) won't resolve under the unit
+  // name — gradeVs would fall through to the non-matching default export and mis-grade. Fall back to the unit
+  // name when no exportName is recorded (the existing default-export units; back-compat).
+  const g = await gradeVs(paths.src, oracle.exportName ?? name, oracle.heldout || oracle.vectors, oracle.mode, oracle.observe);
   const carried = await checkCarried(dir, v.carriedData);
   const sd = { src: shaOk(paths.src, v.srcSha256), oracle: shaOk(paths.oracle, v.oracleSha256), sir: shaOk(paths.sir, v.sirSha256), spec: !paths.spec || shaOk(paths.spec, v.specSha256) };
   return { frozen: (oracle.vectors || []).length, ...g, sd, hashes: sd.src && sd.oracle && sd.sir && sd.spec, carriedOk: carried.ok, carriedReport: carried.report };
