@@ -154,9 +154,9 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
-{"@type":"Organization","@id":"https://rederive.ai/#org","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png","description":"A trust-nothing package manager: packages ship a verifiable contract — a spec and a held-out oracle — not bytes you have to trust.","parentOrganization":{"@type":"Organization","name":"Semcom","url":"https://semcom.ai"},"sameAs":["https://github.com/rederive","https://www.npmjs.com/package/rederive"]},
+{"@type":"Organization","@id":"https://rederive.ai/#org","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png","description":"A trust-nothing package manager: packages ship a verifiable contract — a spec and a held-out oracle — not bytes you have to trust.","parentOrganization":{"@type":"Organization","name":"Semcom","url":"https://semcom.ai"},"sameAs":["https://github.com/rederive","https://github.com/rederive/sir-factory","https://github.com/rederive/sir-toolkit","https://www.npmjs.com/package/rederive"]},
 {"@type":"WebSite","@id":"https://rederive.ai/#website","url":"https://rederive.ai/","name":"rederive","publisher":{"@id":"https://rederive.ai/#org"}},
-{"@type":"SoftwareApplication","name":"rederive","applicationCategory":"DeveloperApplication","operatingSystem":"Node.js","url":"https://rederive.ai/","downloadUrl":"https://www.npmjs.com/package/rederive","softwareVersion":"0.1.0","license":"https://www.apache.org/licenses/LICENSE-2.0","description":"Verify a package's shipped code against its contract, or re-derive it locally from the spec — never trusting the publisher's bytes.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@id":"https://rederive.ai/#org"}}
+{"@type":"SoftwareApplication","name":"rederive","applicationCategory":"DeveloperApplication","operatingSystem":"Node.js","url":"https://rederive.ai/","downloadUrl":"https://www.npmjs.com/package/rederive","softwareVersion":"0.2.0","license":"https://www.apache.org/licenses/LICENSE-2.0","description":"Verify a package's shipped code against its contract, or re-derive it locally from the spec — never trusting the publisher's bytes.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@id":"https://rederive.ai/#org"}}
 ]}
 </script>
 </head>
@@ -169,12 +169,13 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <span class="logo-mark"><span></span><span></span><span></span></span>
     rederive <span class="by">· from Semcom</span>
   </span>
+  <a href="#get-started">Get started</a>
   <a href="#how">How it works</a>
   <a href="spec.html">SIR Spec</a>
   <a href="#opencore">Open core</a>
   <a href="promise.html">Promise</a>
   <a href="#packages">Packages</a>
-  <a href="#normalize">Normalize</a>
+  <a href="https://github.com/rederive">GitHub</a>
   <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
 </nav>
 </div>
@@ -190,10 +191,11 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p class="hook">The oracle is an independent source of truth no publisher can move. Tamper with a shipped package and it's caught two ways at once: the behavior fails the oracle, and the content hash mismatches.</p>
 
   <div class="hero-ctas" style="margin-bottom:1em">
-    <a href="#how" class="btn-primary">See it work</a>
-    <a href="promise.html" class="btn-secondary">Read the Promise</a>
+    <a href="#get-started" class="btn-primary">Get started</a>
+    <a href="#how" class="btn-secondary">See it work</a>
+    <a href="https://github.com/rederive" class="btn-secondary">GitHub</a>
   </div>
-  <p style="font-size:0.85em;color:#808088;margin-bottom:2.5em">Apache-2.0 · the CLI and catalog are free forever · launching on npm soon</p>
+  <p style="font-size:0.85em;color:#808088;margin-bottom:2.5em">Apache-2.0 · free forever · live now: <code>npm i -g rederive</code> · <a href="https://github.com/rederive/sir-factory">sir-factory</a> + <a href="https://github.com/rederive/sir-toolkit">sir-toolkit</a> open on GitHub</p>
 
   <div class="stats-bar">
     <div class="stat"><span class="num">0</span><span class="label">Deps in the verified core</span></div>
@@ -261,6 +263,41 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 <span class="ok">  &check; VERIFIED — trust your own build, not the publisher's.</span>
   </div>
   <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">The held-out oracle even documents the original's real limits — <code>colors.strip</code> removes only color codes, so cursor/title-injection escapes survive. rederive pins that in the contract instead of hiding it.</p>
+</section>
+
+<!-- GET STARTED -->
+<section class="section" id="get-started">
+  <h2>Get started</h2>
+  <p class="section-sub">Two ways in: the verifier alone (one npm install, no AI required), or the full factory as a Claude Code plugin.</p>
+
+  <div class="paths">
+    <div class="path">
+      <div class="ptag">1 · Verify — 60 seconds, no AI</div>
+      <h4>The <code>rdv</code> verifier</h4>
+      <p>A single zero-dependency CLI (Node ≥ 18). Deterministic, offline: replay a package's held-out oracle and check its content hashes.</p>
+      <div class="pcmd">$ npm i -g rederive<br>$ rdv check node_modules/@rederive/colors</div>
+      <div class="pcost">deterministic · no tokens · works in CI (<code>rdv check &amp;&amp; deploy</code>)</div>
+    </div>
+    <div class="path">
+      <div class="ptag">2 · The factory — Claude Code plugin</div>
+      <h4>The <code>sir</code> skills &amp; agents</h4>
+      <p>Re-derive your own dependencies, run verified migrations, and build measured-strength test oracles — from inside Claude Code.</p>
+      <div class="pcmd">/plugin marketplace add rederive/sir-toolkit<br>/plugin install sir@sir-toolkit</div>
+      <div class="pcost">then the CLIs it drives:&nbsp; <code>npm i -g rederive github:rederive/sir-factory</code></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h4><code>sir-verify</code> — verified recompose &amp; migration</h4>
+      <p>Ask Claude Code to re-derive an npm dependency into a verified zero-dep version, or migrate a unit across languages — a sighted decomposer writes the contract, blind re-emitters rebuild it, and a held-out quorum plus a saturation differential decide. The held-out split is what separates a correct port from a confident hallucination.</p>
+    </div>
+    <div class="card">
+      <h4><code>preflight</code> — oracles for untested code</h4>
+      <p>Zero tests? Build the missing source of truth first: coverage-targeted inputs, an adversarial "pedantic senior engineer" review, then mutation testing and an out-of-domain chaos pass — capturing what the real code does and gating on a measured mutation score. Turns "are these tests good enough?" into a number.</p>
+    </div>
+  </div>
+  <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">Everything is Apache-2.0 on GitHub: <a href="https://github.com/rederive/sir-toolkit">sir-toolkit</a> (the plugin) · <a href="https://github.com/rederive/sir-factory">sir-factory</a> (the build orchestrator) · <a href="https://www.npmjs.com/package/rederive">rederive</a> (the <code>rdv</code> verifier, on npm).</p>
 </section>
 
 <!-- THE TWO PATHS -->
@@ -373,9 +410,10 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
       <h4>The open core</h4>
       <div class="tsub">Everything you need to verify or re-derive any package.</div>
       <ul>
-        <li>The <code>rdv</code> CLI — check, vis, resynth</li>
+        <li>The <code>rdv</code> CLI — check, vis, resynth (<a href="https://www.npmjs.com/package/rederive">npm</a>)</li>
+        <li>The <code>sir-factory</code> build orchestrator (<a href="https://github.com/rederive/sir-factory">GitHub</a>)</li>
+        <li>The Claude Code plugin — <code>sir-verify</code> + <code>preflight</code> skills, role agents (<a href="https://github.com/rederive/sir-toolkit">GitHub</a>)</li>
         <li>The SIR specification &amp; package format</li>
-        <li>The verified-recompose loop</li>
         <li>The public <code>@rederive/*</code> catalog</li>
       </ul>
     </div>
@@ -412,8 +450,10 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <div class="footer-inner">
     <span class="footer-brand">rederive &middot; from Semcom &middot; Apilify Inc.</span>
     <div class="footer-links">
+      <a href="#get-started">Get started</a>
       <a href="promise.html">The Promise</a>
       <a href="spec.html">SIR Spec</a>
+      <a href="https://github.com/rederive">GitHub</a>
       <a href="https://semcom.ai">Semcom</a>
       <a href="mailto:lane@apilify.com">Contact</a>
     </div>
