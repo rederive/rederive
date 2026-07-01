@@ -91,8 +91,18 @@ packages/<name>/
 
 - `check` + `vis` — deterministic, done, self-contained (needs only `tsx`).
 - `resynth` — the local token-torching rebuild. The re-emit substrate is **not wired into this CLI**:
-  a plain CLI can't spawn Claude Code subagents. Drive it via the `sir-verify` skill (interactive,
-  no API key), `experiments/sir-toolkit/verify.py` (`claude -p`), or a direct Messages-API worker;
-  then `rdv check` must pass and the manifest `srcSha256` is updated. `rdv build` (AOT/native) is reserved.
+  a plain CLI can't spawn Claude Code subagents. Drive it via the **`sir-verify` skill** from the
+  [`sir` Claude Code plugin](https://github.com/rederive/sir-toolkit) (`/plugin marketplace add
+  rederive/sir-toolkit` → `/plugin install sir@sir-toolkit`), or a direct Messages-API worker; then
+  `rdv check` must pass and the manifest `srcSha256` is updated. `rdv build` (AOT/native) is reserved.
 - Built on the SIR verified-recompose toolkit (decompile → kind-graph → held-out oracle → quorum re-emit).
+
+## The ecosystem
+
+| artifact | what | where |
+|---|---|---|
+| `rdv` (this repo) | the trust-nothing verifier | [npm `rederive`](https://www.npmjs.com/package/rederive) |
+| `sir-factory` | the build orchestrator | [npm](https://www.npmjs.com/package/sir-factory) · [repo](https://github.com/rederive/sir-factory) |
+| `sir` plugin | Claude Code skills & agents (`sir-verify`, `preflight`) | [repo](https://github.com/rederive/sir-toolkit) |
+| SIR Schema | the normative spec (v0.4) | [repo](https://github.com/rederive/sir-spec) · [narrative](https://rederive.ai/spec.html) |
 ```
