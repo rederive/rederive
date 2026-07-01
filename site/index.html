@@ -102,6 +102,11 @@ code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:
 .terminal-dot.red{background:#ff5f57}.terminal-dot.yellow{background:#febc2e}.terminal-dot.green{background:#28c840}
 .terminal .prompt{color:#d4956a}.terminal .output{color:#cfcfd6}.terminal .dim{color:#6a6f7e}
 .terminal .ok{color:#28c840;font-weight:600}.terminal .bad{color:#ff7a72;font-weight:600}.terminal .warn{color:#febc2e}
+.cline{display:flex;align-items:baseline;gap:1em}
+.cline>span:first-child{min-width:0}
+.copybtn{margin-left:auto;flex:none;background:none;border:1px solid #282c38;border-radius:4px;color:#6a6f7e;cursor:pointer;font:inherit;font-size:0.8em;line-height:1;padding:3px 8px;opacity:0.45;transition:all 0.15s}
+.cline:hover .copybtn{opacity:1;color:#d4956a;border-color:#3a3f4e}
+.copybtn.copied{opacity:1;color:#28c840;border-color:#28c840}
 
 /* ---- Inventions ---- */
 .invention-grid{display:grid;grid-template-columns:1fr;gap:1em;margin:1.5em 0}
@@ -271,19 +276,19 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
   <div class="terminal">
     <div class="terminal-bar"><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div>
-<span class="dim"># 1 · the CLIs — the rdv verifier + the build orchestrator (Node ≥ 18)</span><br>
-<span class="prompt">$ npm i -g rederive sir-factory</span><br>
+<span class="dim"># 1 · the CLIs — the rdv verifier + the build orchestrator (Node ≥ 18)</span>
+<div class="cline"><span><span class="prompt">$ npm i -g rederive sir-factory</span></span><button class="copybtn" data-copy="npm i -g rederive sir-factory" aria-label="Copy command">copy</button></div>
 <br>
-<span class="dim"># 2 · the Claude Code plugin — the skills &amp; agents that drive them</span><br>
-<span class="prompt">&gt; /plugin marketplace add rederive/sir-toolkit</span><br>
-<span class="prompt">&gt; /plugin install sir@sir-toolkit</span><br>
+<span class="dim"># 2 · the Claude Code plugin — the skills &amp; agents that drive them</span>
+<div class="cline"><span><span class="prompt">&gt; /plugin marketplace add rederive/sir-toolkit</span></span><button class="copybtn" data-copy="/plugin marketplace add rederive/sir-toolkit" aria-label="Copy command">copy</button></div>
+<div class="cline"><span><span class="prompt">&gt; /plugin install sir@sir-toolkit</span></span><button class="copybtn" data-copy="/plugin install sir@sir-toolkit" aria-label="Copy command">copy</button></div>
 <br>
-<span class="dim"># 3 · put it to work — just ask Claude Code:</span><br>
-<span class="output">&nbsp;&nbsp;"Get this project off <span class="warn">decode-uri-component</span> — re-derive it as a verified, zero-dep vendor."</span><br>
-<span class="output">&nbsp;&nbsp;"This module has <span class="warn">zero tests</span> — preflight it: build a characterization oracle and give me the mutation score."</span><br>
+<span class="dim"># 3 · put it to work — just ask Claude Code:</span>
+<div class="cline"><span class="output">&nbsp;&nbsp;"Get this project off <span class="warn">decode-uri-component</span> — re-derive it as a verified, zero-dep vendor."</span><button class="copybtn" data-copy="Get this project off decode-uri-component — re-derive it as a verified, zero-dep vendor." aria-label="Copy prompt">copy</button></div>
+<div class="cline"><span class="output">&nbsp;&nbsp;"This module has <span class="warn">zero tests</span> — preflight it: build a characterization oracle and give me the mutation score."</span><button class="copybtn" data-copy="This module has zero tests — preflight it: build a characterization oracle and give me the mutation score." aria-label="Copy prompt">copy</button></div>
 <br>
-<span class="dim"># and in CI, the verifier alone re-proves any verified unit — deterministic, offline, no AI</span><br>
-<span class="prompt">$ rdv check vendor/decode-uri-component</span> <span class="dim">&amp;&amp; deploy</span>
+<span class="dim"># and in CI, the verifier alone re-proves any verified unit — deterministic, offline, no AI</span>
+<div class="cline"><span><span class="prompt">$ rdv check vendor/decode-uri-component</span> <span class="dim">&amp;&amp; deploy</span></span><button class="copybtn" data-copy="rdv check vendor/decode-uri-component" aria-label="Copy command">copy</button></div>
   </div>
 
   <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.8em;max-width:820px">Behind those two asks: <strong style="color:#e8e8e8"><code>sir-verify</code></strong> re-derives a unit from its contract — blind rebuilds, graded on held-out cases they never saw. <strong style="color:#e8e8e8"><code>preflight</code></strong> builds the oracle for untested code first — coverage + adversarial review + mutation testing + chaos, gated on a measured score. All Apache-2.0: <a href="https://github.com/rederive/sir-toolkit">sir-toolkit</a> · <a href="https://github.com/rederive/sir-factory">sir-factory</a> · <a href="https://www.npmjs.com/package/rederive">rederive</a>.</p>
@@ -450,5 +455,14 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   </div>
 </footer>
 
+<script>
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.copybtn'); if (!b) return;
+  navigator.clipboard.writeText(b.getAttribute('data-copy')).then(function () {
+    b.textContent = '✓ copied'; b.classList.add('copied');
+    setTimeout(function () { b.textContent = 'copy'; b.classList.remove('copied'); }, 1400);
+  });
+});
+</script>
 </body>
 </html>
