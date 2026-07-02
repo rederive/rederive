@@ -368,6 +368,81 @@ ${unitCards}</section>
 </div></body></html>`;
 }
 
+// ── rdv audit — declared vs delivered: the REAL dependency surface of a project ─────────────────────────
+// You reviewed the dependency choices in package.json; npm resolved an entire tree on your behalf, every node
+// of it installable code, some of it with install-time execution rights. This command makes that visible:
+//   declared (what you chose) vs delivered (what's actually on the rails), the runtime/dev split, how many
+//   packages can run code at install (the worm vector), and how many ship a verifiable contract.
+// Lockfile-first (package-lock v2/v3 carries exact dev + hasInstallScript flags); node_modules walk fallback.
+function cmdAudit(dir: string, asJson: boolean): number {
+  const pjPath = resolve(dir, 'package.json');
+  if (!existsSync(pjPath)) { console.log(C.r(`rdv audit: no package.json in ${dir}`)); return 1; }
+  const pj = JSON.parse(readFileSync(pjPath, 'utf-8'));
+  const declared = { deps: Object.keys(pj.dependencies || {}).length, dev: Object.keys(pj.devDependencies || {}).length };
+
+  type Entry = { name: string; dev: boolean; hook: boolean; diskPath: string };
+  const entries: Entry[] = [];
+  let source = '';
+  const lockPath = resolve(dir, 'package-lock.json');
+  if (existsSync(lockPath)) {
+    const lock = JSON.parse(readFileSync(lockPath, 'utf-8'));
+    if (lock.packages) {
+      source = 'package-lock.json';
+      for (const [k, v] of Object.entries(lock.packages) as [string, any][]) {
+        const idx = k.lastIndexOf('node_modules/');
+        if (idx === -1) continue;
+        entries.push({ name: k.slice(idx + 'node_modules/'.length), dev: !!v.dev, hook: !!v.hasInstallScript, diskPath: resolve(dir, k) });
+      }
+    }
+  }
+  if (!entries.length) {
+    const nm = resolve(dir, 'node_modules');
+    if (!existsSync(nm)) { console.log(C.r('rdv audit: no package-lock.json and no node_modules — run npm install (or npm i --package-lock-only) first')); return 1; }
+    source = 'node_modules walk (no lockfile — runtime/dev split unavailable)';
+    const top = readdirSync(nm).filter((d) => !d.startsWith('.'));
+    for (const d of top) {
+      if (d.startsWith('@')) { for (const s of readdirSync(resolve(nm, d))) entries.push({ name: `${d}/${s}`, dev: false, hook: false, diskPath: resolve(nm, d, s) }); }
+      else entries.push({ name: d, dev: false, hook: false, diskPath: resolve(nm, d) });
+    }
+  }
+
+  // augment from disk where installed: real scripts (the lockfile flag can lag) + verified-contract detection
+  const hookKinds = ['preinstall', 'install', 'postinstall'];
+  let verified = 0;
+  const hookNames: string[] = [];
+  for (const e of entries) {
+    try {
+      if (existsSync(resolve(e.diskPath, 'package.json'))) {
+        const epj = JSON.parse(readFileSync(resolve(e.diskPath, 'package.json'), 'utf-8'));
+        if (hookKinds.some((h) => epj.scripts && epj.scripts[h])) e.hook = true;
+      }
+      if (e.name.startsWith('@rederive/') || existsSync(resolve(e.diskPath, 'sir.manifest.json'))) verified++;
+    } catch { /* unreadable package — count it, can't inspect it */ }
+    if (e.hook) hookNames.push(e.name);
+  }
+  const delivered = entries.length;
+  const devOnly = entries.filter((e) => e.dev).length;
+  const runtime = delivered - devOnly;
+  const hooks = hookNames.length;
+  const splitKnown = source.startsWith('package-lock');
+
+  if (asJson) {
+    console.log(JSON.stringify({ name: pj.name, version: pj.version, declared, delivered, runtime: splitKnown ? runtime : null, devOnly: splitKnown ? devOnly : null, installHooks: hooks, hookPackages: hookNames.sort(), verified, source }, null, 2));
+    return 0;
+  }
+  console.log(`${C.b('rdv audit')}  ${pj.name}@${pj.version}   ${C.dim(source)}`);
+  console.log(`  you chose                 ${C.b(String(declared.deps))} dependenc${declared.deps === 1 ? 'y' : 'ies'} ${C.dim(`(+ ${declared.dev} dev)`)}`);
+  console.log(`  npm delivered             ${C.y(C.b(String(delivered)))} packages${splitKnown ? `   ${C.dim(`(${runtime} runtime · ${devOnly} dev-only)`)}` : ''}`);
+  console.log(`  install-time code rights  ${hooks ? C.r(C.b(String(hooks))) : C.g('0')} ${C.dim('packages carry preinstall/install/postinstall hooks')}`);
+  if (hooks) console.log(`  ${C.dim('  → ' + hookNames.sort().slice(0, 8).join(', ') + (hooks > 8 ? `, +${hooks - 8} more` : ''))}`);
+  console.log(`  ship a verifiable contract ${verified ? C.g(C.b(String(verified))) : C.r('0')} ${C.dim(`of ${delivered}`)}`);
+  console.log('');
+  if (!splitKnown) console.log(C.dim('  tip: `npm i --package-lock-only --package-lock=true` writes the exact tree (runtime/dev split) without installing.'));
+  console.log(C.dim('  the verify leg needs none of this: `rdv check` runs offline — node + the in-repo bundles, no install.'));
+  console.log(C.dim('  shrink the surface: https://rederive.ai/prompt.md  (verify · re-derive · de-dependency)'));
+  return 0;
+}
+
 async function main() {
   const [cmd, dirArg] = process.argv.slice(2);
   const dir = resolve(dirArg && !dirArg.startsWith('--') ? dirArg : '.');
@@ -377,8 +452,9 @@ async function main() {
   try {
     if (cmd === 'check') process.exit(await cmdCheck(dir));
     if (cmd === 'vis') process.exit(cmdVis(dir));
+    if (cmd === 'audit') process.exit(cmdAudit(dir, has('--json')));
     if (cmd === 'resynth') process.exit(has('--apply') ? await cmdResynthApply(dir, unit) : cmdResynthPrepare(dir, unit, parseInt(arg('--n', '3'), 10)));
-    console.log('usage: rdv <check|vis|resynth> <pkgdir> [--unit U] [--n 3] [--apply]');
+    console.log('usage: rdv <check|vis|audit|resynth> <pkgdir> [--unit U] [--n 3] [--apply] [--json]');
     process.exit(2);
   } catch (e: any) { console.error('rdv error:', e?.stack ?? e?.message ?? e); process.exit(1); }
 }
