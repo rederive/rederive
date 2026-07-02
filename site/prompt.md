@@ -16,12 +16,16 @@ held-out oracle — not bytes to trust) and running its loop for me. Follow thes
    b. RE-DERIVE — get a dependency out of my trust tree: decompose it into a contract + oracle, rebuild it
       blind, and accept it only on quorum (the `sir-verify` skill drives `sir-factory`:
       install → decompose → stamp → re-emit → grade → pack).
-   c. DE-DEPENDENCY A PROJECT — the whole-tree version of (b): run the project's test suite for a baseline,
-      enumerate its runtime dependencies, re-derive each one (leaves first), vendor the verified sources with
-      provenance headers, rewire the imports, remove the dependencies from package.json, and prove the
-      project's own test suite still passes. Keep the verification bundles in the repo so CI can re-prove
-      every vendored unit with `rdv check`. Quarantine (and report) anything you cannot soundly verify —
-      an ambient-effect unit, an RNG core, a licensing gap — rather than shipping it unverified.
+   c. DE-DEPENDENCY A PROJECT — the whole-tree version of (b), in this order:
+      c1. BASELINE (gate — do not start any decomposition before this): run the project's own test suite
+          and report the counts to me (e.g. "182 passing, 1 known failure"). This number is the finish line.
+      c2. Enumerate the runtime dependencies (skip devDependencies and types-only packages — say so if you skip one).
+      c3. Re-derive each, leaves first; vendor the verified sources with provenance headers.
+      c4. Rewire the imports; remove the dependencies from package.json.
+      c5. Re-run the project's test suite and report baseline vs. after — the counts must match.
+      Keep the verification bundles in the repo so CI can re-prove every vendored unit with `rdv check`.
+      Quarantine (and report) anything you cannot soundly verify — an ambient-effect unit, an RNG core, a
+      licensing gap — rather than shipping it unverified.
    d. PREFLIGHT — my code has no tests: build a measured-strength characterization oracle first
       (coverage inputs → adversarial review → mutation testing → chaos pass), then use it as the
       source of truth for (b) or for a migration.
@@ -33,7 +37,8 @@ held-out oracle — not bytes to trust) and running its loop for me. Follow thes
    failure precisely; do not tune inputs or retry your way past it — a miss is a finding.
 
 4. When it is green, give me three things: the `rdv check` output, where the verified bundle lives, and one
-   sentence stating exactly what was proven (quorum, held-out count, verified envelope).
+   sentence stating exactly what was proven (quorum, held-out count, verified envelope). For mode (c), also
+   the before/after test-suite counts — a mode-(c) result without a baseline number is incomplete.
 
 The toolkit is immutable from your seat: never edit `rdv` or `sir-factory` to make a check pass — if you hit a
 real tool bug, report it (github.com/rederive/sir-factory/issues) or quarantine the unit.
