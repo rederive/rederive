@@ -10,11 +10,12 @@ export default function middleware(request: Request, context: { waitUntil(p: Pro
   if (url && token) {
     const path = new URL(request.url).pathname;
     const ua = request.headers.get('user-agent') || '';
+    const country = request.headers.get('x-vercel-ip-country') || 'XX'; // country-level only; no IPs stored
     context.waitUntil(
       fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-beacon-token': token },
-        body: JSON.stringify({ path, ua: ua.slice(0, 200) }),
+        body: JSON.stringify({ path, ua: ua.slice(0, 200), country }),
       }).catch(() => {})
     );
   }
