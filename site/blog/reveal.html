@@ -136,6 +136,18 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
   <p>That last one tends to stop people. You reviewed a handful of dependency choices; npm resolved a tree of hundreds on your behalf, every node of it installable code. <code>rderive audit</code> just makes the number visible.</p>
 </section>
 <section class="s">
+  <h2>Or don't run anything — ask your agent</h2>
+  <p>Here's the part I'm most excited about. If you work with a coding agent — Claude Code, Cursor — you don't install or learn anything. You point it at the site and say what you want, in English:</p>
+<pre><span class="dim"># in your repo, to your agent:</span>
+  <span class="ok">"This project has a boatload of dependencies I don't want to trust —</span>
+<span class="ok">   apply rederive.ai to it."</span></pre>
+  <p>The agent fetches <code>rederive.ai</code>, follows the setup prompt published there, and runs the whole loop <em>with</em> you: verify a package, re-derive a single dependency into a zero-dep vendored copy, or de-dependency an entire project — enumerate the runtime tree, re-derive each unit against its upstream, vendor the verified sources, and prove your own test suite still passes. The site was built to be read by an agent as readily as a human; the domain name is the interface. We've watched a cold agent do the full run on a real package from that one sentence, with no setup at all.</p>
+  <div class="callout green">
+    <div class="ct">The discipline travels with it</div>
+    <p style="margin:0">The setup prompt bakes in the rules: expected values are never hand-authored, a failed check is a finding rather than something to retry past, and the verifier itself is off-limits for the agent to "fix." Whatever your agent hands back is verified the same way everything else is — the oracle is still the judge.</p>
+  </div>
+</section>
+<section class="s">
   <h2>What's here today, honestly</h2>
   <p>The catalog stands at <strong>218 verified, zero-dependency packages</strong> — three public in the repo today (<code>colors</code>, <code>rdv</code>, <code>request</code>), the rest rolling out — concentrated where the risk actually lives: the abandoned-but-load-bearing tail of npm that nobody audits and everybody ships. The <a href="/spec.html">SIR contract format</a> is an open spec; the verifier is a few hundred lines of dependency-free Apache-2.0 code you can audit yourself. Everything load-bearing is Apache-2.0, with a <a href="/promise.html">written charter</a> of what we will never do to the community.</p>
   <p>It is not magic and I won't pretend it is. A held-out oracle is evidence of behavior, not a proof of total correctness — which is exactly why <code>check</code> is dual-channel, why catalog packages are zero-dependency by construction, and why re-derivation requires quorum. Smaller attack surface, honestly bounded.</p>
