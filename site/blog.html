@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/blog.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="rederive — Blog">
+<meta property="og:description" content="Verified re-derivation, in the open: the SIR contract format, bug-finding, brownfield and greenfield verification, and vibeless coding.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>Blog — rederive</title>
+<meta name="description" content="Writing from rederive: verified re-derivation, the SIR contract format, bug-finding by characterization, brownfield and greenfield verification, and vibeless coding.">
+<link rel="canonical" href="https://rederive.ai/blog.html">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+.hero{background:#0a0c12;padding:3em 24px 1.6em;border-bottom:1px solid #282c38;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:420px;background:radial-gradient(ellipse at center,rgba(194,124,78,0.09) 0%,transparent 70%);pointer-events:none}
+.hero-inner{max-width:860px;margin:0 auto;position:relative}
+.hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.4em}
+.hero h1{font-size:2.2em;color:#fafafa;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.hero p{color:#b0b0b0;max-width:620px}
+.wrap{max-width:860px;margin:0 auto;padding:2.2em 24px 4em}
+.series-note{font-size:0.85em;color:#808088;margin-bottom:1.6em;padding:0.7em 1em;background:#10131c;border:1px solid #282c38;border-radius:8px}
+a.post{display:block;text-decoration:none;padding:1.3em 1.5em;background:#10131c;border:1px solid #282c38;border-radius:10px;margin-bottom:1em;transition:border-color 0.15s,transform 0.15s}
+a.post:hover{border-color:#c27c4e;transform:translateY(-2px);text-decoration:none}
+a.post.soon{opacity:0.55;pointer-events:none}
+.post .meta{font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#6a6f7e;margin-bottom:0.4em}
+.post .meta .day{color:#d4956a}
+.post h2{font-size:1.25em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.25em}
+.post p{color:#b0b0b0;font-size:0.95em;margin:0}
+.post .pill{float:right;font-size:0.68em;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#808088;background:#1a1d28;border:1px solid #282c38;padding:2px 8px;border-radius:999px}
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+@media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}}
+</style>
+</head>
+<body>
+
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="/index.html#get-started">Get started</a>
+  <a class="nl" href="/spec.html">SIR Spec</a>
+  <a class="nl active" href="/blog.html">Blog</a>
+  <a class="nl" href="/promise.html">Promise</a>
+  <a class="cta-nav" href="https://github.com/rederive">GitHub</a>
+</nav>
+</div>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">Writing</div>
+    <h1>Verified re-derivation, in the open.</h1>
+    <p>Notes from building rederive — the trust-nothing package manager, the SIR contract format, and what happens to code when you squeeze the uncertainty out of it.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="series-note"><strong style="color:#ecc4aa">Launch week</strong> — one post a day, Monday to Friday: the thesis, a real bug, brownfield, greenfield, and the spec underneath it all.</div>
+
+  <a class="post" href="/blog/vibeless-coding.html">
+    <div class="meta"><span class="day">Mon · 1 of 5</span> · 2026-07-06 · 5 min</div>
+    <h2>Vibe coding, minus the vibes</h2>
+    <p>An AI wrote this Rust. A reviewer called it gorgeous. It doesn't look AI-written — and that's the whole point. Vibe is uncertainty made visible; remove the freedom and the slop disappears.</p>
+  </a>
+
+  <a class="post soon">
+    <span class="pill">Tue</span>
+    <div class="meta"><span class="day">Tue · 2 of 5</span> · bug-finding</div>
+    <h2>Your tests pass. Would they notice if the code was wrong?</h2>
+    <p>97% line coverage, a green suite, millions of weekly downloads — and a real bug none of it could see. What characterization testing finds that coverage misses.</p>
+  </a>
+
+  <a class="post soon">
+    <span class="pill">Wed</span>
+    <div class="meta"><span class="day">Wed · 3 of 5</span> · brownfield</div>
+    <h2>Modernize legacy code without changing what it does</h2>
+    <p>A 2,000-line module, no tests, nobody left who understands it. Keep the original running as the oracle, refactor into clean units, and prove the behavior is unchanged.</p>
+  </a>
+
+  <a class="post soon">
+    <span class="pill">Thu</span>
+    <div class="meta"><span class="day">Thu · 4 of 5</span> · greenfield</div>
+    <h2>Verifying code that has no reference</h2>
+    <p>When there's no original to execute, where does the oracle come from? Property oracles, decompose-to-named-leaves, and the discipline of sourcing truth for brand-new code.</p>
+  </a>
+
+  <a class="post soon">
+    <span class="pill">Fri</span>
+    <div class="meta"><span class="day">Fri · 5 of 5</span> · the spec</div>
+    <h2>The contract underneath it all</h2>
+    <p>SIR: a language-neutral behavioral contract that lets a JavaScript function be re-derived in Rust and proven identical. The format, the invariants, and why the oracle is the substrate.</p>
+  </a>
+
+  <a class="post" href="/blog/trusted-maintainer.html">
+    <div class="meta">Essay · 2026-07-02 · 6 min</div>
+    <h2>colors.js had a trusted maintainer. That was the problem.</h2>
+    <p>Every supply-chain defense we've built verifies the pipeline. None of it verifies the payload. What a held-out oracle catches that provenance can't.</p>
+  </a>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <div class="footer-links">
+      <a href="/index.html">Home</a>
+      <a href="/spec.html">SIR Spec</a>
+      <a href="https://github.com/rederive">GitHub</a>
+    </div>
+    <span>&copy; 2026 Apilify Inc. &middot; Apache-2.0</span>
+  </div>
+</footer>
+
+</body>
+</html>

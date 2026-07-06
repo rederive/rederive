@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/blog/trusted-maintainer.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="colors.js had a trusted maintainer. That was the problem.">
+<meta name="twitter:description" content="Every supply-chain defense we've built verifies the pipeline. None of it verifies the payload. What a held-out oracle catches that provenance can't.">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>colors.js had a trusted maintainer. That was the problem. — rederive</title>
+<meta name="description" content="The January 2022 colors.js sabotage shipped with valid credentials and would have carried valid provenance. Four years of pipeline hardening later, npm attacks are monthly. The payload — not the pipe — is the thing nobody verifies.">
+<link rel="canonical" href="https://rederive.ai/blog/trusted-maintainer.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="colors.js had a trusted maintainer. That was the problem.">
+<meta property="og:description" content="Every supply-chain defense we've built verifies the pipeline. None of it verifies the payload.">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(255,122,114,0.06) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout.red{border-left-color:#ff7a72}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+.callout.red .ct{color:#ff7a72}
+
+pre{background:#10131c;border:1px solid #282c38;border-radius:8px;padding:1.1em 1.3em;margin:1.2em 0;overflow-x:auto;font-size:0.85em;line-height:1.55;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;color:#e0e0e0}
+pre .ok{color:#28c840}pre .bad{color:#ff7a72}pre .dim{color:#6a6f7e}
+
+table.t{width:100%;border-collapse:collapse;margin:1.2em 0;font-size:0.92em}
+table.t th{text-align:left;color:#ecc4aa;font-weight:700;padding:0.5em 0.8em;border-bottom:1px solid #282c38}
+table.t td{padding:0.55em 0.8em;border-bottom:1px solid #1a1d28;vertical-align:top}
+table.t td:last-child{color:#ff7a72;font-weight:600;white-space:nowrap}
+
+ul.plain{margin:0.4em 0 1em 0;padding:0;list-style:none}
+ul.plain li{position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8;font-size:0.95em}
+ul.plain li::before{content:'—';position:absolute;left:0;color:#6a6f7e}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"colors.js had a trusted maintainer. That was the problem.","description":"The January 2022 colors.js sabotage shipped with valid credentials and would have carried valid provenance. Every defense built since verifies the pipeline; none verifies the payload.","url":"https://rederive.ai/blog/trusted-maintainer.html","datePublished":"2026-07-02","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"}}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="/index.html#how">How it works</a>
+  <a class="nl" href="/spec.html">SIR Spec</a>
+  <a class="nl active" href="/blog.html">Blog</a>
+  <a class="nl" href="/promise.html">Promise</a>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+</nav>
+</div>
+
+<header class="doc-hero">
+  <div class="doc-hero-inner">
+    <div class="eyebrow">Essay</div>
+    <h1>colors.js had a trusted maintainer.<br>That was the problem.</h1>
+    <p>Four years of supply-chain hardening — 2FA, provenance, signed builds, cooldowns — and npm attacks are now monthly. Every one of those defenses verifies the pipeline. None of them verifies the payload.</p>
+    <div class="vbadge">Lane Thompson · 2026-07-02</div>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+
+<section class="s">
+  <h2>Nothing was hacked</h2>
+  <p class="lead">On January 8, 2022, npm served versions 1.4.1 and 1.4.2 of <code>colors</code> — a terminal-string library with roughly <strong>27 million weekly downloads</strong> and about 19,000 dependent packages — and every application that pulled it began printing <em>LIBERTY LIBERTY LIBERTY</em>, then garbage, forever.</p>
+  <p>The payload was three lines. A loop — <code>for (let i = 666; i &lt; Infinity; i++)</code> — inserted by the package's own maintainer, published with his own credentials, in protest of years of unpaid maintenance. <code>faker</code>, his other library, was gutted the same week. Thousands of builds broke overnight, including tooling at companies with nine-figure security budgets.</p>
+  <p>Here is the part worth sitting with: <strong>no security control failed.</strong> No account was compromised, no token stolen, no build server breached. The registry did exactly what a registry does — it handed you bytes, and a name to trust. The name was valid. The trust was the vulnerability.</p>
+</section>
+
+<section class="s">
+  <h2>We spent four years hardening the pipe</h2>
+  <p>The industry's response to 2022 was real and well-executed. npm mandated 2FA for high-impact maintainers. Sigstore-signed provenance let packages prove which repo and CI workflow built them, and trusted publishing made it nearly automatic. SLSA gave us build-integrity levels. Google's OSS Rebuild independently rebuilds packages and attests that the artifact matches the source. Package managers added release cooldowns.</p>
+  <p>Every one of these answers a pipeline question. None answers the payload question:</p>
+  <table class="t">
+    <tr><th>Defense</th><th>What it proves</th><th>colors 1.4.1?</th></tr>
+    <tr><td>2FA / trusted publishing</td><td>The publisher is who they claim</td><td>He was.</td></tr>
+    <tr><td>Sigstore provenance</td><td>Built from this repo, by this workflow</td><td>It was.</td></tr>
+    <tr><td>SLSA levels</td><td>The build wasn't tampered with</td><td>It wasn't.</td></tr>
+    <tr><td>Reproducible builds / OSS Rebuild</td><td>The artifact matches the source</td><td>It did.</td></tr>
+    <tr><td>Release cooldowns</td><td>Someone else finds it first, maybe</td><td>Nobody did, for hours.</td></tr>
+  </table>
+  <p>The sabotage <em>was</em> the source. A malicious commit from a legitimate maintainer rebuilds perfectly, signs cleanly, and ships with flawless provenance. And the record since proves the point: the Shai-Hulud worm hit hundreds of packages in September 2025 <em>after</em> the 2FA mandate — then returned in November, and again in the spring. The <code>axios</code> compromise in March 2026 shipped a remote-access trojan to a library with 70 million weekly downloads. The LiteLLM backdoor arrived through a compromised <em>security scanner</em>. Roughly one major registry incident a month, for the last ten months, against the most hardened pipeline in the ecosystem's history.</p>
+  <div class="callout red">
+    <div class="ct">The category error</div>
+    <p style="margin:0">Provenance, signatures, and rebuilds verify <strong>where bytes came from</strong>. Nobody in the chain verifies <strong>what the bytes do</strong>. As long as that's true, the trusted maintainer — phished, coerced, burned out, or bought — remains a single point of failure for everything downstream.</p>
+  </div>
+</section>
+
+<section class="s">
+  <h2>Ship the contract, not the bytes</h2>
+  <p>A rederive package ships its <strong>contract</strong>: a structural spec, plus a <strong>held-out oracle</strong> — worked input→output vectors stamped by executing the original code, which the shipped implementation has never seen. The oracle is published in full, hashes and all. It is an independent source of truth that no publisher — including us — can quietly move.</p>
+  <p><code>rdv check</code> re-runs every unit's held-out oracle against the shipped source and verifies the recorded content hashes. It is deterministic, local, and free: no account, no network, no LLM, no trust in the vendor — you can audit the verifier itself; it's a few hundred lines of dependency-free Apache-2.0 code. Tamper with one byte and it fails two ways at once:</p>
+<pre>$ rdv check packages/colors        <span class="dim"># after flipping one character in src/strip.js</span>
+  <span class="bad">✗ FAILED  strip</span>
+     held-out 5/10 miss=[ho_combined_sgr_leading,ho_csi_clear_screen,…]   <span class="bad">hashes MISMATCH</span>
+  <span class="bad">VERIFICATION FAILED</span> — do not trust this src; rebuild with: rdv resynth packages/colors</pre>
+  <p>The behavioral channel catches <em>what</em> changed; the hash channel catches <em>that anything changed at all</em>. A cosmetic, behavior-preserving edit passes every oracle vector — and still fails the hash. A subtle behavioral regression matches no known signature — and still misses the oracle.</p>
+  <p>And if verification fails — or you simply refuse to trust shipped bytes at all — <code>rdv resynth</code> rebuilds the implementation locally from the spec, with isolated workers accepted only on quorum, and the result must pass the very same <code>rdv check</code>. We don't ask you to trust the workers either. <strong>The oracle is the trust anchor. Not the publisher, not the registry, not us, and not any model.</strong></p>
+  <div class="callout">
+    <div class="ct">Isn't this just tests?</div>
+    <p style="margin:0">Tests ship <em>with</em> the code, and the publisher can edit them — a saboteur updates the tests in the same commit as the sabotage. The oracle is held out from the implementation, derived by execution, and independent of the publisher. He can change his code; he can't change your copy of the contract.</p>
+  </div>
+</section>
+
+<section class="s">
+  <h2>What this doesn't prove — said plainly</h2>
+  <p>A held-out oracle is evidence of behavior, not a proof of total correctness. Code can conform on every vector and differ on a path no vector exercises — which is exactly why <code>check</code> is dual-channel, why catalog packages are zero-dependency by construction, and why re-derivation requires quorum agreement from workers that never see each other's output. Smaller attack surface, honestly bounded — not magic.</p>
+  <p>The contract is honest about the code's limitations, too. Our first catalog package is <code>@rederive/colors</code>, a verified recompose of <code>colors@1.4.0</code> — the last release before the sabotage. Its <code>strip</code> unit removes only single-parameter SGR codes; CSI and OSC terminal-injection escapes survive, and <em>the oracle documents that</em>. The original code has that limitation; the contract says so instead of papering over it. A trust primitive that flatters the code it verifies would be worthless.</p>
+</section>
+
+<section class="s">
+  <h2>Where this goes</h2>
+  <p>The catalog stands at 218 verified, zero-dependency packages — three public in the repo today (<code>colors</code>, <code>rdv</code>, <code>request</code>), the rest rolling out — concentrated where the risk actually lives: the abandoned-but-load-bearing tail of npm that nobody audits and everybody ships. The SIR format is an open spec — we'd like nothing more than registry-native contracts to make our catalog redundant. Everything load-bearing is Apache-2.0, with a <a href="/promise.html">written charter</a> of what we will never do to the community.</p>
+  <p>If you want to kick the tires, <code>colors</code> is small enough to audit in an afternoon — the whole contract, oracle vectors and all, is in the open:</p>
+<pre><span class="dim">$</span> npm i -g rederive
+<span class="dim">$</span> git clone https://github.com/rederive/rederive && cd rederive
+<span class="dim">$</span> rdv check packages/colors        <span class="ok">→ ✓ VERIFIED</span></pre>
+  <p>Then flip a byte in <code>src/strip.js</code> and run it again.</p>
+
+  <div class="sig">
+    <p><strong>Lane Thompson</strong> — Founder, rederive · <a href="https://github.com/rederive/rederive">GitHub</a> · <a href="mailto:lane@apilify.com">lane@apilify.com</a></p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <div class="footer-links">
+      <a href="/index.html">Home</a>
+      <a href="/spec.html">SIR Spec</a>
+      <a href="https://semcom.ai">Semcom</a>
+      <a href="mailto:lane@apilify.com">Contact</a>
+    </div>
+    <span>&copy; 2026 Apilify Inc. &middot; Open source (Apache-2.0)</span>
+  </div>
+</footer>
+
+</body>
+</html>
