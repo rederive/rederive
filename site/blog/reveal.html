@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/blog/reveal.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:title" content="rederive is live: verify what a package does, not who published it">
+<meta property="og:description" content="Friday I said freedom is a dial and we'd turned it into infrastructure. This is the infrastructure. rederive ships a package's contract — a spec and a held-out oracle the publisher can't move — not bytes you have to trust. Open source, live now.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="rederive is live: verify what a package does, not who published it">
+<meta name="twitter:description" content="Friday I said freedom is a dial and we'd turned it into infrastructure. This is the infrastructure. rederive ships a package's contract — a spec and a held-out oracle the publisher can't move — not bytes you have to trust. Open source, live now.">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>rederive is live: verify what a package does, not who published it — rederive</title>
+<meta name="description" content="Friday I said freedom is a dial and we'd turned it into infrastructure. This is the infrastructure. rederive ships a package's contract — a spec and a held-out oracle the publisher can't move — not bytes you have to trust. Open source, live now.">
+<link rel="canonical" href="https://rederive.ai/blog/reveal.html">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(212,149,106,0.08) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+
+pre{background:#10131c;border:1px solid #282c38;border-radius:8px;padding:1.1em 1.3em;margin:1.2em 0;overflow-x:auto;font-size:0.85em;line-height:1.55;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;color:#e0e0e0}
+pre .ok{color:#28c840}pre .bad{color:#ff7a72}pre .dim{color:#6a6f7e}pre .kw{color:#d4956a}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+.next{background:#10131c;border:1px solid #282c38;border-radius:10px;padding:1.3em 1.5em;margin-top:2.4em}
+.next .nt{font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6a6f7e;margin-bottom:0.4em}
+.next a{font-weight:600}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}.doc-hero h1{font-size:1.9em}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"rederive is live: verify what a package does, not who published it","description":"Friday I said freedom is a dial and we'd turned it into infrastructure. This is the infrastructure. rederive ships a package's contract — a spec and a held-out oracle the publisher can't move — not bytes you have to trust. Open source, live now.","url":"https://rederive.ai/blog/reveal.html","datePublished":"2026-07-06","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"}}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="/index.html#get-started">Get started</a>
+  <a class="nl" href="/spec.html">SIR Spec</a>
+  <a class="nl active" href="/blog.html">Blog</a>
+  <a class="nl" href="/promise.html">Promise</a>
+  <a class="cta-nav" href="https://github.com/rederive">GitHub</a>
+</nav>
+</div>
+<header class="doc-hero"><div class="doc-hero-inner">
+  <div class="eyebrow">Launch week · 1 of 5</div>
+  <h1>rederive is live</h1>
+  <p>Friday I said freedom is a dial, and we'd turned it into infrastructure. This is the infrastructure — verify what a package <em>does</em>, not who published it.</p>
+  <div class="vbadge">Lane Thompson · 2026-07-06 · 6 min</div>
+</div></header>
+<main id="main" class="wrap">
+
+<section class="s">
+  <p class="lead">Friday I wrote that "vibe" in AI code isn't a defect of the models — it's the leftover freedom in an underspecified problem, and that freedom is a dial you can turn down with a contract and an oracle the author can't game. I ended by saying we'd spent months turning that dial into infrastructure, and I'd tell you what it was this week.</p>
+  <p>It's called <strong>rederive</strong>. It's open source, it's live, and the idea underneath it is simple and a little uncomfortable.</p>
+</section>
+<section class="s">
+  <h2>The registry hands you bytes and a name to trust</h2>
+  <p>Think about what you actually get when you <code>npm install</code> something. You get bytes, and a name. You don't audit the code — nobody does, at the scale of a real dependency tree. You trust that the name behind it is honest. Every supply-chain defense we've built in the last four years hardens <em>that</em>: 2FA, signed provenance, SLSA, reproducible builds, release cooldowns. They all verify <strong>where the bytes came from</strong>.</p>
+  <p>None of them verify <strong>what the bytes do</strong>. In January 2022 the maintainer of <code>colors</code> — 27 million weekly downloads — shipped an infinite loop into his own package, with his own valid credentials. Nothing was hacked. It would have passed provenance, signatures, and a reproducible-build check flawlessly, because <em>the sabotage was the source</em>. Four years and a monthly drumbeat of incidents later — Shai-Hulud, axios, LiteLLM — the trusted maintainer is still a single point of failure for everything downstream. <a href="/blog/trusted-maintainer.html">The long version of that argument is here.</a></p>
+</section>
+<section class="s">
+  <h2>So ship the contract, not the bytes</h2>
+  <p>A rederive package ships its <strong>contract</strong>: a structural spec, plus a <strong>held-out oracle</strong> — worked input→output cases stamped by executing the original code, which the shipped implementation has never seen. The oracle is published in full and is an independent source of truth no publisher — us included — can quietly move. You do one of two things with it:</p>
+  <ul class="plain" style="margin:0.4em 0 1em 0;padding:0;list-style:none">
+    <li style="position:relative;padding:0.35em 0 0.35em 1.6em;color:#e8e8e8"><span style="position:absolute;left:0;color:#d4956a;font-weight:700">1</span> <strong>Verify.</strong> <code>rdv check</code> re-runs the held-out oracle against the shipped code and checks its content hashes. Deterministic, local, free — no account, no network, no LLM. Tamper with a byte and it fails two ways at once: the behavior misses the oracle, and the hash mismatches.</li>
+    <li style="position:relative;padding:0.35em 0 0.35em 1.6em;color:#e8e8e8"><span style="position:absolute;left:0;color:#d4956a;font-weight:700">2</span> <strong>Re-derive.</strong> Don't want to trust the shipped bytes at all? Rebuild the implementation locally from the spec — the exact loop from Friday's essay — accepted only when independent blind workers agree, and it must pass the same <code>rdv check</code>. The oracle is the trust anchor. Not the publisher, not us, not any model.</li>
+  </ul>
+</section>
+<section class="s">
+  <h2>Three things you can run right now</h2>
+<pre><span class="dim">$</span> npm i -g rederive
+
+<span class="dim"># verify a package against its contract — deterministic, offline</span>
+<span class="dim">$</span> rdv check node_modules/@rederive/colors      <span class="ok">→ ✓ VERIFIED</span>
+
+<span class="dim"># see what your dependency tree ACTUALLY pulls in</span>
+<span class="dim">$</span> npx rederive audit
+  you chose                 2 dependencies <span class="dim">(+ 3 dev)</span>
+  npm delivered             <span class="bad">650</span> packages
+  install-time code rights  <span class="bad">…</span> packages carry postinstall hooks</pre>
+  <p>That last one tends to stop people. You reviewed a handful of dependency choices; npm resolved a tree of hundreds on your behalf, every node of it installable code. <code>rderive audit</code> just makes the number visible.</p>
+</section>
+<section class="s">
+  <h2>What's here today, honestly</h2>
+  <p>The catalog stands at <strong>218 verified, zero-dependency packages</strong> — three public in the repo today (<code>colors</code>, <code>rdv</code>, <code>request</code>), the rest rolling out — concentrated where the risk actually lives: the abandoned-but-load-bearing tail of npm that nobody audits and everybody ships. The <a href="/spec.html">SIR contract format</a> is an open spec; the verifier is a few hundred lines of dependency-free Apache-2.0 code you can audit yourself. Everything load-bearing is Apache-2.0, with a <a href="/promise.html">written charter</a> of what we will never do to the community.</p>
+  <p>It is not magic and I won't pretend it is. A held-out oracle is evidence of behavior, not a proof of total correctness — which is exactly why <code>check</code> is dual-channel, why catalog packages are zero-dependency by construction, and why re-derivation requires quorum. Smaller attack surface, honestly bounded.</p>
+</section>
+<section class="s">
+  <p>This week I'm writing one post a day on what it actually does — starting tomorrow with the part that surprised me most: a real bug, in a package with millions of weekly downloads, that its own 97%-coverage test suite couldn't see.</p>
+  <div class="next"><div class="nt">Tomorrow · Launch week 2 of 5</div><p style="margin:0"><strong>Your tests pass. Would they notice if the code was wrong?</strong> — coverage measures what runs; mutation testing measures what your tests would actually catch. The gap between them is where a real bug was hiding.</p></div>
+  <div class="sig"><p><strong>Lane Thompson</strong> — Founder, rederive · <a href="https://github.com/rederive">GitHub</a> · <a href="https://rederive.ai">rederive.ai</a></p></div>
+</section>
+</main>
+<footer><div class="footer-inner">
+  <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+  <div class="footer-links"><a href="/index.html">Home</a><a href="/blog.html">Blog</a><a href="/spec.html">SIR Spec</a><a href="https://github.com/rederive">GitHub</a></div>
+  <span>&copy; 2026 Apilify Inc. &middot; Apache-2.0</span>
+</div></footer>
+</body>
+</html>

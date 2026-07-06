@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/blog/sir-spec.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:title" content="The contract underneath it all">
+<meta property="og:description" content="SIR: a language-neutral behavioral contract that lets a JavaScript function be re-derived in Rust and proven identical. The format, the invariants, and why the oracle — not the source text — is the substrate.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The contract underneath it all">
+<meta name="twitter:description" content="SIR: a language-neutral behavioral contract that lets a JavaScript function be re-derived in Rust and proven identical. The format, the invariants, and why the oracle — not the source text — is the substrate.">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>The contract underneath it all — rederive</title>
+<meta name="description" content="SIR: a language-neutral behavioral contract that lets a JavaScript function be re-derived in Rust and proven identical. The format, the invariants, and why the oracle — not the source text — is the substrate.">
+<link rel="canonical" href="https://rederive.ai/blog/sir-spec.html">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(212,149,106,0.08) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+
+pre{background:#10131c;border:1px solid #282c38;border-radius:8px;padding:1.1em 1.3em;margin:1.2em 0;overflow-x:auto;font-size:0.85em;line-height:1.55;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;color:#e0e0e0}
+pre .ok{color:#28c840}pre .bad{color:#ff7a72}pre .dim{color:#6a6f7e}pre .kw{color:#d4956a}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+.next{background:#10131c;border:1px solid #282c38;border-radius:10px;padding:1.3em 1.5em;margin-top:2.4em}
+.next .nt{font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6a6f7e;margin-bottom:0.4em}
+.next a{font-weight:600}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}.doc-hero h1{font-size:1.9em}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"The contract underneath it all","description":"SIR: a language-neutral behavioral contract that lets a JavaScript function be re-derived in Rust and proven identical. The format, the invariants, and why the oracle — not the source text — is the substrate.","url":"https://rederive.ai/blog/sir-spec.html","datePublished":"2026-07-10","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"}}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="/index.html#get-started">Get started</a>
+  <a class="nl" href="/spec.html">SIR Spec</a>
+  <a class="nl active" href="/blog.html">Blog</a>
+  <a class="nl" href="/promise.html">Promise</a>
+  <a class="cta-nav" href="https://github.com/rederive">GitHub</a>
+</nav>
+</div>
+<header class="doc-hero"><div class="doc-hero-inner">
+  <div class="eyebrow">Launch week · 5 of 5</div>
+  <h1>The contract<br>underneath it all</h1>
+  <p>All week, one artifact did the quiet work — the thing a blind engineer reads to rebuild a unit without ever seeing the source. This is what it is, and why it is shaped the way it is.</p>
+  <div class="vbadge">Lane Thompson · 2026-07-10 · 7 min</div>
+</div></header>
+<main id="main" class="wrap">
+
+<section class="s">
+  <p class="lead">In the essay that opened all this, four agents rebuilt the same function — three in JavaScript, one in Rust — and all four agreed on five thousand inputs. That only works if what they were handed contained the behavior <em>without</em> containing the code. A JavaScript source can't do that; it's JavaScript. What they were handed was a <strong>SIR</strong> — a Semantic Intermediate Representation — and it's the format underneath everything this week.</p>
+</section>
+<section class="s">
+  <h2>What a contract has to carry</h2>
+  <p>A SIR describes one unit of behavior as a tree of kind-discriminated nodes: what it computes, what it branches on, what it depends on, what effects it performs across which boundaries. Load-bearing details are pinned exactly — a verbatim regex, an exact rounding rule, the order of a pipeline — because those are the accidents a re-implementer would otherwise guess wrong. Everything derivable is left derivable. The goal is a description precise enough that independent engineers <em>converge</em>, and no more code-like than that requires.</p>
+  <p>But the SIR text is deliberately <strong>not</strong> the source of truth. That's the load-bearing idea of the whole format:</p>
+  <div class="callout green">
+    <div class="ct">The oracle is the substrate</div>
+    <p style="margin:0">A SIR artifact is self-contained: the spec <em>plus a frozen, held-out oracle</em> whose expected values were stamped by executing the original. The prose is an unverified prior — useful, optional, never load-bearing. Expected values are <strong>differential</strong> (run the original), never hand-authored. And a unit is only "verified" when N independent blind re-emissions <em>agree</em> on the full held-out set, with the original deleted. Prose can be wrong; the oracle can't be quietly moved.</p>
+  </div>
+</section>
+<section class="s">
+  <h2>Why language-neutral falls out for free</h2>
+  <p>Because the contract pins <em>behavior</em> and the oracle grades <em>behavior</em>, nothing in it is tied to a language. A trigger — an HTTP route, a CLI command, a cron job — is metadata, not structure; the same body re-emits behind a different trigger. That's why a Next.js route and a Nest controller with the same choreography have the same SIR, and why a JavaScript function and a Rust one can be graded against the same vectors and proven identical. <strong>The source text is fungible. The executable behavior is fundamental.</strong> The whole week is downstream of that one sentence.</p>
+</section>
+<section class="s">
+  <h2>The format is versioned, evidence-cited, and open</h2>
+  <p>SIR is at <strong>v0.4</strong>, and every addition since the v0.1 freeze cites the specimen that forced it — nothing is resolved from taste. <code>KIND STATE</code> earned its place when a vacuous differential let a do-nothing mutator score 200/200. Carried-data attestation earned its place when a reconstruction transcribed the wrong subset of a 660-entry table. Effect seams, fidelity variants, the concurrency layer — each has a name and a story. Changes are versioned, never silent; a shipped bundle records the spec version it targets, and the verifier checks it.</p>
+  <p>The normative spec lives at <a href="https://github.com/rederive/sir-spec">github.com/rederive/sir-spec</a> — Apache-2.0, with a <a href="/spec.html">narrative introduction</a> and worked examples. We would like nothing more than for the format to outgrow us: registry-native contracts, other implementations, a standard. The best outcome for a trust format is that it stops being ours.</p>
+</section>
+<section class="s">
+  <h2>That's the week</h2>
+  <p>Five days, one idea from five sides. Vibe is uncertainty; remove the freedom and it disappears. Your tests agree with your code; an oracle constrains it instead. Run the original to modernize the code you fear. Source truth from properties and named leaves when there is no original. And underneath all of it, a contract that makes behavior portable and the oracle — not the author — the judge.</p>
+  <p>rederive is open source and live. Start here:</p>
+<pre><span class="dim">$</span> npm i -g rederive
+<span class="dim">$</span> rdv check &lt;a verified package&gt;      <span class="ok">→ deterministic, offline, no LLM</span>
+<span class="dim">$</span> npx rederive audit                  <span class="dim"># what your dependency tree really pulls in</span></pre>
+  <div class="next"><div class="nt">The whole series</div><p style="margin:0">Prologue: <a href="/blog/vibeless-coding.html">Vibe coding, minus the vibes</a> · Mon: <a href="/blog/reveal.html">rederive is live</a> · Tue: <a href="/blog/tests-would-they-notice.html">Would your tests notice?</a> · Wed: <a href="/blog/brownfield.html">Brownfield</a> · Thu: <a href="/blog/greenfield.html">Greenfield</a> · Fri: this post.</p></div>
+</section>
+<div class="sig"><p><strong>Lane Thompson</strong> — Founder, rederive · <a href="https://github.com/rederive">GitHub</a> · <a href="https://rederive.ai">rederive.ai</a></p></div>
+</main>
+<footer><div class="footer-inner">
+  <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+  <div class="footer-links"><a href="/index.html">Home</a><a href="/blog.html">Blog</a><a href="/spec.html">SIR Spec</a><a href="https://github.com/rederive">GitHub</a></div>
+  <span>&copy; 2026 Apilify Inc. &middot; Apache-2.0</span>
+</div></footer>
+</body>
+</html>

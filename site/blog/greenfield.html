@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/blog/greenfield.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:title" content="Verifying code that has no reference">
+<meta property="og:description" content="When there is no original to execute, where does the oracle come from? Property oracles, decompose-to-named-leaves as oracle-sourcing, and frozen human rulings for genuine judgment calls.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Verifying code that has no reference">
+<meta name="twitter:description" content="When there is no original to execute, where does the oracle come from? Property oracles, decompose-to-named-leaves as oracle-sourcing, and frozen human rulings for genuine judgment calls.">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>Verifying code that has no reference — rederive</title>
+<meta name="description" content="When there is no original to execute, where does the oracle come from? Property oracles, decompose-to-named-leaves as oracle-sourcing, and frozen human rulings for genuine judgment calls.">
+<link rel="canonical" href="https://rederive.ai/blog/greenfield.html">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(212,149,106,0.08) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+
+pre{background:#10131c;border:1px solid #282c38;border-radius:8px;padding:1.1em 1.3em;margin:1.2em 0;overflow-x:auto;font-size:0.85em;line-height:1.55;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;color:#e0e0e0}
+pre .ok{color:#28c840}pre .bad{color:#ff7a72}pre .dim{color:#6a6f7e}pre .kw{color:#d4956a}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+.next{background:#10131c;border:1px solid #282c38;border-radius:10px;padding:1.3em 1.5em;margin-top:2.4em}
+.next .nt{font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6a6f7e;margin-bottom:0.4em}
+.next a{font-weight:600}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}.doc-hero h1{font-size:1.9em}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"Verifying code that has no reference","description":"When there is no original to execute, where does the oracle come from? Property oracles, decompose-to-named-leaves as oracle-sourcing, and frozen human rulings for genuine judgment calls.","url":"https://rederive.ai/blog/greenfield.html","datePublished":"2026-07-09","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"}}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="/index.html#get-started">Get started</a>
+  <a class="nl" href="/spec.html">SIR Spec</a>
+  <a class="nl active" href="/blog.html">Blog</a>
+  <a class="nl" href="/promise.html">Promise</a>
+  <a class="cta-nav" href="https://github.com/rederive">GitHub</a>
+</nav>
+</div>
+<header class="doc-hero"><div class="doc-hero-inner">
+  <div class="eyebrow">Launch week · 4 of 5</div>
+  <h1>Verifying code<br>that has no reference</h1>
+  <p>Brownfield had it easy: the original existed, so you could run it. Greenfield is the hard case — brand-new code, nothing to compare against. So where does truth come from?</p>
+  <div class="vbadge">Lane Thompson · 2026-07-09 · 7 min</div>
+</div></header>
+<main id="main" class="wrap">
+
+<section class="s">
+  <p class="lead">Everything so far leaned on a comfortable fact: there was an original. A package to re-derive, a legacy module to run. The oracle came from <em>executing something that already worked</em>. Pull that away — you're writing code that has never existed — and the obvious question is whether any of this still applies. If there's nothing to compare against, what does "verified" even mean?</p>
+  <p>It still applies. You just have to be honest about where truth comes from — and it turns out there are only a few places it can come from.</p>
+</section>
+<section class="s">
+  <h2>Truth source #1: properties</h2>
+  <p>Most code that has no reference still has <em>invariants</em> — statements that must hold for every input, even though you can't enumerate the outputs. You don't need to know what <code>serialize(x)</code> returns to know that <code>parse(serialize(x))</code> must equal <code>x</code>. That's a <strong>property oracle</strong>, and the classic families cover a startling amount of real code:</p>
+  <ul class="plain" style="margin:0.4em 0 1em 0;padding:0;list-style:none">
+    <li style="position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8"><span style="position:absolute;left:0;color:#6a6f7e">—</span> <strong>Round-trip</strong> — <code>decode(encode(x)) == x</code>. Serializers, codecs, compressors.</li>
+    <li style="position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8"><span style="position:absolute;left:0;color:#6a6f7e">—</span> <strong>Idempotence</strong> — <code>f(f(x)) == f(x)</code>. Normalizers, sanitizers, formatters.</li>
+    <li style="position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8"><span style="position:absolute;left:0;color:#6a6f7e">—</span> <strong>Invariance</strong> — sorting preserves the multiset; a transform preserves a checksum; a rebalance preserves the total. Conservation laws.</li>
+    <li style="position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8"><span style="position:absolute;left:0;color:#6a6f7e">—</span> <strong>Oracle-by-agreement</strong> — a slow, obviously-correct reference matches a fast, clever implementation on random inputs. The tortoise checks the hare.</li>
+  </ul>
+  <p>Generate thousands of inputs, assert the property on each. This verifies <em>correctness-of-contract</em> rather than identity to a reference — a different, weaker, but completely real guarantee, and often exactly the one you want for new code.</p>
+</section>
+<section class="s">
+  <h2>Truth source #2: named sub-problems</h2>
+  <p>Here's the move that does the heavy lifting. Most "novel" code isn't novel all the way down. A brand-new feature decomposes into pieces, and the pieces have <em>names</em> — names that appear in algorithm literature, RFCs, or standard library APIs. <code>gcd</code>. <code>levenshtein</code>. <code>sha256_pad_message</code>. <code>parse_query_string</code>.</p>
+  <div class="callout">
+    <div class="ct">Decomposition IS oracle-sourcing</div>
+    <p style="margin:0">A leaf with a name worth saying has a source of truth outside your codebase — a spec, a published test vector, a reference implementation, a well-defined mathematical property. So the act of decomposing novel code into <em>named</em> leaves is the act of finding oracles for it. The glue between the leaves is verified by properties; the leaves are verified against their names. Novelty concentrates into a thin layer of orchestration, and the rest becomes checkable.</p>
+  </div>
+  <p>This is why decomposition quality matters so much. <code>gcd</code> is a good leaf — it has an oracle. <code>helper_that_does_three_vague_things</code> is a bad leaf — it has none. Decompose until every leaf has a name, and you've turned "verify novel code" into "verify a handful of well-understood pieces plus their wiring."</p>
+</section>
+<section class="s">
+  <h2>Truth source #3: a human, once</h2>
+  <p>Some things are genuine judgment calls — a business rule, a product decision, a "this is what we mean by valid." No property or reference settles them; a person has to. The discipline is to capture that ruling <strong>once</strong>, as a frozen vector, at the moment the human decides — and then never let a model re-litigate it. The human is the oracle for exactly the irreducible decisions, and their ruling is held out like any other. What you must never do is let the code's author also be the judge of whether the code is right; that's the rubber stamp the whole system exists to prevent.</p>
+</section>
+<section class="s">
+  <h2>The honest ranking</h2>
+  <p>These aren't equal. Identity to a running original (brownfield) is the strongest. A published spec or reference is next. A property is real but partial — it constrains behavior without pinning it. A frozen human ruling is only as good as the human. The skill isn't pretending new code is as verifiable as old code; it's <strong>knowing which truth source you're standing on, and saying so.</strong> A verification that quietly downgrades from "matches the reference" to "seems plausible" is worse than none, because it lies about its own strength.</p>
+  <p>rederive makes you name the source. That's the point.</p>
+  <div class="next"><div class="nt">Tomorrow · Launch week 5 of 5</div><p style="margin:0"><strong>The contract underneath it all.</strong> — every day this week rested on one artifact: a language-neutral behavioral contract that let a JavaScript function be re-derived in Rust and proven identical. The SIR spec, in the open.</p></div>
+</section>
+<div class="sig"><p><strong>Lane Thompson</strong> — Founder, rederive · <a href="https://github.com/rederive">GitHub</a> · <a href="https://rederive.ai">rederive.ai</a></p></div>
+</main>
+<footer><div class="footer-inner">
+  <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+  <div class="footer-links"><a href="/index.html">Home</a><a href="/blog.html">Blog</a><a href="/spec.html">SIR Spec</a><a href="https://github.com/rederive">GitHub</a></div>
+  <span>&copy; 2026 Apilify Inc. &middot; Apache-2.0</span>
+</div></footer>
+</body>
+</html>

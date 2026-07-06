@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/blog/tests-would-they-notice.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:title" content="Your tests pass. Would they notice if the code was wrong?">
+<meta property="og:description" content="97% line coverage, a green suite, millions of weekly downloads — and a real bug none of it could see. Coverage measures what runs; mutation testing measures what your tests would catch.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Your tests pass. Would they notice if the code was wrong?">
+<meta name="twitter:description" content="97% line coverage, a green suite, millions of weekly downloads — and a real bug none of it could see. Coverage measures what runs; mutation testing measures what your tests would catch.">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>Your tests pass. Would they notice if the code was wrong? — rederive</title>
+<meta name="description" content="97% line coverage, a green suite, millions of weekly downloads — and a real bug none of it could see. Coverage measures what runs; mutation testing measures what your tests would catch.">
+<link rel="canonical" href="https://rederive.ai/blog/tests-would-they-notice.html">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(212,149,106,0.08) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#d4956a;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+
+pre{background:#10131c;border:1px solid #282c38;border-radius:8px;padding:1.1em 1.3em;margin:1.2em 0;overflow-x:auto;font-size:0.85em;line-height:1.55;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;color:#e0e0e0}
+pre .ok{color:#28c840}pre .bad{color:#ff7a72}pre .dim{color:#6a6f7e}pre .kw{color:#d4956a}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+.next{background:#10131c;border:1px solid #282c38;border-radius:10px;padding:1.3em 1.5em;margin-top:2.4em}
+.next .nt{font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6a6f7e;margin-bottom:0.4em}
+.next a{font-weight:600}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}.doc-hero h1{font-size:1.9em}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+</style>
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"Your tests pass. Would they notice if the code was wrong?","description":"97% line coverage, a green suite, millions of weekly downloads — and a real bug none of it could see. Coverage measures what runs; mutation testing measures what your tests would catch.","url":"https://rederive.ai/blog/tests-would-they-notice.html","datePublished":"2026-07-07","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"}}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a class="nl" href="/index.html#get-started">Get started</a>
+  <a class="nl" href="/spec.html">SIR Spec</a>
+  <a class="nl active" href="/blog.html">Blog</a>
+  <a class="nl" href="/promise.html">Promise</a>
+  <a class="cta-nav" href="https://github.com/rederive">GitHub</a>
+</nav>
+</div>
+<header class="doc-hero"><div class="doc-hero-inner">
+  <div class="eyebrow">Launch week · 2 of 5</div>
+  <h1>Your tests pass.<br>Would they notice if the code was wrong?</h1>
+  <p>Monday I showed you what rederive is. Today, the part that surprised me most while building it: your green test suite is hiding uncertainty from you — and there is a number that proves it.</p>
+  <div class="vbadge">Lane Thompson · 2026-07-07 · 6 min</div>
+</div></header>
+<main id="main" class="wrap">
+
+<section class="s">
+  <p class="lead">Here is an uncomfortable exercise. Take your best-tested module — the one with the coverage badge you're proud of — and ask a different question than "do the tests pass." Ask: <em>if someone changed the code to be subtly wrong, would a single test turn red?</em></p>
+  <p>Coverage can't answer that. Coverage measures which lines <strong>ran</strong>. It says nothing about whether your assertions would <strong>notice</strong> if those lines misbehaved. A test that calls a function and checks nothing meaningful executes every line and catches nothing. The badge still says 97%.</p>
+</section>
+<section class="s">
+  <h2>A worked example, from a package you probably ship</h2>
+  <p>We ran this on <code>color-string</code> — the CSS-color parser under the whole <code>color</code> ecosystem, millions of weekly downloads. Its suite is genuinely good by the usual standard: <strong>97.4% line coverage, 195 assertions, all green.</strong></p>
+  <p>Then we ran <em>mutation testing</em> against it. A mutation tester makes thousands of small, deliberate breaks in the code — flip a <code>&lt;</code> to <code>&lt;=</code>, delete a branch, swap <code>+</code> for <code>-</code> — and for each one, re-runs your suite. If your tests still pass with the code broken, that mutant <strong>survived</strong>: proof your suite can't tell that version of the code from the real one.</p>
+  <div class="callout red">
+    <div class="ct">The gap coverage hides</div>
+    <p style="margin:0">color-string: <strong>97.4% line coverage</strong> → but only an <strong>87.2% mutation score</strong>. Sixty-two distinct changes to the code that the entire test suite would wave straight through. Every one is a place the tests <em>run</em> the code but don't actually <em>check</em> it.</p>
+  </div>
+</section>
+<section class="s">
+  <h2>One of those gaps was a real bug</h2>
+  <p>Chasing the survivors, we captured what the code actually does across the input range — and found a value that was simply wrong. <code>color-string</code> converts percentage channels with <code>Math.round(p * 2.55)</code>. But <code>2.55</code> has no exact representation in floating point (it's <code>2.5499999999999998…</code>), so the product lands just below the half-integer:</p>
+<pre>color('rgb(50%, 50%, 50%)').rgb()   <span class="bad">→ [127, 127, 127]</span>   <span class="dim"># should be 128</span>
+color('rgb(90%, 90%, 90%)').rgb()   <span class="bad">→ [229, …]</span>          <span class="dim"># should be 230</span></pre>
+  <p>Nobody's tests had ever noticed — in fact the suite <em>pinned</em> the wrong value in nine assertions. The bug had been golden-mastered. The one-line fix (<code>* 255 / 100</code>, which is exact) is now <a href="https://github.com/Qix-/color-string/pull/92">filed upstream as PR #92</a>, with the exact-arithmetic proof that exactly two integer percents change and nothing else.</p>
+</section>
+<section class="s">
+  <h2>The fix isn't "write more tests." It's a better grader.</h2>
+  <p>You can chase mutation survivors by hand forever. What actually closes the gap is changing where "correct" comes from. The tests in a repo are written by the same person who wrote the code, checked into the same commit, editable in the same breath — so they encode the author's <em>beliefs</em> about the code, including the wrong ones.</p>
+  <p>rederive replaces that with an <strong>oracle</strong>: input→output cases stamped by <em>executing</em> the real code, held out from whoever re-implements it, and mutation-hardened until a measured score says the held-out set actually kills the plausible wrong versions. Expected values are never hand-authored — so they can't inherit the author's blind spot. That's the difference between a suite that agrees with the code and a suite that <em>independently constrains</em> it.</p>
+  <div class="callout green">
+    <div class="ct">Steal this today</div>
+    <p style="margin:0">Run a mutation tester once against your most-trusted module — <code>Stryker</code> (JS/.NET), <code>mutmut</code> or <code>cosmic-ray</code> (Python), <code>PIT</code> (Java). The score it returns — not your coverage number — is how much your green checks are actually worth. It will change how you read every dashboard after.</p>
+  </div>
+</section>
+<section class="s">
+  <p>Coverage tells you the code ran. Mutation score tells you your tests would notice if it broke. Only one of those is a safety property — and for the code you didn't write, that gap is exactly where a supply-chain attack lives.</p>
+  <p>rederive is open source and live: <code>npm i -g rederive</code>, then <code>rdv check</code> any verified package.</p>
+  <div class="next"><div class="nt">Tomorrow · Launch week 3 of 5</div><p style="margin:0"><strong>Modernize legacy code without changing what it does.</strong> — you have a 2,000-line module, no tests, and nobody left who understands it. Keep the original running as the oracle, refactor into clean units, and prove the behavior is unchanged.</p></div>
+</section>
+<div class="sig"><p><strong>Lane Thompson</strong> — Founder, rederive · <a href="https://github.com/rederive">GitHub</a> · <a href="https://rederive.ai">rederive.ai</a></p></div>
+</main>
+<footer><div class="footer-inner">
+  <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+  <div class="footer-links"><a href="/index.html">Home</a><a href="/blog.html">Blog</a><a href="/spec.html">SIR Spec</a><a href="https://github.com/rederive">GitHub</a></div>
+  <span>&copy; 2026 Apilify Inc. &middot; Apache-2.0</span>
+</div></footer>
+</body>
+</html>
