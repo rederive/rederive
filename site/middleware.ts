@@ -2,7 +2,10 @@
 // beacon to our own counter (Lambda + DynamoDB — no analytics vendor). Non-blocking: the response is never
 // delayed or altered. No-ops safely if the env vars are absent. UA classification happens server-side in the
 // counter; we ship only path + UA string.
-export const config = { matcher: ['/prompt.md', '/llms.txt'] };
+// Agent-facing docs (/prompt.md, /llms.txt) PLUS content pages (homepage, blog index, blog posts, spec, promise)
+// so launch-week reads are visible, not just downstream actions. Classification (browser vs bot vs agent) and
+// country happen server-side in the counter; static assets don't match these specific patterns.
+export const config = { matcher: ['/', '/prompt.md', '/llms.txt', '/blog.html', '/blog/:path*', '/spec.html', '/promise.html'] };
 
 export default function middleware(request: Request, context: { waitUntil(p: Promise<unknown>): void }) {
   const url = process.env.METRICS_URL;
