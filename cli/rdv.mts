@@ -30,7 +30,11 @@ const saveManifest = (dir: string, m: any) => writeFileSync(resolve(dir, 'sir.ma
 // SIR Schema version this rdv understands. A package stamps `manifest.specVersion`; a trust-nothing consumer
 // must NOT verify against a contract format it doesn't fully understand, so a NEWER spec halts (upgrade rdv).
 // Absent specVersion = pre-0.2 (v0.1) bundle — verifies normally (back-compat for the existing catalog).
-const SUPPORTED_SPEC = '0.2';
+// v0.3 (carried-data authority, TRACE-SEAM/ORACLE-CLASS, ENVELOPE, export-shape SEAMs — SIR_SCHEMA §§15–18)
+// is fully implemented here, so it is supported. v0.4 (concurrency: PAR/RING/virtual-time, §§19–22) has NO
+// verifier code yet → a v0.4 bundle MUST still halt. Do NOT raise this to 0.4 until a concurrency verifier
+// exists — the version must track what rdv can actually check, not what the schema has published.
+const SUPPORTED_SPEC = '0.3';
 const cmpVer = (a: string, b: string) => {
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return Math.sign(d); }
