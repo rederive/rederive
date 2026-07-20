@@ -72,6 +72,13 @@
   .copy:hover{color:var(--text);border-color:#39415a}
   .copy.done{color:var(--accent);border-color:var(--accent)}
 
+  .tryit{border:1px solid var(--accent);border-radius:10px;margin:1.6em 0;overflow:hidden;background:rgba(212,149,106,0.04)}
+  .tryit .thead{display:flex;align-items:center;gap:8px;padding:11px 16px;background:rgba(212,149,106,0.12);
+    color:var(--accent);font-weight:700;font-size:0.9em;letter-spacing:0.01em}
+  .tryit .tsub{color:var(--dim);font-weight:400;font-size:0.92em}
+  .tryit pre{margin:0;border:none;border-radius:0;background:transparent;font-family:inherit;font-size:0.92em;
+    line-height:1.65;white-space:pre-wrap;word-wrap:break-word;color:var(--text)}
+  .tryit pre code{white-space:pre-wrap}
   .aha{background:linear-gradient(90deg,rgba(212,149,106,0.10),rgba(212,149,106,0.02));border-left:3px solid var(--accent);
     border-radius:0 10px 10px 0;padding:14px 18px;margin:1.6em 0}
   .aha b{color:var(--accent)}
@@ -222,6 +229,38 @@
 
     <span class="chapnum" id="ch1">Chapter 1</span>
     <h2>The invoice generator</h2>
+
+    <p>Want to run this yourself while you read? Paste the prompt below into your coding agent (Claude Code,
+    Cursor, or similar). It kicks off the exact build this chapter walks through — then read on to see what each
+    step means.</p>
+
+    <div class="tryit">
+      <div class="thead">▶ Follow along <span class="tsub">— paste into your coding agent</span></div>
+      <pre><code>Set up rederive, then build a small invoice generator with me,
+leaf by leaf, as verified ZERO-dependency units.
+
+If you're Claude Code, install the toolkit first:
+  /plugin marketplace add rederive/sir-toolkit
+  /plugin install sir@sir-toolkit
+(Other agents: the docs are at rederive.ai and
+github.com/rederive/sir-toolkit.)
+
+The app takes line items (description, quantity, unit price),
+a currency, and a tax rate, and returns a formatted invoice
+total.
+
+Break it into named jobs — round money, format currency,
+format the date. For each job: find the packages people
+normally reach for, run them all on the same inputs, and where
+they DISAGREE on a real choice (how to round a half-cent, how
+to format money for different currencies), STOP and ask me to
+decide — never guess. Where they agree, that's the contract.
+
+Prove each job with a quorum of independent blind rebuilds,
+checked on held-out inputs the rebuilds never saw. Ship no npm
+packages. When it's done, show me the verification (quorum +
+held-out count) and the list of decisions I made.</code></pre>
+    </div>
 
     <h3 id="bug">The bug you'd ship</h3>
     <p>Say you're building an app that makes invoices. You add up the line items and show a total, like
