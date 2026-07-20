@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A human's guide to rederive</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="canonical" href="https://rederive.ai/guide.html">
+<meta name="description" content="A plain-language guide to rederive and SIR — how it re-derives your dependencies, what the process asks you, and why. Written for humans, with real examples.">
+<meta property="og:title" content="A human's guide to rederive">
+<meta property="og:description" content="What rederive asks you, and why — in plain words, with real examples.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#0a0c12; --panel:#12141c; --code:#1a1d28; --line:#232838;
+    --text:#d7dbe4; --dim:#9aa3b5; --head:#f2f4f8; --accent:#d4956a; --ok:#28c840; --amber:#f2b45e;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);line-height:1.7;
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:17px;-webkit-font-smoothing:antialiased}
+  code{background:var(--code);padding:2px 6px;border-radius:4px;font-size:0.86em;color:#e8e8e8;
+    font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:20}
+  .topnav{max-width:1180px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;flex-wrap:wrap;gap:1.4em;font-size:0.92em}
+  .topnav a{white-space:nowrap;color:#b0b0b0;transition:color 0.15s}
+  .topnav a:hover{color:#fafafa;text-decoration:none}
+  .topnav a.current{color:#fafafa}
+  .topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+  .topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+  .topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+  .topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+  .topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+  .topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+  .topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600;transition:background 0.15s}
+  .topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:flex;gap:48px;align-items:flex-start}
+  .toc{position:sticky;top:78px;width:250px;flex:none;padding:34px 0;font-size:0.9em;max-height:calc(100vh - 78px);overflow:auto}
+  .toc .lbl{color:var(--dim);text-transform:uppercase;letter-spacing:0.12em;font-size:0.72em;margin:0 0 12px}
+  .toc ol{list-style:none;margin:0;padding:0}
+  .toc li{margin:0 0 3px}
+  .toc a{color:var(--text);display:block;padding:5px 10px;border-radius:6px;border-left:2px solid transparent}
+  .toc a:hover{background:var(--panel);text-decoration:none}
+  .toc .sub a{padding-left:22px;color:var(--dim);font-size:0.94em}
+  .toc .soon{color:#5a6072;padding:5px 10px;font-size:0.96em}
+  .toc .soon span{font-size:0.8em;color:#464c5e}
+
+  main{flex:1;min-width:0;padding:34px 0 120px;max-width:720px}
+  .lede{font-size:1.05em;color:var(--dim)}
+  h1{font-size:2.1em;line-height:1.15;color:var(--head);margin:0.2em 0 0.1em;letter-spacing:-0.02em}
+  .sub{color:var(--dim);font-size:1.05em;margin:0 0 2.2em}
+  h2{font-size:1.5em;color:var(--head);margin:2.4em 0 0.2em;letter-spacing:-0.01em;padding-top:0.4em}
+  h3{font-size:1.12em;color:var(--head);margin:1.8em 0 0.3em}
+  .chapnum{color:var(--accent);font-size:0.7em;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;display:block;margin-bottom:2px}
+  p{margin:0.9em 0}
+  hr{border:none;border-top:1px solid var(--line);margin:2.6em 0}
+
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;
+    position:relative;font-size:0.84em;line-height:1.55;margin:1.2em 0}
+  pre code{background:none;padding:0;color:#e6e9f0;font-size:1em}
+  pre .cmt{color:#6b7385}
+  pre .out{color:var(--ok)}
+  pre .bad{color:#ef7a7a}
+  .copy{position:absolute;top:8px;right:8px;background:var(--code);color:var(--dim);border:1px solid var(--line);
+    border-radius:6px;font-size:0.74em;padding:3px 9px;cursor:pointer;font-family:inherit}
+  .copy:hover{color:var(--text);border-color:#39415a}
+  .copy.done{color:var(--accent);border-color:var(--accent)}
+
+  .aha{background:linear-gradient(90deg,rgba(212,149,106,0.10),rgba(212,149,106,0.02));border-left:3px solid var(--accent);
+    border-radius:0 10px 10px 0;padding:14px 18px;margin:1.6em 0}
+  .aha b{color:var(--accent)}
+  .tag{display:inline-block;font-size:0.72em;font-weight:700;letter-spacing:0.06em;color:#0a0c12;background:var(--ok);
+    border-radius:5px;padding:1px 7px;vertical-align:middle}
+  .q{border:1px solid var(--line);border-radius:10px;padding:2px 18px;margin:1.2em 0;background:var(--panel)}
+  .q p:first-child{color:var(--amber);font-weight:600}
+  table.forks{width:100%;border-collapse:collapse;margin:1.2em 0;font-size:0.9em}
+  table.forks th,table.forks td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.forks th{color:var(--dim);font-weight:600;font-size:0.86em}
+  table.forks code{white-space:nowrap}
+  /* collapsible contents — mobile only */
+  .mtoc{display:none;margin:0 0 2.2em;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:0.94em}
+  .mtoc summary{cursor:pointer;padding:12px 16px;color:var(--head);font-weight:600;list-style:none;letter-spacing:0.02em}
+  .mtoc summary::-webkit-details-marker{display:none}
+  .mtoc summary::after{content:"▾";float:right;color:var(--dim)}
+  .mtoc[open] summary::after{content:"▴"}
+  .mtoc ol{list-style:none;margin:0;padding:0 8px 10px}
+  .mtoc a{display:block;padding:6px 10px;border-radius:6px;color:var(--text)}
+  .mtoc a:hover{background:var(--code);text-decoration:none}
+
+  @media(max-width:900px){
+    .toc{display:none}
+    .wrap{padding:0 18px}
+    main{padding-top:22px;max-width:100%;width:100%}
+    body{font-size:16px}
+    .mtoc{display:block}
+    h1{font-size:1.7em}
+    h2{font-size:1.3em}
+    pre{font-size:0.78em}
+    table.forks{font-size:0.82em}
+    .topnav{gap:1.1em;padding:0.8em 18px}
+  }
+  @media(max-width:420px){
+    .wrap{padding:0 14px}
+    h1{font-size:1.5em}
+    .lede{font-size:1em}
+    table.forks th,table.forks td{padding:6px 6px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topnav-wrap"><nav class="topnav">
+  <a href="/" class="logo">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive <span class="by">· from Semcom</span>
+  </a>
+  <a href="/#get-started">Get started</a>
+  <a href="/#how">How it works</a>
+  <a href="spec.html">SIR Spec</a>
+  <a href="guide.html" class="current">Guide</a>
+  <a href="blog.html">Blog</a>
+  <a href="promise.html">Promise</a>
+  <a href="https://github.com/rederive">GitHub</a>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+</nav></div>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <p class="lbl">A human's guide</p>
+    <ol>
+      <li><a href="#start">Start here</a></li>
+      <li><a href="#ch1">1 · The invoice generator</a></li>
+      <ol class="sub">
+        <li><a href="#bug">The bug you'd ship</a></li>
+        <li><a href="#break">How rederive looks at it</a></li>
+        <li><a href="#ask">The questions it asks you</a></li>
+        <li><a href="#light">The surprise</a></li>
+        <li><a href="#proof">How it proves the code</a></li>
+        <li><a href="#end">What you're left with</a></li>
+      </ol>
+      <li><a href="#ch2">2 · Get one package out</a></li>
+      <li><a href="#ch3">3 · The bug you'd introduce</a></li>
+      <li><a href="#ch4">4 · The whole tree, and the finish line</a></li>
+      <li><a href="#ch5">5 · No tests? Preflight first</a></li>
+      <li><a href="#ch6">6 · When to quarantine</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <span class="chapnum" id="start">Start here</span>
+    <h1>A human's guide to rederive</h1>
+    <p class="sub">What it asks you, and why — in plain words.</p>
+
+    <details class="mtoc">
+      <summary>Contents</summary>
+      <ol>
+        <li><a href="#start">Start here</a></li>
+        <li><a href="#ch1">1 · The invoice generator</a></li>
+        <li><a href="#ch2">2 · Get one package out</a></li>
+        <li><a href="#ch3">3 · The bug you'd introduce</a></li>
+        <li><a href="#ch4">4 · The whole tree, and the finish line</a></li>
+        <li><a href="#ch5">5 · No tests? Preflight first</a></li>
+        <li><a href="#ch6">6 · When to quarantine</a></li>
+      </ol>
+    </details>
+
+    <p class="lede">Welcome to rederive and SIR. My name is Lane; I'm the creator. This is not a labor of love
+    or a "fun" project. This, to me, is a necessity. In a world of Shai-Hulud worms, mile-a-minute AI slop, and
+    developers who blindly trust LLM output, I needed a tool to fight the onslaught. rederive is that tool.
+    SIR is the vehicle.</p>
+
+    <p>The origin is interesting. It came from a theoretical exercise that turned into something much more:
+    <a href="https://semcom.ai" target="_blank" rel="noopener noreferrer">semcom</a>, a tool that goes from semantic input to LLVM IR &mdash; the low-level code a machine actually runs
+    &mdash; and then straight to a binary. The high-level concept is that the only purpose of a programming
+    language is to convert human intent into byte code. In a world of agentic coding, I theorized that the
+    programming language is an unnecessary abstraction.</p>
+
+    <p>In that process, a very real problem showed up: I can't read LLVM IR. It's virtually impossible to intuit
+    what the IR does. I'm certain people smarter than me can do it &mdash; but not over a large project. So the
+    question became: how do I <i>know</i> that my LLVM IR is correct? The answer came from the world of ML. When
+    a model is trained, it learns from one set of data, and then held-out tests &mdash; examples kept hidden
+    from it &mdash; verify the output.</p>
+
+    <p>The insight that created SIR and rederive is that LLM-based coding should follow the same process. The
+    difference is that correctness can be checked by passing the same set of unit tests. In LLVM, it's an
+    input&nbsp;&rarr;&nbsp;output system. In a higher-level language, it's an <code>expect</code> &mdash; a
+    check that says what the answer should be.</p>
+
+    <p>You can think of everything here as test-driven development on steroids. The fundamentals come from
+    classic engineering. Sharp eyes will notice concepts cribbed from compiler design, Forth, Smalltalk, and
+    machine learning. We stand on the shoulders of giants!</p>
+
+    <p style="color:var(--dim);margin-top:1.4em">&mdash; Lane, creator of rederive</p>
+
+    <hr>
+
+    <p>Now, one thing to carry into the examples. rederive is built for AI coding agents; most of the time your
+    agent runs it and you never see it work. But now and then it stops and asks you a question. When it does, it
+    is not asking what you would <i>like</i> &mdash; rederive never guesses. A question means it hit a real
+    choice it cannot make for you, and it needs one thing:</p>
+
+    <div class="aha"><b>What is the source of truth here?</b> Every question rederive asks is that same
+    question, wearing a different coat. Once you see that, the questions stop being confusing.</div>
+
+    <p>And one word you'll meet everywhere: everything rederive writes down about what a piece of code does
+    &mdash; its exact inputs, outputs, and quirks &mdash; is called a <b>SIR</b>. The letters stand for
+    &ldquo;Semantic Intermediate Representation,&rdquo; but the plain meaning is the one you already have:
+    <b>the contract &mdash; the exact list of what the code does, not how it's written.</b> When you see
+    &ldquo;SIR&rdquo; anywhere in rederive, this is it. (The Spec page is this same thing, zoomed all the way in.)</p>
+
+    <p>The rest of this guide shows you what all of that feels like, through real examples. Every number and
+    every line of code below is from an actual run.</p>
+
+    <hr>
+
+    <span class="chapnum" id="ch1">Chapter 1</span>
+    <h2>The invoice generator</h2>
+
+    <h3 id="bug">The bug you'd ship</h3>
+    <p>Say you're building an app that makes invoices. You add up the line items and show a total, like
+    <code>$1,204.50</code>. Easy. You write <code>total.toFixed(2)</code> and move on.</p>
+    <p>But that one line is wrong in ways you won't notice until a customer does. Try it yourself:</p>
+
+    <pre><code><span class="cmt"># what you'd expect  →  what toFixed(2) actually gives</span>
+(2.675).toFixed(2)    <span class="out">"2.68"?</span>  <span class="bad">no → "2.67"</span>
+(10.995).toFixed(2)   <span class="out">"11.00"?</span> <span class="bad">no → "10.99"</span>
+(1.005).toFixed(2)    <span class="out">"1.01"?</span>  <span class="bad">no → "1.00"</span></code></pre>
+
+    <p>Those are real cents, going missing, on real invoices. You didn't write that bug. It came from the way
+    computers store numbers: <code>2.675</code> isn't really <code>2.675</code> inside the machine — it's a
+    hair less, so it rounds down. Almost every money bug starts here.</p>
+
+    <h3 id="break">How rederive looks at it</h3>
+    <p>rederive doesn't treat "invoice app" as one big lump. It breaks it into small, named jobs — each one a
+    thing the world already knows how to do:</p>
+    <ul>
+      <li><b>round money</b> — turn <code>2.675</code> into a clean 2-decimal value</li>
+      <li><b>format money</b> — show it as <code>$1,204.50</code> (or <code>¥1,205</code>, or German
+        <code>1.204,50&nbsp;€</code>)</li>
+      <li><b>format the date</b> — show the invoice date</li>
+      <li><b>number the invoice</b> — <code>INV-0001</code></li>
+    </ul>
+    <p>For each job, rederive finds the packages people normally reach for, and <b>runs them all on the same
+    inputs.</b> Then it watches two things: where the packages <b>agree</b>, and where they <b>disagree</b>.</p>
+    <p>Where they agree, that's just how the job works — no decision to make. Where they disagree, that's a real
+    fork in the road, and picking a branch changes your customer's total. rederive can't pick for you. So it
+    stops and asks. That's the question.</p>
+
+    <h3 id="ask">The questions it asks you</h3>
+    <p>On the invoice app, rounding money alone had two forks. Here's the first one, the way it reaches you:</p>
+
+    <div class="q">
+      <p>When a value lands exactly halfway — like <code>2.345</code> — which way should it round?</p>
+      <p style="color:var(--dim)"><b>half-up:</b> always up → <code>2.35</code> &nbsp;·&nbsp;
+      <b>banker's:</b> to the nearest even → <code>2.34</code></p>
+    </div>
+
+    <p>That doesn't look like a big deal until you're adding thousands of lines. "Always up" quietly tilts every
+    total in one direction; "banker's" (round half to even) cancels out over many rows, which is why finance
+    uses it. This is <b>not</b> a style choice. It's a question about <b>who decides what "correct" means for
+    your money</b> — you, an accounting standard, or whichever package you happened to install.</p>
+
+    <p>The honest answer isn't "whatever, pick one." It's to name a source. On this app the ruling was:
+    banker's rounding, and — the second fork — <b>sum the exact numbers and round once at the end</b>, never
+    round each line and then add. Both were written down as decisions made on purpose:</p>
+
+    <table class="forks">
+      <tr><th>The fork</th><th>The choice</th><th>Why</th></tr>
+      <tr><td>Ties (2.345)</td><td>banker's / half-even</td><td>doesn't drift totals; the finance standard</td></tr>
+      <tr><td>When to round</td><td>once, at the total</td><td>round-per-line and round-once give different totals</td></tr>
+      <tr><td>Bad inputs (NaN, ∞)</td><td>pass through, don't crash</td><td>matches the trusted reference's real behavior</td></tr>
+    </table>
+
+    <h3 id="light">The surprise</h3>
+    <p>Now the part that made us sit up. The next job was <b>format money</b> — show the number with the right
+    symbol, the right separators, the right number of decimals for the currency (US dollars have 2, yen has 0,
+    Bahraini dinar has 3).</p>
+    <p>The popular packages for this — currency.js, numeral, accounting — were each about to add a
+    <b>dependency</b> to your project. And they'd give you formatting that's US-centric and, in places, just
+    wrong (yen with cents, for example).</p>
+    <p>The correct answer was already sitting in your language, free, called <code>Intl</code>. It knows every
+    currency and locale, because it ships with the rules the whole industry agrees on. The entire verified job
+    is one line:</p>
+
+    <pre><code><span class="cmt">// format_currency — the whole thing. Zero packages.</span>
+export default function formatCurrency(amount, code, locale = 'en-US') {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: code }).format(amount);
+}</code></pre>
+
+    <div class="aha"><b>This is the moment it clicks.</b> The right answer was <i>fewer</i> dependencies, not
+    more — and it was <i>more</i> correct at the same time. rederive didn't just remove a package. It showed us
+    the package was never buying us anything. Deleting it <i>was</i> the fix.</div>
+
+    <h3 id="proof">How it proves the code</h3>
+    <p>Removing packages only helps if the replacement is actually right. So here's the part that makes it safe
+    to trust. For each job, rederive:</p>
+    <ol>
+      <li>writes down the correct answers by <b>running a trusted reference</b> — never by hand (for rounding,
+        that reference was decimal.js in banker's mode);</li>
+      <li>hides some of those answers as a secret <b>held-out</b> set;</li>
+      <li>rebuilds the job from scratch <b>three separate times</b>, blind — each rebuild never sees the answer
+        key or the other rebuilds;</li>
+      <li>accepts the code <b>only if all three agree</b>, including on the hidden answers they were never shown.</li>
+    </ol>
+    <p>Three blind rebuilds landing on the same behavior, on inputs none of them saw, is very hard to fake. That's
+    the difference between correct code and a confident guess. Here's what the rounding job scored:</p>
+
+    <pre><code><span class="cmt"># money_round — final result from the real run</span>
+quorum        <span class="out">3 / 3 agree</span>
+checked on    18 shown + <span class="out">19 held-out</span> (never seen during the build)
+anchored to   decimal.js, banker's rounding  <span class="cmt"># the chosen source of truth</span>
+ships         <span class="out">0 dependencies</span></code></pre>
+
+    <p>And <code>format_currency</code> scored the same way: <span class="tag">3 / 3</span> agree, checked on 15
+    held-out cases, zero dependencies — one line of code doing what three packages did worse.</p>
+
+    <h3 id="end">What you're left with</h3>
+    <p>An invoice app that ships <b>no dependencies at all</b>, is provably right on the money math, and comes
+    with a short list of every decision that was made on purpose — banker's rounding, round once, medium date
+    format, and so on. If someone asks six months from now "why does it round this way?", the answer isn't
+    "someone decided." It's written down, with the run that proves it.</p>
+    <p>That's the whole idea, small enough to hold in your hand. The chapters after this one show the other
+    shapes it takes — getting a single package out of an existing project, catching a bug hiding in code you're
+    about to migrate, clearing a whole dependency tree, and knowing when to stop and set something aside instead
+    of pretending it's safe.</p>
+
+    <hr>
+
+    <span class="chapnum" id="ch2">Chapter 2</span>
+    <h2>Get one package out of your tree</h2>
+    <p>In January 2022, the person who maintained <code>colors</code> — a tiny package inside tens of thousands
+    of projects — pushed an update on purpose that printed garbage in an endless loop. Apps broke all over the
+    world overnight. The people running them did nothing wrong. They just trusted a name.</p>
+    <p>That's the deal with every dependency. You're not really trusting the code you read once. You're trusting
+    whoever is allowed to publish the <i>next</i> version, forever.</p>
+    <p>rederive gets you out of that deal, one package at a time. Take <code>colors</code>. It reads the last
+    good version — 1.4.0, the release right before the sabotage — writes down exactly what it does, deletes it,
+    and builds it again from scratch — blind, three times, checked on hidden inputs none of the rebuilds saw.
+    (That written-down description of what the code does is its <b>SIR</b>.)</p>
+    <pre><code><span class="cmt"># colors → the "strip" function, from the real run</span>
+source        colors@1.4.0   <span class="cmt"># last release before the 2022 sabotage</span>
+quorum        <span class="out">3 / 3 agree</span>
+checked on    10 shown + <span class="out">10 held-out</span>
+original      deleted — the rebuild never got to copy it
+ships         <span class="out">0 dependencies</span></code></pre>
+    <p>Now you have a <code>colors</code> that does exactly what the good version did, ships nothing underneath
+    it, and <b>cannot be changed by someone you've never met.</b> You kept the behavior. You ship none of the
+    package. Nobody can sabotage a copy you own and proved yourself.</p>
+
+    <span class="chapnum" id="ch3">Chapter 3</span>
+    <h2>The bug you'd introduce</h2>
+    <p>Sometimes the code you want to replace has a <i>quirk</i> — not a clean bug, but an odd behavior that
+    other code quietly leans on. Rewrite it "the right way" and you break those callers, and you won't find out
+    until a customer does.</p>
+    <p>Here's a real one. <code>slugify</code> turns <code>"Hello World!"</code> into <code>"hello-world"</code>.
+    It has an option called <code>remove</code>. The original decides whether to use your value like this:</p>
+    <pre><code><span class="cmt">// the original slugify — note the || (a "truthiness" check)</span>
+removePattern = options.remove || DEFAULT_PATTERN
+
+<span class="cmt">// the "cleaner" rewrite everyone reaches for — and it's WRONG</span>
+removePattern = options.remove !== undefined ? options.remove : DEFAULT_PATTERN</code></pre>
+    <p>They look the same. They are not. With the original, passing an empty string, or <code>false</code>, or
+    <code>0</code> all fall back to the default. The "cleaner" version treats an empty string as a real value.
+    Somebody's slugs quietly change, and nothing errors out to warn them.</p>
+    <p>rederive never rebuilds from what code <i>should</i> do. It rebuilds from what the code <i>does</i> do,
+    proven by running the original. So it surfaces the real question: <b>is this quirk the spec, or a bug to
+    fix?</b> On slugify, real callers depend on it — so it's kept, on purpose, and written down as a decision.
+    A hand-port guesses at what the author meant. rederive copies what the code does and makes you choose, out
+    loud, which quirks are load-bearing.</p>
+
+    <span class="chapnum" id="ch4">Chapter 4</span>
+    <h2>The whole tree, and the finish line</h2>
+    <p>One package is nice. Your real problem is the <i>tree</i> — a single <code>npm install</code> pulls in a
+    hundred packages you will never read.</p>
+    <p>rederive can clear the whole tree, but it starts with a rule you cannot skip: <b>run your tests first,
+    and write down the number.</b> Say your suite reports "182 passing" — write that down. That number is now the finish line. Nothing is done until it still
+    passes.</p>
+    <p>Take <code>del</code>, a tool for deleting files — fittingly, the one you most want to be sure about. It
+    leans on a small tree: <code>slash</code>, <code>is-path-cwd</code>, <code>is-path-inside</code>,
+    <code>is-glob</code>, <code>micromatch</code>. rederive re-derives each one, leaves first, and drops
+    verified copies into your project:</p>
+    <pre><code><span class="cmt"># del's dependency tree, re-derived — from the real run</span>
+slash          3.0.0 → <span class="out">3/3 agree</span>, checked on 400 held-out inputs
+is-path-cwd    3.0.0 → <span class="out">3/3 agree</span>, checked on 500 held-out inputs
+is-path-inside 4.0.0 → <span class="out">3/3 agree</span>
+...            each one proven, then vendored with its provenance</code></pre>
+    <p>Then it removes those packages from <code>package.json</code>, rewires the imports, and re-runs your
+    tests. Same number in, same number out — or it isn't finished. The baseline isn't bureaucracy. It's the
+    whole promise in one line: <b>your app behaves exactly the same, minus the packages you were trusting on
+    faith.</b></p>
+
+    <span class="chapnum" id="ch5">Chapter 5</span>
+    <h2>No tests? Preflight first</h2>
+    <p>Everything so far needs a source of truth to check against. But what if the code you want to move has no
+    tests, or only tests the happy path? Then "it passed" means nothing — you had nothing real to pass.</p>
+    <p>rederive's answer is <b>Preflight</b>. Before it rebuilds anything, it builds a strong answer key from the
+    real code — and, the part that matters, it <b>measures how strong.</b> It covers every branch, has a picky
+    senior-engineer pass review the edges, then does the honest bit: it breaks the code on purpose.</p>
+    <p>That's called mutation testing. It makes hundreds of slightly-broken copies of the code and checks whether
+    your answer key <i>notices</i>. If a broken copy slips past unnoticed, your key has a hole in exactly that
+    spot.</p>
+    <pre><code><span class="cmt"># preflight on the "cookie" package — real result</span>
+broken copies caught     <span class="out">332</span>
+broken copies missed     13
+strength                 <span class="out">~96%</span>   <span class="cmt"># "no tests" is now a number you can act on</span></code></pre>
+    <p>You don't rebuild on faith. You first turn "I have a bad feeling about these tests" into a score — and if
+    the score is too low to trust, that's a finding, not a failure.</p>
+
+    <span class="chapnum" id="ch6">Chapter 6</span>
+    <h2>When to quarantine</h2>
+    <p>The most useful thing rederive can say is <b>no.</b></p>
+    <p>Some code can't be soundly verified — not because rederive is weak, but because the thing genuinely has no
+    fixed answer to check. Anything driven by randomness, by real-world side effects, or by timing that a
+    function you pass in controls.</p>
+    <p>Take <code>p-map</code>: it runs many async jobs with a limit on how many run at once. Its behavior
+    depends on a function you hand it and on timing. There is no clean "this input gives that output" to freeze.
+    The correct move is to <b>quarantine</b> it — set it aside clearly, and tell you why — instead of pretending.</p>
+    <p>In one of our own runs, an agent <i>didn't</i> do that. It tried to hand-build a checker for p-map, got
+    the concurrency wrong, and left this comment sitting in its own code:</p>
+    <pre><code><span class="bad"># wrong: naive Promise.all —</span></code></pre>
+    <p>That's the failure a quarantine prevents. A quarantine is not rederive giving up. It's rederive telling
+    you exactly where the proven ground ends — so you never mistake a confident guess for a proof. Knowing the
+    edge of what you've verified is the whole point of it.</p>
+
+    <hr>
+    <p>There is a lot here, and I hope it's helpful. SIR is an open spec. I'm always available at
+    <a href="mailto:lane@apilify.com">lane@apilify.com</a> &mdash; and if you have a great idea, pull requests
+    are welcome!</p>
+    <p style="color:var(--dim);margin-top:1.2em">&mdash; Lane</p>
+
+  </main>
+</div>
+
+<script>
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.textContent='copy';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      navigator.clipboard.writeText(t).then(function(){b.textContent='copied';b.classList.add('done');
+        setTimeout(function(){b.textContent='copy';b.classList.remove('done')},1400);});
+    });
+    pre.appendChild(b);
+  });
+</script>
+</body>
+</html>
