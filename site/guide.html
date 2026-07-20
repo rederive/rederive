@@ -401,17 +401,67 @@ is-path-inside 4.0.0 → <span class="out">3/3 agree</span>
     <p>Everything so far needs a source of truth to check against. But what if the code you want to move has no
     tests, or only tests the happy path? Then "it passed" means nothing — you had nothing real to pass.</p>
     <p>rederive's answer is <b>Preflight</b>. Before it rebuilds anything, it builds a strong answer key from the
-    real code — and, the part that matters, it <b>measures how strong.</b> It covers every branch, has a picky
-    senior-engineer pass review the edges, then does the honest bit: it breaks the code on purpose.</p>
-    <p>That's called mutation testing. It makes hundreds of slightly-broken copies of the code and checks whether
-    your answer key <i>notices</i>. If a broken copy slips past unnoticed, your key has a hole in exactly that
-    spot.</p>
-    <pre><code><span class="cmt"># preflight on the "cookie" package — real result</span>
-broken copies caught     <span class="out">332</span>
-broken copies missed     13
-strength                 <span class="out">~96%</span>   <span class="cmt"># "no tests" is now a number you can act on</span></code></pre>
-    <p>You don't rebuild on faith. You first turn "I have a bad feeling about these tests" into a score — and if
-    the score is too low to trust, that's a finding, not a failure.</p>
+    real code — and, the part that matters, it <b>measures how strong the answer key is.</b> Most people never do
+    that second part. That's the whole point of this chapter.</p>
+    <p>We'll follow one real run: <code>cookie</code>, a small, widely-used package that reads and writes browser
+    cookie strings. Every number below is from that run.</p>
+
+    <h3>Where do the questions come from?</h3>
+    <p>If there are no tests, what do you even feed the code? Preflight gets its inputs from two places:</p>
+    <ul>
+      <li><b>The rules the code is supposed to follow.</b> Cookies have an official rulebook (it has a boring
+        name, RFC 6265). Preflight walks that rulebook and makes an input for every case it names — the normal
+        ones and the picky edge ones.</li>
+      <li><b>Pure garbage.</b> On top of the sensible inputs, it throws junk at the code on purpose: emoji, a
+        single dot, a 400-character wall of nonsense, random broken text. Real users send weird things, so the
+        answer key should know what the code does with weird things too.</li>
+    </ul>
+    <p>For each input, it writes down what the <i>real</i> code does — never a hand-guessed answer. That list of
+    input-and-answer pairs is the answer key.</p>
+
+    <h3>Does it hold up under garbage?</h3>
+    <p>The junk inputs aren't just for show. They check a promise that matters: the code should <b>never crash,
+    on any string, ever</b>, and should always be able to read back what it wrote. On <code>cookie</code>, all
+    six of those promises held — no input, however broken, could make it throw or lose data.</p>
+
+    <h3>How strong is the answer key, really?</h3>
+    <p>Now the honest part. A green test run feels good but proves little — the test might run a line without
+    ever checking the result. So Preflight <b>breaks the code on purpose</b> and watches whether the answer key
+    notices. This is called mutation testing: it makes hundreds of slightly-wrong copies of the code — flip a
+    <code>&lt;</code> to <code>&lt;=</code>, swap a <code>+</code> for a <code>-</code> — and re-runs the answer
+    key against each one. Every wrong copy the key <b>catches</b> is a point in its favor. Every wrong copy that
+    <b>slips through unnoticed</b> is a hole, in that exact spot.</p>
+    <pre><code><span class="cmt"># cookie — the mutation run, real numbers</span>
+wrong copies made        361
+caught by the answer key <span class="out">332</span>
+slipped through          13
+score                    <span class="out">96.4%</span>   <span class="cmt"># the pass mark is 90%</span></code></pre>
+
+    <h3>Wait — what about the 13 that slipped through?</h3>
+    <p>This is the question everyone asks, and the answer is the best part. <b>You don't shrug at the 13.</b> You
+    look at every single one. On <code>cookie</code>, each of the 13 turned out to be a wrong copy that
+    <i>can't actually change the answer</i> — like deleting a shortcut when the long way around gives the exact
+    same result. They're changes with no effect. Each one was checked by hand and written down with the reason.</p>
+    <div class="aha"><b>Here's the real finish line.</b> It isn't "96%." It's <b>zero unexplained holes.</b> Every
+    wrong copy is either caught, or shown by hand to be a change that cannot matter. Nothing is left as a shrug.
+    On cookie: <span class="tag">0 unexplained</span></div>
+
+    <h3>And if the score is low?</h3>
+    <p>Sometimes a slipped-through copy is a <i>real</i> hole — a genuine change the answer key missed. That's
+    not a failure, it's a finding, and it has a fix: find the one input that makes the wrong copy behave
+    differently, and add it to the key. On <code>cookie</code>, the first pass scored 95.8% with 15 slipping
+    through; adding two pointed inputs caught two real ones and lifted it to 96.4%. You either catch it or prove
+    it can't matter — there's no third option where you just hope.</p>
+
+    <h3>Isn't this just code coverage?</h3>
+    <p>No, and this is the trap Preflight is built to escape. Code coverage only tells you a line
+    <i>ran</i> during testing. It says nothing about whether anyone <i>checked the result.</i> <code>cookie</code>
+    already had <b>100% coverage</b> — every line, every branch, run — and mutation testing <i>still</i> found
+    real holes. Coverage says "the line ran." Mutation testing says "if that line were wrong, the answer key
+    would catch it." Only the second one is worth trusting.</p>
+    <p>So Preflight turns "I have a bad feeling about these tests" into a number and a short list of checked-off
+    holes. If the number is too low to trust, that's a finding — and you fix it before you build anything on top
+    of it, instead of finding out later from a customer.</p>
 
     <span class="chapnum" id="ch6">Chapter 6</span>
     <h2>When to quarantine</h2>
