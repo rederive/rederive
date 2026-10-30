@@ -1,0 +1,693 @@
+{
+ "mode": "vectors",
+ "unit": "ts_sig_of",
+ "authority": "rederive@7f015c4d1023",
+ "authorityTreeSha256": "9f9cd065fa883f9a9e639cc2475436b6bfb8ae3ba4f077b0e2ca9972335be1d0",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "export default function bytes(value: unknown, options?: unknown): string | number | null"
+   ],
+   "expected": {
+    "exportName": null,
+    "fnType": "(value: unknown, options?: unknown) => string | number | null"
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "export function pick<T>(xs: readonly T[], f: (x: T) => boolean): T | null"
+   ],
+   "expected": {
+    "exportName": "pick",
+    "fnType": "<T>(xs: readonly T[], f: (x: T) => boolean) => T | null"
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "export const x = 1"
+   ],
+   "expected": {
+    "__throw": "SIG is not an exported function declaration: export const x = 1"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "export default function f(a: string)"
+   ],
+   "expected": {
+    "__throw": "SIG declares no return type: export default function f(a: string)"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "export   default\tfunction\t\tf(a: string):\tstring"
+   ],
+   "expected": {
+    "exportName": null,
+    "fnType": "(a: string) => string"
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    " \t export function f(a: string): string \t "
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: string) => string"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    "export function f<T extends (x: number) => void>(a: T): T"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "<T extends (x: number) => void>(a: T) => T"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "export function f<T extends '>'>(a: T, b: \"(\"): T"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "<T extends '>'>(a: T, b: \"(\") => T"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    "export function f(a: \"x;y=z//`\", b: 'it\\'s ) any'): \"never\""
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"x;y=z//`\", b: 'it\\'s ) any') => \"never\""
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    "export function f(): string = impl as never; //"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): string = impl as never; //"
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    "export function f(a: string): string; export const g = 1"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: string): string; export const g = 1"
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "export function f(): any"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function f(): any"
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "export function f(...a: never[]): unknown"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function f(...a: never[]): unknown"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "export function f(a: x.any, b: $never, c: company): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: x.any, b: $never, c: company) => s"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "export function f(a: typeof x): s"
+   ],
+   "expected": {
+    "__throw": "SIG uses typeof / import / infer — a contract type names no value: export function f(a: typeof x): s"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "export function f (a): s"
+   ],
+   "expected": {
+    "__throw": "SIG has no parameter list: export function f (a): s"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    "export function f(a)\n: string"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a)\n: string"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "export function f(): "
+   ],
+   "expected": {
+    "__throw": "SIG declares no return type: export function f(): "
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "export function f(a: \"unterminated): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"unterminated) => s"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "export function f(): { a: number; b: boolean }"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => { a: number; b: boolean }"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "export function f(o: { a: string; b?: number }): void"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(o: { a: string; b?: number }) => void"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "export function f(): { a: number }; s"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): { a: number }; s"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    "export function f(): { a: number }}; s"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): { a: number }}; s"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "export function f(): s } { a; b }"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => s } { a; b }"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "export function f<T>\t (a: T): T"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "<T>(a: T) => T"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "export function f(a: T = 1): string"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: T = 1): string"
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "export function café(): string"
+   ],
+   "expected": {
+    "__throw": "SIG has no parameter list: export function café(): string"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    "export function f(a: string): s t"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: string): s t"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    "export function f(): : x, y"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => : x, y"
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    "export function f(): { a; b"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => { a; b"
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    "export function f(a: \"{\"): s; t"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: \"{\"): s; t"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    "export function f(): { a: \"};\"; b: 1 }"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => { a: \"};\"; b: 1 }"
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    "export function f<T extends { a: 1; b: 2 }>(x: T): T"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "<T extends { a: 1; b: 2 }>(x: T) => T"
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "export function f(): { a: { b: 1; }; c: 2 }"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => { a: { b: 1; }; c: 2 }"
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "export function f(): { a: 1; b = 2 }"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): { a: 1; b = 2 }"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    "export function f(): { a: never; }"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function f(): { a: never; }"
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    "export function f(); : { a; }"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(); : { a; }"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    "export function f(a: { any: string }): s"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function f(a: { any: string }): s"
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "export function f(): ﻿"
+   ],
+   "expected": {
+    "__throw": "SIG declares no return type: export function f(): ﻿"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    "export function f(): import(\"m\").T"
+   ],
+   "expected": {
+    "__throw": "SIG uses typeof / import / infer — a contract type names no value: export function f(): import(\"m\").T"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    "export function f<T>(a: T): T extends Array<infer U> ? U : T"
+   ],
+   "expected": {
+    "__throw": "SIG uses typeof / import / infer — a contract type names no value: export function f<T>(a: T): T extends Array<infer U> ? U : T"
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "export function f(a: x.typeof, b: importer, c: infers, d: $infer, e: Typeof): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: x.typeof, b: importer, c: infers, d: $infer, e: Typeof) => s"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "export function typeof(): s"
+   ],
+   "expected": {
+    "__throw": "SIG uses typeof / import / infer — a contract type names no value: export function typeof(): s"
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "export function f(a: \"x y typeof z\", b: ' '): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"x y typeof z\", b: ' ') => s"
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    "export function f(...a: (string & number)[]): ReturnType<typeof JSON.parse>"
+   ],
+   "expected": {
+    "__throw": "SIG uses typeof / import / infer — a contract type names no value: export function f(...a: (string & number)[]): ReturnType<typeof JSON.parse>"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    "export function f(...a: (string & number)[]): unknown, x: T"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(...a: (string & number)[]) => unknown, x: T"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    "export function f<>(): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "<>() => s"
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "export function f<T>x(): s"
+   ],
+   "expected": {
+    "__throw": "SIG has no parameter list: export function f<T>x(): s"
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "export function f<T>>(a): s"
+   ],
+   "expected": {
+    "__throw": "SIG has no parameter list: export function f<T>>(a): s"
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "export function f<T = number>(a: T): T"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f<T = number>(a: T): T"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "export function f(a: (b: number) => string): (c: d) => e"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: (b: number) => string) => (c: d) => e"
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "export function f(): s ==> t"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): s ==> t"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    "export function f(): a >= b"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): a >= b"
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "export function f(): s /* c */"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): s /* c */"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    "export function f(): `t`"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): `t`"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "export function f(): s "
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): s "
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    "export function f():\u000bstring"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => \u000bstring"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    "export function f():"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => "
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "export function f(a): string"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a) => string"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "export function f(): s. any"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function f(): s. any"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    "export function f(): éany"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function f(): éany"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    "export function f(): anyX | xnever | never_ | any$"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "() => anyX | xnever | never_ | any$"
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    "export function any(): s"
+   ],
+   "expected": {
+    "__throw": "SIG uses any or never, which every artifact satisfies: export function any(): s"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    "export function f(a: \"a\\\"b)\"): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"a\\\"b)\") => s"
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "export function f(a: 'a\"b)'): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: 'a\"b)') => s"
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    "export function f(a: \"a\nb;\"): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"a\nb;\") => s"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "export function f(a: \"a\\\nb;\"): s"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: \"a\\\nb;\"): s"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "export function f(a: \"a\\ b\"): s"
+   ],
+   "expected": {
+    "__throw": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: \"a\\ b\"): s"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    "export function f(a: \"a\\b)\"): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"a\\b)\") => s"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    "export function f(a: \"x\\\"): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"x\\\") => s"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "export function f(a: \"\\\\\", b: \")\"): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"\\\\\", b: \")\") => s"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    "export function f(a: \"x\\\")\"): s"
+   ],
+   "expected": {
+    "exportName": "f",
+    "fnType": "(a: \"x\\\")\") => s"
+   }
+  }
+ ]
+}

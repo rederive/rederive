@@ -1,0 +1,262 @@
+UNIT sortedIndex
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG sortedIndex(array, value) -> number
+# `array`  : the (assumed-sorted) array to inspect. May be null/undefined.
+# `value`  : the value to locate an insertion point for. Any JS value.
+# returns  : an integer index in the range 0 .. array.length (inclusive),
+#            the LEFTMOST index at which `value` could be inserted to keep
+#            `array` sorted. (retHighest is NOT exposed by sortedIndex; it is
+#            permanently falsy here — every "retHighest ? .. : .." below
+#            therefore takes the ELSE branch.)
+
+DEPENDS-ON none
+# Self-contained module, zero runtime dependencies. Internally inlines four
+# private helpers (baseSortedIndex, baseSortedIndexBy, isObjectLike, isSymbol,
+# identity). The blind re-emitter reconstructs them inline; nothing is imported.
+
+# ============================================================================
+# CONSTANTS (exact, from source)
+# ============================================================================
+# MAX_ARRAY_LENGTH      = 4294967295            (0xFFFFFFFF)
+# MAX_ARRAY_INDEX       = MAX_ARRAY_LENGTH - 1  = 4294967294
+# HALF_MAX_ARRAY_LENGTH = MAX_ARRAY_LENGTH >>> 1 = 2147483647
+# symbolTag             = "[object Symbol]"
+# (For ALL in-scope inputs the array length is tiny, so HALF/MAX thresholds
+#  never bite, but they are part of the exact definition — see NODE A.)
+
+# ============================================================================
+# READ-ONLY GUARANTEE
+# ============================================================================
+# sortedIndex performs ONLY reads of `array` (length + indexed element access)
+# and NEVER mutates `array`, `value`, or any global. It is a pure function of
+# its two arguments. (No seam: no clock/RNG/env/io. ORACLE-CLASS deterministic.)
+
+# ============================================================================
+# HELPER: isSymbol(v)            # used in BOTH paths
+# ============================================================================
+#   isObjectLike(v) := (Boolean(v) === true) AND (typeof v === "object")
+#                      # i.e. v is truthy AND typeof v is "object"
+#                      # note: null -> false (typeof null is "object" but !!null is false)
+#   isSymbol(v) := (typeof v === "symbol")
+#                  OR ( isObjectLike(v) AND
+#                       Object.prototype.toString.call(v) === "[object Symbol]" )
+#   # Symbol primitives -> true. Symbol-wrapper objects -> true.
+#   # Everything else (numbers, strings, null, undefined, NaN, bigint,
+#   #   plain objects, arrays) -> false.
+
+# ============================================================================
+# HELPER: identity(v) := v       # the iteratee used by sortedIndex's general path
+# ============================================================================
+# Because the iteratee is identity, `iteratee(value) === value` and
+# `iteratee(array[mid]) === array[mid]`. The general-path pseudo-code below is
+# already written with identity folded in (so `computed` is simply `array[mid]`).
+
+# ============================================================================
+# BEHAVIOR (ordered)
+# ============================================================================
+
+BEHAVIOR
+
+  # --- entry --------------------------------------------------------------
+  # sortedIndex(array, value) := baseSortedIndex(array, value)   # retHighest omitted => undefined (falsy)
+
+  # baseSortedIndex(array, value):
+  #   low  := 0
+  #   high := array ? array.length : 0
+  #     # NOTE the truthiness test on `array`: a null OR undefined array yields
+  #     # high = 0 (the loop never runs) => returns 0. (Verified: f(null,5)=0,
+  #     # f(undefined,5)=0.) An EMPTY array also yields high = 0 => returns 0.
+
+  NODE A  # PATH SELECTION (the single most important branch)
+    # Take the NUMERIC FAST PATH iff ALL THREE hold:
+    #     (typeof value === "number")
+    #     AND (value === value)           # i.e. value is NOT NaN
+    #     AND (high <= HALF_MAX_ARRAY_LENGTH)   # 2147483647; always true in-scope
+    # Otherwise take the GENERAL PATH (NODE C).
+    #
+    # Consequences a blind re-emitter MUST honor:
+    #   * value is a finite/infinite Number (incl. -0, +0, Infinity, -Infinity,
+    #     but NOT NaN) -> NUMERIC PATH.
+    #   * value is NaN -> typeof is "number" but value !== value -> GENERAL PATH.
+    #   * value is a string / bigint / null / undefined / symbol / boxed Number
+    #     (typeof "object") / object / array -> GENERAL PATH.
+
+  NODE B  # NUMERIC FAST PATH (value is a non-NaN number)
+    #   while (low < high):
+    #       mid      := (low + high) >>> 1          # unsigned-right-shift-by-1 floor of the midpoint
+    #       computed := array[mid]                  # raw element (NO iteratee)
+    #       advance  := (computed !== null)
+    #                   AND (isSymbol(computed) === false)
+    #                   AND (computed < value)       # ELSE-branch of retHighest (strict "<")
+    #       if advance: low  := mid + 1
+    #       else:       high := mid
+    #   return high
+    #
+    #   The guard `computed !== null && !isSymbol(computed)` means: if the
+    #   element at mid is null OR a symbol, `advance` is FALSE -> high := mid
+    #   (we move left past it). Otherwise the ordering is JS abstract relational
+    #   `computed < value`:
+    #     - number < number       -> numeric comparison
+    #     - string < number       -> both coerced to Number; e.g. "2" < 2 is 2<2=false
+    #     - undefined < number    -> Number(undefined)=NaN -> comparison is false
+    #     - NaN-element < number   -> false (NaN compares false)
+    #   In every "advance is false" case we set high := mid (move toward the
+    #   leftmost qualifying position) -> this yields the LEFTMOST insertion index
+    #   of any run of values equal to (or unordered-relative-to) `value`.
+
+  NODE C  # GENERAL PATH  (= baseSortedIndexBy(array, value, identity, retHighest=undefined))
+    # Precompute value-shape flags ONCE (with identity, value is unchanged):
+    #   valIsNaN       := (value !== value)        # true only for NaN value
+    #   valIsNull      := (value === null)
+    #   valIsSymbol    := isSymbol(value)
+    #   valIsUndefined := (value === undefined)
+    #
+    #   low  := 0
+    #   high := array ? array.length : 0
+    #   while (low < high):
+    #       mid          := Math.floor((low + high) / 2)   # floored midpoint
+    #       computed     := array[mid]                      # raw element (identity iteratee)
+    #       othIsDefined := (computed !== undefined)
+    #       othIsNull    := (computed === null)
+    #       othIsReflexive := (computed === computed)        # false ONLY when element is NaN
+    #       othIsSymbol  := isSymbol(computed)
+    #
+    #       # setLow chosen by the FIRST matching value-shape branch.
+    #       # retHighest is falsy, so each "retHighest || X" reduces to X and
+    #       # each "retHighest ? A : B" reduces to B. The reduced forms:
+    #       if valIsNaN:
+    #           setLow := othIsReflexive
+    #               # advance past any NON-NaN element; stop (move left) at a NaN element.
+    #       else if valIsUndefined:
+    #           setLow := othIsReflexive AND othIsDefined
+    #               # advance past any defined non-NaN element; stop at undefined or NaN.
+    #       else if valIsNull:
+    #           setLow := othIsReflexive AND othIsDefined AND (othIsNull === false)
+    #               # advance past defined, non-NaN, non-null elements; stop at null/undefined/NaN.
+    #       else if valIsSymbol:
+    #           setLow := othIsReflexive AND othIsDefined AND (othIsNull === false)
+    #                     AND (othIsSymbol === false)
+    #               # advance past defined non-NaN non-null non-symbol; stop at symbol/null/undefined/NaN.
+    #       else if (othIsNull OR othIsSymbol):
+    #           setLow := false
+    #               # value is an ordinary comparable (number-NaN already excluded, or
+    #               # string/bigint/object/array); a null or symbol element is treated
+    #               # as "not less than" -> move left.
+    #       else:
+    #           setLow := (computed < value)        # ELSE-branch of retHighest: strict "<"
+    #               # JS abstract relational comparison:
+    #               #   string < string -> lexicographic (UTF-16 code unit) order
+    #               #   number-element  < string-value etc. -> ToNumber coercion
+    #               #   bigint < bigint, bigint < number per spec
+    #               #   any comparison involving NaN-element already handled by
+    #               #     othIsReflexive? NO — for an ORDINARY value with a NaN element,
+    #               #     othIsNull/othIsSymbol are false so we reach here and compute
+    #               #     (NaN < value) which is false -> setLow false -> move left.
+    #       if setLow: low  := mid + 1
+    #       else:      high := mid
+    #   return Math.min(high, MAX_ARRAY_INDEX)      # MAX_ARRAY_INDEX = 4294967294
+    #       # the Math.min clamp is unreachable for in-scope (small) arrays; high
+    #       # is always <= array.length << MAX_ARRAY_INDEX. Include it for fidelity.
+
+  # --- LEFTMOST tie-break (applies to BOTH paths) -------------------------
+  # The comparator advances `low` ONLY on a STRICT-less / "should-go-before"
+  # condition and moves `high := mid` on equal-or-after. Therefore for any run
+  # of elements equal to `value`, the returned index is the index of the FIRST
+  # (leftmost) such element. (sortedLastIndex would use retHighest=true and "<=",
+  # but sortedIndex never does.)
+
+  # --- RETURN RANGE -------------------------------------------------------
+  # The result is always an integer in [0, array.length] (or 0 for a
+  # null/undefined array). Concretely:
+  #   * empty / null / undefined array            -> 0
+  #   * value < every element / "before" all      -> 0
+  #   * value > every element / "after" all        -> array.length
+  #   * otherwise                                  -> leftmost qualifying index.
+
+ORACLE value -> /tmp/factory-run/lodash.sortedindex/sir/oracle.json
+# Pure deterministic function. The oracle records value equivalence:
+# expected = sortedIndex(array, value) compared structurally (an integer).
+
+# ============================================================================
+# WORKED EXAMPLES (verified by executing the real package)
+# ============================================================================
+# sortedIndex([30,50], 40)            => 1     # numeric path
+# sortedIndex([], 5)                  => 0     # empty
+# sortedIndex(null, 5)                => 0     # null array
+# sortedIndex(undefined, 5)           => 0     # undefined array
+# sortedIndex([10,20,30], 5)          => 0     # before all
+# sortedIndex([10,20,30], 100)        => 3     # after all
+# sortedIndex([10,20,30], 20)         => 1     # present (leftmost)
+# sortedIndex([10,20,20,20,30], 20)   => 1     # duplicates leftmost
+# sortedIndex([5], 5)                 => 0     # single elem equal -> 0
+# sortedIndex([5], 3)                 => 0     # single smaller
+# sortedIndex([5], 9)                 => 1     # single larger
+# sortedIndex([1,2,3], NaN)           => 3     # NaN value, general path, all reflexive
+# sortedIndex([1,2,NaN], NaN)         => 2     # stops at the NaN element
+# sortedIndex([NaN,NaN], NaN)         => 0     # first non-reflexive element seen
+# sortedIndex([1,2,3], null)          => 3     # null value, all defined-non-null
+# sortedIndex([null,null,1], null)    => 0     # stops at leading null
+# sortedIndex([1,2,3], undefined)     => 3     # undefined value
+# sortedIndex([1,2,undefined], undefined) => 2 # stops at the undefined element
+# sortedIndex(["a","b","c"], "b")     => 1     # general path, string present
+# sortedIndex(["a","c"], "b")         => 1     # string absent, between
+# sortedIndex(["a","b","b","c"], "b") => 1     # string duplicates leftmost
+# sortedIndex(["apple","banana","cherry"], "blueberry") => 2  # lexicographic
+# sortedIndex([null,1,2], 1)          => 0     # numeric path; null guard -> move left then 1<1 false
+# sortedIndex([1,2,null], 5)          => 2     # numeric path; null at end ignored
+# sortedIndex([1,S,3], 2)             => 1     # numeric path; symbol guard at mid -> move left (S=Symbol)
+# sortedIndex([-Infinity,0,Infinity], 0) => 1  # numeric path with infinities
+# sortedIndex([1,2,3], Infinity)      => 3
+# sortedIndex([1,2,3], -Infinity)     => 0
+# sortedIndex([0,0,0], -0)            => 0     # -0 is a number, value===value true
+# sortedIndex([1,2,3], new Number(2)) => 1     # boxed Number is typeof object -> general path
+# sortedIndex(["1","2","3"], 2)       => 1     # numeric value, string elems: "2"<2 -> 2<2 false
+# sortedIndex([1,2,3], "2")           => 1     # string value, number elems: general path, 1<"2"->1<2 true
+# sortedIndex([1,2,3], S)             => 3     # symbol value, all non-symbol non-null defined -> advance
+# sortedIndex(["a",null,"z"], "m")    => 1     # null element, ordinary value -> setLow false at null
+# sortedIndex([1n,2n,3n], 2n)         => 1     # bigint array+value, general path
+# sortedIndex([1,2,3], 2n)            => 1     # bigint value, number elems, general path, 1<2n true
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - Path selection (NODE A): typeof-number AND non-NaN AND length<=HALF.
+    - Numeric fast path bisect (NODE B): mid=(low+high)>>>1, guard
+      (computed!==null && !isSymbol(computed)) AND strict (computed < value).
+    - General path bisect (NODE C): mid=Math.floor((low+high)/2), the full
+      valIsNaN/valIsUndefined/valIsNull/valIsSymbol/(othIsNull||othIsSymbol)/else
+      comparator matrix with retHighest folded to falsy; final Math.min clamp.
+    - isSymbol / isObjectLike / identity helpers as defined above.
+    - Leftmost tie-break; return range 0..length; null/undefined/empty array -> 0.
+    - Read-only: no mutation of array/value.
+
+  CARRIED DATA: none. (No large literal tables; only the 4 small numeric
+    constants and the "[object Symbol]" tag string, all transcribed inline above.)
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; behavior still
+  derivable from the spec above but excluded because the input codec cannot
+  faithfully round-trip them):
+    - Symbol primitive ELEMENTS or a Symbol VALUE (Symbol is not JSON/codec
+      round-trippable). Their COMPARATOR behavior is fully specified above
+      (isSymbol -> guard/branch), and the worked examples include S cases run
+      against the real package, but genInputs does not emit Symbols.
+    - Function elements / function value, boxed primitives (new Number/String),
+      class instances: not codec-faithful -> excluded from genInputs. (A boxed
+      Number value would take the GENERAL path since typeof is "object"; this is
+      documented but not generated.)
+    - Arrays whose length exceeds HALF_MAX_ARRAY_LENGTH (2147483647): out of
+      practical envelope; the threshold branch is documented for completeness.
+    - Non-array `array` arguments other than null/undefined (e.g. a string or
+      object): the source uses `array ? array.length : 0` then indexes — out of
+      the intended contract; genInputs emits only real arrays plus null/undefined.
+
+PROVENANCE lodash.sortedindex@4.1.0
+  repo:    lodash/lodash  (https://github.com/lodash/lodash)
+  license: MIT  (jQuery Foundation; based on Underscore.js 1.8.3)
+  source:  index.js  (module.exports = sortedIndex)
+           Build: `lodash modularize exports="npm" -o ./`
+  export:  DEFAULT export -> the blind re-emitter must `export default sortedIndex`.

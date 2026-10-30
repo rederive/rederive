@@ -1,0 +1,26 @@
+UNIT check_carried
+LANG js
+PRIMARY-SHA256 48345c0139463424c8369a2dd17b8f99b22d5dbe4a32e3f5583cb189c642bc28
+SIG checkCarried(decl: object, table: object): { sha: string, hashOk: boolean | null, results: object[], attested: boolean, status: string, entries: number }
+NOTE default export
+ABI an ES module default-exporting the function; it may import node:crypto and nothing else. text = string; a number =
+  number (double); bool = boolean; none = null; list = Array; map = a plain object whose own enumerable string keys are
+  its entries (an own "__proto__" key is an entry). The driver calls checkCarried(decl, table) on fresh copies of the
+  vector's args. The result is a plain object with the six fields of the primary's record; each element of results is a
+  plain object holding exactly expr, equals, got and ok (never A spread: its other entries are dropped); an ABSENT got may
+  be left undefined (the oracle reads it as none). A throw (R1) is a thrown Error; the message is not graded.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM sha (R2) = createHash('sha256') from node:crypto over Buffer.from(CANON) (UTF-8), digest('hex'). CANON is written
+  directly by a recursive writer — keys via Object.keys(m).sort() (the default sort IS UTF-16 code-unit order), each key
+  and each text leaf through JSON.stringify (which IS the ESCAPE table), each finite number through JSON.stringify (which
+  IS NUMBER-TEXT) — never JSON.stringify of a whole map, whose integer-like keys ("9", "10") enumerate before the others.
+  Test Number.isFinite and Object.is(x, -0) before writing a number (JSON.stringify writes NaN as null and -0 as 0); a
+  missing CANON is a throw, for the table and for an equals alike (R1). The map test is: not null, typeof
+  object, not an Array.
+MECHANISM GOT (R4): Object.hasOwn(table, expr) decides presence, never `expr in table` or a bare table[expr] (which reads
+  Object.prototype for __proto__, constructor, toString…); count is Object.keys(table).length. PIN (R3) is
+  typeof S === 'string' and /^[0-9a-f]{64}$/ (JS $ without the m flag matches only at the end, so a trailing newline is
+  no PIN); S === undefined or S === null is ABSENT (hashOk null), anything else that is no PIN throws. An assertion's
+  equals is present when Object.hasOwn(A, 'equals'); its expr is well-formed when typeof is 'string' and it is not ''.
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs checkCarried + canonical + canonicalValue. Language file re-cut 2026-10-27 with the primary (delta round 5b).

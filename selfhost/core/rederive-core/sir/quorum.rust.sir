@@ -1,0 +1,11 @@
+UNIT quorum
+LANG rust
+PRIMARY-SHA256 ece801dc428005b1cf887ee7a8bf2acec2607638c1208195ce76669d9807b969
+SIG pub fn quorum(fulls: &[bool], need: i64) -> (i64, bool, i64)
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn quorum), no dependencies, no main, no I/O, no unsafe.
+  The verifier generates its own harness from the abstract SIG. The record result is a tuple by value in declared field
+  order: (fullCount, hasQuorum, winnerIdx). A throw (R1) is a panic; the message is not graded.
+MECHANISM test need < 1 on the i64 before anything else. Count and positions are usize internally; convert to i64 with as
+  i64 before comparing with need (never cast need to usize).
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/verdict.mts quorum, cut 2026-10-26 (round 2) before any blind re-emission.

@@ -1,0 +1,22 @@
+UNIT is_number
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR is-number@7.0.0 — reproduce the package exactly, accidents included (R4)
+ORACLE-CLASS deterministic
+SIG is_number(x: f64 | text | bool | none) -> bool
+ENVELOPE a JS-shaped value space: numbers (incl. NaN, ±Infinity, -0), text, booleans, none. Objects and boxed wrappers are
+  representable only in the js variant (see its ENVELOPE narrowing); other languages verify the numeric/text/bool/none subset.
+DEPENDS-ON none
+DESCRIPTION Decide whether a value is a finite number, or text that parses as one.
+BEHAVIOR
+R1 a primitive number that is finite -> true; NaN and ±Infinity -> false. (-0 is finite -> true.)
+R2 primitive text that is non-empty after trimming whitespace and parses as a finite number -> true.
+R3 everything else -> false (booleans, none, non-numeric or empty text).
+R4 a boxed wrapper (a Number object, a String object) is not a primitive -> R3 -> false. CITED FIDELITY package — the primitive/boxed accident of is-number@7.0.0 (js-only; outside other languages' envelope)
+INVARIANT the result is a boolean for every input in the envelope.
+ORACLE value -> oracles/is_number.json  CANONICAL-SHA256 35a0059cdc9f6f5bc9a341a13797d7eb6d3aee5c843b4bcdd000782c069478f4
+NOTE 16 frozen + 13 held-out from the shipped @rederive/is-number bundle (captured from the real package); carries NaN, ±Infinity
+  and -0 as v0.4 codec tags — the NaN-rule validation unit; re-ENCODED as sir-canonical-v1, never regenerated
+SCOPE IN: R1–R4. OUT: anything is-number@7.0.0 does not do.
+PROVENANCE is-number@7.0.0 (jonschlinkert/is-number, MIT); shipped bundle @rederive/is-number (quorum 3/3, differential 400/400).
+  Re-cut 2026-09-22 into the v0.5 contract register (the plan's own illustration) as the NaN / signed-zero / infinity test unit.

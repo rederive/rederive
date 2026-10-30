@@ -1,0 +1,230 @@
+UNIT difference
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG difference(array, ...values) -> Array
+    # Default export of the package: module.exports = difference.
+    # A blind re-emitter MUST expose this function as the module's DEFAULT export:
+    #   export default difference
+DEPENDS-ON none   # zero runtime deps; self-contained. No carried data.
+
+# ---------------------------------------------------------------------------
+# SUMMARY
+# ---------------------------------------------------------------------------
+# Creates a NEW array of the elements of `array` that are NOT present in any of
+# the other (`...values`) arrays, compared with SameValueZero. Order follows the
+# first array. Duplicates from the first array that survive exclusion are KEPT
+# (NO output de-duplication). Only "array-like objects" among the rest-args are
+# considered as exclusion sources; every other rest-arg is silently ignored.
+# Pure / read-only: never mutates any argument; always returns a fresh Array.
+#
+# This is lodash's `_.difference` (v4.5.0 standalone build). Internally:
+#   difference = baseRest(function(array, values){
+#     return isArrayLikeObject(array)
+#       ? baseDifference(array, baseFlatten(values, 1, isArrayLikeObject, true))
+#       : [];
+#   });
+# `baseRest` is just the rest-parameter collector: it gathers the 2nd..last
+# positional args into the single array `values`. So `values` is the array of
+# the rest-args, in order.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline; exact)
+# ---------------------------------------------------------------------------
+
+BEHAVIOR
+
+# --- Helper predicate: isArrayLikeObject(v) ------------------------------
+# (used both to gate `array` and to filter each rest-arg)
+# isArrayLikeObject(v) is TRUE iff ALL of:
+#   (a) v is object-like:  v !== null AND typeof v === 'object'
+#       -> EXCLUDES: null, undefined, numbers, strings, booleans, bigints,
+#          symbols, and functions (typeof 'function'); INCLUDES Array, typed
+#          arrays (Uint8Array/Buffer/...), arguments objects, and any plain
+#          object that also satisfies (b).
+#   (b) v has a valid array-like length:  isLength(v.length) where
+#       isLength(n) === ( typeof n === 'number' AND n > -1 AND n % 1 === 0
+#                         AND n <= 9007199254740991 ).
+#       -> length must be a NON-NEGATIVE INTEGER number <= MAX_SAFE_INTEGER.
+#          Non-number length, negative, fractional, NaN, or Infinity => FALSE.
+#   (c) v is NOT a function (already excluded by (a)'s typeof check, but the
+#       library also checks !isFunction(v); for our inputs (a) suffices).
+# NOTE: a plain object like {0:2, length:1} IS array-like-object (length is a
+#   non-negative integer) and IS treated as an exclusion source. {length:0} is
+#   array-like but empty (contributes nothing). Strings are NOT (not object-like).
+#   Set / Map are NOT (no numeric `length` property; they use `size`).
+
+# --- SameValueZero(a, b) -------------------------------------------------
+# Equality used for both exclusion-membership and (effectively) NaN matching:
+#   SameValueZero(a,b) === ( a === b ) OR ( a !== a AND b !== b )
+# Consequences (ALL pinned by running the real package):
+#   * NaN is equal to NaN  (NaN in first array is excluded by NaN in values).
+#   * +0 and -0 are EQUAL  (a -0 element is excluded by +0 in values, and vice
+#     versa).
+#   * Everything else is strict `===`:
+#       - bigint 2n is NOT equal to number 2  (2n !== 2) -> distinct.
+#       - object/array elements compare by REFERENCE IDENTITY, never by deep
+#         structure: the SAME object reference is excluded; a structurally-equal
+#         BUT DIFFERENT object ({a:1} vs another {a:1}) is NOT excluded.
+#       - Infinity and -Infinity are distinct; strings by value; null/undefined
+#         each equal only themselves.
+
+# --- NODE 0: gate on `array` --------------------------------------------
+# If isArrayLikeObject(array) is FALSE -> return a NEW empty array []  and STOP.
+#   This covers:  array === null  -> []
+#                 array === undefined -> []
+#                 array a number / boolean / bigint / symbol -> []
+#                 array a string (e.g. 'abc') -> []  (NOT object-like)
+#                 array a function -> []
+#                 array a plain object WITHOUT valid array-like length -> []
+#   It does NOT throw for any of these; it returns [].
+# If TRUE, proceed. (Note: a typed array or array-like object as `array` is
+#   accepted; the RESULT is always a plain Array regardless of input kind.)
+
+# --- NODE 1: build the exclusion list  (flatten rest-args, depth 1) ------
+# Let `values` = the ordered list of rest-args (args[1..]).
+# Compute EXCLUDE = baseFlatten(values, depth=1, predicate=isArrayLikeObject,
+#                               isStrict=true), which is exactly:
+#   EXCLUDE = []
+#   for each arg V in values (in order):
+#     if isArrayLikeObject(V):           # V is a considered exclusion source
+#         for i in 0 .. V.length-1:      # one level only; reads V[i], holes->undefined
+#             EXCLUDE.push(V[i])         # element pushed VERBATIM (NO recursion)
+#     else:                              # isStrict drops non-array-like rest-args
+#         (skip V entirely)              # numbers, strings, objects w/o length,
+#                                        #  null, undefined, Set, Map, functions...
+#   -> Each CONSIDERED rest-arg contributes ITS OWN elements, flattened exactly
+#      ONE level. There is NO deeper flattening: if V[i] is itself an array, that
+#      inner array is pushed as a single (object) value and later compared by
+#      reference identity (so it will essentially never match a primitive).
+#   -> EXCLUDE may itself contain dupes / NaN / -0 / objects; that is fine.
+
+# --- NODE 2: filter `array` against EXCLUDE  (baseDifference) ------------
+# valuesLength = EXCLUDE.length
+# result = []
+# (Implementation detail, behaviorally transparent: when EXCLUDE.length >= 200
+#  the real package switches to a SetCache for membership; semantics are IDENTICAL
+#  SameValueZero membership — a re-emitter may ignore this optimization.)
+# For index = 0 .. array.length-1   (ascending; preserves first-array order):
+#     value    = array[index]        # a sparse hole reads as `undefined`
+#     # -0 normalization of the OUTPUT value (NOT of the comparison):
+#     emit     = (value !== 0) ? value : 0      # i.e. if value is +0 OR -0, emit +0
+#     excluded = false
+#     if value is NOT NaN (value === value):
+#         # fast common path: plain `===` scan over EXCLUDE
+#         for j in 0 .. valuesLength-1:
+#             if EXCLUDE[j] === value:  excluded = true; break
+#         # NOTE: this fast path uses strict === so it does NOT match NaN; NaN is
+#         #       handled by the branch below instead.
+#     else:                            # value IS NaN
+#         # NaN is excluded iff EXCLUDE contains any NaN (SameValueZero/arrayIncludes
+#         #   uses a NaN-aware indexOf): excluded = EXCLUDE has some NaN
+#         excluded = (EXCLUDE contains a NaN)
+#     if NOT excluded:  result.push(emit)
+# return result
+#
+# KEY behavioral consequences (ALL pinned by running):
+#   * NO DEDUP: every surviving element is pushed, including duplicates from the
+#     first array. difference([1,1,2,2,3,3],[2]) => [1,1,3,3].
+#     difference([1,1,1], []) => [1,1,1].  difference([1,2,3]) => [1,2,3].
+#   * ORDER preserved from first array. difference([3,1,2,5,4],[5,1]) => [3,2,4].
+#   * -0 NORMALIZATION ON OUTPUT: a surviving element that is -0 is emitted as +0.
+#     difference([-0,1],[9]) => [0,1] and Object.is(result[0], -0) === FALSE,
+#     Object.is(result[0], 0) === TRUE. (For EXCLUSION, -0 and +0 still match.)
+#   * NaN handling: difference([NaN,1,NaN],[NaN]) => [1];
+#     difference([NaN,1],[2]) => [NaN,1].
+#   * sparse holes in `array` are read as undefined and kept (unless undefined is
+#     excluded): difference([1,,3],[99]) => [1, undefined, 3].
+#   * undefined excluded if present in EXCLUDE: difference([1,undefined,3],[undefined]) => [1,3].
+#   * always a NEW plain Array; never === any input; never mutates any input.
+
+# ---------------------------------------------------------------------------
+# DEMONSTRATED I/O  (executed against lodash.difference@4.5.0 — these are the
+#                    real observed outputs; the generator emits inputs that hit
+#                    every one of these classes)
+# ---------------------------------------------------------------------------
+#   difference([2,1],[2,3])                 => [1]
+#   difference([1,1,2,2,3,3],[2])           => [1,1,3,3]        # keeps dupes
+#   difference([1,1,1],[])                  => [1,1,1]
+#   difference([1,2,3])                     => [1,2,3]          # no rest-args
+#   difference([], [1,2])                   => []               # empty first
+#   difference([1,2,3],[1,2,3])             => []               # all excluded
+#   difference([3,1,2,5,4],[5,1])           => [3,2,4]          # order
+#   difference([NaN,1,NaN],[NaN])           => [1]              # SVZ NaN
+#   difference([NaN,1],[2])                 => [NaN,1]
+#   difference([-0,1],[0])                  => [1]              # -0 excl by +0
+#   difference([0,1],[-0])                  => [1]              # +0 excl by -0
+#   difference([-0,1],[9])                  => [0,1]            # surviving -0 -> +0
+#   difference([Infinity,-Infinity,1],[Infinity]) => [-Infinity,1]
+#   difference([1n,2n,3n],[2])              => [1n,2n,3n]       # bigint != number
+#   difference([1n,2n,3n],[2n])            => [1n,3n]
+#   difference([1,2,3],2)                   => [1,2,3]          # number rest-arg ignored
+#   difference([1,2,3,'a'],'a')            => [1,2,3,'a']       # string rest-arg ignored
+#   difference([1,2,3],null)               => [1,2,3]          # null ignored
+#   difference([1,2,3],undefined)          => [1,2,3]          # undefined ignored
+#   difference([1,2,3],new Set([2]))       => [1,2,3]          # Set ignored (no numeric length)
+#   difference([1,2,3],new Map([[2,9]]))   => [1,2,3]          # Map ignored
+#   difference([1,2,3],{0:2,length:1})     => [1,3]            # array-like OBJECT considered
+#   difference([1,2,3],{length:0})         => [1,2,3]          # array-like empty
+#   difference([1,2,3],{length:"x",0:2})   => [1,2,3]          # bad length -> ignored
+#   difference([1,2,3],{length:-1,0:2})    => [1,2,3]          # negative length -> ignored
+#   difference([1,2,3],{length:1.5,0:2})   => [1,2,3]          # fractional length -> ignored
+#   difference([1,2,3,4],new Uint8Array([2,4])) => [1,3]       # typed array considered
+#   difference(new Uint8Array([1,2,3]),[2]) => [1,3]           # typed array first; result is plain Array
+#   difference([1,2,3,4],[2],[4])          => [1,3]            # multiple rest arrays
+#   difference([10,[10]],[[10],99])        => [10,[10]]        # one-arg [[10],99] -> excl {[10],99}; 10 kept (no -1), [10] kept by ref
+#   difference([99,1],[5],[99])            => [1]              # two rest-args -> excl {5,99}
+#   difference([99,1],[[5],99])            => [1]              # one rest-arg [[5],99] -> flatten depth1 -> excl {[5],99}; 99 excluded
+#   difference(null,[1])                   => []
+#   difference(undefined,[1])              => []
+#   difference(5,[1])                      => []
+#   difference('abc',['a'])                => []               # string first -> []
+#   difference({0:1,length:1},[9])         => [1]              # array-like object first -> considered
+#   difference([1,,3],[99])                => [1, undefined, 3]
+#   difference([1,undefined,3],[undefined])=> [1,3]
+#   same-object-ref:  let o={a:1}; difference([o,1],[o])      => [1]
+#   structural-non-eq: difference([{a:1},1],[{a:1}])          => [{a:1},1]
+
+ORACLE value -> oracle.json
+    # Differential oracle: for each generated input tuple [array, ...values],
+    # the recorded expected is the real package's returned Array (codec-encoded).
+    # Equality is array-structural; element comparison must respect:
+    #   - NaN equals NaN, +0 equals -0 in element position EXCEPT that a surviving
+    #     -0 is emitted as +0 (so the recorded expected literally contains +0).
+    #   - bigint vs number distinction preserved.
+    # No seam; fully deterministic and pure. Inputs are codec-faithful
+    # (see SCOPE / the generator's out-of-envelope notes).
+
+# ---------------------------------------------------------------------------
+SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   isArrayLikeObject gate on `array`; depth-1 strict flatten of rest-args with
+#   isArrayLikeObject filtering; SameValueZero membership test; first-array order;
+#   NO output dedup; -0->+0 output normalization; NaN-aware membership; fresh
+#   plain-Array result; no mutation. All constants are inlined here
+#   (LARGE_ARRAY_SIZE=200 is a transparent perf threshold, MAX_SAFE_INTEGER=
+#   9007199254740991 bounds isLength). The >=200 SetCache path is an internal
+#   optimization with IDENTICAL observable semantics — a re-emitter need not
+#   replicate the cache, only the SameValueZero result.
+#
+# CARRIED DATA: none. No literal tables.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#   - Elements that are functions or Symbols, or first/values args that are
+#     functions: these are valid for the real fn (functions-as-elements compare
+#     by reference; functions-as-rest-args are ignored since isArrayLikeObject is
+#     false), but they do NOT survive the JSON+codec round-trip, so the generator
+#     does not emit them. Behavior is fully derivable from the rules above.
+#   - boxed primitives (new Number(0), new String('')) — non-round-trippable;
+#     not emitted. (As elements they'd compare by reference; as rest-args, a
+#     boxed String is object-like but has a numeric length, so it WOULD be
+#     considered — out of envelope, documented only.)
+#   - The real function never throws for any in-scope input (no throw paths).
+
+PROVENANCE lodash.difference@4.5.0 (MIT). Repository: lodash/lodash
+    (standalone modularized build, "lodash modularize exports=npm").
+    Source file: node_modules/lodash.difference/index.js
+    Decomposed unit: the default export `difference` (lines 908-912), with
+    helpers baseRest, baseFlatten, baseDifference, isArrayLikeObject,
+    isArrayLike, isLength, isObjectLike, isFunction, eq, arrayIncludes,
+    baseIndexOf, baseFindIndex, baseIsNaN, arrayPush, arrayMap, SetCache/cacheHas.

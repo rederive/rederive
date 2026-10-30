@@ -1,0 +1,284 @@
+UNIT reverse
+KIND STATE
+ORACLE-CLASS deterministic
+SIG reverse(array) -> array            # default export: module.exports = reverse
+
+# ===========================================================================
+# HARDEN ROUND 1 — divergence diagnosis (quorum 0/3 on v19, v22)
+# ===========================================================================
+# The two split held-out vectors were BOTH in-place-mutating receivers whose
+# codec `decode` returns the SAME mutable reference (Uint8Array v19, Buffer v22).
+# Re-reading the source + RUNNING the real package proved the blind emitters were
+# NOT wrong about lodash's behavior. The vectors themselves are SELF-POISONED by an
+# interaction between this STATE unit's in-place mutation and the harness's
+# stamp/decode pipeline. See NODE 2.d and the SELF-POISON note below. The HARDEN
+# fix is: keep the (correct) prior delegation spec, REMOVE typed-array/Buffer from
+# genInputs (they cannot be stamped faithfully for a mutating receiver), and
+# CORRECT one stale claim the prior SIR got wrong (len-1 string returns a BOXED
+# String object, not the primitive — NODE 2.g).
+#
+# ---------------------------------------------------------------------------
+# WHY v19 / v22 SPLIT THE QUORUM  (codec/harness artifact, NOT SIR ambiguity)
+# ---------------------------------------------------------------------------
+# The harness stamps a vector (orchestrator/lib/oracle.mjs stampOracle) as:
+#     k        = JSON.stringify(encode(args))          # dedup key, BEFORE running
+#     expected = realFn(...args.map(decode))           # RUN the real fn
+#     stored   = { args: encode(args), expected: encode(expected) }   # AFTER running
+# Note `encode(args)` is computed AFTER `realFn` ran. For a STATE unit that mutates
+# its receiver in place, whether `args[0]` is mutated depends on whether
+# `decode(args[0])` returned the SAME object or a COPY:
+#   * decode(PLAIN ARRAY)  -> v.map(decode)  => a NEW array. realFn reverses the
+#     COPY; the original `args[0]` is untouched; stored args = ORIGINAL order,
+#     stored expected = REVERSED order. Correct, gradeable. (verified)
+#   * decode(Uint8Array/Buffer) -> returns the SAME instance (codec.mjs short-
+#     circuits `v instanceof Uint8Array -> return v`). realFn reverses `args[0]`
+#     IN PLACE. So stored args = encode(args AFTER mutation) = REVERSED bytes, and
+#     stored expected = same reversed bytes. Hence v19: args=[4,3,2,1],
+#     expected=[4,3,2,1] (the original input was actually [1,2,3,4]).
+# At GRADE time (grade.mjs line 33) the blind emitter is handed decode(stored args)
+# = a FRESH Uint8Array[4,3,2,1] and must reproduce decode(expected)=Uint8Array[4,3,2,1].
+# But a CORRECT reverse maps [4,3,2,1] -> [1,2,3,4] != [4,3,2,1]. So a CORRECT
+# emitter FAILS v19/v22 — the vector is unsatisfiable by any faithful re-emitter.
+# REPRODUCED LIVE: stamp([Uint8Array[1,2,3,4]]) -> args=[4,3,2,1] expected=[4,3,2,1];
+# correct-emitter grade => false. The defect is structural to mutating + same-ref
+# decode, so the only sound fix is to NOT EMIT such receivers (see SCOPE / genInputs).
+# Plain arrays and the tagged `sparse` form are NOT affected (decode copies them),
+# so ALL array/sparse/falsy/string vectors remain in-envelope and self-consistent
+# (verified: 23/23 non-typed-array vectors pass with a correct emitter).
+
+# ---------------------------------------------------------------------------
+# DEPENDS-ON
+# ---------------------------------------------------------------------------
+DEPENDS-ON  Array.prototype.reverse   # captured ONCE at module load as
+                                      #   var arrayProto   = Array.prototype;
+                                      #   var nativeReverse = arrayProto.reverse;
+                                      # invoked via nativeReverse.call(array).
+                                      # This is the host engine's built-in
+                                      # Array#reverse (ECMA-262 23.1.3.x). The
+                                      # re-emitter MUST use this exact mechanism
+                                      # (capture-then-.call) — NOT the receiver's
+                                      # own .reverse (see NODE 2.d).
+            none-else                 # zero npm/runtime dependencies.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (the ENTIRE body is one expression; reproduce exactly)
+# ---------------------------------------------------------------------------
+#
+#   var arrayProto    = Array.prototype;
+#   var nativeReverse = arrayProto.reverse;          # bound ONCE at module load
+#   function reverse(array) {
+#     return array ? nativeReverse.call(array) : array;
+#   }
+#   module.exports = reverse;
+#
+# NODE 1 (BRANCH on truthiness of `array`):
+#   The guard is `array ?` — a JS TRUTHINESS test, NOT `array == null`.
+#   (A meta/hint elsewhere phrased it as `array == null ? array : ...`; the REAL
+#    source is `array ? nativeReverse.call(array) : array`. They DIVERGE for
+#    falsy-but-non-null values — see NODE 1.a. THE SIR FOLLOWS THE SOURCE.)
+#
+#   NODE 1.a  FALSY `array`  ->  RETURN `array` UNCHANGED (identity passthrough,
+#             no reverse call, no mutation, no throw).
+#             The 7 falsy values in JS, ALL returned as-is:
+#               null        -> returns null
+#               undefined   -> returns undefined
+#               false       -> returns false
+#               0           -> returns 0
+#               -0          -> returns -0          (Object.is(-0) preserved)
+#               ""          -> returns ""          (empty string; NO throw — guard short-circuits)
+#               NaN         -> returns NaN         (the SAME falsy value)
+#             NOTE: `0`, `-0`, `false`, `""`, `NaN` are PASSTHROUGH too — an
+#             `array == null` framing would WRONGLY reverse-call these. Do not.
+#
+#   NODE 1.b  TRUTHY `array`  ->  RETURN nativeReverse.call(array)
+#             i.e. Array.prototype.reverse.call(array). See NODE 2.
+#
+# NODE 2 (delegate to the CAPTURED Array.prototype.reverse, applied to the receiver):
+#   The re-emitter MUST do exactly `nativeReverse.call(array)` where
+#   `nativeReverse === Array.prototype.reverse`. Do NOT call `array.reverse()`
+#   (the receiver's OWN method): for a typed array that would route to
+#   TypedArray.prototype.reverse and for a string it would throw a DIFFERENT error.
+#   The generic Array#reverse algorithm (ECMA-262), applied to the receiver `array`:
+#     * Let O = ToObject(array). Let len = ToLength(O.length).
+#     * For each i in 0 .. floor(len/2)-1, SWAP element[i] <-> element[len-1-i]
+#       using [[Get]]/[[Set]]/[[Delete]] — presence-aware: a present element is
+#       moved/overwritten; a HOLE (absent index) is moved as a hole (destination
+#       index is DELETED, not set to undefined). See NODE 2.c.
+#     * RETURNS O — i.e. the SAME receiver object (or its ToObject box for a
+#       primitive receiver; see NODE 2.g).
+#   STATE CONTRACT: the receiver is mutated IN PLACE. For an OBJECT receiver the
+#   returned value IS the input reference (`reverse(a) === a`). The observable
+#   result downstream is the RETURNED (== mutated) receiver.
+#
+#   NODE 2.a  `array` is a genuine Array (the in-contract / in-envelope case):
+#             reversed in place; returns same Array reference.
+#               []            -> []            (len 0/1: NO swaps; same ref)
+#               [9]           -> [9]
+#               [1,2]         -> [2,1]
+#               [1,2,3]       -> [3,2,1]       (odd len: middle element fixed)
+#               [1,2,3,4]     -> [4,3,2,1]     (even len)
+#               [5,4,3,2,1]   -> [1,2,3,4,5]
+#             Element TYPE is irrelevant — elements are moved by reference/value,
+#             never inspected. Mixed/nested elements preserved (inner objects/arrays
+#             are the SAME nested refs, only the TOP-LEVEL order changes; inner
+#             arrays are NOT themselves reversed):
+#               [1,"x",null,true,{k:1},[7,8]] -> [[7,8],{k:1},true,null,"x",1]
+#               [[1,[2,3]],{x:[4,5]},"s"]     -> ["s",{x:[4,5]},[1,[2,3]]]
+#               ["",0,false,null]             -> [null,false,0,""]   (falsy ELEMENTS
+#                 inside a TRUTHY array reverse normally — the guard is on the array,
+#                 not its elements).
+#
+#   NODE 2.b  Large array: behavior identical, O(len) swaps.
+#             [0..49] -> [49..0]; returned[0]===49, returned[49]===0; same ref.
+#
+#   NODE 2.c  SPARSE arrays (HOLES move as holes — load-bearing):
+#               [1, <hole>, 3]  (length 3, index 1 absent)
+#                 -> length 3; index0 present=3, index1 ABSENT (hole, hasOwn=false),
+#                    index2 present=1. The hole at the middle of an odd length stays
+#                    middle; the endpoints swap.
+#               [1, <hole>, <hole>, 4]  (length 4)
+#                 -> [4, <hole>, <hole>, 1]   (present 0<->3 swap; holes 1<->2 swap, stay holes)
+#               [<hole>,<hole>,<hole>]   -> length 3, ALL three indices remain holes
+#                    (no own properties created; never filled with undefined)
+#               [<hole>, 2, <hole>]      -> [<hole>, 2, <hole>]  (single present at middle)
+#             Reverse uses [[Delete]] on the destination when the source index is a
+#             hole, so holes are preserved, not densified to `undefined`.
+#             CODEC NOTE: sparse arrays cross the oracle as a {__t:'sparse',length,
+#             entries:[[idx,val]...]} tag and decode to a FRESH copy (NOT a same-ref),
+#             so they are stamp-faithful — IN-ENVELOPE and emitted.
+#
+#   NODE 2.d  TYPED ARRAY / Buffer receiver — REAL behavior, but OUT-OF-ENVELOPE
+#             FOR EMISSION (documented spec; NOT emitted by genInputs):
+#             REAL lodash.reverse(Uint8Array/Buffer) (VERIFIED against the installed
+#             package): `Array.prototype.reverse.call(typedArray)` reverses the
+#             BACKING BYTES IN PLACE and returns the SAME typed-array/Buffer
+#             reference, byte order reversed:
+#               reverse(Uint8Array[1,2,3,4]) === that Uint8Array, now bytes [4,3,2,1];
+#                 result instanceof Uint8Array == true, Array.isArray == false.
+#               reverse(Buffer[10,20,30])    === that Buffer, now bytes [30,20,10];
+#                 result Buffer.isBuffer == true.
+#             This is correct, deterministic, same-reference, byte-reversing — a
+#             faithful re-emitter using `nativeReverse.call(array)` reproduces it.
+#             *** BUT IT CANNOT BE STAMPED AS A VALUE-MODE VECTOR for this MUTATING
+#             unit ***: codec.decode(Uint8Array|Buffer) returns the SAME reference,
+#             so the harness's `realFn(...args.map(decode))` mutates the stored
+#             `args[0]` in place, and `encode(args)` (taken AFTER the run) records the
+#             ALREADY-REVERSED bytes. The persisted vector then has args===expected
+#             (both reversed), which NO faithful reverse can satisfy at grade time
+#             (it would re-reverse). This is the EXACT cause of the round-1 quorum
+#             split (v19, v22). Therefore typed arrays / Buffers are DOCUMENTED-OUT
+#             and NOT emitted by genInputs. (Plain arrays escape this because
+#             decode COPIES them; see the SELF-POISON note at top.)
+#
+#   NODE 2.e  ARRAY-LIKE plain object with numeric `length`:
+#               {0:'a',1:'b',2:'c',length:3} -> {0:'c',1:'b',2:'a',length:3}, same ref.
+#             Reverse swaps the integer-keyed props per `length`; `length` itself and
+#             non-index keys untouched. A plain object decodes to a FRESH copy so it
+#             WOULD be stamp-faithful, but it is NOT emitted by genInputs (kept as
+#             documented spec; covered conceptually by NODE 2.a/2.c).
+#
+#   NODE 2.f  TRUTHY value with NO swappable indices (documented OUT — non-codec-
+#             faithful result; NOT emitted):
+#               * truthy primitive number (123, 5n)  -> ToObject boxes the primitive
+#                 to a wrapper OBJECT (Number{123}, BigInt{5n}); length is undefined
+#                 -> ToLength 0 -> no swaps; RETURNS the BOXED object (reverse(123)
+#                 !== 123). Boxed -> result not round-trippable in a plain-value sense.
+#               * `true` -> ToObject -> Boolean object, no-op, returns the box.
+#               * Set / Map receiver -> truthy object, `.length` undefined ->
+#                 ToLength 0 -> NO swaps; returns the SAME Set/Map reference
+#                 unchanged. Result IS codec-faithful but a pure no-op and
+#                 uninstructive; documented, not emitted.
+#
+#   NODE 2.g  STRING receiver (truthy strings) — EXACT, codec-faithful, EMITTED:
+#             ToObject("...") boxes the primitive to a String wrapper object whose
+#             integer indices are NON-WRITABLE.
+#               * STRING length 0 ("")  -> FALSY -> NODE 1.a passthrough, returns "",
+#                 NO throw.
+#               * STRING length 1 ("a", " ")  -> TRUTHY. ToObject -> String box;
+#                 len 1 => 0 swaps => no [[Set]] => RETURNS THE BOXED String OBJECT
+#                 (new String("a")), NOT the primitive. (CORRECTION vs prior SIR,
+#                 which wrongly said "returns the primitive string UNCHANGED".)
+#                 VERIFIED: reverse("a") is typeof "object", a String wrapper; the
+#                 oracle encodes it as {__t:'boxed',k:'String',v:'a'}. A re-emitter
+#                 doing `nativeReverse.call("a")` produces exactly this box NATURALLY
+#                 — DO NOT special-case strings to return the primitive.
+#               * STRING length >= 2 ("ab","abc","  ")  -> TRUTHY; len>=2 => reverse
+#                 attempts element[0] <-> element[len-1] via [[Set]] on a read-only
+#                 index -> THROWS TypeError:
+#                 "Cannot assign to read only property '0' of object '[object String]'".
+#                 Recorded as {__throw} (grade compares throw-vs-throw, message not
+#                 compared, but this is the exact message).
+#               * Object.freeze([1,2,3]) (frozen array, len>=2) -> THROWS TypeError
+#                 "Cannot assign to read only property '0' of object '[object Array]'".
+#                 Frozenness does NOT survive the JSON codec, so NOT emitted;
+#                 documented here.
+#
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+#   Observation: the harness DEDUPES on encode(args) BEFORE running, then stamps
+#   expected = realFn(...args.map(decode)) and stores BOTH args and expected via
+#   encode() taken AFTER the run. For a STATE unit this is only faithful when
+#   decode(args[i]) is a COPY (plain array, sparse tag, plain object) — true for
+#   EVERY value genInputs emits. Inputs whose decode is a SAME-REF mutable receiver
+#   (Uint8Array, Buffer) are NOT emitted (NODE 2.d). Throw paths recorded as
+#   {__throw}. Boxed String results (len-1 strings) round-trip via the {__t:'boxed'}
+#   tag and ARE in the emitted set. -0 / NaN / boxed-number results are NOT emitted.
+
+# ---------------------------------------------------------------------------
+SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   * The truthiness guard `array ? ... : array` (NODE 1) — passthrough of the
+#     7 falsy values; delegation otherwise.
+#   * Delegation via the CAPTURED `nativeReverse = Array.prototype.reverse` invoked
+#     as `nativeReverse.call(array)` (NODE 2): generic Array#reverse semantics —
+#     in-place reversal, same-reference (or ToObject-box) return, hole-preserving
+#     swaps, length-driven, presence-aware, element-type-agnostic. The re-emitter
+#     must NOT call the receiver's own `.reverse` and must NOT special-case strings
+#     or typed arrays.
+#   * The STATE/mutation contract (object receiver mutated; returned === input ref).
+#
+# CARRIED DATA: none. There is no literal table; the only captured datum is the
+#   built-in `Array.prototype.reverse` method reference (a host primitive, not a
+#   transcribable constant). No <unit>.carried.json is produced.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented above; NOT emitted by genInputs):
+#   * TYPED ARRAY / Buffer receivers (NODE 2.d): real behavior is byte-reverse-in-
+#     place + same-ref, but a value-mode vector for a SAME-REF mutating receiver is
+#     self-poisoned by the stamp pipeline (args re-encoded post-mutation == expected).
+#     ROUND-1 ROOT CAUSE. Documented; NEVER emitted.
+#   * Falsy NON-round-trippable INPUTS: -0 (JSON loses sign; Object.is mismatch),
+#     NaN (JSON -> null). genInputs DOES emit null/undefined/false/0/"" (the
+#     round-trippable falsy values) and does NOT emit -0/NaN.
+#   * Truthy primitive numbers / bigint / boolean (NODE 2.f): result is a BOXED
+#     wrapper object -> not emitted.
+#   * Set / Map receivers (NODE 2.f): emittable & codec-faithful, but a pure no-op;
+#     documented, not emitted (uninstructive).
+#   * Array-like plain objects (NODE 2.e): stamp-faithful but not emitted (covered
+#     by array/sparse cases).
+#   * Frozen-array throw (NODE 2.g): frozenness lost by codec -> documented, not emitted.
+#   * Function-valued / Symbol-valued elements: non-round-trippable -> documented-OUT,
+#     never emitted.
+
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ---------------------------------------------------------------------------
+# This is the DEFAULT export. The re-emitted module MUST do:  export default reverse;
+# Capture `nativeReverse = Array.prototype.reverse` at module scope, then
+#   function reverse(array){ return array ? nativeReverse.call(array) : array; }
+# HARD RULES:
+#   * Use `array ?` — do NOT substitute `array == null`.
+#   * Delegate via `nativeReverse.call(array)` — do NOT call `array.reverse()`, and
+#     do NOT special-case strings, typed arrays, or any receiver. The boxing
+#     (len-1 string -> String object) and any byte-reversal must fall out of the
+#     generic call, not from bespoke branches.
+
+# ---------------------------------------------------------------------------
+PROVENANCE
+# ---------------------------------------------------------------------------
+#   package:  lodash.reverse@4.0.1  (npm)
+#   export:   module.exports = reverse  (default export)
+#   repo:     lodash/lodash  (custom modularized build; "lodash modularize exports=npm")
+#   license:  MIT  (Copyright 2012-2016 The Dojo Foundation; Underscore.js 1.8.3 lineage)
+#   file:     index.js  (41-line file; arrayProto/nativeReverse at lines 11/14;
+#             the function is lines 37-39; module.exports at line 41)

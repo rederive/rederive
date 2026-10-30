@@ -1,0 +1,13 @@
+UNIT f64_from_bits
+LANG ts
+PRIMARY-SHA256 280dbe363c44f78c8429c754e288658426d2993eb5e176c5eab0af7485e4f4a4
+SIG export function f64_from_bits(bits: string): number
+ABI TypeScript compiles to the js runtime: text=string (UTF-16); f64=number. STRICT: the artifact must type-check under
+  `strict: true` with no `any`, no non-null assertions (`!`), no `@ts-ignore` / `@ts-expect-error`. A throw is any
+  thrown Error; its type and message are not graded.
+MECHANISM (restated from js) R1 = the pinned regex, tested WITHOUT the m flag (an unflagged $ is end-of-text only, so a
+  trailing line feed is rejected). R2 = BigInt("0x" + bits) through DataView.setBigUint64 / getFloat64 (big-endian), or
+  two 32-bit halves through setUint32. A BigInt route needs target lib ES2020.
+DEPENDS-ON none
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R1 — no i flag, no m flag
+PROVENANCE rederive@b15b56613f9d cli/sir/canon.mjs f64fromBits.

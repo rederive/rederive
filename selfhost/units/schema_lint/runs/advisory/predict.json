@@ -1,0 +1,80 @@
+{
+ "status": "ok",
+ "unit": "schema_lint",
+ "primary": "selfhost/units/schema_lint/sir/schema_lint.sir",
+ "primarySha256": "8e74cb3dded267ffa91c77fece9986ab50d20be3ad85c2b5ee718a04d26d04bb",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "LINES: text is split at every CRLF pair, every other CR and every other LF; n breaks give n + 1 lines, numbered from 1. On each line, every U+FEFF inside the line's leading run of SP and U+FEFF characters (in any mix) is removed, then the trailing run of SP characters is removed. \"The line\" below always means this trimmed line. CITED FIDELITY package",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R2",
+   "text": "BLANK: an empty line is skipped. It ends nothing: lines after it still belong to the directive before it.",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R3",
+   "text": "COMMENT LINE: a line whose first character after its leading SP run is \"#\" opens nothing and ends nothing. Its COMMENT TEXT is that part with its leading run of \"#\" removed and then at most one SP character removed; it is appended to the comments of the current directive (the last one opened), or ignored before the first directive.",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R4",
+   "text": "CODE: on any other line, take the part after the leading SP run and cut it at its COMMENT MARKER: the first \"#\" that is preceded by an SP character, is followed by an SP character or the end, and is not inside a quoted span (R8) of that part. The code is the part before the marker with its trailing SP run removed, or the whole part when there is no marker; the text after the marker with its leading and trailing SP runs removed (possibly empty) is a TRAILING COMMENT, appended to the comments of the directive the line opens or continues (R5, R6).",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R5",
+   "text": "DIRECTIVE LINE: a line with no leading SP character opens a new directive when its NAME — its code up to the first SP character, or all of it — is a directive name, i.e. an uppercase ASCII letter followed by any number of uppercase ASCII letters, ASCII digits and \"-\", other than the word CITED. A name that is such a word followed by one \":\" counts as that word (except CITED followed by \":\"). The opened directive's ARGUMENTS are the attribute body (R7) of the code after the name, and that code's attribute values begin its attribute list; the directive ends where the next directive opens. It is a DEPENDS-ON directive when the name is exactly DEPENDS-ON (case-sensitive; so DEPENDS-ON: also is, while DEPENDS-ON-X, DEPENDS-ONX and depends-on are other directives). CITED FIDELITY package",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R6",
+   "text": "CONTINUATION: every other line — an indented line, or a column-0 line that does not open a directive (prose, a lowercase word, a name glued to its text by a character that is not SP, a CITED line) — belongs to the current directive: the attribute body (R7) of its code, when not empty, is appended to that directive's continuations, and its attribute values to its attribute list. A line before the first directive belongs to nothing and is ignored, so an indented DEPENDS-ON line is never a directive.",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "R7",
+   "text": "ATTRIBUTES of a piece of code: read the piece with one space put in front. An ATTRIBUTE MARKER is a run of SP characters, then one of the words CITED, EARNED or ANCHOR (case-sensitive), then an SP character or the end, where the word does not lie inside a quoted span (R8) of the piece. The BODY is everything before the first marker's SP run (the whole piece when there is none), with its leading and trailing SP runs removed. Each marker's VALUE is the text after its word up to the next marker's SP run (or the end), with its leading and trailing SP runs removed — possibly empty, and kept even when empty. The marker itself (its SP run and its word) is in no part.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R8",
+   "text": "QUOTED SPAN: scan left to right. A '\"' opens a span when it is the first character, or the character before it is one of the OPENERS, or it directly follows the closing quote of the span before it. The span closes at the next '\"' that is not escaped, where a backslash escapes the one character (code point) after it. An opening quote with no closing quote opens nothing, and no later quote opens either. A position is inside a span when it lies strictly between its two quotes. Spans only hide a \"#\" or an attribute word from R4 and R7; their text is content like any other. CITED FIDELITY package — so an inch mark (12\"), a quote after a letter, after \"/\" or \".\" or after * + ? opens nothing",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R9",
+   "text": "CONTENT of a DEPENDS-ON directive: its arguments (possibly empty), then each of its continuations in line order, then each value of its attribute list in order (the directive line's first, left to right), then each of its comments in line order, joined with one space between each two (an empty piece still contributes its joining space). Nothing is blanked.",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R10",
+   "text": "HIT: a DEPENDS-ON directive is a hit when its content contains the seven letters carried in any mix of ASCII case at a place whose preceding character is absent or not an ASCII letter and whose following character is absent or not an ASCII letter (so carried_x, carried2 and écarried count while miscarried and carriedX do not; a non-ASCII look-alike such as U+017F or U+0130 never matches a letter), or when carried_name is not none, not empty and not exactly the text none, and the content contains carried_name, compared exactly (case-sensitive, character by character, every character literal) at any place, overlapping occurrences included, whose preceding character is absent or not WORD and whose following character is absent or not WORD. A name that starts or ends with a non-WORD character still needs those neighbours to be non-WORD. CITED FIDELITY package — a name none is never tested (None and NONE are), as it reads like no dependency",
+   "ambiguity": 0.48
+  },
+  {
+   "id": "R11",
+   "text": "Each hit contributes one entry, in ascending line order: line = the directive's line number (R1); what = the WHAT pin; text = the directive's line (R1, so with any attribute and trailing comment it holds), cut to its first 96 Unicode code points (all of it when shorter). A directive gives at most one entry. No hits gives hits as the empty list.",
+   "ambiguity": 0.36
+  }
+ ],
+ "ranked": [
+  "R10",
+  "R1",
+  "R4",
+  "R8",
+  "R6",
+  "R5",
+  "R7",
+  "R9",
+  "R11",
+  "R3",
+  "R2"
+ ],
+ "at": "2026-10-28T03:15:53Z"
+}

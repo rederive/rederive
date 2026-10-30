@@ -1,0 +1,41 @@
+# EXEMPLAR (minimal register) — a ≤10-line pure function earns a ~35-line SIR.
+# This exact contract is PROVEN: blind quorum 3/3 at 29/29 (16 frozen + 13 held-out) — condensed 68% from a
+# 116-line original with no convergence loss. The EARNED block below was added after an observed round-1
+# divergence (2/3 emissions syntax-dead) — defensive lines are earned by failures, never written cold.
+UNIT min-indent
+KIND FUNCTIONAL
+FIDELITY package        # reproduce min-indent@1.0.1 exactly
+ORACLE-CLASS deterministic
+SIG minIndent(string: string) -> number   # default export; pure; no options
+DEPENDS-ON none
+
+# The smallest count of leading space/tab characters among the string's CONTENT lines (lines whose next
+# character after the leading run is non-whitespace). No content lines -> 0.
+
+# BEHAVIOR — the whole computation is one regex scan (pinned verbatim, load-bearing):
+#     RE = /^[ \t]*(?=\S)/gm
+#   match = string.match(RE)
+#   if (!match) return 0
+#   return match.reduce((r, a) => Math.min(r, a.length), Infinity)
+#
+# Three class distinctions carry all the behavior — get these exactly right:
+#   1. The leading class is EXACTLY [ \t] (ASCII space + tab, each counting 1) — NOT \s. A \f, \v, or
+#      no-break space in the leading run makes the lookahead fail: that line is NOT a content line.
+#   2. The content test (?=\S) uses full-Unicode \S.
+#   3. Line starts come from the multiline `^`, which fires at string start and after each JS line
+#      terminator (\n, \r, U+2028, U+2029) — NOT after \f or \v. Do not split on '\n'; CRLF, lone \r,
+#      and LS/PS all work only because `^` defines the boundaries.
+#
+# EARNED (round-1 divergence: 2/3 emissions were syntax-dead from raw LS/PS in comments): when your source
+# mentions U+2028/U+2029, write them ONLY as escapes (\u2028) — the raw characters are line terminators and
+# will truncate a // comment into live code.
+#
+# Discriminators (kill the plausible-wrong implementations; the oracle carries the full set):
+#   " \fa"        -> 0   (a \s-based leading class would return 1)
+#   "    a\r  b"  -> 2   (a split('\n') line model would miss the lone-\r boundary)
+#   "  a\n\t\n b" -> 1   (whitespace-only lines are ignored, not counted as indent 0)
+
+ORACLE value -> oracle.json
+
+ENVELOPE minIndent(string) only; non-string args are out (real code calls String.prototype.match).
+PROVENANCE min-indent@1.0.1, github.com/thejameskyle/min-indent, MIT, index.js (single default export).

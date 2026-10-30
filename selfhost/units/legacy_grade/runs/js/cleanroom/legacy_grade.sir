@@ -1,0 +1,131 @@
+UNIT legacy_grade
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@978444f3baf3 cli/verdict.mts — grade(gots, vectors) over vectorPass, threw, eq, enc and revive; the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG legacy_grade(gots: list[json], vectors: list[record[name: text, expected: json]]) -> record[pass: i64, total: i64, full: bool, miss: list[text]]
+ENVELOPE ABSTRACT SLICE: gots is a list of json values (the IEEE-754 specials NaN, +Infinity, -Infinity and -0 included);
+  vectors is a list of records {name: text, expected: json}. A json map reaches the unit with its keys in canonical order
+  (UTF-16 code units), so in this slice two maps compare by key set and values (R4) and key order is never observed. An
+  expected value is the v0.4 legacy codec's stored spelling: plain json in which a map carrying the key __t is a TAG MAP
+  (TABLE REVIVE). Throws are IN scope as observations: R1 says when the whole call throws.
+  HOST SLICE (the js/ts extension, see NOTE): the same lists may hold host values with no language-neutral meaning — the
+  absent value, a big integer, a regular expression, a boxed wrapper (number, text or bool kind), a set, a keyed
+  collection, a byte array (plain or buffer-flavoured), a list with holes — and maps whose key order is significant (R4).
+DEPENDS-ON none
+DESCRIPTION rdv's per-vector verdict and tally for a v0.4 (legacy-codec) oracle. gots[i] is the already-computed result,
+  or a captured-throw sentinel, for vectors[i]. Each vector passes when both sides are throw sentinels, or when the got,
+  spelled canonically (CANON), is identical to the expected value decoded (REVIVE) and then spelled canonically. The
+  result record is {pass, total, full, miss} in that field order: the passing count, the vector count, whether every
+  vector passed, and the names of the first 8 failing vectors.
+BEHAVIOR
+R1 Vectors are graded in order, i = 0 … total-1, where total is the number of vectors; gots[i] past the end of gots is the
+  absent value and gots beyond the vectors are ignored. pass = the number of vectors for which PASS(gots[i], expected) holds.
+  miss = the names of the failing vectors in order, cut to the first 8 (names repeat when vectors repeat them). full =
+  (pass equals total); an empty vector list gives pass 0, total 0, full true, miss empty. A throw anywhere in R5–R13 while
+  grading any vector makes the WHOLE call throw (no partial result); vectors before it do not soften that.
+R2 THROWN(x): x is a map (not a list, not none, not a scalar) that has an OWN key __throw. The key's value is not inspected
+  (text, a number, none) and other keys may be present.
+R3 PASS(g, e) = THROWN(g) and THROWN(e), or else SAME(g, e). When both are thrown, e is never decoded — so a malformed
+  tag inside a thrown expected cannot throw; a thrown got against an unthrown expected falls through to SAME, and so does
+  an unthrown got against a thrown expected (which is decoded, and may throw, R6).
+R4 SAME(g, e): CANON(g) and CANON(REVIVE(e)) are the identical ordered tree. Lists compare element by element; maps
+  compare entry by entry in KEY ORDER, keys and values both, with the same entry count; text by UTF-16 code units; finite
+  numbers by value; bools; none. KEY ORDER of a map = its array-index keys (the canonical decimal spelling of an integer
+  0 … 4294967294) ascending first, then every other key in arrival order. So in the host slice {a:1, b:2} is not SAME as
+  {b:2, a:1}, while {b:1, "1":2} is SAME as {"1":2, b:1} CITED FIDELITY package — eq compares serialized text, ext key-order call
+R5 CANON(v), applied recursively, first matching row of TABLE CANON. A tag map produced by CANON has its keys in the order
+  the row lists them.
+TABLE CANON — v is the value being spelled
+  the absent value                                       | {__t: "undef"}
+  a big integer                                          | {__t: "bigint", v: its decimal text (a leading "-" when negative)}
+  the number -0                                          | {__t: "num", v: "-0"}
+  NaN, +Infinity, -Infinity                               | {__t: "num", v: "NaN" / "Infinity" / "-Infinity"}
+  a regular expression                                   | {__t: "regex", source: its normalized source, flags: its normalized flags} (R10)
+  a boxed wrapper                                        | {__t: "boxed", k: "Number" / "String" / "Boolean" by kind, v: CANON(its payload)}
+  a set                                                  | {__t: "set", values: CANON of each member in insertion order}
+  a keyed collection                                     | {__t: "map", entries: [CANON(key), CANON(value)] for each entry in insertion order}
+  a byte array                                           | {__t: "u8", bytes: its bytes as numbers 0–255, buf: whether it is buffer-flavoured}
+  a list with a hole (an index below its length absent)   | {__t: "sparse", length: its length, entries: [index, CANON(element)] for each present index ascending}
+  any other list                                         | the list of CANON of each element
+  a map                                                  | the map of the same keys in KEY ORDER with CANON values; when the ORIGINAL map has an OWN key __t, __throw or __threw (any value) it is wrapped as {__t: "obj", v: that map} CITED rederive selfhost #67 — own keys only
+  text, a finite number other than -0, a bool, none       | itself
+R6 REVIVE(e), recursively. A list -> the list of REVIVE of each element, holes kept as holes. A map whose key __t holds
+  one of the texts of TABLE REVIVE -> that row (other keys of the tag map are ignored unless the row reads them). Any other
+  map (no __t, or a __t of another text or a non-text value) -> a fresh map with the same keys in the same order and REVIVE
+  of each value; its own __t stays as data, so CANON wraps it again (R5) and {__t: "zzz", a: 1} is SAME as itself. Text,
+  numbers, bools, none, the absent value and a big integer -> themselves. A host set, keyed collection, regular
+  expression, byte array or boxed wrapper reaching REVIVE (host slice only) is read as a map of its own enumerable keys:
+  empty for a set, a keyed collection, a regular expression and a boxed number or bool; a byte array gives the keys "0" …
+  "n-1" holding its bytes; a boxed text gives "0" … "n-1" holding its one-character texts CITED FIDELITY package — revive's plain-map branch takes any object; ext y0–y6: an expected set equals the got {}, and a set got never equals a set expected
+TABLE REVIVE — t is the tag map, t.x its key x (absent when the key is missing)
+  __t "undef"   | the absent value
+  __t "regex"   | a regular expression from pattern t.source and flags t.flags; an absent pattern is the empty pattern, absent flags mean no flags (R10)
+  __t "bigint"  | a big integer from t.v (R11)
+  __t "num"     | t.v must be exactly one of the texts "NaN", "Infinity", "-Infinity", "-0" -> that number; any other t.v (other text, a number, absent) -> throws CITED rederive selfhost #55 (round 4)
+  __t "boxed"   | x = REVIVE(t.v); t.k "Number" -> boxed number TO-NUMBER(x); t.k "String" -> boxed text TO-TEXT(x); any other t.k ("Boolean", absent, anything) -> boxed bool TO-BOOL(x)
+  __t "set"     | a set of REVIVE of each element of t.values in order (R8); a falsy t.values (R7) is the empty list; a t.values that is truthy and not a list -> throws
+  __t "map"     | a keyed collection (R8) from t.entries read as in R9; a falsy t.entries is the empty list; truthy and not a list -> throws
+  __t "u8"      | a byte array from t.bytes (R12), buffer-flavoured when t.buf is truthy (R7)
+  __t "sparse"  | a list from t.length and t.entries (R13)
+  __t "obj"     | t.v must be a map (none, a list, a scalar or absent -> throws, CITED rederive selfhost #55); a fresh map of t.v's keys in order with REVIVE of each value — t.v's own __t, __throw, __threw are data, never a tag
+R7 TRUTHY: every value except false, 0, -0, NaN, the empty text, none and the absent value (an empty list and an empty map
+  are truthy). TO-BOOL(x) = TRUTHY(x). TO-TEXT(x): text is itself; a number is its shortest round-trip digits, written
+  in plain decimal notation when x is 0 or 1e-6 <= |x| < 1e21, else in scientific notation (the first digit, then "." and
+  the remaining digits when there are any, then e+n or e-n): 5 -> "5", 0.5 -> "0.5", 1e21 -> "1e+21", 1.5e-7 -> "1.5e-7",
+  -0 -> "0"; true/false -> "true"/"false"; none -> "null"; the absent value -> "undefined"; a list -> TO-TEXT of its
+  elements joined by "," (a none or absent element gives the empty text); a map -> "[object Object]". TO-NUMBER(x): a
+  number is itself; true/false -> 1/0; none -> 0; the absent value -> NaN; text -> after trimming WS from both ends, the
+  empty text -> 0, a decimal literal (optional sign; digits, optionally then "." and zero or more digits, or "." then
+  one or more digits; optional e/E exponent; or Infinity after the optional sign) or an unsigned 0x/0o/0b literal -> its value, anything else -> NaN; a list
+  or a map -> TO-NUMBER(TO-TEXT(x)).
+R8 SET MEMBERS and COLLECTION KEYS are unique under SAME-VALUE-ZERO: NaN equals NaN, -0 equals 0 (and is stored as 0),
+  text/number/bool/none/big integer/absent compare by value, every list or map is distinct (REVIVE builds fresh ones). A
+  later duplicate member is dropped; a later duplicate key replaces the earlier entry's value and the entry keeps its
+  first position.
+R9 COLLECTION ENTRIES: each element of t.entries is read as a pair by taking its first two items: a list gives its first
+  and second elements (a missing one is the absent value; extra ones are ignored), a text gives its first and second
+  characters (so "ab" is the pair "a", "b"); any other element (a number, none, a map, a bool) -> throws. Key and value
+  are then REVIVE'd.
+R10 REGULAR EXPRESSIONS: flags (when present, read as text: none is the text "null") is a set of letters from d g i m s u
+  v y, each at most once, u and v not together; anything else -> throws. Normalized flags = those letters in the order
+  d g i m s u v y. The pattern (read as text) must be valid in the host dialect (the js file's pin) or -> throws. Its
+  normalized source: the empty pattern is "(?:)", an unescaped "/" becomes "\/", a line feed becomes the two characters
+  "\n" (the host's source-escaping, the js file's pin).
+R11 BIG INTEGER from t.v: text, after trimming WS from both ends — the empty text is 0; an optional sign
+  then decimal digits; or (no sign) 0x/0o/0b then digits of that base; anything else -> throws. A number that is an
+  integer -> that integer; a non-integer number -> throws. true/false -> 1/0. A list
+  or a map -> the text rule applied to TO-TEXT of it ([5] -> 5, [] -> 0, a map -> throws). none or the absent value -> throws.
+R12 BYTES from t.bytes: a list -> one byte per element, TO-NUMBER of it, NaN and ±Infinity -> 0, otherwise truncated
+  toward zero and reduced modulo 256 into 0–255 (256 -> 0, -1 -> 255, 1.5 -> 1, "7" -> 7, "a" -> 0, none -> 0, true -> 1).
+  A text -> when buffer-flavoured, its UTF-8 bytes ("12" -> 49, 50); otherwise one byte per character by the list rule
+  ("12" -> 1, 2). A number -> the empty byte array when not buffer-flavoured, throws when buffer-flavoured. The absent value
+  -> throws (either flavour).
+R13 HOLED LISTS from t.length and t.entries: a t.length that is a number must be an integer in 0 … 4294967295 (else
+  throws) and starts a list of that many holes; an absent t.length starts the one-element list [absent value]; any other
+  t.length (text, a bool, none, a map) starts the one-element list [t.length] (not revived) CITED FIDELITY package — p2, p3, p5, v7
+  Then each element of t.entries (a falsy t.entries is the empty list; a text t.entries is read as the list of its characters;
+  any other truthy non-list -> throws) is a pair [i, x] read as in R9 (an element that cannot be read as a pair -> throws): i (a number or an index text like "1") puts
+  REVIVE(x) at index i, extending the length when i is at or past it; an i that is not an array index (negative) puts
+  nothing visible; a later pair for the same index overwrites. A list without holes then spells as a plain list (R5).
+PINNED charset WS = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000–U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED R7 TO-NUMBER and R11 — the host trims exactly these
+INVARIANT pass + (the number of failing vectors) = total; miss has min(8, total - pass) names; full holds exactly when
+  miss is empty; no argument is mutated.
+OUT-OF-DOMAIN what the code does outside ENVELOPE. Items 1–3 are reproduced in the host slice; item 4 is not.
+  1. gots none with at least one vector -> throws; gots none with no vectors -> pass 0, total 0, full true, miss empty.
+  2. vectors none -> throws; a vector that is none -> throws.
+  3. a vector without an expected key: expected is the absent value (so it is SAME as an absent got, R1).
+  4. OUT: a name that is not text (it is copied into miss as it is), gots or vectors that are maps or text (indexed by
+  position), map values that are functions (CANON drops those entries), a buffer-flavoured byte array or a boxed -0,
+  NaN or Infinity as a GOT (the lab's legacy argument codec cannot carry them faithfully), byte-array look-alikes whose
+  storage is detached (CANON falls back to the map row), text keys of t.entries holding characters beyond U+FFFF, t.bytes that is a bool, none or a map,
+  and a boxed payload (R6 boxed row) that REVIVEs to a host value.
+NOTE rust is OMITTED: the unit's domain is the JS-native value model — REVIVE builds host sets, keyed collections with
+  same-value-zero keys, regular expressions in the host dialect, boxed wrappers and holed lists, and R4 compares maps in
+  the host's own-key order. A rust variant could only re-model those as tagged trees, and the abstract slice alone would
+  verify it on a fraction of the rules. Tier 2 of REDERIVE_SELF_PLAN is js/ts.
+ORACLE value -> oracles/legacy_grade.json  CANONICAL-SHA256 982a73b5342a7741c052a115ff3d12e09636d7dd0e96b1576d4564ae88ff29c1
+SCOPE IN: R1–R13 over ENVELOPE (both slices) and OUT-OF-DOMAIN 1–3. OUT: OUT-OF-DOMAIN 4, the other verdict.mts exports
+  (quorum, hashHex, hashOk) except as grade uses them, and the message text of any throw (not graded).
+PROVENANCE rederive@978444f3baf3 (pinned authority, tree 51f9195ee1b0…), cli/verdict.mts: grade, vectorPass, threw, eq,
+  enc, revive. Cut 2026-10-27 into the v0.5 contract register from the pinned source only.

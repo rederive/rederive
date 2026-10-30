@@ -1,0 +1,179 @@
+# SIR for lodash.tolower@4.1.2  (default export: module.exports = toLower)
+# Comments use '#'. This is a language-neutral IR, not JavaScript.
+
+UNIT toLower
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toLower(value: any) -> string
+DEPENDS-ON none   # zero runtime deps; helpers (toString/baseToString/isSymbol/isObjectLike) are bundled INLINE in index.js
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (exact, ordered pipeline — faithful to index.js)
+# ----------------------------------------------------------------------------
+# toLower(value) is, verbatim:   return toString(value).toLowerCase()
+# Two stages: (A) lodash toString-coercion of `value` to a string,
+#             (B) native String.prototype.toLowerCase on that string.
+#
+# --- STAGE A: coerce `value` to a string via lodash toString() -------------
+# toString(value):
+#   NODE A1  (nullish guard, LOOSE equality):
+#     if (value == null) return ''        # loose '==' so BOTH null AND undefined -> ''
+#                                         #   (no other value is loosely-equal to null)
+#     else return baseToString(value)
+#
+# baseToString(value):
+#   NODE A2  (string fast-path):
+#     if (typeof value === 'string') return value      # identity; NO normalization, NO -0 logic
+#
+#   NODE A3  (symbol path):
+#     if (isSymbol(value)) return Symbol.prototype.toString.call(value)
+#       # isSymbol(value) is true iff:
+#       #   typeof value === 'symbol'                                  # primitive symbol
+#       #   OR (value is object-like AND Object.prototype.toString.call(value) === '[object Symbol]')
+#       #      # object-like := value is truthy AND typeof value === 'object'  (a boxed Symbol wrapper)
+#       # Result is the canonical "Symbol(desc)" spelling, e.g.:
+#       #   Symbol('Foo')      -> 'Symbol(Foo)'
+#       #   Symbol()           -> 'Symbol()'
+#       #   Symbol.for('BAR')  -> 'Symbol(BAR)'
+#       # NOTE: bundled `Symbol` reference falls back to undefined if the host has no
+#       #   global Symbol; then symbolToString is undefined and this returns ''. On any
+#       #   modern engine Symbol exists, so the canonical spelling is the in-contract result.
+#       # (Symbols are OUT-OF-ENVELOPE for genInputs — codec cannot carry them — but the
+#       #  mapping is specified here so a blind re-emitter reconstructs it.)
+#
+#   NODE A4  (general coercion + -0 reconstruction):
+#     result = (value + '')              # JS string-concatenation coercion (see A4-detail)
+#     if (result === '0' AND (1 / value) === -Infinity) return '-0'   # uses loose '==' to '0' & '-INFINITY'
+#     else return result
+#       # The '-0' branch fires ONLY when `value + ''` is exactly the string '0' AND value is
+#       #   numeric negative-zero (1/(-0) === -Infinity). Net effect: top-level Number -0 -> '-0'.
+#       # CAUTION: the predicate `1 / value` is evaluated for EVERY value whose coercion is '0'.
+#       #   When value === 0n (BigInt zero): result === '0' is true, so `1 / value` => 1 / 0n
+#       #   => JS throws TypeError "Cannot mix BigInt and other types, use explicit conversions".
+#       #   ==> toLower(0n) THROWS. (See THROW PATHS.) All other BigInts coerce fine (no '0' match,
+#       #       or for 0n only). Number 0 -> '0' (1/0 === +Infinity, not -Infinity, so no '-0').
+#
+#   # A4-detail: semantics of `value + ''` (ECMAScript ToPrimitive(value,'default') then ToString):
+#   #   number  -> ECMAScript Number-to-String (same as String(n)):
+#   #              123 -> '123'; -123.456 -> '-123.456'; 1.5 -> '1.5';
+#   #              1e21 -> '1e+21'; 1e-7 -> '1e-7'; 1e100 -> '1e+100';
+#   #              0 -> '0'; -0 -> '0' (then A4 reconstructs to '-0' at top level);
+#   #              NaN -> 'NaN'; Infinity -> 'Infinity'; -Infinity -> '-Infinity';
+#   #              9007199254740991 -> '9007199254740991'.
+#   #   bigint  -> decimal digits, no 'n' suffix: 10n -> '10'; -5n -> '-5';
+#   #              123456789012345678901234567890n -> '123456789012345678901234567890'.
+#   #              (0n is the throw exception above.)
+#   #   boolean -> 'true' / 'false'.
+#   #   boxed primitive wrappers (new Number/String/Boolean) -> their underlying primitive's
+#   #              string: new Number(5)->'5', new String('ABC')->'ABC', new Boolean(true)->'true'.
+#   #              (OUT-OF-ENVELOPE for genInputs; mapping specified for the blind re-emitter.)
+#   #   Array   -> Array.prototype.toString === join(','):  RECURSIVELY coerce each element with
+#   #              the SAME element->String rules (NOT lodash toString), join with ',':
+#   #                [1,2,3]            -> '1,2,3'
+#   #                ['A','B','C']      -> 'A,B,C'
+#   #                [[1,2],[3,4]]      -> '1,2,3,4'      (nested join flattens via ',')
+#   #                [['A'],['B']]      -> 'A,B'
+#   #                [1, {}, 2]         -> '1,[object Object],2'
+#   #                []                 -> ''
+#   #                ['X']              -> 'X'
+#   #              ELEMENT coercion uses String(element) (NOT lodash's -0 reconstruction):
+#   #                null  element      -> ''   ([1,null,3]      -> '1,,3')
+#   #                undefined element  -> ''   ([1,undefined,3] -> '1,,3'; [undefined]->''; sparse hole same)
+#   #                -0    element      -> '0'  ([-0]->'0'; [-0,1]->'0,1'; [[-0]]->'0')  # NO '-0' inside arrays
+#   #                NaN   element      -> 'NaN'; Infinity->'Infinity'; -Infinity->'-Infinity'
+#   #                0n    element      -> '0'  ([0n]->'0'; [1,0n,2]->'1,0,2')  # join uses String(0n), NO throw
+#   #                Symbol element     -> THROWS TypeError (join calls String(symbol)). See THROW PATHS.
+#   #   TypedArray (Uint8Array) -> %TypedArray%.prototype.toString joins values with ',':
+#   #                Uint8Array([65,66,67]) -> '65,66,67'.
+#   #   Buffer (Node) -> Buffer.prototype.toString() decodes bytes as UTF-8:
+#   #                Buffer.from([65,66,67]) -> 'ABC'; Buffer.from('HÉLLO','utf8') -> 'HÉLLO'.
+#   #                (Buffer differs from a bare Uint8Array — Buffer overrides toString to UTF-8 decode.)
+#   #   plain object {}        -> Object.prototype.toString -> '[object Object]'   (then lowered to '[object object]')
+#   #                {a:1}      -> '[object Object]' as well (no own toString).
+#   #   Map / Set              -> default Object.prototype.toString -> '[object Map]' / '[object Set]'.
+#   #   RegExp                 -> RegExp.prototype.toString -> '/AbC/gi' (source + flags, case preserved at A; lowered at B).
+#   #   object w/ custom toString -> that toString's return: {toString:()=>'HELLO'} -> 'HELLO'.
+#   #   object w/ only valueOf    -> default '+' prefers valueOf for 'default' hint: {valueOf:()=>42} -> '42'.
+#   #   Function -> Function.prototype.toString -> the source text, e.g. 'function Foo(){}', '()=>{}'.
+#   #              (OUT-OF-ENVELOPE for genInputs — not codec-carriable; mapping noted for completeness.)
+#
+# --- STAGE B: lowercase ----------------------------------------------------
+#   NODE B1:
+#     return <stageA-string>.toLowerCase()
+#       # NATIVE String.prototype.toLowerCase — Unicode Default Case Conversion, LOCALE-INDEPENDENT.
+#       # It is explicitly NOT toLocaleLowerCase. Therefore:
+#       #   ASCII A-Z          -> a-z.
+#       #   Latin-1 accented   -> 'ÀÉÎ'    -> 'àéî'.
+#       #   Greek              -> 'ΑΒΓ'    -> 'αβγ'.
+#       #   Greek final sigma  -> 'ΟΔΟΣ'   -> 'οδος'  (regular sigma σ, NOT final ς — context-free).
+#       #   German cap sharp s -> 'ẞ'(U+1E9E) -> 'ß'(U+00DF).
+#       #   Latin digraph DŽ   -> 'Ǆ'(U+01C4) -> 'ǆ'(U+01C6).
+#       #   Turkish dotted İ   -> 'İ'(U+0130) -> 'i̇' (U+0069 U+0307: 'i' + COMBINING DOT ABOVE).
+#       #                         **Locale-independent**: it is NOT Turkish-locale 'i' (U+0069 alone).
+#       #   Turkish 'I'(U+0049)-> 'i'(U+0069) (default, NOT dotless ı).
+#       #   already-lowercase  -> unchanged ('foobar' -> 'foobar').
+#       #   whitespace/punct/digits/emoji/no-case chars -> unchanged ('   '->'   '; '😀ABC'->'😀abc'; '--Foo-Bar--'->'--foo-bar--').
+#       # B applies to the WHOLE stage-A string (including bracketed tags: '[object Object]' -> '[object object]').
+
+# ----------------------------------------------------------------------------
+# THROW PATHS  (codec-faithful & reproducible — recorded as {__throw} by the harness)
+# ----------------------------------------------------------------------------
+# T1: toLower(0n)  -> TypeError ("Cannot mix BigInt and other types, use explicit conversions")
+#     Reason: baseToString sees result==='0' for 0n, then evaluates 1/value === 1/0n (BigInt/Number mix).
+#     ONLY 0n; every other BigInt returns its decimal string.
+# T2: toLower(<array/collection containing a Symbol element>) -> TypeError
+#     ("Cannot convert a Symbol value to a string")
+#     Reason: Array/TypedArray join calls String(element); String(symbol) throws. e.g. [Symbol('x')].
+#     (Top-level Symbol does NOT throw — A3 uses Symbol.prototype.toString.call.)
+
+# ----------------------------------------------------------------------------
+# ORACLE
+# ----------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Pure deterministic function of `value` alone; no clock/RNG/env/fs/net seam. No injection needed.
+# Output is exactly String.prototype.toLowerCase applied to lodash toString(value), as specified above.
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire two-stage pipeline above
+#   (nullish guard, string fast-path, symbol path, '+'-coercion incl. array/typed/buffer/object/regexp,
+#    the '-0' reconstruction predicate + its 0n throw, native locale-independent toLowerCase).
+#
+# CARRIED DATA: none. (No literal tables. Unicode case mappings are provided by the host's native
+#   String.prototype.toLowerCase, not embedded in the unit.)
+#
+# OUT-OF-CONTRACT: none. Pure, no side effects, no statefulness, no external API.
+#
+# ENVELOPE (in-scope inputs genInputs emits; each is codec-round-trippable per this run's harness codec):
+#   - strings: ASCII mixed/lower/upper, dashes/underscores, whitespace, empty, accented Latin, Greek
+#     (incl. final-sigma word), German cap sharp s, Latin digraph, Turkish İ and I, emoji/surrogate,
+#     numeric-looking strings ('0','-0','0xFF').
+#   - numbers: 0, -0, 123, -123.456, 1.5, 1e21, 1e-7, 1e100, NaN, Infinity, -Infinity, MAX_SAFE_INTEGER.
+#   - booleans: true, false.
+#   - bigint: 0n (THROW), 1n, -5n, large.
+#   - null, undefined.
+#   - arrays: numbers, mixed-case strings, nested arrays, with null/undefined/-0/NaN/0n elements,
+#     empty, single, array-with-plain-object element. (Arrays with Symbol elements -> THROW path, in-scope.)
+#   - plain objects {} and {a:1}, RegExp, Map, Set, Uint8Array, Buffer.
+#
+# OUT-OF-ENVELOPE (NOT emitted by genInputs — codec cannot faithfully carry these; behavior still
+#   specified above so a blind re-emitter is complete):
+#   - primitive Symbol (typeof 'symbol') and boxed Symbol object  -> A3, 'symbol(...)' after lowering.
+#   - Function / arrow function  -> A4, lowered source text.
+#   - boxed primitive wrappers new Number/String/Boolean  -> A4, underlying primitive's lowered string.
+#   - object with custom toString/valueOf whose identity/closure matters  -> A4 via that method.
+#   (If a host genuinely lacks a global Symbol, A3 degrades to '' — not reachable in standard engines.)
+
+# ----------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ----------------------------------------------------------------------------
+# Emit an ES module whose DEFAULT export is the function:  export default toLower
+# where toLower(value) implements the two-stage pipeline EXACTLY (preserve the '-0' predicate and its
+# 0n throw, the loose nullish guard, the symbol spelling, and use the host's native locale-independent
+# String.prototype.toLowerCase — NOT toLocaleLowerCase).
+
+# ----------------------------------------------------------------------------
+PROVENANCE lodash.tolower@4.1.2 ; repo https://github.com/lodash/lodash (modularized build) ;
+#           license MIT ; source file: node_modules/lodash.tolower/index.js
+#           (toLower = toString(value).toLowerCase(); toString/baseToString/isSymbol/isObjectLike bundled inline)

@@ -1,0 +1,25 @@
+# Frozen oracle for spec_version_for — worked input -> output; reproduce EXACTLY. 24 shown; 48 more are HELD OUT.
+  spec_version_for([]) => "0.2"
+  spec_version_for(["vectors"]) => "0.2"
+  spec_version_for(["carried-data"]) => "0.3"
+  spec_version_for(["envelope"]) => "0.3"
+  spec_version_for(["trace-seam"]) => "0.3"
+  spec_version_for(["scheduler"]) => "0.4"
+  spec_version_for(["lifecycle"]) => "0.4"
+  spec_version_for(["par-interleaving"]) => "0.4"
+  spec_version_for(["ring"]) => "0.4"
+  spec_version_for(["lang-variant"]) => "0.5"
+  spec_version_for(["cross-lang-anchor"]) => "0.5"
+  spec_version_for(["Vectors"]) => throw("unknown feature \"Vectors\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["vectors","nope"]) => throw("unknown feature \"nope\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["__proto__"]) => throw("unknown feature \"__proto__\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["constructor","ring"]) => throw("unknown feature \"constructor\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["toString","lang-variant"]) => throw("unknown feature \"toString\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["ring","ring"]) => "0.4"
+  spec_version_for(["lang-variant","vectors"]) => "0.5"
+  spec_version_for(["vectors","lang-variant"]) => "0.5"
+  spec_version_for(["envelope","scheduler","carried-data"]) => "0.4"
+  spec_version_for([""]) => throw("unknown feature \"\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["RING","ring"]) => throw("unknown feature \"RING\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["ring","RING"]) => throw("unknown feature \"RING\" — not in cli/capabilities.json; refusing to stamp a version for it")
+  spec_version_for(["vectors","carried-data","envelope","trace-seam","scheduler","lifecycle","par-interleaving","ring","lang-variant","cross-lang-anchor"]) => "0.5"

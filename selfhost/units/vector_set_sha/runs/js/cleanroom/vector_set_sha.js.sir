@@ -1,0 +1,27 @@
+UNIT vector_set_sha
+LANG js
+PRIMARY-SHA256 8b5022fdc658ffc607a31321298cfe965b315f8427a5ff1286efbe397db4fe00
+SIG vector_set_sha(oracle) -> string
+NOTE default export
+ABI json = a JS value: text=string; bool=boolean; list=Array; map=a plain object (prototype Object.prototype or null)
+  with own enumerable string keys; f64=number; none=null. Result text=string of 64 lower-case hex digits. A throw
+  (R1, R2, R4, R5) is an Error thrown out of the call; the message is free. The artifact is an ES module default-exporting
+  the function; it may import node:crypto and nothing else (no rederive, no package).
+ENVELOPE widening: undefined under args/expected throws; Array holes throw; strings holding unpaired surrogates render
+  escaped as lower-case \udxxx (JSON.stringify does this), so the hashed text is well-formed; a null-prototype object
+  is a map. "__proto__" keys are OUT. The R5 cap vectors (args nested ~414 deep) are js-only: past the neutral codec's 100-value cap.
+MECHANISM R1/R2: check Array.isArray on frozen and heldout, and that each case is a plain object whose "args" and
+  "expected" are own keys (or at least not undefined). Build the projection as fresh { args, expected } objects.
+MECHANISM R4 (canonical_string): text and every key via JSON.stringify(string) (ES2019+ escaping is exactly the table);
+  never JSON.stringify anything else. list = Array.isArray (throw on a hole); map = plain object with
+  Object.keys(o).sort() (the default sort IS 16-bit code-unit order); test o.t === 'f64' / 'throw' first and render a
+  fresh { t: 'f64', bits } or { t: 'throw' } after validating bits with HEX16. number, null, undefined and every other
+  host value throw.
+MECHANISM R5: pass a depth down the render (the projection 0, +1 per list element and per map value, including the
+  texts of a fresh f64/throw node) and check it on ENTRY to each value, throwing when it exceeds 416 — before looking at
+  the value, so a 480-deep input throws without descending further. 416 levels fit Node's default stack by plain recursion.
+MECHANISM R6: createHash('sha256').update(canon, 'utf8').digest('hex') from node:crypto.
+DEPENDS-ON none
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R4 — the f64 bits accept-set
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs vectorSetSha (own code). Round 1 language file 2026-10-26; round 4
+  re-cut 2026-10-27 (the R5 nesting cap); round 5 re-cut 2026-10-27 (the cap is 416).

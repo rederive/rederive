@@ -1,0 +1,59 @@
+UNIT kill_precedence
+KIND FUNCTIONAL
+FIDELITY spec
+ANCHOR docs/GDD-v0.5.md §4.2 "Kill precedence" (the five ranks) and §14.4 "Kill adjudication window" (the one-tick window and
+  the tie rule; §14 wins on conflict by its own preamble), with §14.12 "Naming" — a frozen ruling; there is no package to run
+ORACLE-CLASS deterministic
+SIG kill_precedence(events: list[record[id: u64, cause: text]]) -> u64 | none
+ENVELOPE events is the list of damage events that landed on ONE target within ONE tick (the caller's bucketing — see
+  UNGUARDED-PRECONDITION): any length, zero included; each event an id anywhere in the u64 range and a cause that is one of
+  the five tokens of TABLE RANKS, spelled exactly. Ids may repeat, may come in any order, and mean nothing beyond their
+  numeric order. A cause outside the table is OUT-OF-DOMAIN 1 (a throw, reproduced). OUT: deciding which events fall in the
+  window, the cross-tick credit chain (rocket -> vehicle -> wreckage, §14.4 second bullet), the re-attribution of a chain
+  kill to the shooter as splash (§4.2 last sentence, §14.3) and of a detonation kill to the victim (§14.3), the pot amount,
+  the bounty, the ledger and the killcam card.
+DEPENDS-ON none
+UNGUARDED-PRECONDITION events assumes every element landed on the same target within the same tick  DISCHARGE: caller
+UNGUARDED-PRECONDITION events assumes id is the Bishop's event id, issued in event order, so a smaller id is an earlier event  DISCHARGE: caller
+DESCRIPTION Resolve one tick's damage events on one target to the single event that takes the kill credit, and with it the
+  pot share: the highest-ranked cause wins, and among equal causes the earliest event id. The result is that event's id, or
+  none when no event landed.
+BEHAVIOR
+TABLE RANKS — cause token | rank (1 outranks 2, 2 outranks 3, and so on to 5) | the name in §4.2 CITED §4.2 items 1–5
+  headshot | 1 | Headshot
+  body     | 2 | Direct body hit
+  ram      | 3 | Ram (a rider steering a vehicle into you)
+  splash   | 4 | Splash (indirect)
+  traffic  | 5 | Traffic (indifferent, unaimed)
+R1 An empty list -> none: nothing landed, nothing is credited.
+R2 Every event's cause must be a token of TABLE RANKS, character for character — no trimming, no case folding, so "Headshot",
+  "HEADSHOT", " headshot" and "" are all unknown. Any unknown token anywhere in the list -> throw, whatever the other events
+  would have decided: the check covers the whole list and no credit is computed when it fails.
+NOTE decision-pending (R2): §4.2 and §14.4 name five causes and no other, and the document does not say what the Bishop does
+  with a token outside them. Reading A (taken): refuse to rule — throw. Reading B: skip the event and rule on the rest, an
+  all-unknown list giving none. A is taken because a foreign token is an upstream bug and a silent ruling would hide it.
+R3 The winning rank is the smallest rank number among the events' causes CITED §4.2 "the highest rank takes credit and the pot share"; §14.4 "The Bishop resolves all damage events landing on the same target within one tick by §4.2 precedence"
+R4 Among the events whose cause has the winning rank, the credited event is the one with the smallest id CITED §14.4 "Ties within the same rank go to the earliest event id"
+  Earliest is the numeric order of ids (the second UNGUARDED-PRECONDITION); an event's position in the list is never
+  consulted.
+R5 The result is the credited event's id. Because the result is the id and not the event, a duplicate id never makes it
+  ambiguous: several events at the winning rank sharing the smallest id yield that id.
+INVARIANT a non-none result is the id of some event in the list; the result is none only for the empty list.
+INVARIANT a single event's id is the result.
+INVARIANT the result depends only on the (id, cause) pairs, never on their order in the list.
+INVARIANT traffic is credited only when every event is traffic CITED §4.2 "Traffic is lowest so 'killed by a moped' always means no chicken had a claim"
+NOTE the cause token names the RANK, never the vehicle or the weapon: a kill by a Moped, a Bus or a Dozer is traffic. The
+  vehicle-class enum of §14.12 is not an input of this unit, and the banned working name of §14.12 appears nowhere in it.
+OUT-OF-DOMAIN what the unit does outside ENVELOPE. Item 1 is reproduced; item 2 cannot be reached.
+  1. A cause that is not a token of TABLE RANKS -> throw (R2), a differently-cased or padded spelling of a token and the
+  empty text included; the list's other events do not matter.
+  2. An event missing id or cause, a non-integer or negative id, a non-text cause: outside the abstract SIG, no vector can
+  carry it and it never reaches the unit. Each language file says what its native shape does there; it is unverified.
+ORACLE value -> oracles/kill_precedence.json  CANONICAL-SHA256 d92a9d56833587c18d59fd2f3f4a00038ad265827019cfda3a919cddac0dd3b2
+NOTE 64 frozen + 24 held-out, COMPUTED by oracle/gen.mjs — an independent reference of R1–R5 in JavaScript — on 2026-09-25,
+  never typed by hand. The curated prefix covers every rank alone, every pair of ranks in both list orders, every same-rank
+  tie in both id orders, all five ranks at once, the empty list, duplicate ids, ids at 0, 2^53 and 2^64-1, and OUT-OF-DOMAIN 1.
+SCOPE IN: R1–R5 over ENVELOPE, and OUT-OF-DOMAIN 1. OUT: OUT-OF-DOMAIN 2 and everything ENVELOPE lists as OUT.
+PROVENANCE greenfield: the game's docs/GDD-v0.5.md (v0.5, Claude Code handoff) §4.2, §14.4, §14.12, read 2026-09-25.
+  No prior implementation exists; the oracle is the ruling computed, and fidelity to the giver's intent is checked by the
+  giver against the quoted lines, not by this file.

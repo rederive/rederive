@@ -1,0 +1,146 @@
+UNIT padRight
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG padRight(val: any, num?: number, str?: any) -> string
+# NOTE on arg names: the published export is named `padRight`, but the source's inner
+# function param names are (val, num, str). Here `val` is the value to pad, `num` is the
+# target total length, and `str` is the PAD UNIT (what the task called `ch`). This SIR uses
+# (val, num, str) to match the source exactly. There is NO `.toString()` precoercion of val
+# (see BEHAVIOR node B1) — this is load-bearing.
+
+DEPENDS-ON none
+# IMPORTANT: this SIR is SELF-CONTAINED. The source does `require('repeat-string')`, but the
+# observable contract of repeat-string@1.6.1's exported `repeat(str, count)` is INLINED below
+# (node R) so a blind re-emitter reconstructs a standalone padRight with NO external import.
+
+BEHAVIOR
+  # ---- exact source (pad-right@0.2.2/index.js), faithfully reproduced ----
+  #   var padding = '';
+  #   var diff = num - val.length;
+  #   if (diff <= 5 && !str) { padding = '00000'; }              # 5 zeros
+  #   else if (diff <= 25 && !str) { padding = '<27 zeros>'; }   # 27 zeros (literal is 27 long)
+  #   else { return val + repeat(str || '0', diff); }
+  #   return val + padding.slice(0, diff);
+  #
+  # The two precomputed-zero branches are a speed optimization for the DEFAULT pad unit;
+  # they are reproduced exactly because their slice() semantics (esp. for negative/fractional
+  # diff) are observable. The default pad unit is '0' (ZERO), NOT space.
+
+  B1 READ-LENGTH
+     diff := num - val.length
+     # val.length is read DIRECTLY off the argument with NO prior coercion.
+     #  - string val  -> .length is the char count (normal case).
+     #  - array val   -> .length is element count (e.g. [1,2].length === 2).
+     #  - number/boolean val -> .length is `undefined`  => diff := num - undefined === NaN.
+     #  - null / undefined val -> reading `.length` THROWS (see THROW-PATHS T1).
+     # `num` is used numerically as-is: if num is undefined => diff NaN; if num is a numeric
+     # string like '5', JS coerces in subtraction (e.g. '5' - 3 === 2).
+
+  B2 BRANCH-DEFAULT-SMALL   # taken when (diff <= 5) AND str is FALSY
+     # FALSY str := one of: undefined, omitted, null, false, 0, '', NaN  (i.e. !str)
+     # padding := '00000'  (exactly 5 ZERO chars)
+     # GOTO B5 (slice-and-concat)
+     # Note: NaN <= 5 is FALSE, so a NaN diff never enters here.
+
+  B3 BRANCH-DEFAULT-MED     # taken when NOT B2, AND (diff <= 25) AND str is FALSY
+     # padding := a literal of exactly 27 ZERO chars: "000000000000000000000000000"
+     #   (27 > 25, so .slice(0, diff) below always has enough source chars for diff in 6..25)
+     # GOTO B5 (slice-and-concat)
+     # Note: NaN <= 25 is FALSE, so a NaN diff never enters here.
+
+  B4 BRANCH-REPEAT          # taken otherwise: (diff > 25) OR (str is TRUTHY) OR (diff is NaN)
+     # unit := (str is TRUTHY ? str : '0')        # i.e. `str || '0'`
+     # return  CONCAT(val, repeat(unit, diff))    # see node R for repeat(); then DONE.
+     # CONCAT here is JS `+`: it stringifies val (number/boolean/array -> String(val)).
+     # IMPORTANT consequence: when val is a number or boolean, diff is NaN, so repeat(unit,NaN)
+     #   returns '' (see R), and the result is just String(val) with NO padding.
+     #   e.g. padRight(12345, 8) === "12345";  padRight(true, 8) === "true".
+
+  B5 SLICE-AND-CONCAT       # reached from B2 / B3
+     # return CONCAT(val, padding.slice(0, diff))
+     # CONCAT is JS `+` (stringifies val via String(val) if val is array/number/etc.).
+     # padding.slice(0, diff) uses EXACT JS String.prototype.slice semantics:
+     #   - diff in [0 .. padding.length]  -> first `floor(diff)` chars (slice truncates frac).
+     #   - diff NEGATIVE -> slice(0, diff) returns chars from index 0 up to
+     #     (padding.length + diff), i.e. effective length = max(0, padding.length + diff).
+     #     Because the small branch uses a 5-char source, NEGATIVE diff yields:
+     #         diff = -1 -> 4 zeros ;  -2 -> 3 ; -3 -> 2 ; -4 -> 1 ; -5 -> 0 ; <= -6 -> '' (0).
+     #     Worked example (val.length 3): padRight('abc', 2) -> diff = -1 -> "abc0000" (len 7);
+     #       padRight('abc', 0) -> diff = -3 -> "abc00"; padRight('abc', -2) -> diff = -5 -> "abc".
+     #   - diff FRACTIONAL & positive (default branch): slice truncates the float end index, so
+     #     padRight('abc', 5.5) -> diff 2.5 -> 2 zeros -> "abc00"; ('abc',10.7) -> 7 zeros.
+
+  R  INLINED-REPEAT   # observable contract of repeat-string@1.6.1 `repeat(str, num)` (INLINED)
+     # PRECONDITION: if `typeof str !== 'string'` THROW TypeError('expected a string').
+     #   In padRight this `str` is `unit = (origStr || '0')`. So:
+     #     - default / falsy origStr -> unit '0' (string) -> never throws here.
+     #     - TRUTHY non-string origStr (e.g. 5, true, ['a']) -> unit is that non-string ->
+     #       repeat THROWS TypeError('expected a string'). (See THROW-PATHS T2.)
+     # Let n = num (the diff). The OBSERVABLE result for a STRING `unit`:
+     #     R.a  n === 1            -> unit
+     #     R.b  n === 2            -> unit + unit
+     #     R.c  n <= 0 OR n is NaN -> '' (empty string)
+     #     R.d  n a POSITIVE INTEGER >= 3 -> unit repeated exactly n times
+     #          (length === unit.length * n). The pad-right call therefore CONCATENATES the
+     #          full repeated unit; for a MULTI-CHAR unit this OVERSHOOTS the target `num`:
+     #          padRight('abc', 10, 'ab') -> repeat('ab', 7) === 'ab'*7 (14 chars) -> total 17.
+     #          padRight('abc', 8, 'xyz') -> repeat('xyz', 5) (15 chars) -> total 18.
+     #          For a SINGLE-CHAR unit it lands exactly: padRight('abc',6,'z') -> "abczzz".
+     #          Default '0' is single-char, so default padding lands exactly on `num`
+     #          (when diff > 25): padRight('abc', 30) -> "abc" + 27 zeros (len 30).
+     #     R.e  n a POSITIVE NON-INTEGER (fractional) -> result = first floor(unit.length * n)
+     #          chars of the repetition, BUT repeat-string carries a MODULE-LEVEL CACHE
+     #          (`res`/`cache`) and for a MULTI-CHAR unit the trimmed result is
+     #          HISTORY-DEPENDENT (it can differ by 1 char depending on prior repeat() calls
+     #          in the same process). For a SINGLE-CHAR unit the fractional result is stable
+     #          (= floor(n) chars). -> See ORACLE-CLASS / SCOPE: the multi-char-fractional case
+     #          is the SOLE non-deterministic path and is excluded from the oracle envelope.
+
+  # ---- DETERMINISM SUMMARY (which paths are stable for the oracle) ----
+  #  * Default pad unit ('0'): ALL diffs deterministic — small/med branches are pure slice;
+  #    diff>25 uses repeat('0', integer-or-fractional) which is single-char => stable.
+  #  * Custom TRUTHY STRING str with INTEGER resulting diff: deterministic (R.a/b/c/d), even
+  #    multi-char (overshoot is a fixed function of diff). Verified cache-stable.
+  #  * Custom MULTI-CHAR string str with FRACTIONAL resulting diff (diff>0): NON-DETERMINISTIC
+  #    (R.e history-dependent). EXCLUDED from genInputs; documented OUT.
+  #  * Custom SINGLE-CHAR string str with FRACTIONAL diff: deterministic (stable floor).
+
+THROW-PATHS
+  T1 val is null or undefined -> TypeError (reading `.length` of null/undefined).
+     Reachable by codec-faithful inputs, but EXCLUDED from genInputs per task (kept OUT).
+  T2 str is a TRUTHY NON-STRING (number !=0, true, non-empty array/object) AND the call reaches
+     the repeat branch with that unit -> TypeError('expected a string') from inlined repeat (R).
+     Reachable by codec-faithful inputs (e.g. 5, true). EXCLUDED from genInputs (documented OUT).
+     (A FALSY non-string str — 0, false, null, '' — does NOT throw: it is treated as default '0'.)
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The (val, num, str) pipeline B1..B5 and inlined repeat R, including:
+        * default pad unit is '0' (zero), not space;
+        * the !str (falsy) => default-zero branch selection;
+        * `str || '0'` unit selection in the repeat branch;
+        * exact 5-zero and 27-zero literals and their .slice(0, diff) semantics;
+        * negative-diff slice (returns trailing-trimmed prefix, NOT empty) — see B5;
+        * fractional-diff slice truncation in default branch — see B5;
+        * multi-char custom-unit OVERSHOOT via full repeat(unit, diff) — see R.d;
+        * NaN-diff for number/boolean val => no padding, just String(val) — see B4;
+        * final concatenation uses JS `+` (so val is stringified, not pre-coerced).
+  CARRIED DATA: none (no large literal tables; the only literals are two short zero strings,
+    transcribed inline above; no carried.json).
+  OUT-OF-CONTRACT (excluded from the oracle envelope):
+    - val === null / undefined  -> throws (T1).
+    - TRUTHY NON-STRING str reaching repeat branch -> throws (T2).
+    - MULTI-CHAR custom string str combined with a FRACTIONAL resulting diff in the repeat
+      branch -> output is module-cache history-dependent (R.e), hence non-deterministic; not
+      gradable by a stateless oracle. (Single-char fractional and all-integer cases stay IN.)
+    - Non-round-trippable args (functions, Symbols, undefined as an element, NaN/Infinity as a
+      meaningful value): not emitted by genInputs.
+
+PROVENANCE
+  pad-right@0.2.2  (repo: jonschlinkert/pad-right, MIT, (c) 2014 Jon Schlinkert)
+    source file: node_modules/pad-right/index.js
+  INLINED dependency: repeat-string@1.6.1 (repo: jonschlinkert/repeat-string, MIT)
+    source file: node_modules/repeat-string/index.js  (its `repeat(str,num)` export inlined as node R)
+  Verified on Node v24.16.0 by executing the installed packages.

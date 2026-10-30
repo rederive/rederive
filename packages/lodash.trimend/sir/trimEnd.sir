@@ -1,0 +1,248 @@
+UNIT trimEnd
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG trimEnd(string = '', chars = <whitespace>, guard?) -> string
+    # DEFAULT EXPORT: the module's `module.exports` IS this function.
+    # A blind re-emitter MUST emit it as the default export:  export default trimEnd
+    # (no named-export wrapper). The function is called as trimEnd(...args).
+DEPENDS-ON none   # zero runtime deps; all helpers below are inlined in the source and reproduced here.
+
+# =====================================================================================
+# OVERVIEW
+# Removes TRAILING characters from a string. Two branches:
+#   (A) whitespace branch  — used when `chars` is absent / guarded-away: strips trailing
+#       JS-/\s/ whitespace by code unit, via a scan from the right.
+#   (B) custom-chars branch — strips a trailing run of symbols whose membership is tested
+#       against the SET of symbols in `chars`. Membership is UNICODE-SYMBOL-AWARE
+#       (astral pairs, combining clusters, ZWJ sequences, flags, variation selectors,
+#       skin-tone modifiers are each treated as ONE symbol), NOT by UTF-16 code unit.
+# This unit is PURE and DETERMINISTIC. No clock/RNG/io/net seam. No carried data.
+# =====================================================================================
+
+BEHAVIOR
+# ---- Coercion helpers (reproduce EXACTLY) ------------------------------------------
+#
+# toString(value):                      # used for the `string` arg
+#   if value == null  (i.e. value === null OR value === undefined) -> return ''
+#   else return baseToString(value)
+#
+# baseToString(value):                  # used for `string` (via toString) AND directly for `chars`
+#   1. if typeof value == 'string'                 -> return value                      (identity)
+#   2. if Array.isArray(value)                      -> return arrayMap(value, baseToString) + ''
+#        # CRITICAL: this is NOT plain String(value). It maps EACH element through baseToString
+#        # (recursively), producing an array of strings, then does `(arrayOfStrings + '')` which
+#        # joins with ',' (Array#toString). The difference from plain String():
+#        #   - null      element -> baseToString(null)      = (null + '')      = 'null'   (NOT '')
+#        #   - undefined element -> baseToString(undefined) = (undefined + '') = 'undefined' (NOT '')
+#        #     (plain String([1,null,3]) === '1,,3'; lodash baseToString([1,null,3]) === '1,null,3'.)
+#        #   - -0        element -> '-0' (per-element negative-zero rule below) so [0,-0] -> '0,-0'
+#        #   - nested array element recurses: [1,[2,3]] -> '1,2,3' ; [[1,2],[3,4]] -> '1,2,3,4'
+#        #   - number/bool/bigint element -> default coercion ('1', 'true', '7').
+#        # Verified mappings:
+#        #   [1,2,3]      -> '1,2,3'      [1,[2,3]]   -> '1,2,3'      [[1,2],[3,4]] -> '1,2,3,4'
+#        #   [1,null,3]   -> '1,null,3'   [null]      -> 'null'       [true,false]  -> 'true,false'
+#        #   [0,-0]       -> '0,-0'       ['a','b']   -> 'a,b'
+#   3. if isSymbol(value)                           -> return Symbol.prototype.toString.call(value)
+#        # e.g. Symbol('x') -> 'Symbol(x)'.  (Symbols do NOT throw here — see SCOPE/out-of-envelope.)
+#   4. otherwise:
+#        result = (value + '')                      # default JS string coercion
+#        if result == '0' AND (1 / value) == -Infinity   -> return '-0'    # NEGATIVE-ZERO SIGN PRESERVED
+#        else return result
+#        # Consequences (verified):
+#        #   42        -> '42'        true   -> 'true'      false -> 'false'
+#        #   0         -> '0'         -0     -> '-0'        123n  -> '123'   (bigint)
+#        #   NaN       -> 'NaN'       Infinity -> 'Infinity'   -Infinity -> '-Infinity'
+#        #   null (as CHARS, via baseToString directly, NOT toString) -> 'null'
+#        #   undefined (as CHARS, via baseToString directly)          -> 'undefined'
+#        #   {toString:()=>'hello'} -> 'hello'   (plain objects coerce via their own toString)
+#
+# isSymbol(value): typeof value == 'symbol' OR (isObjectLike(value) && tag(value)=='[object Symbol]')
+# isObjectLike(value): value != null && typeof value == 'object'
+#
+# ---- The function body (reproduce EXACTLY, in this order) ---------------------------
+#
+# function trimEnd(string, chars, guard):
+#   NODE 1.  string = toString(string)                         # coerce string arg (null/undefined -> '')
+#
+#   NODE 2.  WHITESPACE BRANCH  (guard OR no chars):
+#            if (string && (guard || chars === undefined)):
+#                return string.slice(0, trimmedEndIndex(string) + 1)
+#            # Condition detail (CRITICAL):
+#            #   - `string` must be TRUTHY (non-empty after coercion). Empty string skips here.
+#            #   - taken when `guard` is TRUTHY (ANY truthy value: {}, 1, 'iteratee', [], etc.)
+#            #     OR when `chars === undefined` (strictly undefined; null does NOT qualify).
+#            #   - GUARD SEMANTICS IN THIS BUILD: it is a BARE truthiness test `guard || ...`.
+#            #     There is NO isIterateeCall() call. ANY truthy 3rd arg forces the whitespace
+#            #     branch and IGNORES `chars`. A falsy 3rd arg (0, '', false, null, undefined,
+#            #     NaN) does NOT trigger it (then `chars === undefined` decides).
+#            #   Examples:
+#            #     trimEnd('  abc  ')            -> '  abc'   (chars undefined)
+#            #     trimEnd('  abc  ', ' ', {})   -> '  abc'   (guard truthy; same here)
+#            #     trimEnd('-_-abc-_-','_-', {}) -> '-_-abc-_-' (guard truthy => chars '_-' IGNORED, only ws stripped, none trailing)
+#            #     trimEnd('  abc  ', ' ', 0)    -> '  abc'   (guard falsy => custom branch, strips trailing ' ')
+#            #     trimEnd('  abc  ', undefined) -> '  abc'   (chars===undefined)
+#            #     trimEnd('', undefined, {})    -> ''        (string falsy => skip, falls through to NODE 3 -> '')
+#
+#   NODE 3.  CHARS COERCION + EMPTY GUARD:
+#            if (!string || !(chars = baseToString(chars))):
+#                return string
+#            # i.e. if string is EMPTY ('') -> return '' .
+#            #      else assign chars = baseToString(chars); if the coerced chars is the EMPTY
+#            #      string '' (falsy) -> return string UNCHANGED.
+#            #   Examples:
+#            #     trimEnd('', 'x')        -> ''      (string empty)
+#            #     trimEnd('abc', '')      -> 'abc'   (chars coerces to '' -> unchanged)
+#            #     trimEnd('xxabc','x','') -> 'xxabc' (guard '' falsy, chars '' -> unchanged)
+#            #   NOTE: chars coercion uses baseToString (NOT toString). So:
+#            #     chars = null      -> baseToString(null)      = 'null'       (char SET = {n,u,l})
+#            #     chars = undefined -> NEVER reaches here: chars===undefined was caught at NODE 2
+#            #                          when string truthy; if string falsy, NODE 3's `!string`
+#            #                          already returned. (So baseToString(undefined) is unreachable.)
+#            #     chars = 0         -> '0'   chars = false -> 'false'   chars = 123n -> '123'
+#
+#   NODE 4.  CUSTOM-CHARS SYMBOL TRIM:
+#            strSymbols = stringToArray(string)                # symbol array of the (coerced) string
+#            end        = charsEndIndex(strSymbols, stringToArray(chars)) + 1
+#            return castSlice(strSymbols, 0, end).join('')
+#            # charsEndIndex scans strSymbols from the RIGHT; while the current symbol IS a member
+#            # of the chars-symbol-array (by strict === on the SYMBOL STRINGS), keep retreating.
+#            # Returns index of the last symbol NOT in the chars set (or -1 if all matched).
+#            # `+1` makes `end` the exclusive cut point; castSlice(symbols, 0, end).join('') is
+#            # the kept prefix. (If end==0, result is '' .)
+#            # Examples:
+#            #   trimEnd('-_-abc-_-','_-') -> '-_-abc'   trimEnd('xxabcxx','x') -> 'xxabc'
+#            #   trimEnd('abcdef','xyz')   -> 'abcdef'   trimEnd('aaa','a')     -> ''
+#            #   trimEnd([1,2,3],'3')      -> '1,2,'     ([1,2,3]->'1,2,3', strip trailing '3')
+#            #   trimEnd(-0,'0')           -> '-'        (-0 -> '-0', strip trailing '0')
+#
+# ---- trimmedEndIndex(string)  [whitespace branch helper] ---------------------------
+#   index = string.length
+#   while (index-- && reWhitespace.test(string.charAt(index))) {}   # retreat over trailing ws
+#   return index                                                    # index of last NON-ws char (-1 if all ws)
+#   reWhitespace = /\s/   (a SINGLE JS regex \s test, applied to ONE UTF-16 code unit at a time,
+#                          via string.charAt(index)).
+#   string.slice(0, index+1) keeps the prefix up to and including the last non-ws code unit.
+#   LEADING/INTERIOR whitespace is NEVER touched (this is trim-END only).
+#
+#   THE WHITESPACE SET = exactly the 25 code points matched by JS /\s/ (verified by enumeration):
+#     U+0009 (tab)  U+000A (LF)  U+000B (VT)  U+000C (FF)  U+000D (CR)  U+0020 (space)
+#     U+00A0 (NBSP) U+1680 (Ogham space)  U+2000..U+200A (en quad .. hair space, 11 chars)
+#     U+2028 (line sep)  U+2029 (para sep)  U+202F (narrow NBSP)  U+205F (med math space)
+#     U+3000 (ideographic space)  U+FEFF (BOM / zero-width no-break space)
+#   Explicitly the ranged block U+2000..U+200A is: 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009 200A.
+#   NOT whitespace (NOT stripped): U+180E (Mongolian vowel separator), U+200B (zero-width space),
+#     U+200C, U+200D (ZWJ), U+2060, and any char JS /\s/ does not match.
+#
+# ---- stringToArray(string)  [symbol splitter for custom branch] --------------------
+#   if hasUnicode(string): return unicodeToArray(string)   else: return asciiToArray(string)
+#
+#   asciiToArray(string)  = string.split('')               # split by UTF-16 CODE UNIT.
+#
+#   hasUnicode(string)    = reHasUnicode.test(string)
+#     reHasUnicode = RegExp('[' + ZWJ + ASTRAL + COMBO + VAR + ']')  where
+#       ZWJ='‍', ASTRAL='\ud800-\udfff',
+#       COMBO='̀-ͯ︠-︯⃐-⃿', VAR='︎️'.
+#     i.e. TRUE iff the string contains any: ZWJ (U+200D), any surrogate (U+D800..U+DFFF, i.e.
+#     any astral codepoint or lone surrogate), any combining mark in U+0300..U+036F or
+#     U+FE20..U+FE2F or U+20D0..U+20FF, or variation selector U+FE0E/U+FE0F.
+#
+#   unicodeToArray(string) = string.match(reUnicode) || []   # split into GRAPHEME-ish symbols.
+#     reUnicode (build it EXACTLY from these pieces; 'g' flag). All ranges below as \u escapes:
+#       rsAstralRange       = '\ud800-\udfff'
+#       rsComboMarksRange   = '̀-ͯ'
+#       reComboHalfMarksRange = '︠-︯'
+#       rsComboSymbolsRange = '⃐-⃿'
+#       rsComboRange        = rsComboMarksRange + reComboHalfMarksRange + rsComboSymbolsRange
+#       rsVarRange          = '︎️'
+#       rsAstral   = '[' + rsAstralRange + ']'
+#       rsCombo    = '[' + rsComboRange + ']'
+#       rsFitz     = '\ud83c[\udffb-\udfff]'                 # skin-tone modifiers
+#       rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+#       rsNonAstral= '[^' + rsAstralRange + ']'
+#       rsRegional = '(?:\ud83c[\udde6-\uddff]){2}'          # a pair of regional indicators (flag)
+#       rsSurrPair = '[\ud800-\udbff][\udc00-\udfff]'        # a well-formed surrogate pair
+#       rsZWJ      = '‍'
+#       reOptMod   = rsModifier + '?'
+#       rsOptVar   = '[' + rsVarRange + ']?'
+#       rsOptJoin  = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')'
+#                          + rsOptVar + reOptMod + ')*'
+#       rsSeq      = rsOptVar + reOptMod + rsOptJoin
+#       rsSymbol   = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')'
+#       reUnicode  = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+#     EFFECT (verified): each match is ONE user-perceived symbol:
+#       - a plain non-astral char, optionally with ONE trailing combining mark cluster
+#         ('café' -> ['c','a','f','é'] where 'é' = 'e'+U+0301);
+#       - a full astral char / emoji ('😀😀' -> ['😀','😀']);
+#       - a ZWJ-joined sequence as ONE symbol ('👨‍👩‍👧' -> ['👨‍👩‍👧']);
+#       - a regional-indicator flag pair as ONE symbol ('🇺🇸' -> ['🇺🇸']);
+#       - base + variation selector as ONE symbol ('❤️' = U+2764 U+FE0F -> ['❤️']);
+#       - base + skin-tone (fitz) modifier as ONE symbol ('👍🏻' -> ['👍🏻']);
+#       - a lone surrogate matched as a single unit.
+#
+# ---- charsEndIndex(strSymbols, chrSymbols)  [membership scan] -----------------------
+#   index = strSymbols.length
+#   while (index-- && baseIndexOf(chrSymbols, strSymbols[index], 0) > -1) {}
+#   return index
+#   baseIndexOf finds value in chrSymbols by STRICT === on the symbol strings (with a NaN
+#   fallback that is irrelevant here since symbols are strings). Each strSymbol is one match
+#   string; membership is exact-symbol-string equality. So a chars symbol like '👍🏻' matches
+#   only a whole '👍🏻' in the string, never a '👍' alone, and vice-versa.
+#   MEMBERSHIP CONSEQUENCES (verified):
+#     - '😀'   removes whole astral chars, never half a surrogate pair.
+#     - '\ud83d' (lone HIGH surrogate) does NOT remove a complete '😀' (the string symbol is
+#       the full pair '😀', '\ud83d' != '😀'); but a TRAILING lone '\ud83d' in the string IS
+#       removed by chars '\ud83d'.
+#     - chars '́' (combining acute alone) does NOT trim 'café' (string symbol is 'é' =
+#       e+U+0301, != the bare combining mark); chars 'é' (e+U+0301) DOES trim it.
+#     - chars '👨' (single emoji) does NOT trim a trailing ZWJ family symbol '👨‍👩‍👧'.
+#     - chars '🇺' (one regional indicator) does NOT trim a trailing flag '🇺🇸'.
+#     - chars '❤' (no VS) does NOT trim trailing '❤️' (heart+VS16).
+#   IMPORTANT: `string` and `chars` are each passed to stringToArray INDEPENDENTLY, so one may
+#   be ascii-split while the other is unicode-split (e.g. trimEnd('😀abcx','x') -> '😀abc';
+#   trimEnd('abcx','x😀') -> 'abc').
+#
+# ---- castSlice(array, start, end) --------------------------------------------------
+#   end = end === undefined ? length : end
+#   return (!start && end >= length) ? array : baseSlice(array, start, end)
+#   With start=0: if end >= length it returns the full array (no copy); else baseSlice(0,end).
+#   baseSlice clamps as standard. Result symbol-array is then join('')-ed to the output string.
+#   (Note: re-joining all symbols reconstructs the original string exactly when nothing trimmed.)
+
+ORACLE value -> oracle.json
+# Pure deterministic value oracle: expected = trimEnd(...args), compared by string equality.
+# Throw paths: only via a non-codec-faithful arg (Symbol — see below). No codec-faithful input
+# reaches a throw; all in-envelope inputs return a string.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The full pipeline NODE 1..4 above, both branches, the guard bare-truthiness test.
+    - The coercion ladder (toString / baseToString) including: array element-wise recursive
+      mapping via baseToString joined with ',' (so null->'null', undefined->'undefined',
+      -0->'-0' PER ELEMENT — NOT plain String(array)); bigint/boolean/number default coercion;
+      the top-level -0 -> '-0' sign-preservation rule; object-via-its-own-toString;
+      Symbol -> 'Symbol(desc)' (note: symbol inputs are out-of-ENVELOPE for the generator,
+      see below, but the behavior is specified for completeness).
+    - The whitespace branch's exact /\s/ set (25 code points enumerated above), tested per
+      UTF-16 code unit from the right.
+    - The custom branch's unicode symbol splitting (reUnicode / reHasUnicode constructed
+      byte-exact from the ranges above) and exact-symbol-string membership scan.
+  CARRIED DATA: none. There is NO large literal table. The unicode regexes are SMALL inline
+      constructions fully transcribed above; reproduce them character-for-character. The /\s/
+      whitespace set is a host-regex class, enumerated above so a blind re-emitter reproduces
+      the same set. (Re-emitters SHOULD use the host /\s/ regex, which matches the enumerated
+      set on any modern JS engine; the enumeration is the authority.)
+  OUT-OF-CONTRACT: none (no side effects, no statefulness, no external API).
+  OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because not codec-round-trippable):
+    - Symbol args. trimEnd(Symbol('x')) -> 'Symbol(x)' (does NOT throw in this build);
+      a Symbol as `chars` -> 'Symbol(x)' char set. Symbols do not survive JSON/codec, so the
+      generator does not emit them; the behavior is specified above for a blind re-emitter.
+    - NaN / +Infinity / -Infinity as the `string` arg coerce to 'NaN'/'Infinity'/'-Infinity'.
+      These numbers are NOT codec-faithful (NaN/Inf), so they are NOT emitted live; behavior
+      is specified. (-0 IS allowed/round-trippable per the codec list and IS emitted, including
+      as a top-level string arg and as an array ELEMENT [0,-0]->'0,-0'.)
+    - `undefined` as an ARRAY ELEMENT (e.g. [1, undefined, 3] -> '1,undefined,3') or as `chars`
+      directly is codec-lossy and not emitted; behavior is specified (element -> 'undefined').
+
+PROVENANCE lodash.trimend@4.18.0 (npm). Repo: lodash/lodash. License: MIT.
+  Source file: node_modules/lodash.trimend/index.js (single-file custom modular build).
+  Authors: John-David Dalton, Mathias Bynens. Based on Underscore.js 1.8.3.

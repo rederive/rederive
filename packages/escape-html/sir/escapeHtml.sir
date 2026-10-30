@@ -1,0 +1,155 @@
+UNIT escapeHtml
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure value-mode string transformer. No seam (no clock/RNG/env/io/net). Default export.
+
+SIG escapeHtml(string: any) -> string
+DEPENDS-ON none
+
+BEHAVIOR
+  # ----------------------------------------------------------------------------
+  # NODE 0 — COERCION (exact, load-bearing)
+  #   str = '' + string      # JS string-concatenation coercion, NOT String(...)
+  #   This invokes ToString on the operand via the '+' operator:
+  #     - a string      -> itself (value-identical primitive)
+  #     - a number      -> its decimal form: 42 -> "42", 0 -> "0",
+  #                        NaN -> "NaN", Infinity -> "Infinity", -Infinity -> "-Infinity"
+  #     - a bigint      -> its digits WITHOUT the 'n' suffix: 10n -> "10"
+  #     - boolean       -> "true" / "false"
+  #     - null          -> "null"
+  #     - undefined     -> "undefined"   (NO short-circuit on falsy; undefined is stringified)
+  #     - a plain object {} -> "[object Object]"
+  #     - an object with custom toString -> the toString() result
+  #     - an array      -> Array.prototype.toString (comma-join): [1,2] -> "1,2", ["<"] -> "<"
+  #   THROW PATH: a Symbol operand makes '' + symbol throw
+  #     TypeError: "Cannot convert a Symbol value to a string".
+  #     (Distinguishing detail: String(symbol) would NOT throw; this unit uses '+' so it DOES.)
+  #     Symbols are out-of-envelope (not codec-faithful) and are NOT emitted by genInputs;
+  #     documented here for completeness — see SCOPE/out-of-contract.
+  #
+  # NODE 1 — FAST-PATH PROBE
+  #   match = /["'&<>]/.exec(str)         # the module-level regex matchHtmlRegExp = /["'&<>]/
+  #   The character class contains EXACTLY these 5 code points and NO others:
+  #     0x22 "  (double quote)
+  #     0x27 '  (apostrophe / single quote)
+  #     0x26 &  (ampersand)
+  #     0x3C <  (less-than)
+  #     0x3E >  (greater-than)
+  #   exec() finds the FIRST occurrence (match.index = position of first escapable char).
+  #   IF no match (!match)  -> return str UNCHANGED (the coerced string, no rebuild).
+  #     This is the no-escapable fast path. The returned value EQUALS str by value.
+  #     Examples that hit the fast path: "", "hello world", "   " (spaces),
+  #     "#$%=", "`/" (backtick and slash are NOT escaped), "café", "😀",
+  #     "42", "null", "undefined", "true", "[object Object]".
+  #
+  # NODE 2 — INDEX-WALK REBUILD (only reached when match is found)
+  #   escape = '' ; html = '' ; index = 0 ; lastIndex = 0
+  #   FOR index = match.index ; index < str.length ; index++ :
+  #     switch on str.charCodeAt(index):   # operates on UTF-16 CODE UNITS
+  #       case 34 (0x22 ")  -> escape = '&quot;'
+  #       case 38 (0x26 &)  -> escape = '&amp;'
+  #       case 39 (0x27 ')  -> escape = '&#39;'    # numeric entity, NOT &apos;
+  #       case 60 (0x3C <)  -> escape = '&lt;'
+  #       case 62 (0x3E >)  -> escape = '&gt;'
+  #       default           -> continue            # skip non-escapable code unit, no append
+  #     # On a matched (escapable) code unit only:
+  #     IF lastIndex !== index :
+  #       html += str.substring(lastIndex, index)  # flush the plain run before this char
+  #     lastIndex = index + 1
+  #     html += escape                             # append the entity
+  #   # END FOR
+  #   # Tail flush of any trailing plain run after the last escapable char:
+  #   RETURN (lastIndex !== index)
+  #            ? html + str.substring(lastIndex, index)   # index == str.length here
+  #            : html
+  #   Note: after the loop, index === str.length. lastIndex !== index is true iff
+  #   there is plain text after the final escapable char; otherwise html is complete.
+  #
+  # EXACT ENTITY TABLE (verified by running escape-html@1.0.3):
+  #     &  -> &amp;
+  #     <  -> &lt;
+  #     >  -> &gt;
+  #     "  -> &quot;
+  #     '  -> &#39;        (decimal numeric character reference, NOT &apos;)
+  # No other character is altered. Surrogate-pair code units (e.g. emoji) are
+  # non-escapable code units and pass through via the `default: continue` branch.
+  #
+  # VERIFIED EXAMPLES (input -> output):
+  #   "&"            -> "&amp;"
+  #   "<"            -> "&lt;"
+  #   ">"            -> "&gt;"
+  #   "\""           -> "&quot;"
+  #   "'"            -> "&#39;"
+  #   ""             -> ""                          (fast path)
+  #   "hello world"  -> "hello world"               (fast path)
+  #   "&<>\"'"       -> "&amp;&lt;&gt;&quot;&#39;"   (all five, adjacent)
+  #   "&&"           -> "&amp;&amp;"
+  #   "<abc"         -> "&lt;abc"                    (leading escapable)
+  #   "abc>"         -> "abc&gt;"                    (trailing escapable)
+  #   "a<b>c&d"      -> "a&lt;b&gt;c&amp;d"          (interleaved)
+  #   "abc&def"      -> "abc&amp;def"                (match.index != 0)
+  #   "😀<b>"        -> "😀&lt;b&gt;"                (emoji passes through)
+  #   "café&"        -> "café&amp;"
+  #   "#$%="         -> "#$%="                       (fast path; not escapable)
+  #   "`/&"          -> "`/&amp;"                    (backtick, slash NOT escaped)
+  #   "\n\t&"        -> "\n\t&amp;"
+  #   42             -> "42"                         (coercion, fast path)
+  #   0              -> "0"
+  #   null           -> "null"
+  #   undefined      -> "undefined"
+  #   true           -> "true"
+  #   false          -> "false"
+  #   {}             -> "[object Object]"
+  #   [1,2]          -> "1,2"
+  #   ["<"]          -> "&lt;"                       (array coerces to "<", then escapes)
+  #   {toString:()=>"x<y"} -> "x&lt;y"               (custom toString -> "x<y" -> escaped;
+  #                                                   CORRECT behavior, but NOT a gradable
+  #                                                   differential input — see OUT-OF-CONTRACT)
+  #   NaN            -> "NaN"
+  #   Infinity       -> "Infinity"
+  #   10n            -> "10"
+  #   Symbol("s")    -> THROW TypeError "Cannot convert a Symbol value to a string"
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The '' + string coercion (string-concat ToString, including the Symbol throw path).
+    - The /["'&<>]/ regex, the no-match fast path (return coerced str unchanged).
+    - The index-walk rebuild with the exact 5-entry entity table above, including
+      &#39; (numeric, not &apos;), the plain-run flush logic, and the tail flush.
+    - charCodeAt code-unit semantics (surrogate pairs / emoji pass through untouched).
+  CARRIED DATA: none. The entity table is 5 inline cases, reproduced above verbatim
+    (it is in-contract logic, not a large literal table).
+  OUT-OF-CONTRACT:
+    - Symbol input: throws TypeError. Documented above; NOT codec-round-trippable
+      (Symbols carry identity and do not survive JSON.stringify(encode(...))), so it is
+      NOT emitted by genInputs. A blind re-emitter reconstructs the throw from this spec.
+    - Live functions as input would coerce to source text via Function.prototype.toString;
+      not codec-faithful, NOT emitted.
+    - OBJECTS WITH A CUSTOM toString (e.g. { toString: () => 'x<y' }): the BEHAVIOR is
+      in-contract (NODE 0 uses the toString() result, then NODE 1/2 escape it — example
+      above). But such an object is NOT a gradable DIFFERENTIAL input: the oracle codec
+      (JSON.stringify(encode(args))) serializes any plain object by its OWN ENUMERABLE
+      KEYS only, so the toString closure is DROPPED — it serializes to {} and the revived
+      value re-coerces to "[object Object]", not the intended string. The two sides of the
+      differential would then run on DIFFERENT effective inputs -> a FALSE divergence.
+      (Round-1 defect: genInputs emitted { toString: () => randStr() }; randStr() was also
+      invoked INSIDE the closure, so each coercion consumed fresh rnd() state and returned a
+      DIFFERENT string — non-deterministic AND non-round-trippable. Both the random-fill
+      branch and the curated x<y case were removed.) Therefore custom-toString objects are
+      DOCUMENTED here / reconstructable from NODE 0, but are NOT emitted by genInputs. The
+      escapable-via-coercion path is instead exercised by codec-round-trippable carriers:
+      ARRAYS of precomputed strings (["<"] -> "&lt;", ["a","<","b"] -> "a,&lt;,b"), whose
+      comma-join coercion is deterministic and survives the codec element-for-element.
+    - GENERATOR INVARIANT (self-consistency anchor): every value genInputs emits coerces
+      identically under repeated '' + arg (no stateful/non-deterministic toString) AND
+      survives the codec round-trip to a value that re-coerces to the SAME string. Codec-
+      faithful + coercion-stable emitted carriers: strings; finite numbers; NaN/±Infinity
+      (codec tag __t:'num'); null; undefined (codec tag __t:'undef'); booleans; bigint
+      (codec tag __t:'bigint'); plain {} ("[object Object]"); and arrays of the foregoing.
+
+PROVENANCE escape-html@1.0.3, repo component/escape-html (github), MIT Licensed,
+  source file index.js (lines 16, 33-78). Verified by executing the installed package
+  in node at /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-escape_html-pBM87h.

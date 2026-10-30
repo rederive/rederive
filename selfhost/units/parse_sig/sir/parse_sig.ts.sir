@@ -1,0 +1,29 @@
+UNIT parse_sig
+LANG ts
+PRIMARY-SHA256 60b55e0a01fec765e82a808a2ede7490c1e3cf116aa0aa28046eb6dcad91682a
+SIG export default function parse_sig(s: string): Sig
+ABI TypeScript compiles to the js runtime and is driven exactly as js. Declare in the artifact
+  type TypeTree = { k: 'text' | 'bytes' | 'bool' | 'none' | 'i64' | 'u64' | 'f64' | 'json' } | { k: 'union'; alts: TypeTree[] }
+  | { k: 'tuple'; items: TypeTree[] } | { k: 'list'; item: TypeTree } | { k: 'map'; key: TypeTree; val: TypeTree }
+  | { k: 'record'; fields: [string, TypeTree][] };
+  type Arg = { name: string; type: TypeTree; rest?: true }; type Sig = { name: string; args: Arg[]; result: TypeTree }.
+  An argument carries the property rest only when it is a rest parameter (never rest: false). Property order is
+  immaterial. STRICT: the artifact type-checks under strict: true with no any, no non-null assertions (!), no @ts-ignore
+  and no @ts-expect-error. A throw (R1, R2, R5–R8) is a thrown Error; the message is not graded. ES module default export;
+  imports nothing.
+ENVELOPE as the primary; no widening.
+MECHANISM (restated from js — language files are self-contained) a recursive-descent reader with one cursor over the
+  string (index access; every accepted character is ASCII): skip WHITESPACE before every token, read IDENT longest first
+  by the IDENT pin at the cursor, test literal tokens with startsWith at the cursor. WHITESPACE is the four characters of
+  the primary pin only — NOT \s and NOT trim (no-break space, zero width no-break space, line separator, vertical tab and
+  form feed are oracle throws). PREFIX (R2): remember the cursor, read the prefix words as IDENT tokens, keep them only
+  when each matches and WHITESPACE then an IDENT start follow, else restore the cursor. Unreachable alternatives (R5):
+  SAME compares an order-free key of each tree (union alts and record "name=key" fields each sorted, then joined inside
+  brackets; tuple, list, map members in order), NOT JSON.stringify of the tree, which is order-sensitive; JSON is a
+  recursive predicate over TABLE JSON_SHAPED; COVERS is a recursive predicate that holds when ANY row of TABLE COVERS
+  holds (try them all: the LIST, TUPLE, MAP and RECORD rows recurse into COVERS, the union rows recurse both ways); test
+  each later alt against every earlier one. Nesting (R8): one depth counter, up on entering a composite, down on its closing bracket. After the result TYPE skip WHITESPACE and require the
+  end. A regex match is RegExpExecArray | null and an index read is string | undefined: narrow, never assert.
+DEPENDS-ON none
+PINNED regex IDENT = /^[A-Za-z_][A-Za-z0-9_]*/ CITED primary IDENT — applied to the remainder at the cursor
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs parseSig + reader. Round 5: re-cut after FINDINGS #74 #78 #79.

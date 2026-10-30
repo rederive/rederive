@@ -1,0 +1,320 @@
+# =====================================================================
+# SIR — deepmerge (default export) — npm "deepmerge"@4.3.1, CJS
+# =====================================================================
+UNIT deepmerge
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure function. No clock/RNG/io/net seam. The only "ambient" effect is
+# that it MUTATES the passed `options` object (adds helper fns) and never
+# mutates target/source. Value-mode oracle compares the RETURNED merged
+# value (structure), so option-mutation is irrelevant. See SCOPE.
+
+SIG  deepmerge(target: any, source: any, options?: Options) -> any
+#   Options = {
+#     arrayMerge?:  (target[], source[], options) => any[]   # function — OUT (see SCOPE)
+#     clone?:       boolean                                   # IN  (default true)
+#     customMerge?: (key) => ((x,y)=>any) | undefined         # function — OUT
+#     isMergeableObject?: (value) => boolean                  # function — OUT
+#   }
+#   The default export is ALSO assigned a static method `deepmerge.all`
+#   (merge an array of objects). `.all` is OUT-of-contract for THIS unit;
+#   this SIR specifies ONLY the callable default export deepmerge(t,s,opts).
+
+DEPENDS-ON none
+# Source `dist/cjs.js` (the package `main`) INLINES the dependency
+# `is-mergeable-object` — there is no runtime require of any package.
+# Reproduce isMergeableObject inline per the BEHAVIOR below. Zero deps.
+
+# =====================================================================
+# BEHAVIOR  — exact ordered pipeline. Reproduce verbatim.
+# =====================================================================
+#
+# ---- PREDICATES (reproduce exactly) --------------------------------
+#
+# isNonNullObject(v):
+#     return (!!v) && (typeof v === 'object')
+#   # true for plain objects, arrays, Date, RegExp, Set, Map, typed
+#   # arrays, Buffer, boxed Number/String, class instances, Object.create(null).
+#   # false for null, undefined, numbers, strings, booleans, bigint,
+#   # symbols, functions.
+#
+# isSpecial(v):
+#     s = Object.prototype.toString.call(v)
+#     return s === '[object RegExp]'
+#         || s === '[object Date]'
+#         || isReactElement(v)
+#   # isReactElement(v): v.$$typeof === Symbol.for('react.element')
+#   #   (fallback const 0xeac7 if Symbol.for unavailable; modern engines
+#   #    always have Symbol.for, so it is Symbol.for('react.element')).
+#   # NOTE: ONLY RegExp, Date, and React elements are "special".
+#   #   Set, Map, Uint8Array/typed arrays, Buffer, ArrayBuffer, Error,
+#   #   Promise, boxed primitives, plain class instances are NOT special.
+#
+# isMergeableObject(v):                # the DEFAULT options.isMergeableObject
+#     return isNonNullObject(v) && !isSpecial(v)
+#   # => TRUE for: {}, [], Set, Map, Uint8Array/Buffer/typed arrays,
+#   #              Object.create(null) (+own props), class instances.
+#   #    FALSE for: null/undefined/scalars/bigint/symbol/function,
+#   #               Date, RegExp, React element.
+#
+# emptyTarget(val):
+#     return Array.isArray(val) ? [] : {}
+#
+# ---- CLONE WRAPPER -------------------------------------------------
+#
+# cloneUnlessOtherwiseSpecified(value, options):
+#     if (options.clone !== false) && options.isMergeableObject(value):
+#         return deepmerge(emptyTarget(value), value, options)   # deep clone
+#     else:
+#         return value                                           # pass through (by-reference)
+#   # When clone !== false AND value is mergeable, deep-clone by merging
+#   # value onto a fresh [] or {}. Otherwise return the value itself.
+#   # NON-mergeable values (scalars, Date, RegExp, null, ...) are returned
+#   # AS-IS (by reference for the object ones — Date/RegExp identity preserved).
+#
+# ---- KEY ENUMERATION -----------------------------------------------
+#
+# getEnumerableOwnPropertySymbols(target):
+#     Object.getOwnPropertySymbols(target) filtered to those that are
+#     own-enumerable (propertyIsEnumerable).  (Empty array if no symbols.)
+#
+# getKeys(target):
+#     return Object.keys(target).concat(getEnumerableOwnPropertySymbols(target))
+#   # = own ENUMERABLE string keys (in normal JS key order: integer-like
+#   #   keys ascending numeric first, then insertion order for the rest),
+#   #   THEN own enumerable symbol keys.
+#   # IMPORTANT: Set/Map have NO own enumerable string keys -> Object.keys
+#   #   is [] -> they enumerate to nothing. Uint8Array/Buffer expose own
+#   #   enumerable INDEX keys '0','1',... (NOT 'length').
+#
+# ---- PROTOTYPE-POISONING GUARD (reproduce exactly) -----------------
+#
+# propertyIsOnObject(object, property):
+#     try { return (property in object) } catch(_) { return false }
+#   # `in` walks the prototype chain.
+#
+# propertyIsUnsafe(target, key):
+#     return propertyIsOnObject(target, key)
+#         && !( Object.hasOwnProperty.call(target, key)
+#               && Object.propertyIsEnumerable.call(target, key) )
+#   # A source key is UNSAFE (and SKIPPED) iff it exists somewhere on the
+#   # target's prototype chain but is NOT an own-enumerable property of the
+#   # target. This silently drops dangerous keys like '__proto__',
+#   # 'constructor', 'toString', 'valueOf', 'hasOwnProperty' when the target
+#   # is a normal object that does NOT carry them as own-enumerable props.
+#   # (If the target DOES own such a key enumerably, the key is safe -> merged.)
+#
+# ---- OBJECT MERGE --------------------------------------------------
+#
+# mergeObject(target, source, options):
+#     destination = {}                      # ALWAYS a fresh plain object
+#     if options.isMergeableObject(target):
+#         for key in getKeys(target):
+#             destination[key] = cloneUnlessOtherwiseSpecified(target[key], options)
+#     for key in getKeys(source):
+#         if propertyIsUnsafe(target, key):
+#             continue                       # SKIP unsafe key entirely
+#         if propertyIsOnObject(target, key) && options.isMergeableObject(source[key]):
+#             # key present on target (own OR proto, but it passed the unsafe
+#             # guard so it is own-enumerable here) AND source value mergeable:
+#             #   recurse via the merge fn (default = deepmerge).
+#             destination[key] = getMergeFunction(key, options)(target[key], source[key], options)
+#         else:
+#             # key absent on target OR source value not mergeable:
+#             #   take the (cloned) source value — SOURCE WINS.
+#             destination[key] = cloneUnlessOtherwiseSpecified(source[key], options)
+#     return destination
+#   # KEY INSIGHT: when isMergeableObject(target) is FALSE (e.g. target is a
+#   #   scalar/Date/RegExp/null... but recall null/scalar reach here only when
+#   #   target & source TYPES MATCH per deepmerge), target keys are NOT copied;
+#   #   only source keys are emitted. Result is ALWAYS a plain object {}.
+#
+# getMergeFunction(key, options):
+#     if (!options.customMerge): return deepmerge
+#     cm = options.customMerge(key)
+#     return (typeof cm === 'function') ? cm : deepmerge
+#   # With no customMerge (default), this is always `deepmerge` (recursion).
+#
+# ---- DEFAULT ARRAY MERGE -------------------------------------------
+#
+# defaultArrayMerge(target, source, options):
+#     return target.concat(source).map(el => cloneUnlessOtherwiseSpecified(el, options))
+#   # CONCATENATE target's elements THEN source's elements, in order, and
+#   # clone each element (mergeable elements deep-cloned; scalars/Date/RegExp
+#   # passed through). No de-duplication, no index-wise merge.
+#
+# ---- TOP-LEVEL DISPATCH (the exported function) --------------------
+#
+# deepmerge(target, source, options):
+#     options = options || {}
+#     options.arrayMerge        = options.arrayMerge        || defaultArrayMerge
+#     options.isMergeableObject = options.isMergeableObject || isMergeableObject   # the default predicate above
+#     options.cloneUnlessOtherwiseSpecified = cloneUnlessOtherwiseSpecified        # ALWAYS overwritten (caller cannot replace)
+#     # (the three assignments above MUTATE the caller's options object)
+#
+#     sourceIsArray = Array.isArray(source)
+#     targetIsArray = Array.isArray(target)
+#     typesMatch    = (sourceIsArray === targetIsArray)
+#
+#     BRANCH A — types DO NOT match (exactly one of target/source is an Array):
+#         return cloneUnlessOtherwiseSpecified(source, options)
+#         # SOURCE WINS WHOLESALE. The merged value is the (cloned) source,
+#         # regardless of target. e.g. ([1,2], {a:1}) -> {a:1};
+#         #   ({a:1}, [1,2]) -> [1,2];  ([1,2], 5) -> 5;  (5, [1,2]) -> [1,2].
+#
+#     BRANCH B — both are Arrays:
+#         return options.arrayMerge(target, source, options)
+#         # default: concat+clone (see defaultArrayMerge).
+#
+#     BRANCH C — neither is an Array (both "non-array", incl. scalars/null/objects):
+#         return mergeObject(target, source, options)
+#         # Result is ALWAYS a fresh plain {} object.
+#
+# =====================================================================
+# WORKED CONSEQUENCES (self-consistency anchors — verified vs real pkg)
+# =====================================================================
+# All produced by deepmerge with default options unless noted.
+#
+#  recursive merge, source wins on scalar, recurse on both-objects:
+#     ({a:{x:1,y:2}, b:1}, {a:{y:3,z:4}, c:2}) -> {a:{x:1,y:3,z:4}, b:1, c:2}
+#  array concat (target then source), elements cloned:
+#     ([{i:1}], [{j:2}]) -> [{i:1},{j:2}]
+#     ([1,2], [3,4])     -> [1,2,3,4]
+#     ([], [1,2])        -> [1,2]
+#     ({a:[1,2]}, {a:[3,4]}) -> {a:[1,2,3,4]}
+#  Date/RegExp are NON-mergeable VALUES (replace, identity preserved):
+#     ({a:1}, {a:<Date>, b:<RegExp>}) -> {a:<same Date ref>, b:<same RegExp ref>}
+#  no mutation of target/source (both unchanged after call).
+#  type mismatch — source wins:
+#     ([1,2], {a:1}) -> {a:1}        ({a:1}, [1,2]) -> [1,2]
+#     ([1,2], 5)     -> 5            (5, [1,2])     -> [1,2]
+#  scalar/scalar (both non-array, neither mergeable):
+#     (1, 2)         -> {}           (5, {a:1})     -> {a:1}
+#  empty cases:
+#     ({}, {a:1}) -> {a:1}   ({a:1}, {}) -> {a:1}   ({},{}) -> {}
+#  source-scalar over target-object:    ({a:{x:1}}, {a:5}) -> {a:5}
+#  source-object over target-scalar:    ({a:5}, {a:{x:1}}) -> {a:{x:1}}
+#                # (recurse: mergeObject(5,{x:1}); isMergeableObject(5)=false,
+#                #  so target keys skipped; source keys cloned -> {x:1})
+#  null / undefined source values are own keys and SURVIVE:
+#     ({a:1,b:2}, {a:null, b:undefined, c:null}) -> {a:null, b:undefined, c:null}
+#     # NOTE 'b' is an own key whose value is undefined; it IS present in
+#     #   the result object (Object.keys includes it). (Not codec-friendly —
+#     #   see SCOPE; emitted only in the bigint/null subset, never undefined.)
+#  bigint values (non-mergeable scalars, source wins):
+#     ({a:1n}, {a:2n, b:3n}) -> {a:2n, b:3n}
+#  Set / Map are MERGEABLE (NOT special) but have NO own enumerable string
+#  keys, so they CLONE/RECURSE to a plain EMPTY object {}:
+#     ({}, {a:new Set([1,2])})           -> {a:{}}
+#     ({a:new Set([1])}, {a:new Set([2])}) -> {a:{}}
+#     ({a:new Map([['k',1]])}, {a:new Map([['x',2]])}) -> {a:{}}
+#     (new Set([1]), new Set([2]))       -> {}
+#  Uint8Array / Buffer are MERGEABLE and expose own enumerable INDEX keys,
+#  so they CLONE/RECURSE to a plain INDEX object (no 'length', not a typed array):
+#     ({}, {a:new Uint8Array([1,2,3])})  -> {a:{'0':1,'1':2,'2':3}}
+#     ({a:Uint8Array([10,20,30])}, {a:Uint8Array([1,2])}) -> {a:{'0':1,'1':2,'2':30}}
+#       # (target idx 0,1,2 cloned; source idx 0,1 win as scalars; idx 2 kept)
+#     (new Uint8Array([1,2,3]), new Uint8Array([9])) -> {'0':9,'1':2,'2':3}
+#       # both non-array -> mergeObject; target keys 0,1,2 then source key 0 wins
+#  prototype-poisoning guard — dangerous keys NOT own-enumerable on target SKIP:
+#     ({}, JSON.parse('{"__proto__":{"polluted":true}}')) -> {}   (no pollution)
+#     ({}, {constructor:{x:1}})  -> {}     ({}, {toString:'hi'}) -> {}
+#     ({}, {valueOf:42}) -> {}             ({}, {hasOwnProperty:1}) -> {}
+#   # but if target OWNS the key enumerably it IS merged:
+#     ({constructor:{a:1}}, {constructor:{b:2}}) -> {constructor:{a:1,b:2}}
+#  Object.create(null) source merges its own props normally:
+#     ({}, <null-proto {a:1}>) -> {a:1}
+#  options:
+#     clone defaults true. `{clone:false}` makes cloneUnlessOtherwiseSpecified
+#     return mergeable values BY REFERENCE instead of deep-cloning. The
+#     RETURNED STRUCTURE (value) is IDENTICAL to clone:true for the same
+#     inputs — only referential identity / shared-ness differs, which a
+#     value-mode (structural) oracle does not observe. So clone is
+#     VALUE-TRANSPARENT under value-mode comparison.
+#     ({a:[1]}, {a:[2]}) === ({a:[1]}, {a:[2]}, {}) === (...,{clone:true})
+#       all -> {a:[1,2]} (structurally).
+#  ERROR / THROW paths (both target & source non-array, so BRANCH C ->
+#  mergeObject -> getKeys(source) -> Object.keys(source)):
+#     ({a:1}, null)      THROWS  TypeError "Cannot convert undefined or null to object"
+#     ({a:1}, undefined) THROWS  TypeError "Cannot convert undefined or null to object"
+#       # because deepmerge(t, undefined) does NOT short-circuit: undefined is
+#       #   not an array, target {a:1} not an array -> typesMatch -> mergeObject
+#       #   -> getKeys(undefined) -> Object.keys(undefined) throws.
+#       # (Recorded as {__throw} by the harness for codec-faithful inputs.)
+#     (null, {a:1})      THROWS  TypeError (mergeObject(null,...): isMergeableObject(null)
+#                                false so target loop skipped, but getKeys(source) ok ->
+#                                actually returns {a:1}; null TARGET does NOT throw.)
+#       # CLARIFY: only a null/undefined SOURCE throws (Object.keys(source)).
+#       #   A null/undefined TARGET with an object source does NOT throw
+#       #   (target keys are guarded by isMergeableObject(target); source keys
+#       #    enumerate fine). e.g. (null, {a:1}) -> {a:1}; (undefined,{a:1}) -> {a:1}.
+
+ORACLE value -> oracle.json
+# Value-mode. The oracle records the RETURNED merged value (or {__throw}
+# on the TypeError paths) encoded via the harness codec and compares
+# structurally. deepmerge does NOT mutate inputs and the return is fully
+# distinguishable, so value-mode is sufficient and correct.
+
+# =====================================================================
+# SCOPE
+# =====================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire BEHAVIOR pipeline —
+#   the three top-level branches (type-mismatch / both-array / both-object),
+#   defaultArrayMerge (concat + per-element clone), mergeObject (target-clone
+#   then source-merge with source-wins-vs-recurse rule), cloneUnlessOtherwise-
+#   Specified, isMergeableObject = isNonNullObject && !isSpecial (special =
+#   Date/RegExp/React-element ONLY), getKeys (Object.keys ++ enumerable own
+#   symbols), and the propertyIsUnsafe prototype-poisoning guard. Plus the
+#   `clone` option (value-transparent). All deterministic and pure.
+#
+# CARRIED DATA: NONE. No literal tables, no constants beyond the two
+#   toString tags '[object RegExp]'/'[object Date]' and the React-element
+#   sentinel Symbol.for('react.element') (fallback 0xeac7), which are
+#   inlined string/symbol literals in BEHAVIOR, not a table. No carried.json.
+#
+# OUT-OF-CONTRACT (NOT exercised by this unit's value-mode oracle):
+#   - deepmerge.all(array, options): static method on the export; merges an
+#     array of objects via reduce, throws Error('first argument should be an
+#     array') on non-array. Separate unit; NOT specified here.
+#   - options.arrayMerge / options.customMerge / options.isMergeableObject:
+#     FUNCTION-valued options. Not codec-round-trippable; genInputs never
+#     emits them. A blind re-emitter must still SUPPORT them (the defaults
+#     are reached when absent), but the oracle only checks DEFAULT behavior
+#     plus the `clone` boolean.
+#   - options-object MUTATION (deepmerge writes arrayMerge/isMergeableObject/
+#     cloneUnlessOtherwiseSpecified onto the passed options): a side effect on
+#     the caller's options arg, NOT on target/source, and NOT observed by the
+#     value-mode return oracle. Reproduce it for fidelity; it is unobserved.
+#   - React-element detection: requires a real {$$typeof: Symbol.for(
+#     'react.element')} value; symbols are NOT codec-round-trippable, so
+#     genInputs never emits one. Documented for completeness; reproduce the
+#     isReactElement check but it is exercised only conceptually.
+#
+# OUT-OF-ENVELOPE (behavior defined but value NOT codec-faithful, so EXCLUDED
+#   from genInputs — a blind re-emitter still reconstructs the rule from spec):
+#   - functions, Symbols as VALUES — not round-trippable. (deepmerge would
+#     treat a function as a non-mergeable value: isNonNullObject(fn)=false.)
+#   - Date / RegExp as VALUES: behavior IS defined (non-mergeable, identity
+#     preserved) and IS exercised — IF the harness codec round-trips Date and
+#     RegExp. RegExp IS in the codec round-trip set, so RegExp values ARE
+#     emitted. Date is NOT guaranteed in the codec set per the task addendum,
+#     so genInputs DOES NOT emit Date values (documented-as-OUT); the RegExp
+#     case fully demonstrates the "special value, not merged" rule.
+#   - undefined / NaN / ±Infinity / -0 as VALUES, boxed primitives: not
+#     round-trippable; EXCLUDED from genInputs. Behavior: all are non-mergeable
+#     scalars/objects -> source wins / survive as own keys. Documented, not emitted.
+#   - circular references: not representable; EXCLUDED. (deepmerge would
+#     infinite-loop on a self-referential mergeable cycle; never emitted.)
+
+# =====================================================================
+# PROVENANCE
+# =====================================================================
+# package:  deepmerge@4.3.1  (npm)
+# repo:     https://github.com/TehShrike/deepmerge
+# license:  MIT (James Halliday, Josh Duff, and other contributors)
+# main:     dist/cjs.js  (CJS build; inlines is-mergeable-object@1.1.0)
+#           identical logic to source index.js (require('is-mergeable-object'))
+# export:   module.exports = deepmerge  (default/main export; also .all static)
+# RE-EMIT:  this is the DEFAULT export -> the blind re-emitter MUST
+#           `export default <the deepmerge function>` from the .mjs emission
+#           (importKind 'default', exportName null).

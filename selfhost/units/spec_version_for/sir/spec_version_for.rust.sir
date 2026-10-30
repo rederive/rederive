@@ -1,0 +1,14 @@
+UNIT spec_version_for
+LANG rust
+PRIMARY-SHA256 b4bc2a94f8a75a40ea06352528c695afc42a5a705d03c519677dec1e8adc7d49
+SIG pub fn spec_version_for(features: &[&str]) -> String
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn spec_version_for) with no
+  dependencies — no main, no I/O, no unsafe. The verifier generates its own harness from the abstract SIG: the list[text]
+  argument arrives as a slice of &str, the returned String is printed as one JSON line. A throw (R3) is a panic; the
+  message is not graded.
+ENVELOPE as the primary; every list of text is representable.
+MECHANISM FEATURES is a match on the name (or a const slice of (name, since) pairs compared with ==), byte-exact on the
+  UTF-8 text: no case folding, no trimming; every other name panics (R3). Compare versions by the VERSION-ORDER table (a
+  rank 0..3 per since); return the since text as an owned String.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/features.mjs specVersionFor. Language file cut 2026-10-26 with the primary, before any blind re-emission.

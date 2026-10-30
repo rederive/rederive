@@ -1,0 +1,152 @@
+UNIT arrayFlatten
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ============================================================================
+# EXPORT SHAPE  (VERIFIED against source — the hint was WRONG)
+# ============================================================================
+# The hint said "default export". The REAL v3.0.0 API is a NAMED export.
+#   dist/index.js (CommonJS, main):   exports.flatten = flatten;   # NO default
+#   dist.es2015/index.js (ESM, module): export function flatten(array) {...}
+#   dist/index.d.ts:                  export declare function flatten<...>(array: T): ...
+# Observed at runtime: Object.keys(require("array-flatten")) === ["flatten"];
+#   require(...).default === undefined.
+# => The unit under test is the named function `flatten`, arity 1 (fn.length === 1, fn.name === "flatten").
+#
+# EMITTER DIRECTIVE (load-bearing — emissions are .mjs loaded via import()):
+#   The blind re-emitter MUST expose the function as a NAMED export named `flatten`:
+#       export function flatten(array) { ... }
+#   (NOT `export default`.) The input-generator sets exportName = 'flatten', importKind = 'named'.
+
+SIG  flatten(array: ArrayLike<any>) -> Array<any>
+# `array` is any ARRAY-LIKE: a value with a numeric `.length` property and integer-indexed
+# elements (a real Array, a string, an `arguments` object, a Uint8Array/Buffer, or a plain
+# object shaped { length: N, 0:..., 1:..., ... }). Returns a brand-NEW Array. Pure: input is
+# never mutated (the function only READS `array.length` and `array[i]`; it never writes to `array`).
+
+DEPENDS-ON none
+# Zero runtime dependencies. Uses only Array.isArray and Array.prototype.push.
+
+# ============================================================================
+# BEHAVIOR  (exact algorithm — deterministic, pure, no seam)
+# ============================================================================
+# array-flatten@3 flattens NESTED ARRAYS INDEFINITELY (ALL levels — unlike lodash.flatten,
+# which is depth-1). "Nested" means, and ONLY means, a value v for which Array.isArray(v) is true.
+# Anything that is NOT an Array (objects, strings, numbers, null, undefined, NaN, ±Infinity,
+# bigint, Set, Map, Uint8Array/Buffer, functions, symbols, ...) is an OPAQUE LEAF: pushed
+# through by reference/value as a single element, regardless of whether it is itself iterable
+# or array-LIKE. Only true Arrays are descended into.
+#
+# ALGORITHM (reproduce EXACTLY):
+#
+#   flatten(array):
+#       result = new empty Array []
+#       $flatten(array, result)        # mutate `result` in place via the helper
+#       return result
+#
+#   $flatten(array, result):                       # depth-first PRE-ORDER, left-to-right
+#       for i = 0; i < array.length; i = i + 1:     # cache-free: reads array.length each iter is fine,
+#           value = array[i]                         #   but length is effectively fixed for our inputs
+#           if Array.isArray(value):                 # ONLY a genuine Array recurses
+#               $flatten(value, result)              # recurse into the nested array
+#           else:
+#               result.push(value)                   # everything else -> appended as ONE leaf element
+#
+# NODE / BRANCH enumeration (each must be exercised):
+#   NODE-1  Top-level entry: allocate fresh result [], call helper, return result.
+#           => return value is ALWAYS a new Array, never the input, never shared with the input.
+#   NODE-2  Iteration is index-based 0..length-1 over the array-like (uses `.length` + `array[i]`),
+#           NOT a for..of / iterator. So a string top-level iterates by char index; an arguments
+#           object iterates by index; a { length, 0, 1 } object iterates by index.
+#   BRANCH-A  value is a real Array (Array.isArray === true)  -> recurse (descend, do NOT push the array).
+#   BRANCH-B  value is anything else                          -> push value verbatim as a single leaf.
+#   ORDER     Strict depth-first pre-order, left to right. Leaves appear in result in the exact order
+#             they are visited. Example: flatten([1,[2,3,[4,5]],6,[7,[8,[9]]]]) -> [1,2,3,4,5,6,7,8,9].
+#   DEPTH     UNBOUNDED. flatten([[[[[[42]]]]]]) -> [42]. No depth cap, no maxDepth parameter.
+#             (Implementation is true recursion; extremely deep nesting could in principle hit a
+#             native call-stack limit, but no software depth limit exists. Curated inputs stay <= ~6
+#             deep — well within any stack.)
+#
+# LEAF/PASSTHROUGH SEMANTICS (confirmed by running the package):
+#   - Objects pass through by reference as a single element:
+#       flatten([1,[{a:1},null]]) -> [1, {a:1}, null]   (the object is element[1], unchanged identity).
+#   - null passes through:            flatten([1,[null],3]) -> [1, null, 3].
+#   - NaN / Infinity / -Infinity pass through with identity preserved (NaN stays NaN, Infinity stays
+#     Infinity, -Infinity stays -Infinity):
+#       flatten([NaN,[Infinity,[-Infinity]]]) -> [NaN, Infinity, -Infinity].
+#   - bigint passes through:          flatten([1n,[2n,[3n]]]) -> [1n, 2n, 3n].
+#   - A STRING is NOT recursed when it is an ELEMENT (Array.isArray("ab") is false):
+#       flatten([1,["ab",[2]]]) -> [1, "ab", 2]   (the string "ab" is one leaf, not split into chars).
+#     BUT a STRING passed as the TOP-LEVEL argument IS iterated by index (it is array-like):
+#       flatten("test") -> ["t","e","s","t"];  flatten("") -> [].
+#   - Set / Map / Uint8Array / Buffer as ELEMENTS are opaque leaves (Array.isArray is false for all):
+#       flatten([1,[new Set([1,2])]])[1] is the SAME Set instance (NOT expanded).
+#       flatten([new Map([["k","v"]])])[0] is the SAME Map instance.
+#       flatten([1,[new Uint8Array([7,8])]])[1] is the SAME Uint8Array (NOT expanded into 7,8).
+#     (They have a numeric length/size or are iterable, but the test is strictly Array.isArray.)
+#
+# EMPTY / DEGENERATE:
+#   - flatten([])                 -> []   (new empty array).
+#   - flatten([[], [[]], []])     -> []   (all-empty nesting collapses to []).
+#   - flatten("")                 -> []   (empty string array-like, length 0).
+#   - flatten({length:0})         -> []   (length 0 array-like).
+#
+# TOP-LEVEL ARGUMENT TYPE BEHAVIOR (no explicit type guard — behavior FALLS OUT of `array.length`):
+#   - Array-like WITH a numeric/usable `.length`: iterated normally.
+#       flatten({length:2, 0:"a", 1:"b"}) -> ["a","b"].
+#   - A value WHOSE `.length` is undefined (e.g. a number, or a plain object with no `length`):
+#     the loop guard `0 < undefined` is false immediately, so the loop never runs:
+#       flatten(5)      -> []    (number has no .length -> empty result; does NOT throw).
+#       flatten({a:1})  -> []    (plain object, no .length -> empty result; does NOT throw).
+#   - null or undefined as the TOP-LEVEL argument THROWS a TypeError (reading `.length` of null/undefined):
+#       flatten(null)      -> THROW TypeError "Cannot read properties of null (reading 'length')"
+#       flatten(undefined) -> THROW TypeError "Cannot read properties of undefined (reading 'length')"
+#     (The exact message text is engine-specific; the gradable contract is: a TypeError is thrown.
+#      The harness records this throw-path as {__throw} for codec-faithful null/undefined inputs.)
+#
+# SPARSE ARRAYS / EXPLICIT-UNDEFINED ELEMENTS (documented; see SCOPE for why genInputs avoids them):
+#   - Iteration is `array[i]` over indices 0..length-1, so a HOLE (sparse slot) is read as `undefined`
+#     and PUSHED (holes are NOT skipped — the result is dense):
+#       flatten([1,,3])     -> [1, undefined, 3]  (length 3).
+#       flatten([1,[,,2]])  -> [1, undefined, undefined, 2].
+#   - An explicit `undefined` element is pushed identically: flatten([1,undefined,3]) -> [1,undefined,3].
+#     NOTE: `undefined` (hole or explicit) does NOT survive the JSON codec round-trip (serializes to
+#     null), so genInputs MUST NOT emit it; a blind engineer still reconstructs this branch from the
+#     spec above. `null` is codec-faithful and exercises the SAME push-leaf branch.
+
+ORACLE value -> oracle.json
+# The expected output for each input tuple is the new flattened Array (or the {__throw} marker for
+# the null/undefined top-level throw cases). Equality is deep structural equality of the result Array
+# (element order significant; object/Set/Map/typed-array LEAVES compared by their serialized form via
+# the harness codec). Pure & deterministic => value-mode oracle, no seam.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire algorithm above —
+#   * new-array allocation + return,
+#   * index-based 0..length-1 traversal of the top-level array-like,
+#   * Array.isArray test selecting recurse-vs-push,
+#   * unbounded depth-first pre-order left-to-right flattening of nested Arrays only,
+#   * opaque passthrough of every non-Array value (objects, null, NaN, ±Infinity, bigint, strings,
+#     Set/Map/Uint8Array/Buffer) as single leaves,
+#   * no mutation of the input,
+#   * empty/degenerate collapses, array-like top-level (string/arguments/{length,...}),
+#   * top-level no-.length => [] (number, plain object), top-level null/undefined => TypeError throw.
+#
+# CARRIED DATA: none. (No literal tables; nothing to extract or attest.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; behavior still specified above for a
+# blind re-emitter):
+#   * Sparse-array holes & explicit `undefined` ELEMENTS — un-round-trippable through the JSON codec
+#     (serialize to null); behavior documented (read-as-undefined, pushed, dense result).
+#   * Function and Symbol elements — pass through as opaque leaves IN THE REAL PACKAGE (Array.isArray
+#     is false), but functions/symbols are not codec-faithful, so they are explicitly excluded from
+#     genInputs per the addendum. A blind engineer infers: any non-Array leaf is pushed verbatim.
+#   * No stateful APIs, no side effects, no ambient reads (clock/RNG/env/fs/net) — there is NO SEAM.
+
+PROVENANCE array-flatten@3.0.0  (blakeembrey)
+#   repo:    git://github.com/blakeembrey/array-flatten.git
+#   license: MIT
+#   source:  dist/index.js (CommonJS, package.main) and dist.es2015/index.js (ESM, package.module);
+#            types dist/index.d.ts; behavior cross-checked against dist/index.spec.js.

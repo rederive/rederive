@@ -1,0 +1,200 @@
+UNIT join
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG join(array, separator) -> string
+# Default export of the package (CommonJS `module.exports = join`). The blind
+# re-emitter MUST emit it as the ES-module DEFAULT export: `export default <fn>`.
+# (See EMISSION CONTRACT below.) exportName = null (call the default/main export).
+
+DEPENDS-ON none
+# Zero runtime deps. The only "dependency" is the host's built-in
+# Array.prototype.join, captured ONCE at module-load time:
+#     nativeJoin = global.Array.prototype.join
+# The unit calls nativeJoin via .call(array, separator). The re-emitter may
+# reference `Array.prototype.join` directly — semantics are identical for the
+# in-scope inputs (no monkey-patching of Array.prototype is in scope).
+
+BEHAVIOR
+# The ENTIRE function body is, verbatim from source:
+#     function join(array, separator) {
+#       return array ? nativeJoin.call(array, separator) : '';
+#     }
+# Two ordered nodes:
+#
+# NODE 1 — TRUTHY GUARD (NOT a null-check!)
+#   Evaluate the JS truthiness of `array`.
+#   IMPORTANT: this is `array ? A : B`, i.e. a *truthy* test — NOT `array == null`
+#   and NOT `array != null`. The set of values that take the ELSE branch (return
+#   '') is exactly the JS FALSY set:
+#       undefined, null, false, 0, -0, 0n, "" (empty string), NaN
+#   For ANY of those (including the empty string "" and the number 0), the
+#   function returns the empty string '' WITHOUT calling nativeJoin.
+#   For every other value (truthy), proceed to NODE 2.
+#   # Degenerate / no-arg calls: join() and join(undefined) -> array is undefined
+#   # (falsy) -> '' . join(null) -> '' .
+#
+# NODE 2 — DELEGATE TO Array.prototype.join (NATIVE join, not String#join)
+#   Return  Array.prototype.join.call(array, separator).
+#   This is the standard ECMAScript Array.prototype.join algorithm
+#   (ES2015 22.1.3.13) applied to `array` coerced via ToObject, reading
+#   `length` = ToLength(O.length), and elements O[0..length-1].
+#
+#   2a. SEPARATOR HANDLING (per Array.prototype.join):
+#       - If separator is `undefined` (this includes the case where the caller
+#         passed only one argument, OR explicitly passed undefined), the
+#         separator used is the literal string "," (comma).
+#       - Otherwise the separator is String(separator) — coerced with ToString:
+#             "-"        -> "-"
+#             ""         -> ""           (elements concatenated with no sep)
+#             "%"        -> "%"
+#             0          -> "0"
+#             null       -> "null"       (NOTE: only the SEPARATOR===undefined
+#                                          maps to ","; separator===null maps to
+#                                          the string "null")
+#             true       -> "true"
+#             {}         -> "[object Object]"
+#             [1,2]      -> "1,2"         (Array ToString)
+#             new Set([1,2]) -> "[object Set]"
+#             new Uint8Array([7,8]) -> "7,8"
+#             /x/g       -> "/x/g"
+#             5n (bigint)-> "5"
+#       This String()-coercion of the separator is the defining difference from
+#       a naive "String#join": it is Array.prototype.join.
+#
+#   2b. LENGTH / ELEMENT READING:
+#       length = ToLength(array.length). Objects WITHOUT a usable numeric
+#       `length` property (length is undefined -> ToLength -> 0) produce "".
+#       Consequences for in-scope truthy inputs:
+#         - Real Array          : length = its length; indexed normally.
+#         - Array-like object {length:n, 0:..,1:..} : indexed by 0..n-1.
+#         - String (e.g. "abc") : has a length and indexed chars -> "a,b,c".
+#         - Uint8Array / Buffer : have length + indexed bytes -> "1,2,3".
+#         - new Set / new Map    : truthy objects but have NO own `length`
+#                                  property -> length coerces to 0 -> "".
+#         - Number primitive (e.g. 42), bigint primitive (e.g. 5n): truthy, but
+#                                  ToObject gives a boxed Number/BigInt with no
+#                                  `length` -> "".  (Note 0 / 0n are falsy and
+#                                  short-circuit at NODE 1 to "" anyway.)
+#
+#   2c. ELEMENT COERCION (per Array.prototype.join step for each element e):
+#       For each element e at index 0..length-1:
+#         - if e is undefined OR null    -> contributes the EMPTY string ""
+#           (this includes ARRAY HOLES in a sparse array — a hole reads as
+#            undefined -> "").
+#         - otherwise                    -> String(e)  (ToString):
+#             numbers      : String(n)   -> "1", "2.5", "NaN", "Infinity",
+#                                           "-Infinity"; and -0 -> "0".
+#             true/false   : "true"/"false"
+#             bigint       : decimal, no "n" suffix (1n -> "1")
+#             string       : itself
+#             nested Array : Array.prototype.toString -> its OWN join with ","
+#                            APPLIED RECURSIVELY and ALWAYS with comma regardless
+#                            of the outer separator:
+#                              join([[1,2],[3,4]], "-")  -> "1,2-3,4"
+#                              join([[1,[2,[3]]]])       -> "1,2,3"
+#                              join([[],[]], "-")        -> "-"   (each [] -> "")
+#             plain object : String(obj) -> "[object Object]"
+#             RegExp       : String(re)  -> "/re/g"
+#         Elements joined by inserting the (coerced) separator BETWEEN them
+#         (n elements -> n-1 separators). A single element -> no separator.
+#         Empty length-0 -> "".
+#
+#   WORKED GROUND-TRUTH EXAMPLES (all verified against the real package):
+#       join(['a','b','c'])              -> "a,b,c"
+#       join(['a','b','c'], '-')         -> "a-b-c"
+#       join(['a','b','c'], '')          -> "abc"
+#       join(['a','b','c'], '%')         -> "a%b%c"
+#       join(['a','b','c'], undefined)   -> "a,b,c"     # explicit undefined == default
+#       join([])                         -> ""
+#       join(['x'])                      -> "x"
+#       join([null,'b',undefined])       -> ",b,"
+#       join([null])                     -> ""
+#       join([undefined])                -> ""
+#       join([1,,3])                     -> "1,,3"      # hole -> ""
+#       join(['','',''])                 -> ",,"
+#       join([''])                       -> ""
+#       join([[1,2],[3,4]])              -> "1,2,3,4"
+#       join([[1,2],[3,4]], '-')         -> "1,2-3,4"
+#       join([['a',['b','c']]])          -> "a,b,c"
+#       join([[],[]])                    -> ","
+#       join([[],[]], '-')               -> "-"
+#       join([1,2,3])                    -> "1,2,3"
+#       join([1,'a',true,null,2.5])      -> "1,a,true,,2.5"
+#       join([1n,2n,3n])                 -> "1,2,3"
+#       join([-0,0])                     -> "0,0"
+#       join([NaN,Infinity,-Infinity])   -> "NaN,Infinity,-Infinity"
+#       join([{a:1},{b:2}])              -> "[object Object],[object Object]"
+#       join([/re/g,/x/])                -> "/re/g,/x/"
+#       join(new Uint8Array([1,2,3]))    -> "1,2,3"
+#       join(new Uint8Array([1,2,3]),'-')-> "1-2-3"
+#       join(Buffer.from([1,2,3]))       -> "1,2,3"
+#       join(new Set([1,2,3]))           -> ""          # no .length
+#       join(new Map([[1,2]]))           -> ""          # no .length
+#       join({length:3,0:'x',1:'y',2:'z'}) -> "x,y,z"
+#       join({})                         -> ""
+#       join('abc')                      -> "a,b,c"     # truthy string is array-like
+#       join('abc','-')                  -> "a-b-c"
+#       join(42)                         -> ""          # truthy number, no .length
+#       join(5n)                         -> ""          # truthy bigint, no .length
+#       join('')                         -> ""          # FALSY -> guard, returns ""
+#       join(0)                          -> ""          # FALSY
+#       join(false)                      -> ""          # FALSY
+#       join(NaN)                        -> ""          # FALSY
+#       join(0n)                         -> ""          # FALSY
+#       join(null)                       -> ""          # FALSY (guard)
+#       join(undefined)                  -> ""          # FALSY (guard)
+#       join()                           -> ""          # array===undefined, FALSY
+#       # separator coercion:
+#       join(['a','b'], 0)               -> "a0b"
+#       join(['a','b'], null)            -> "anullb"
+#       join(['a','b'], true)            -> "atrueb"
+#       join(['a','b'], {})              -> "a[object Object]b"
+#       join(['a','b'], [1,2])           -> "a1,2b"
+#       join(['a','b'], new Set([1,2]))  -> "a[object Set]b"
+#       join(['a','b'], new Uint8Array([7,8])) -> "a7,8b"
+#       join(['a','b'], /x/g)            -> "a/x/gb"
+#       join(['a','b'], 5n)              -> "a5b"
+#
+# NO THROW PATHS for in-scope inputs. (Array.prototype.join.call never throws
+# for the values above; it would throw a TypeError only on the *primitive*
+# `null`/`undefined` array — but those are intercepted by NODE 1's falsy guard
+# and never reach NODE 2.)
+# NO SIDE EFFECTS — pure / read-only. No clock, RNG, env, fs, or net seam.
+
+ORACLE value -> oracle.json
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the truthy guard (NODE 1) and the full
+# delegation to Array.prototype.join (NODE 2) including separator===undefined->",",
+# String()-coercion of any other separator, ToLength of `.length`, element
+# ToString with null/undefined/hole -> "", and recursive comma-join of nested
+# arrays. All demonstrated by the worked examples above.
+#
+# CARRIED DATA: none. No literal tables, no constants beyond the string literals
+# "" and "," that are part of the in-contract logic. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+# they are not codec-round-trip-faithful, yet a blind re-emitter still reproduces
+# them from NODE 1/NODE 2 above):
+#   - FUNCTION elements, e.g. join([()=>1, 'b']): NODE 2 applies String(fn) which
+#     yields the function's source text — not codec-round-trippable; excluded.
+#   - SYMBOL elements, e.g. join([Symbol('s')]): Array.prototype.join coerces
+#     elements with ToString, and ToString(Symbol) THROWS a TypeError. So this is
+#     a THROW path, but Symbols are not codec-round-trippable; excluded from
+#     genInputs. (Documented for completeness: a Symbol element -> TypeError.)
+#   - A separator that is a Symbol -> ToString(Symbol) THROWS TypeError; excluded
+#     (Symbols not codec-faithful).
+#   - Monkey-patching Array.prototype.join after module load: out of scope; the
+#     unit binds nativeJoin at load time. Not exercised.
+#
+# EMISSION CONTRACT (how the blind re-emitter must export):
+#   The unit is the package's DEFAULT export. The re-emitted ES module MUST do:
+#       function join(array, separator) { ... }
+#       export default join;
+#   so that `import('...').then(m => m.default)` yields the callable. The harness
+#   calls the default export with the 2-element arg tuples produced by genInputs.
+
+PROVENANCE lodash.join@4.0.0 (npm), repo lodash/lodash, MIT license,
+           source file: node_modules/lodash.join/index.js (the whole module is
+           the 3-line function `join` + the `nativeJoin = Array.prototype.join`
+           capture shown verbatim in BEHAVIOR).

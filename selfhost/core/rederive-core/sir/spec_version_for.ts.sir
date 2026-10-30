@@ -1,0 +1,15 @@
+UNIT spec_version_for
+LANG ts
+PRIMARY-SHA256 b4bc2a94f8a75a40ea06352528c695afc42a5a705d03c519677dec1e8adc7d49
+SIG export default function spec_version_for(features: readonly string[]): string
+ABI TypeScript compiles to the js runtime and is driven exactly as js. text = string; list[text] = readonly string[]. The
+  result is one of the four version strings of the primary's VERSION-ORDER table. STRICT: the artifact type-checks under
+  strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. A throw (R3) is a thrown
+  Error; the message is not graded. ES module default export; imports nothing.
+ENVELOPE as the primary; no widening.
+MECHANISM (restated from js — language files are self-contained) hold FEATURES in a ReadonlyMap<string, string>;
+  Map.get returns string | undefined, so the unknown branch (R3) narrows without a cast. Never index a plain object
+  literal with the name: that reaches inherited members (constructor, toString, __proto__) R3 says throw. Compare
+  versions by the VERSION-ORDER table.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/features.mjs specVersionFor. Language file cut 2026-10-26 with the primary, before any blind re-emission.

@@ -26,7 +26,7 @@ The **open core** is licensed **Apache-2.0** and comprises, at minimum:
 
 - The **`rdv` CLI** — `check`, `vis`, `resynth`, and any command required to verify or re-derive a package.
 - The **SIR specification and format** — the contract grammar and the bundle layout, developed as an open standard.
-- The **verified-recompose loop** — decompile → held-out oracle → quorum re-derivation.
+- The **verified-recompose loop** — decompile → held-out oracle → quorum re-derivation: **`sir-factory`** (including the SIR v0.5 front end, `prepare` / `grade`) and the **Claude Code plugin** (`rederive@rederive`: skills, role agents, hooks). There is no separate proprietary engine — what you can run is the whole loop.
 - The **public catalog** of `@rederive/*` verified packages and their contracts.
 
 **The durability promise:**

@@ -1,0 +1,264 @@
+UNIT hasAnsi
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG hasAnsi(input) -> boolean
+DEPENDS-ON none   # SELF-CONTAINED: the ansi-regex@3 pattern is INLINED below; the
+                  # reconstruction MUST NOT require() any module. See INLINED DEPENDENCY.
+
+# ===========================================================================
+# SUMMARY
+# ===========================================================================
+# hasAnsi(input) returns a boolean: true iff the STRING-COERCED form of `input`
+# contains at least one ANSI escape sequence (per the inlined ansi-regex@3
+# pattern), false otherwise.
+#
+# The original CommonJS source (has-ansi@3.0.0, index.js) is, in full:
+#
+#     'use strict';
+#     const ansiRegex = require('ansi-regex');
+#     // Remove the `g` flag
+#     const re = new RegExp(ansiRegex().source);
+#     module.exports = input => re.test(input);
+#
+# Two load-bearing facts a blind re-emitter MUST reproduce:
+#
+#  (1) NO TYPE GUARD. The exported function is simply `input => re.test(input)`.
+#      It does NOT check typeof input, does NOT throw TypeError on non-strings.
+#      RegExp.prototype.test performs ToString(input) on its argument and tests
+#      the regex against the coerced string. So non-string inputs are COERCED,
+#      not rejected. (See COERCION SEMANTICS + ERROR/THROW below.)
+#
+#  (2) THE 'g' FLAG IS STRIPPED. ansi-regex@3 returns `new RegExp(pattern, 'g')`
+#      (global). has-ansi takes only its `.source` and rebuilds `new RegExp(source)`
+#      with NO FLAGS. The comment "// Remove the `g` flag" is exactly this intent.
+#      Because the regex used by `.test` has NO global flag, its `lastIndex` never
+#      advances and `.test()` is STATELESS / IDEMPOTENT — repeated calls on the
+#      same string always return the same boolean. (See STATEFULNESS below.)
+#      A blind emitter therefore builds the regex WITHOUT the 'g' flag. Whether
+#      the emitter builds it once at module scope or fresh per call is
+#      OBSERVATIONALLY IDENTICAL (no 'g' => no lastIndex drift); both are correct.
+#
+# The unit is a PURE, READ-ONLY predicate. No effects, no ambient reads
+# (no clock/RNG/env/fs/net), no mutation. ORACLE-CLASS is plain `deterministic`
+# (no seam to inject). Output is a boolean and is fully gradable.
+
+# ===========================================================================
+# INLINED DEPENDENCY — the ansi-regex@3.0.1 pattern (verbatim, SELF-CONTAINED)
+# ===========================================================================
+# has-ansi@3 does `require('ansi-regex')` (resolved to ansi-regex@3.0.1) and uses
+# ONLY `ansiRegex().source`. That source is INLINED here so the reconstruction
+# needs NO require. The original ansi-regex@3.0.1 (index.js) is, in full
+# (each `\\` below is HOW THE SOURCE FILE WRITES one backslash in a JS string
+# literal — i.e. the LITERAL .source character is a single backslash):
+#
+#     'use strict';
+#     module.exports = () => {
+#       const pattern = [
+#         '[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[a-zA-Z\\d]*)*)?\\u0007)',
+#         '(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))'
+#       ].join('|');
+#       return new RegExp(pattern, 'g');
+#     };
+#
+# has-ansi consumes `ansiRegex().source`, which equals that `parts.join('|')`
+# string (the 'g' flag lives on the RegExp object, not the source string; it is
+# dropped when has-ansi rebuilds `new RegExp(source)`).
+#
+# ---------------------------------------------------------------------------
+# THE EXACT .source STRING (reproduce CHARACTER-FOR-CHARACTER — #1 divergence risk)
+# ---------------------------------------------------------------------------
+# CRITICAL TRANSCRIPTION RULE: the regex SOURCE is a 154-character PURE-ASCII
+# string. It contains NO raw control bytes. Where an ANSI control byte is meant,
+# the .source uses the regex ESCAPE for it as LITERAL TEXT: the 6 characters
+# backslash u 0 0 1 B (for ESC U+001B), backslash u 0 0 9 B (for CSI U+009B),
+# backslash u 0 0 0 7 (for BEL U+0007). Likewise `\d` is two chars (backslash, d),
+# `\/` is two chars (backslash, slash), `\]` is two chars (backslash, ]). There
+# are exactly 11 literal backslash characters in the .source. A blind emitter that
+# constructs `new RegExp(theString)` MUST give a string whose characters equal the
+# .source EXACTLY; one that writes a `/literal/` must make its `.source` equal it.
+#
+# THE SINGLE CANONICAL FORM — the .source written as a JS SINGLE-QUOTED LITERAL
+# (so each `\\` is one backslash in the actual .source). This is byte-verified:
+# the literal collapses to a 154-char string === the real ansiRegex().source.
+# COPY THIS form to avoid any control-byte transcription hazard. The recommended
+# reconstruction is `const re = new RegExp(<this literal>);` (NO flags):
+#
+#     '[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[a-zA-Z\\d]*)*)?\\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))'
+#
+# (If an emitter instead writes a JS /regex literal/, it MUST encode the same
+#  characters: \u001B \u009B \u0007 as \u escapes, the literal slash as \/ , and
+#  add NO flags so .flags === ''. The safest path is the new RegExp(<literal>) form
+#  above — do NOT hand-type raw ESC/CSI/BEL control bytes anywhere.)
+#
+# ANCHORS (verified by running the real has-ansi@3.0.0 + ansi-regex@3.0.1):
+#   - .source.length === 154        (pure ASCII; UTF-8 byte length === 154)
+#   - .source contains NO raw control byte; it contains 11 literal '\' characters
+#   - parts.join('|') === .source   (the two-part assembly reconstructs it)
+#   - .source.startsWith('[\\u001B\\u009B][[')   # begins with the chars:
+#         [  \ u 0 0 1 B  \ u 0 0 9 B  ]  [  [
+#   - .source.endsWith('*)?[\\dA-PRZcf-ntqry=><~]))')   # ends with the chars:
+#         * ) ? [ \ d A - P R Z c f - n t q r y = > < ~ ] ) )
+#   - The regex has-ansi builds from it has .flags === '' (NO flags; 'g' removed)
+#     and .global === false.
+#
+# PER-CHARACTER NOTES on the dense classes (described in WORDS to avoid raw bytes;
+# every `\u`/`\d`/`\/` referenced is LITERAL TEXT with a single backslash):
+#   - Leading class:   the 14 chars   [ \u001B \u009B ]   i.e. bracket, the 6-char
+#       escape backslash-u-0-0-1-B, the 6-char escape backslash-u-0-0-9-B, bracket.
+#       (ESC U+001B and CSI U+009B, both as \u escapes.)
+#   - Next class:      [[\]()#;?]            (literal '[' inside, then \] for ']',
+#                                             then ( ) # ; ? ), quantified by '*'
+#   - First sub-alt class: [-a-zA-Z\d\/#&.:=?%@~_]   (chars: - a-z A-Z \d / # & . : = ? % @ ~ _)
+#   - Second sub-alt class: [a-zA-Z\d]               (ONLY a-z A-Z and digits)   <-- NOTE
+#   - BEL terminator:  the 6-char escape backslash-u-0-0-0-7  (for BEL U+0007)
+#   - Final class:     [\dA-PRZcf-ntqry=><~]
+#       ranges/members: \d , A-P , R , Z , c , f-n , t , q , r , y ,
+#                       and the literals = > < ~
+#   - Quantifiers used: *  +  ?  {1,4}  {0,4}
+#
+# ===========================================================================
+# !!! VERSION WARNING — DO NOT use the ansi-regex@5 pattern !!!
+# ===========================================================================
+# A different (longer, 169-char) ansi-regex@5 pattern exists and is WRONG here.
+# Distinguishing features of the CORRECT @3 .source you must inline:
+#   - @3 second sub-alt class is `[a-zA-Z\d]+(?:;[a-zA-Z\d]*)*`
+#       (@5 uses the richer `[-a-zA-Z\d\/#&.:=?%@~_]` there).
+#   - @3 final class is `[\dA-PRZcf-ntqry=><~]`  (note `A-PRZ`: range A-P, then R, then Z)
+#       (@5 uses `[\dA-PR-TZcf-ntqry=><~]`, i.e. `A-PR-TZ`).
+#   - @3 .source.length === 154   (@5 === 169).
+# Use the 154-char @3 string above. Nothing else.
+
+# ===========================================================================
+# COERCION SEMANTICS — what `re.test(input)` does to a non-string input
+# ===========================================================================
+# RegExp.prototype.test(x) computes a string S = ToString(x), then matches.
+# So the predicate is effectively:  re.test(String(input))  for all coercible
+# inputs (with ONE exception: Symbol, see ERROR/THROW). Coercion rules
+# (standard JS ToString), all VERIFIED against the real package:
+#
+#   - string          -> itself
+#   - number 42       -> "42"            -> no ANSI    -> false
+#   - number 0        -> "0"             -> false
+#   - 3.14            -> "3.14"          -> false
+#   - true / false    -> "true"/"false"  -> false
+#   - null            -> "null"          -> false
+#   - undefined       -> "undefined"     -> false
+#   - bigint 5n       -> "5"             -> false
+#   - {}              -> "[object Object]" -> false
+#   - { a: 1 }        -> "[object Object]" -> false
+#   - []              -> ""              -> false       (empty -> no ANSI)
+#   - [1]             -> "1"             -> false
+#   - [ESC + "[31m"]  -> "<ESC>[31m"     -> TRUE         (array of one ANSI string
+#                                                         stringifies to that string)
+#   - [1,2]           -> "1,2"           -> false
+#   - RegExp /re/     -> "/re/"          -> false
+#   - object whose toString returns an ANSI string -> that string -> TRUE
+#     (ToString uses ToPrimitive hint "string" -> calls .toString())
+#
+# So: for ANY input, the result is `re.test(String(input))` — true iff the
+# coerced string contains an ANSI escape matched by the inlined pattern.
+# NONE of the plain numbers/booleans/null/undefined/objects above contain ANSI,
+# so they are all false; only inputs whose COERCED string contains an ANSI
+# sequence are true.
+
+# ===========================================================================
+# STATEFULNESS  (the moving-lastIndex trap — and why it does NOT apply)
+# ===========================================================================
+# Concern: ansi-regex@3 returns a regex WITH the 'g' flag; a shared global regex's
+# `.test()` advances `lastIndex` and yields alternating true/false across calls.
+# Resolution: has-ansi DROPS the 'g' flag (`new RegExp(ansiRegex().source)` with
+# no flags). A NON-global regex's `.test()` always starts at index 0 and never
+# mutates `lastIndex`. Therefore the predicate is STATELESS and IDEMPOTENT.
+# EVIDENCE (real has-ansi@3.0.0, in one Node process):
+#   - hasAnsi("<ESC>[31mRED<ESC>[39m") called 6x  ->  [true,true,true,true,true,true]
+#   - interleaved hasAnsi("<ESC>[31m"), hasAnsi("plain"), repeated
+#       -> [true, false, true, false, true]   (each call independent, correct)
+#   - the internal regex reports .global === false and .flags === ''.
+# IMPLICATION FOR THE EMITTER: do NOT add a 'g' flag. With no 'g' flag it is
+# irrelevant whether you hoist the regex to module scope or rebuild it per call;
+# both are stable. (The original hoists it once at module scope — equivalent.)
+
+# ===========================================================================
+# BEHAVIOR  (ordered pipeline)
+# ===========================================================================
+# node-1  Construct the matcher regex from the INLINED 154-char .source above,
+#         with NO flags (the 'g' is removed). [Build-once or per-call: equivalent.]
+# node-2  On call hasAnsi(input): compute S = ToString(input).
+#           - For a Symbol input, ToString THROWS a TypeError (node-4); this is
+#             V8's coercion throwing, not a guard in has-ansi.
+# node-3  Return `regex.test(S)` — a boolean: true iff S contains >=1 ANSI escape
+#         matched by the pattern, else false. (No 'g' flag => stateless.)
+# node-4  ERROR/THROW: the ONLY throwing inputs are those whose ToString throws —
+#         in practice ONLY a Symbol (TypeError "Cannot convert a Symbol value to
+#         a string"). There is NO explicit type guard and NO TypeError for plain
+#         non-strings (numbers, null, undefined, objects, arrays all COERCE and
+#         return false unless their coerced string contains ANSI). Symbols are
+#         non-round-trippable through the oracle codec and are NOT emitted by
+#         genInputs (documented OUT-OF-ENVELOPE below); if ever exercised the
+#         harness records {__throw: TypeError}.
+
+# ===========================================================================
+# ORACLE
+# ===========================================================================
+ORACLE value -> oracle.json
+# Output is a primitive boolean. The codec round-trips booleans trivially.
+# For each generated input the expected = real-package hasAnsi(input) (true/false).
+# No throw paths are generated (Symbol excluded), so all expecteds are booleans.
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The INLINED 154-char ansi-regex@3 .source as the matcher pattern, byte-exact.
+#   - Building the regex with NO flags (the 'g' removed) => stateless predicate.
+#   - NO type guard: `regex.test(input)` semantics = `regex.test(String(input))`,
+#     i.e. coerce-then-test; non-strings are NOT rejected, they are coerced.
+#   - Returning a strict boolean (the value of RegExp.prototype.test).
+# CARRIED DATA: none. The pattern is small in-contract code, NOT a carried table.
+# OUT-OF-CONTRACT: none (pure, no effects, no stateful API, no ambient seam).
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - Symbol input -> throws TypeError (ToString of a Symbol). Symbols are not
+#     codec-faithful; excluded. Behavior documented at node-4.
+#   - Functions as input -> coerce via Function.prototype.toString to the source
+#     text of the function (e.g. "() => {}") -> almost always false; functions are
+#     NOT codec-faithful, so excluded. (Behavior still derivable from coerce-then-test.)
+#   - Boxed primitives (new String("...")) -> lose class through the codec; not
+#     emitted. (They coerce to their primitive string and behave like that string.)
+#   - bare `undefined` / `NaN` / `±Infinity` AS the argument: codec maps these to
+#     null on persist (lossy), so they are NOT emitted directly. Their behavior is
+#     documented (all -> false) but to keep the persisted arg faithful the generator
+#     emits the LITERAL STRINGS "undefined"/"NaN"/"Infinity" instead, which are
+#     codec-faithful and which the coerced equivalents test identically (all false).
+
+# ===========================================================================
+# SELF-CONSISTENCY CROSS-CHECK (SIR <-> genInputs)
+# ===========================================================================
+# genInputs emits ONLY single-element tuples [value] where value is one of:
+#   - a string (with or without ANSI escapes; ANSI built from the real bytes
+#     U+001B (ESC) and U+009B (CSI), NOT from rendered glyphs). For each such string
+#     the SIR defines the result as `regex.test(string)` against the inlined
+#     pattern — fully specified.
+#   - a small set of CODEC-FAITHFUL non-strings whose coercion the SIR defines
+#     explicitly above: number, 0, true, false, null, {}, {a:1}, [], [1],
+#     [ESC+"[31m"], [1,2], a RegExp, a bigint. Each maps to `regex.test(String(value))`
+#     per the COERCION SEMANTICS table (all false except [ESC+"[31m"] -> true).
+# Every emitted value's behavior is defined explicitly in the SIR (coerce-then-test
+# + the inlined pattern). The generator emits NO value whose behavior is left to an
+# undocumented table, and emits NO non-round-trippable value (no Symbol, no function,
+# no boxed primitive, no bare undefined/NaN/Infinity argument). The Symbol-throw path
+# is documented but NOT generated. SELF-CHECK: PASS.
+
+# ===========================================================================
+# EMISSION DIRECTIVE
+# ===========================================================================
+# The original is `module.exports = input => re.test(input)` (CommonJS default
+# export, a single function). Emissions are .mjs consumed via import(). The blind
+# re-emitter MUST emit a SINGLE DEFAULT export that is the hasAnsi function:
+#     export default hasAnsi
+# (exportName=null in the generator tells the harness to call the default export.)
+# The emission MUST be SELF-CONTAINED: build the regex from the inlined 154-char
+# .source with NO flags; do NOT require()/import any external module.
+
+PROVENANCE has-ansi@3.0.0 (chalk/has-ansi), MIT license, source file index.js;
+           INLINED dependency ansi-regex@3.0.1 (chalk/ansi-regex), MIT license,
+           source file index.js (pattern .source only; the 'g' flag removed by has-ansi).

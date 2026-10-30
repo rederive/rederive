@@ -1,0 +1,210 @@
+UNIT inRange
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG inRange(number: any, start?: any = 0, end?: any) -> boolean
+DEPENDS-ON none   # self-contained; helper logic (toFinite / toNumber / baseInRange / isObject / isSymbol / isObjectLike) is inlined below and MUST be reproduced exactly
+
+# ---------------------------------------------------------------------------
+# OVERVIEW
+# ---------------------------------------------------------------------------
+# Pure, read-only number-range predicate. Decides whether `number` lies in a
+# HALF-OPEN interval [min, max) where min/max are derived from start & end.
+# Default export of npm `lodash.inrange@3.3.6`. No side effects, no I/O, no RNG,
+# no clock. ORACLE-CLASS deterministic (no seam).
+#
+# CRITICAL ASYMMETRY (verified against source — differs from the hand-wavy hint):
+#   * `start` and `end` are coerced with toFinite  (clamps +/-Infinity and NaN).
+#   * `number` is coerced with toNumber             (KEEPS Infinity; NaN stays NaN).
+#   This asymmetry is load-bearing: e.g. inRange(Infinity, 0, Infinity) === false
+#   because number stays Infinity but end becomes MAX_INTEGER (a FINITE number),
+#   so `Infinity < MAX_INTEGER` is false.
+#
+# The blind re-emitter MUST `export default inRange` (this is the package's
+# default/CommonJS `module.exports = inRange`).
+
+# ---------------------------------------------------------------------------
+# CONSTANTS (exact)
+# ---------------------------------------------------------------------------
+INFINITY    = 1 / 0                       # +Infinity
+MAX_INTEGER = 1.7976931348623157e+308     # === Number.MAX_VALUE
+NAN         = 0 / 0                        # NaN
+symbolTag   = "[object Symbol]"
+reTrim      = /^\s+|\s+$/g                 # global, matches leading AND trailing whitespace runs
+reIsBadHex  = /^[-+]0x[0-9a-f]+$/i         # signed hex string => BAD (=> NaN)
+reIsBinary  = /^0b[01]+$/i                 # binary literal string
+reIsOctal   = /^0o[0-7]+$/i               # octal literal string
+freeParseInt = parseInt                    # the global parseInt
+objectToString = Object.prototype.toString
+nativeMax = Math.max
+nativeMin = Math.min
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — reproduce EXACTLY, including helper internals)
+# ---------------------------------------------------------------------------
+# TOP-LEVEL inRange(number, start, end):
+#   1. start = toFinite(start)
+#   2. IF end === undefined:            # the literal JS value `undefined`
+#          end   = start                # i.e. end := toFinite(originalStart)
+#          start = 0
+#      ELSE:
+#          end   = toFinite(end)
+#   3. number = toNumber(number)
+#   4. RETURN baseInRange(number, start, end)
+#
+#   NOTE on the 2-arg dispatch: it keys ONLY on `end === undefined`. Passing
+#   `undefined` explicitly as the 3rd arg is identical to omitting it. The 1-arg
+#   form inRange(number) therefore yields start=0, end=toFinite(undefined)=0,
+#   so the range is [0, 0) (EMPTY) => result is always false for ANY number
+#   (verified: inRange(5) === false, inRange(0) === false, inRange(-1) === false).
+#   The 2-arg form inRange(number, end) means start=0, range [min(0,end), max(0,end)).
+#
+# baseInRange(number, start, end):
+#   RETURN (number >= nativeMin(start, end)) && (number < nativeMax(start, end))
+#   # Half-open: lower bound min(start,end) INCLUDED, upper bound max(start,end) EXCLUDED.
+#   # This min/max IS the start>end "swap": no physical swap; the comparison uses
+#   #   min(start,end) as the inclusive low and max(start,end) as the exclusive high.
+#   # If number is NaN, both comparisons are false => false.
+#   # If min===max (degenerate/empty interval) => (number>=v && number<v) is always false.
+#   # Math.min/Math.max with a NaN arg propagate NaN, but start/end are toFinite'd so
+#   #   they are never NaN here (NaN -> 0). -0 and +0 compare equal under >=,<,min,max.
+#
+# toFinite(value):   # used for start and end
+#   IF (!value):                                   # falsy: 0, -0, NaN, "", null, undefined, false
+#       RETURN (value === 0) ? value : 0           # +0 and -0 pass through; everything else -> 0
+#   value = toNumber(value)
+#   IF (value === INFINITY || value === -INFINITY):
+#       sign = (value < 0) ? -1 : 1
+#       RETURN sign * MAX_INTEGER                   # clamp +/-Inf to +/- 1.7976931348623157e+308
+#   RETURN (value === value) ? value : 0            # NaN (value!==value) -> 0; else the number
+#
+# toNumber(value):   # used for number (and called inside toFinite)
+#   IF typeof value === "number":  RETURN value     # numbers pass through unchanged (incl. NaN, +/-Inf, -0)
+#   IF isSymbol(value):            RETURN NAN
+#   IF isObject(value):
+#       other = (typeof value.valueOf === "function") ? value.valueOf() : value
+#       value = isObject(other) ? (other + "") : other      # if valueOf still object, String() it
+#   IF typeof value !== "string":
+#       RETURN (value === 0) ? value : (+value)     # unary plus. NOTE: +bigint THROWS TypeError (see below)
+#   # value is a string from here:
+#   value = value.replace(reTrim, "")               # strip leading & trailing whitespace
+#   isBinary = reIsBinary.test(value)
+#   IF (isBinary || reIsOctal.test(value)):
+#       RETURN freeParseInt(value.slice(2), isBinary ? 2 : 8)   # "0b101"->5, "0o17"->15
+#   IF reIsBadHex.test(value):  RETURN NAN          # "-0x1f" / "+0x1f" -> NaN
+#   RETURN +value                                   # unary plus on the trimmed string
+#                                                   #   ""->0, "  "->0, "5"->5, "3.5"->3.5,
+#                                                   #   "1e2"->100, "0x1f"->31 (valid hex via +),
+#                                                   #   "abc"->NaN, "Infinity"->Infinity
+#
+# isObject(value):     RETURN !!value && (typeof value === "object" || typeof value === "function")
+# isObjectLike(value): RETURN !!value && typeof value === "object"
+# isSymbol(value):     RETURN typeof value === "symbol"
+#                              || (isObjectLike(value) && objectToString.call(value) === symbolTag)
+
+# ---------------------------------------------------------------------------
+# WORKED / VERIFIED RESULTS  (every one run against the real package)
+# ---------------------------------------------------------------------------
+# 3-ARG, plain numbers:
+#   inRange(3, 2, 4)      = true     # 3 in [2,4)
+#   inRange(2, 2, 4)      = true     # AT min -> INCLUDED
+#   inRange(4, 2, 4)      = false    # AT max -> EXCLUDED (half-open)
+#   inRange(3, 4, 2)      = true     # start>end "swap": [min=2,max=4) -> 3 in
+#   inRange(2, 4, 2)      = true     # min(4,2)=2 included
+#   inRange(4, 4, 2)      = false    # max(4,2)=4 excluded
+#   inRange(-3, -2, -6)   = true     # [min=-6,max=-2) -> -3 in
+# 2-ARG (start defaults to 0; range [min(0,end), max(0,end))):
+#   inRange(4, 8)         = true     # [0,8)
+#   inRange(4, 2)         = false    # [0,2), 4 not in
+#   inRange(2, 2)         = false    # [0,2), 2 == max excluded
+#   inRange(1.2, 2)       = true     # [0,2)
+#   inRange(5.2, 4)       = false    # [0,4)
+#   inRange(0, 0)         = false    # [0,0) empty
+# 1-ARG (range collapses to [0,0), ALWAYS false):
+#   inRange(5)            = false
+#   inRange(0)            = false
+#   inRange(-1)           = false
+# EXPLICIT undefined start (toFinite(undefined)=0):
+#   inRange(3, undefined, 5) = true  # [0,5)
+# -0 / +0:
+#   inRange(-0, 0, 5)     = true     # -0 >= min(0,5)=0 (true) && -0 < 5 (true)
+#   inRange(-0, -5, 0)    = false    # -0 < max=0 ? (-0 < 0) is false
+# Infinity asymmetry (toNumber keeps Inf, toFinite clamps to MAX_INTEGER):
+#   inRange(Infinity, 0, Infinity)   = false  # Inf < MAX_INTEGER is false
+#   inRange(1e308, 0, Infinity)      = true   # 1e308 < MAX_INTEGER true
+#   inRange(Number.MAX_VALUE, 0, Infinity) = false  # MAX_VALUE < MAX_VALUE false (MAX_INTEGER === MAX_VALUE)
+#   inRange(-Infinity, -Infinity, 0) = false  # -Inf >= -MAX_INTEGER is false
+# NaN:
+#   inRange(NaN, 0, 5)    = false    # number NaN -> both comparisons false
+#   inRange(3, NaN, 5)    = true     # start toFinite(NaN)=0 -> [0,5)
+#   inRange(3, 5, NaN)    = true     # end toFinite(NaN)=0 -> [0,5)
+# STRING number coercion:
+#   inRange("5", 0, 10)   = true     # "5"->5
+#   inRange("  10  ", 0,10)= false   # trim->"10"->10, == max excluded
+#   inRange("  9  ", 0,10)= true     # ->9
+#   inRange("0x1f", 0,40) = true     # +"0x1f"=31 (valid hex through unary +)
+#   inRange("-0x1f", -100,100)= false# bad signed hex -> NaN
+#   inRange("+0x1f", -100,100)= false# bad signed hex -> NaN
+#   inRange("0b101", 0,10)= true     # binary -> parseInt("101",2)=5
+#   inRange("0o17", 0,20) = true     # octal  -> parseInt("17",8)=15
+#   inRange("1e2", 0,200) = true     # ->100
+#   inRange("", 0, 5)     = true     # +""=0, [0,5), 0 included
+#   inRange("   ", 0, 5)  = true     # trim->"" -> 0
+#   inRange("abc", 0, 5)  = false    # NaN
+#   inRange("3.5", 0, 5)  = true     # ->3.5
+# STRING start/end coercion (toFinite path):
+#   inRange(3, "2", "4")  = true     # [2,4)
+#   inRange(3, "", "5")   = true     # "" falsy in toFinite -> 0 -> [0,5)
+#   inRange(1e308, 0, "Infinity") = true  # toFinite(+"Infinity"=Inf)=MAX_INTEGER -> [0,MAX_INTEGER)
+#   inRange(3, "abc", 5)  = true     # toFinite: toNumber("abc")=NaN -> 0 -> [0,5)
+# OTHER primitive coercions (number arg via toNumber typeof!=string branch -> +value):
+#   inRange(null, 0, 5)   = true     # +null=0
+#   inRange(false, 0, 5)  = true     # +false=0
+#   inRange(true, 0, 5)   = true     # +true=1
+#   inRange([3], 0, 5)    = true     # isObject([3]) -> valueOf is [3] (object) -> String([3])="3" -> +"3"=3
+#   inRange({}, 0, 5)     = false    # {} -> valueOf is {} (object) -> "[object Object]" -> NaN
+# OTHER start/end coercions (toFinite, !value guard -> 0 for falsy):
+#   inRange(3, null, 5)   = true     # null falsy -> 0 -> [0,5)
+#   inRange(3, false, 5)  = true     # false falsy -> 0
+#   inRange(0, true, 5)   = false    # true truthy -> toNumber(true)=1 -> [1,5), 0 not in
+#   inRange(1, true, 5)   = true     # 1 in [1,5)
+# THROW path (bigint via unary plus):
+#   inRange(3n, 0, 5)     THROWS TypeError "Cannot convert a BigInt value to a number"
+#   inRange(0n, 0, 5)     THROWS TypeError  (0n === 0 is false, so guard does not short-circuit; +0n throws)
+#   inRange(3, 2n, 5)     THROWS TypeError  (start toFinite -> toNumber(2n) -> +2n throws; 2n truthy so !value is false)
+#   # Note: a bigint in start/end is truthy so toFinite's `!value` guard is skipped and +bigint throws.
+
+# ---------------------------------------------------------------------------
+# ORACLE
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Pure deterministic function. For each input tuple [number, start?, end?] the
+# expected is the boolean returned by the real fn, OR a recorded {__throw} for
+# the bigint TypeError paths. No seam, no injection.
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   the toFinite(start), 2-arg vs 3-arg dispatch (end===undefined), toNumber(number),
+#   baseInRange half-open [min,max) with min/max-based swap, and the full
+#   toNumber/toFinite/isObject/isSymbol/isObjectLike coercion helpers including
+#   the trim regex, binary/octal parseInt, bad-hex->NaN, valid-hex-via-unary-plus,
+#   the toFinite falsy-guard and +/-Infinity->MAX_INTEGER clamp, and -0/+0 behavior.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for the blind re-emitter, but NOT
+# emitted by genInputs because they are not oracle-codec round-trippable):
+#   * Symbol args -> toNumber returns NaN for `number`; for start/end a Symbol is
+#     truthy so toFinite -> toNumber(symbol)=NaN -> 0. Behavior is specified above
+#     but Symbols do not survive JSON codec, so they are not generated.
+#   * Plain objects / arrays with custom valueOf/toString: the generator emits ONLY
+#     the simple cases [3] and {} (which DO round-trip as JSON arrays/objects and
+#     whose String()-coercion is fully specified). Functions are never emitted.
+#   * NaN / +/-Infinity / -0 DO NOT survive JSON.stringify round-trip as raw JSON
+#     numbers; the generator therefore exercises these via STRING equivalents
+#     ("Infinity", "-Infinity") and via -0 only where the harness codec restores it.
+#     The number-typed NaN/Infinity/-0 BEHAVIORS are nonetheless fully specified in
+#     the worked-results block so a blind engineer reconstructs them regardless.
+
+# ---------------------------------------------------------------------------
+PROVENANCE lodash.inrange@3.3.6  (npm)  |  repo: lodash/lodash  |  license: MIT
+           source file: index.js  (Custom Build; `module.exports = inRange`)

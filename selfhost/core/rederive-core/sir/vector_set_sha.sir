@@ -1,0 +1,68 @@
+UNIT vector_set_sha
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/sir/canon.mjs, export vectorSetSha — the oracle hash every oracle file's canonicalSha256
+  and every primary's ORACLE CANONICAL-SHA256 declares; SIR_SCHEMA §10 extension states the same rule ("SHA-256 of the
+  canonical string of {frozen: [{args, expected}…], heldout: […]}")
+ORACLE-CLASS deterministic
+SIG vector_set_sha(oracle: json) -> text
+ENVELOPE an oracle file's json: a map whose "frozen" and "heldout" are lists of case maps, each case holding "args" and
+  "expected" as CANONICAL TREES (text, bool, list, map[text, tree]; numbers and none appear only inside typed-value maps
+  such as {"t":"f64","bits":..}, {"t":"i64","v":".."}, {"t":"none"}). Every json value is IN the envelope: one that is
+  not such an oracle THROWS (R1, R2, R4, R5), and that throw is part of the contract. The language-neutral oracle carries
+  the oracle value nested up to the codec's 100-value cap (the oracle is depth 0, so args and expected carry at most 97
+  levels below them); the R5 boundary lies deeper, so its vectors are a js-only extension.
+DEPENDS-ON canonical_string (selfhost unit, re-derived; its contract is summarized in R4 so this file stands alone)
+DESCRIPTION The fingerprint of an oracle's vector set: project the oracle down to the two ordered case lists, keep only
+  each case's args and expected, render that projection as its canonical string and hash it. Two oracles get the same
+  hash exactly when their projections render identically, so case names, extra case keys, extra top-level keys, f64
+  display text and throw messages never move the hash, while case order, the frozen/heldout split, duplicates, the bit
+  pattern of every f64 and every other byte of args and expected always do.
+BEHAVIOR
+R1 The oracle must be a map holding key "frozen" and key "heldout", each bound to a list; otherwise -> throws. That
+  covers an oracle that is not a map (list, text, f64, bool, none), a missing key, and a key bound to anything but a
+  list (none, a map, text, empty text included). Every other top-level key is ignored and never examined.
+R2 Every case, in both lists, must be a map; otherwise -> throws (none, text, a list, an f64). From a case only the
+  values under "args" and "expected" are taken, and both keys must be present (a missing one -> throws); every other key
+  of the case ("name", "note", anything) is ignored and never examined.
+R3 The PROJECTION is the map with exactly two entries: "frozen" -> the list of {"args": A, "expected": E} built from the
+  frozen cases in their order, and "heldout" -> the same from the heldout cases. Order is preserved, duplicate cases
+  are kept, nothing is sorted or de-duplicated, and an empty list stays empty.
+R4 CANON is canonical_string(PROJECTION) (unit canonical_string); a throw there is a throw here. Summary of that
+  contract: text renders as a JSON string literal (quotation mark, reverse solidus, backspace, form feed, line feed,
+  carriage return and tab as their two-character short escapes; every other control 0x00..0x1F as the six-character
+  unicode escape with LOWER-case hex; everything else raw, non-ASCII included); bool as true/false; a list as
+  [e1,e2,..]; a map as {"k":v,..} with keys sorted ascending by 16-bit code units; no whitespace anywhere outside text.
+  A map whose "t" is exactly the text "f64" renders as {"bits":B,"t":"f64"} and requires "bits" to be text of exactly
+  16 characters from 0-9 and lower-case a-f (else throws); a map whose "t" is exactly "throw" renders as {"t":"throw"};
+  in both the other entries are dropped unexamined. A raw f64 or a none reached by the rendering throws. Hence CANON
+  always begins {"frozen":[ and each case renders as {"args":A,"expected":E}. canonical_string's depth cap is R5. CITED ANCHOR SIR_SCHEMA §10
+R5 NESTING CAP (canonical_string's depth rule, seen through the projection). Depth is counted in the PROJECTION: the
+  projection itself is depth 0 and every value directly inside a list or a map (a map's values; keys are never counted) is
+  one deeper than its container, so the frozen and heldout lists are depth 1, each case map depth 2, and every case's args
+  and expected depth 3. The rendering throws as soon as it reaches a value deeper than 416 (= 4 × 100 + 16, from the
+  codec's 100-value cap). Only REACHED values count: the dropped entries of an f64 or throw node are never measured, while
+  the texts such a node does render ("t" and "bits" of an f64, "t" of a throw) sit one level below the node. Measured from
+  args or expected as depth 0: a reached value at depth 413 renders, one at 414 or deeper -> throws; an f64 or throw node
+  renders at depth 412 at most. Nesting of any depth past the cap is this throw. A wide but shallow tree never throws for
+  its size. CITED FIDELITY package
+R6 The result is SHA-256 (FIPS 180-4) of CANON's bytes in the 8-bit Unicode encoding (each scalar value as 1 to 4
+  bytes, §10's cu utf8 form), written as 64 LOWER-case hexadecimal digits. CITED FIDELITY package
+R7 Whether the oracle throws is the observation; the message is a display hint and is not part of the contract. When
+  several causes are present, any of them may be the one reported.
+INVARIANT renaming cases, adding or removing ignored keys, rewriting an f64's display "v" with the same "bits", or
+  rewriting a throw's "msg" never changes the result.
+INVARIANT the result depends only on the projection's values, never on the order in which any map's keys were written.
+INVARIANT moving a case between frozen and heldout, or swapping two unequal cases, changes CANON and so the result.
+OUT-OF-DOMAIN js widening (no oracle vector; the codec cannot carry them): an absent value under "args" or "expected"
+  throws like a missing key; a frozen or heldout list with holes throws; text holding unpaired surrogates renders them
+  as six-character unicode escapes with lower-case hex, so CANON stays ASCII-safe for them; a map whose prototype is
+  absent is a map like any other. A "__proto__" key is outside the oracle. Nesting past R5's cap is IN the contract and
+  is a throw at every depth beyond it (the cap is checked on entry to each value, so the rendering never descends past 417).
+ORACLE value -> oracles/vector_set_sha.json  CANONICAL-SHA256 7510cd1d2064be9a61f8d9b52ad40285424ec83fe35dda8e1b22081cd63d1b70
+SCOPE IN: R1-R7 over every json value. OUT: canonical_string's own vector set (a separate unit, depended on here), the
+  oracle file's other fields, and the comparison of the result against a declared hash (callers, not this unit).
+PROVENANCE rederive@bb8ded84fa50 (rederive, own code), cli/sir/canon.mjs, export vectorSetSha, driven through
+  selfhost/seams/vector_set_sha.mjs; oracle stamped by selfhost/stamp.mjs on the default host stack from the pinned
+  authority snapshot (24 frozen + 48 held-out, seed 1). Round 1 cut 2026-10-26; round 4 re-cut 2026-10-27 for the nesting
+  cap (FINDINGS #66); round 5 re-cut 2026-10-27 for the 416 raw cap (FINDINGS #78).

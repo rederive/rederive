@@ -1,0 +1,24 @@
+UNIT directive
+LANG js
+PRIMARY-SHA256 7d028a91b909e5fafc9a4b6440e7f93eaff370b0ca053c6d582d9ec156c482aa
+SIG directive(text: string, name: string): string | null
+NOTE named export directive
+ABI text=string (UTF-16); none=null (never undefined). A throw (R1) is any thrown Error; its message is not graded.
+MECHANISM SEP (R2, R3, R5, R6, R8) is exactly SPACE and CHARACTER TABULATION: never the \s class, String.prototype.trim,
+  trimStart or trimEnd, which also take NO-BREAK SPACE, IDEOGRAPHIC SPACE, LINE TABULATION, the byte-order mark and more.
+  Trim with the SEP-only pattern pinned below.
+MECHANISM R4 is a hand scan over CONTENT in UTF-16 code units, NOT a regex match sequence: a span opens only at index 0,
+  after an OPENER character, or at the index right after the previous span's closing mark; an escape pair skips the REVERSE SOLIDUS and the WHOLE code point after it (two units for an
+  astral one, and LINE SEPARATOR is an ordinary partner); the first unclosed opener ends the scan. A "#" at index i is
+  protected when some span [a, b) has a < i < b; an ATTRIBUTE hit is dropped when its keyword's first index is so placed,
+  the spans taken over the same string the hit indexes (REST, or SPACE + CODE).
+MECHANISM the package realizes R2–R9 with the shared parser (sir-parse.mjs parse in legacy mode, then the first AST node
+  with that name, its args and cont filtered by truthiness and joined by one space); an emitter may hand-roll them instead,
+  needing nothing but the rules.
+DEPENDS-ON none
+PINNED regex NAME = /^(?:[A-Z][A-Z0-9-]*|R[0-9]+)$/ CITED R1 — no m flag, so a trailing line feed fails
+PINNED regex LINE-BREAK = /\r\n|\r|\n/ CITED R2
+PINNED regex BOM-DROP = /^[ \t\uFEFF]+/ CITED R2 — the LEAD; its match is replaced by itself with every U+FEFF removed, once per line, before the trailing SEP trim
+PINNED regex SEP-TRIM = /^[ \t]+|[ \t]+$/g CITED R8
+PINNED regex ATTRIBUTE = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/ CITED R8 — global; the first hit outside every quoted span ends the kept part
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs + cli/sir/sir-parse.mjs (the real modules); this file states how the js variant realizes the primary.

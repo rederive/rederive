@@ -1,0 +1,80 @@
+{
+ "status": "ok",
+ "unit": "legacy_print_sha",
+ "primary": "selfhost/units/legacy_print_sha/sir/legacy_print_sha.sir",
+ "primarySha256": "211da0e9049f0b9965185081f40026ac44eaf659e75caa15009110a8dd86153c",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Result = SHA-256 (FIPS 180-4) of the UTF-8 encoding of P, as 64 lowercase hexadecimal digits.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R2",
+   "text": "Lines. The text is split at every line feed (000A) only; the empty piece after a final line feed is a line like any other. From each line ONE trailing carriage return (000D) is removed, if present; any other carriage return stays in the line as an ordinary character. Lines are read in order; a line made only of WS characters (or empty) is skipped.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R3",
+   "text": "INDENT = the longest prefix of the line made of space (0020) and tab (0009) only; CONTENT = the rest. CONTENT is never empty here (R2).",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R4",
+   "text": "Full-line comment: CONTENT begins with NUMBER SIGN (0023) -> the line is dropped; CURRENT is unchanged.",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "R5",
+   "text": "Trailing comment. In CONTENT, the marker is the NUMBER SIGN at the smallest position k (k >= 1) such that the character at k-1 is WS, the character at k+1 is WS or k is the last position, and CONTENT contains no LT character at any position other than k-1. With a marker, CODE = CONTENT before position k-1 with its trailing WS run removed; without one, CODE = CONTENT unchanged (trailing WS kept). So a NUMBER SIGN glued to text on either side is content, and a line holding an LT anywhere but just before the sign has no trailing comment at all CITED FIDELITY package.",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "R6",
+   "text": "Column-0 line (INDENT empty). Split CODE into NAME = its longest prefix of non-WS characters and TAIL = what follows NAME with its whole leading WS run removed. The split FAILS when NAME is empty (CODE is empty or begins with WS — a no-break space, a byte-order mark, a vertical tab) or when TAIL contains an LT character. On success: if NAME is an uppercase letter A-Z, then zero or more of A-Z 0-9 \"-\", then a final \":\", the colon is dropped. If NAME is now an uppercase letter A-Z followed by zero or more of A-Z 0-9 \"-\", the line starts a NEW directive: NAME, and ARGS and ATTRS from R8 applied to TAIL, no continuations; it becomes CURRENT. Known and unknown names alike.",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R7",
+   "text": "Any other column-0 line (split failed, or NAME not of that form): if CURRENT exists, CODE is appended VERBATIM to its continuations — no attribute extraction, no trimming; otherwise the line is dropped. A leading byte-order mark therefore drops the first directive line of a file.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R8",
+   "text": "Attribute extraction over a piece S yields (BODY, A). Repeat: find the EARLIEST keyword occurrence K in S — K one of CITED, EARNED, ANCHOR, immediately preceded by a run of one or more WS characters — whose remainder R (everything after K) begins with WS and can be cut into a non-empty all-WS head and a non-empty tail containing no LT. If none exists, stop. Otherwise value = R with leading and trailing WS removed (possibly empty); if A already holds a NON-EMPTY value for K, A[K] = old value, one space, value; otherwise A[K] = value; then S = S cut just before the WS run preceding K. BODY = the final S with leading and trailing WS removed. Consequences the oracle pins: the first qualifying keyword swallows the rest of the line, later keywords included (\"x CITED a EARNED b\" -> CITED = \"a EARNED b\"); a keyword that begins S, or lacks WS after it, or has only a single WS after it and nothing more, stays in BODY; more than one extraction per piece happens only when an LT blocks an earlier keyword's remainder CITED FIDELITY package.",
+   "ambiguity": 0.62
+  },
+  {
+   "id": "R9",
+   "text": "Indented line (INDENT not empty): if no CURRENT, the line is dropped. Otherwise apply R8 to CODE: BODY is appended to CURRENT's continuations (even when empty), and each (K, value) of A, in A's order, is stored into CURRENT's ATTRS REPLACING any earlier value for K — an earlier CITED is overwritten, never joined CITED FIDELITY package.",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R10",
+   "text": "ATTRS order = the order in which each keyword was FIRST stored into that directive (a replaced key keeps its place); within one R8 run, keywords are stored in extraction order (rightmost occurrence first).",
+   "ambiguity": 0.58
+  },
+  {
+   "id": "R11",
+   "text": "P. For each directive in reading order: one line = NAME, then (only if ARGS is non-empty) one space and ARGS, then for each ATTRS entry in order one space, the keyword, one space, the value (an empty value leaves a trailing space); then one line per continuation = two spaces and the continuation text. P = all lines, each followed by one line feed. No directive at all -> P is a single line feed.",
+   "ambiguity": 0.22
+  }
+ ],
+ "ranked": [
+  "R8",
+  "R10",
+  "R5",
+  "R6",
+  "R9",
+  "R7",
+  "R1",
+  "R2",
+  "R11",
+  "R3",
+  "R4"
+ ],
+ "at": "2026-10-28T03:11:17Z"
+}

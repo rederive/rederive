@@ -1,0 +1,96 @@
+UNIT lint_transcription
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs transcriptionLint with its CODE_SHAPES table and stripQuoted, reading lines
+  through sir-parse.mjs sirLines (the parser's own line reader) and quoted spans through sir-parse.mjs quotedSpans — the deterministic
+  floor of SIR_SCHEMA's "a primary is a contract, not a transcription" lint; reproduced exactly, accidents included
+ORACLE-CLASS deterministic
+SIG lint_transcription(text: text) -> json
+ENVELOPE text only: any well-formed text, empty included, any line-break kinds, non-ASCII and astral characters included.
+  Non-text input is outside the envelope (the package throws a type error on its first operation; no vector).
+DEPENDS-ON none
+DESCRIPTION Measure how code-shaped a primary text is. The text is cut into lines; each line, after its double-quoted
+  literals are blanked, is tested against thirteen fixed code shapes. The result is a map with five entries, in this order:
+  hits (a list of maps with entries line, what, text: one per shape that matched on a line), hitLines (how many distinct
+  lines have at least one hit), lines (how many lines are non-blank), commentLines (how many lines start with "#" once
+  trimmed) and density (hitLines divided by lines, or 0 when lines is 0). Every count is a number. The 10% gate is applied by the
+  caller (pack, the validator) to density with a strict greater-than; it is not part of this unit.
+BEHAVIOR
+R1 Lines. Scanning left to right, a BREAK is a CR (000D) immediately followed by a line feed (000A) — the pair is ONE break
+  — or else a lone CR, or a lone line feed. The text is split at every BREAK and nowhere else: LINE SEPARATOR (2028),
+  PARAGRAPH SEPARATOR (2029), NEXT LINE (0085), form feed and vertical tab stay inside their line. Lines are numbered from 1.
+  A text of k breaks has k + 1 lines, so the empty text is one empty line, a trailing break adds an empty last line, and
+  CR CR LF is two breaks (a lone CR, then a pair).
+  Normalization, applied to every line before anything else reads it, in this order: first, the line's LEAD is its
+  maximal leading run of spaces (0020), tabs (0009) and BYTE ORDER MARKs (FEFF), in any mix, possibly empty; every FEFF of
+  the LEAD is removed and its spaces and tabs are kept in their order (so space, FEFF, space, FEFF, x becomes space, space, x;
+  a FEFF after any other character stays, and one pass is final: the lead left behind holds no FEFF); then every space and
+  tab at the very end of the line is removed (a run of them; any other
+  trailing WS character, a no-break space or a FEFF for one, stays). Every
+  later rule reads the NORMALIZED line, and its "end of the line" is the normalized end: a trailing space or tab is never
+  seen by any shape, while a trailing no-break space is an ordinary WS character of the line.
+R2 Stripping. Each line is copied into its STRIPPED form, in which every QUOTED span is replaced by the two characters
+  of an empty quoted literal (a pair of double quotes). Spans are found left to right. A double quote OPENS a span only
+  (a) at a TOKEN START: it is the first character of the line, or the character just before it in the line is one of
+  space, tab, "(", "[", "{", ",", "=", ":", ";", "|", "<", ">", "!", "&", "-", "~" (16 OPENERS; any other
+  neighbour opens nothing: a letter, a digit, "+", "*", "?", "/", ")", "]", "}", ".", a single quote, a no-break space, a
+  FEFF); or
+  (b) directly after a span: it is the character right after the closing quote of the span just found, so two literals
+  written side by side are two spans. A double quote that follows a quote which closed nothing (a quote that never opened)
+  opens nothing by (b), and a quote inside an earlier span is never considered. From an opening quote the span is that
+  quote, a sequence of items, and the first double quote that ends the sequence. An item is a backslash together with the
+  ONE character after it, whatever it is (a double quote, a backslash, LS, PS, an astral character), or one character other
+  than a double quote or a backslash. When the line ends first (a backslash that is the last character included) the quote
+  is UNCLOSED: it opens no span, and no later quote of the line opens one.
+  Single quotes and backticks never open a span. Only the shape tests (R3) read the stripped form; R6's text is the
+  normalized line, unstripped.
+R3 Shapes. Each row of TABLE SHAPES is tested once against the stripped line; a row matches when its condition holds
+  anywhere in the line (only the narration row is tied to the line start). Every matching row is one hit. Letters are
+  case-sensitive except in the narration row. A line may yield several hits; a row never yields two hits on one line.
+TABLE SHAPES — what | condition on the stripped line S. "bounded" means a BOUNDARY just before and just after the word
+  "typeof"                     | the word "typeof", bounded
+  "arrow fn"                   | the two characters "=>" side by side
+  "method call"                | a full stop, then one of "match" "reduce" "slice" "test" "exec" "split" "map" "filter", then "(" — nothing between them
+  "JS builtin"                 | a BOUNDARY, one of "parseInt" "parseFloat" "Number" "String" "Math", then zero or more WS characters, then a full stop or "("
+  "if ("                       | a BOUNDARY, the word "if", zero or more WS characters, then "("
+  "return"                     | the word "return", bounded
+  "loop"                       | a BOUNDARY then "for", one or more WS, one or more WORD, one or more WS, then "in" followed by a BOUNDARY; or a BOUNDARY then "for" or "while", zero or more WS, then "("
+  "STEP/NODE/BRANCH narration" | S begins with zero or more WS, at most one "#", zero or more WS, one of "STEP" "NODE" "BRANCH" "GATE" in any ASCII letter case, one or more WS, then a WORD character or a hyphen
+  "indexed assignment"         | a WORD character, "[", one or more WORD characters, "]", zero or more WS, then OP, then an equals sign whose next character, if any, is neither an equals sign nor ">"; OP is nothing or exactly one of "**" "<<" ">>" ">>>" "&&" "||" "??" "-" "+" "*" "/" "%" "&" "|" "^" written with no WS inside or before the equals sign (an equals sign ending S qualifies; "==" and "=>" never do at that sign; "<=", ">=", "!=" and "?=" are not OP forms)
+  "dialect regex literal"      | some occurrence of the pair "/^" (any, not only the first) and, later in the line and not overlapping it, the pair "$/", with no LT character between them
+  "JS value name (say none)"   | the word "null" or the word "undefined", bounded
+  "assignment statement"       | ASSIGN (R7)
+  "capture-group reference"    | a BOUNDARY, the word "group", exactly one ASCII digit, then a BOUNDARY
+R4 A hit is the map (line = the line's number, what = the row's what text exactly as in the table, text = R6). The hits
+  list is ordered by line number, and within a line by the row order of TABLE SHAPES.
+R5 Counts. A line is BLANK when it is empty or consists only of WS characters. The entry lines is the number of non-BLANK lines.
+  The entry commentLines is the number of lines whose first non-WS character is "#" (a comment line is non-BLANK and counts
+  in lines too). The entry hitLines is the number of distinct line numbers among the hits. The entry density is hitLines / lines as a double (correctly
+  rounded division, not rounded further: 1 of 3 is 0.3333333333333333, 1 of 10 is exactly the double nearest 0.1, the same
+  double as 3 of 30), and 0 when lines is 0. A BLANK line never has a hit, so density never exceeds 1.
+R6 The text of a hit is the normalized line (R1, before R2) with every leading and trailing WS character removed, then cut to
+  its first 96 characters (code points: a character outside the Basic Multilingual Plane counts as ONE and is never split);
+  a shorter text is kept whole.
+R7 ASSIGN holds on S when there is an equals sign E in S such that all of these hold:
+  (a) skipping back from E over zero or more WS characters reaches a run of WORD characters (the whole maximal run) that holds
+  at least one ASCII letter or underscore — so "a1 = b;" qualifies and "1 = 2;" does not;
+  (b) after E come zero or more WS characters and then a character C that is neither an equals sign nor WS — so a double
+  equals sign or a compound operator such as "+=" never qualifies at that sign;
+  (c) the last non-WS character of S is a semicolon standing strictly after C, with no LT character between C and it.
+PINNED charset WS = the code points 0009 000A 000B 000C 000D 0020 00A0 1680 2000 to 200A 2028 2029 202F 205F 3000 FEFF (hexadecimal, 25 members) CITED ECMA-262 WhiteSpace and LineTerminator, the host's white-space class and trim set; probe over every BMP code unit: the class and the trim set are both exactly these 25; 0085 (NEXT LINE) and 180E are NOT members, FEFF is — this is NOT the Unicode White_Space property
+PINNED charset WORD = the ASCII letters A to Z and a to z, the ASCII digits 0 to 9, and the underscore CITED ECMA-262 non-unicode word class; probe: a lone accented letter is not WORD, so "éreturn" has a BOUNDARY before "return" and is a hit
+PINNED charset LT = the code points 2028 2029 (hexadecimal) CITED ECMA-262 LineTerminator minus the CR and line feed that R1 already consumed as breaks; the "any character" of the package's patterns crosses neither, so "x = 1" 2028 ";" is not ASSIGN while "x = 1;" 2028 is
+PINNED grammar BOUNDARY = a position between two characters, or at either end of S, where exactly one of the two neighbours is a WORD character; outside S counts as non-WORD CITED ECMA-262 word-boundary assertion over WORD
+INVARIANT 0 <= hitLines <= lines, 0 <= commentLines <= lines, 0 <= density <= 1, and hitLines <= the length of hits.
+INVARIANT the result depends on each line alone: reordering lines reorders hits and leaves every count unchanged.
+ORACLE value -> oracles/lint_transcription.json  CANONICAL-SHA256 cc16f0acb0b6fb233fa86c96c89868cc8de68cb70a1560835f6ff3b05fb5067c
+SCOPE IN: R1-R7 over any text in ENVELOPE. OUT: the 10% gate and its percent message (lintFamily), the language-leak and
+  pin lints, the Jev dial score, and non-text input.
+PROVENANCE rederive@6199e2cc8b75 (rederive, the trust kernel's own SIR v0.5 lab core), cli/sir/v05.mjs: transcriptionLint,
+  CODE_SHAPES, stripQuoted; cli/sir/sir-parse.mjs: sirLines, quotedSpans. Cut cold 2026-10-26 for REDERIVE_SELF_PLAN Tier 1; round 2
+  followed the kernel fix (line reader and code-point cut) at b15b56613f9d; round 3 follows FINDINGS #50 at 31803f408bef
+  (the indexed-assignment row needs no right-hand side); round 4 follows FINDINGS #59 #60 #68 at 978444f3baf3 (quoted spans
+  open only at a token start and escape any one character; the indexed-assignment row takes the compound operators and
+  refuses "=>"); round 5 follows FINDINGS #75 #76 at bb8ded84fa50 (the 19 openers, a quote right after a closed span opens
+  the next, and a FEFF run after the indent is dropped); round 5b follows FINDINGS #99 #107 at 6199e2cc8b75 (every FEFF
+  of the leading space/tab/mark run is dropped; "+", "*" and "?" are no longer openers).

@@ -1,0 +1,29 @@
+UNIT any_ban_hits
+LANG rust
+PRIMARY-SHA256 38a09b24bccfa0114557d5ea8f265f266ff76a8348b83562c85dcddb45f2b533
+SIG pub fn any_ban_hits(src: &str) -> Vec<String>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn any_ban_hits); no main, no I/O; the verifier owns the
+  harness. text=&str (UTF-8; scanning by char agrees with the package's UTF-16 scan, since every rule tests ASCII
+  characters or "at or above U+0080"); list[text]=Vec<String>.
+MECHANISM collect src into a Vec<char> and scan it by index (R1-R9); CONTEXT is a Vec<char> or String. No regex crate is
+  needed (DEPENDS-ON none). Indexing past the end must read as "no character", never panic: a BACKSLASH may be the last
+  character of a string, template or regex body.
+MECHANISM WS is the primary's pinned set, NOT char::is_whitespace (which admits U+0085 and rejects U+FEFF) and NOT
+  u8::is_ascii_whitespace (which rejects VT); WORD / IDENT are ASCII tests (WORD CHAR adds every non-ASCII char that is not WS, U+0085 or U+200B), NOT char::is_alphanumeric; the
+  regex flags are ASCII letters only (char::is_ascii_alphabetic). OPERAND END's non-ASCII part is c as u32 >= 0x80, WORD CHAR's the same minus WS, U+0085 and U+200B
+  (one char for an astral code point, which the package sees as two word-char code units: the same word).
+MECHANISM LINE counts LF only, exactly where R2-R8 say (an LF escaped inside a string or template IS counted, one
+  escaped inside a regex body is not); it is NOT str::lines. Entries are format!("{}@{}", label, line).
+MECHANISM DIRECTIVE is an ASCII case-insensitive substring search (to_ascii_lowercase), run on the text AND on
+  str::to_lowercase of the text (the LOWERED row: it maps U+212A to k and U+0130 to "i\u{307}"); R4's P, Q and AT are
+  indices in UTF-16 code units (count c.len_utf16()), not bytes or chars, since U+0130 makes LOW one unit longer per
+  occurrence; a line comment stops at '\n', '\r', '\u{2028}' or '\u{2029}'.
+MECHANISM the REST SCAN runs only when the regex was GUESSED (REGEX POSITION by its empty or keyword row, never the
+  punctuator row); it is a recursive call on the chars from just after the opening SOLIDUS to the end, memoized in a
+  HashMap<usize, Vec<String>> keyed by suffix length and passed down to every nested REST SCAN; the final order is a STABLE
+  sort by line (slice::sort_by_key, never sort_unstable).
+MECHANISM a regex BODY is lexed by a recursive call on the chars strictly between its two SOLIDUS characters, with fresh
+  state; its entries are re-labelled at the opening line by splitting at the LAST '@' (rsplit_once('@')). The KEY test skips
+  WS minus '\n' '\r' '\u{2028}' '\u{2029}', plus '\u{85}' and '\u{200B}'.
+DEPENDS-ON none
+PROVENANCE rederive@aa3b8dce6ef8 cli/lang-ts.mts anyBanHits, cut for REDERIVE_SELF_PLAN round 5, re-cut for 5b, 5c, 5d, 5f, 5g and 5h.

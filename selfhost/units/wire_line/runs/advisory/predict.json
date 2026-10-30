@@ -1,0 +1,200 @@
+{
+ "status": "ok",
+ "unit": "wire_line",
+ "primary": "selfhost/units/wire_line/sir/wire_line.sir",
+ "primarySha256": "dceecb49554e9bcc4cdf9017a3bf90c2cbfc2d054f6a9690ad621a1daa7cf4f9",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Reading the SIG. FIXED = the number of parameters not marked rest. REST = the type of the FIRST parameter marked rest; a rest parameter with no type (absent or none) means there is NO rest. Argument j (0-based) is wired at the type of the j-th entry of the WHOLE parameter list when j < FIXED (whether or not that entry is the rest one), else at REST. CITED FIDELITY package",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R2",
+   "text": "Throws, and only these, before any argument is looked at: sig is none or absent, sig has no parameter list (or one that is not a list), or a parameter entry is none. They throw even when args is malformed. Nothing else throws (R5).",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "R3",
+   "text": "Shape. args not a list -> NARROWED \"the args are not a list\". No REST and the args count differs from FIXED -> NARROWED \"<count> args for a <FIXED>-parameter SIG\". With a REST any count passes, fewer than FIXED included (only the arguments present are wired). Then, before any argument is wired, a hole anywhere in args -> NARROWED HOLE_TEXT (it wins over every argument's own result, faults included). CITED FIDELITY package",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R4",
+   "text": "Walk. The arguments are wired left to right by WIRE (R6-R16); the FIRST argument whose wire is NARROWED is the result and no later argument is examined. Otherwise the result is \"[\" + the wires joined by \",\" + \"]\"; no arguments -> \"[]\".",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "R5",
+   "text": "A host fault while wiring one argument (a malformed type node, TABLE MALFORMED) -> NARROWED \"wire: \" + the fault message. Inside one list, tuple or record EVERY element / item / field is wired before the first NARROWED among them is chosen, so a fault anywhere inside an argument wins over a NARROWED sibling in it; across arguments R4's order decides.",
+   "ambiguity": 0.6
+  },
+  {
+   "id": "R6",
+   "text": "None and absent first, at every typed position, any depth. The ABSENT value (an argument, list element or tuple item that is absent, or a declared record field the value lacks or holds as absent) is tested FIRST, by reading the node: at a none node or an OPTION union (R7) it wires \"null\"; at every other node (json, map, a multi-way union, a scalar, a kind outside the set, a node with no k) -> NARROWED ABSENT_REASON. Then a none value wires \"null\" before the type is read, whatever the type (malformed included). So on a malformed node absent can fault (TABLE MALFORMED) where none cannot. CITED FIDELITY package",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "R7",
+   "text": "Union. An OPTION union — exactly two alternatives, exactly one of them not none, in either order — wires the value by that alternative's rule. Every other union (two non-none alternatives, three or more, one, or zero) wires the value by the json rule R15, whatever the alternatives are: the value is never checked against them. CITED FIDELITY package",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R8",
+   "text": "f64. A number -> its IEEE-754 binary64 bit pattern as a JSON string of exactly 16 lowercase hex digits, every NaN as 7ff8000000000000 (-0 -> \"8000000000000000\", +Infinity -> \"7ff0000000000000\"). Anything else (a big integer included) -> NARROWED \"not an f64 value\".",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R9",
+   "text": "text. A text with a lone surrogate -> NARROWED \"a lone surrogate has no UTF-8 form\"; another text -> TEXT-ESCAPE. Anything else (a boxed text included) -> NARROWED \"not a text value\".",
+   "ambiguity": 0.57
+  },
+  {
+   "id": "R10",
+   "text": "bool. true / false -> \"true\" / \"false\"; anything else -> NARROWED \"not a bool value\".",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "R11",
+   "text": "i64 and u64. Accepted: a big integer, or a number that is an integer of magnitude at most 2^53-1 (-0 counts, and is 0); in range [-2^63, 2^63-1] for i64, [0, 2^64-1] for u64 -> its exact decimal digits (\"-\" when negative). Anything else (a fraction, 2^53 as a number, out of range, non-number) -> NARROWED \"not a i64 value\" / \"not a u64 value\". CITED FIDELITY package",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R12",
+   "text": "list. Not a list (a byte array, a text, a map: anything but a list) -> NARROWED \"not a list value\". A list with any hole -> NARROWED HOLE_TEXT (checked before any element is wired). Otherwise each element is wired at the item type; the first NARROWED element is the wire; else \"[\" + the element wires joined by \",\" + \"]\".",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R13",
+   "text": "tuple. A list with any hole -> NARROWED HOLE_TEXT, checked first (before the length test and before the node's items are read, so it wins over a wrong length and over a node with no items). Otherwise: not a list, or a list whose length differs from the item count -> NARROWED \"not a <items>-tuple\"; else item i is wired at item type i, first NARROWED wins, else \"[...]\" as R12. CITED FIDELITY package",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R14",
+   "text": "record. Not a plain map (a list, keyed collection, set, byte array, regexp, boxed value, scalar) -> NARROWED \"not a record value\". Otherwise each declared field, in declared order, wires the value's OWN property of that name at the field type — a missing one is absent (R6: \"null\" only at a none or option field; an inherited member such as constructor is never read). First NARROWED field wins; else \"{\" + each JSON-quoted field name (TEXT-ESCAPE) + \":\" + its wire, joined by \",\", + \"}\". Undeclared keys of the value are dropped unchecked.",
+   "ambiguity": 0.63
+  },
+  {
+   "id": "R15",
+   "text": "json and map (and R7's non-option unions). If the value is NOT CARRIABLE -> NARROWED with the first REASON found by CARRY; otherwise the value's PLAIN rendering. A map position never consults its key or value type: map[text, f64] holding \"x\" sends \"x\", a number as decimal (not bits). CARRY, depth first, elements in index order and map entries in HOST KEY ORDER (a key before its value): none, bool -> carriable; a number that is NaN, +Infinity, -Infinity or -0 -> NARROWED_JSON; a whole number of magnitude above 2^53 (2^53 itself passes) -> \"a whole number past 2^53 reaches serde_json as a different integer\" (whether or not its rendering would be exact); a big integer below -2^63 or above 2^64-1 -> \"an integer past i64/u64 has no serde_json form\"; a text (or a map key) with a lone surrogate -> \"a lone surrogate has no UTF-8 form\"; the absent value (nested) -> ABSENT_REASON; a list hole -> HOLE_TEXT; a plain map -> its entries; a list -> its elements; any other object -> \"a <TAG> has no serde_json form\", TAG = the host's class name: Uint8Array (a host byte buffer too), Map (keyed collection), Set, RegExp, Number, String, Boolean (boxed). CITED FIDELITY package",
+   "ambiguity": 0.73
+  },
+  {
+   "id": "R16",
+   "text": "Every other kind (bytes, none, a kind outside the closed set, a node with no k) -> NARROWED \"the rust harness has no route for <k>\", <k> the kind text as written, or ABSENT_TEXT when the node has no k. CITED FIDELITY package",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R17",
+   "text": "PLAIN rendering (only of CARRIABLE values): a big integer -> its decimal digits, unquoted; none -> \"null\"; bool -> \"true\" / \"false\"; a number -> NUMBER-TEXT (CARRY has removed every whole number past 2^53); text -> TEXT-ESCAPE; a list -> \"[\" + elements PLAIN joined by \",\" + \"]\"; a plain map -> \"{\" + each TEXT-ESCAPE key + \":\" + value PLAIN, joined by \",\", + \"}\" in HOST KEY ORDER: keys that are array indices (the canonical decimal spelling of an integer 0 .. 2^32-2) first, ascending numerically, then every other key in creation order. CITED FIDELITY package",
+   "ambiguity": 0.74
+  },
+  {
+   "id": "TABLE MALFORMED row 1",
+   "text": "the type node itself is missing or none, any value but none (absent included)     -> Cannot read properties of <x> (reading 'k')",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "TABLE MALFORMED row 2",
+   "text": "a union node with no alts, any value but none (absent included)                   -> Cannot read properties of <x> (reading 'filter')",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "TABLE MALFORMED row 3",
+   "text": "a list node with no item, at an element that is not none (absent included)        -> Cannot read properties of <x> (reading 'k')",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "TABLE MALFORMED row 4",
+   "text": "a tuple node with no items, a present value that is not a list with a hole        -> Cannot read properties of <x> (reading 'length')",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "TABLE MALFORMED row 5",
+   "text": "a record node with no fields, the value a plain map                               -> Cannot read properties of <x> (reading 'map')",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "TABLE TEXT-ESCAPE row 1",
+   "text": "U+0022 quotation mark                                -> ESC then the quotation mark",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE TEXT-ESCAPE row 2",
+   "text": "U+005C reverse solidus                               -> ESC then ESC",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE TEXT-ESCAPE row 3",
+   "text": "U+0008 U+0009 U+000A U+000C U+000D                   -> ESC then the letter b, t, n, f, r respectively",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE TEXT-ESCAPE row 4",
+   "text": "any other unit below U+0020                          -> ESC, the letter u, \"00\", two lowercase hex digits",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE TEXT-ESCAPE row 5",
+   "text": "everything else (U+007F, U+2028, U+2029, a surrogate pair) -> itself, unescaped",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "TABLE NUMBER-TEXT row 1",
+   "text": "k <= n <= 21                     -> the digits followed by n-k zeros",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "TABLE NUMBER-TEXT row 2",
+   "text": "0 < n <= 21                      -> the first n digits, \".\", the rest",
+   "ambiguity": 0.74
+  },
+  {
+   "id": "TABLE NUMBER-TEXT row 3",
+   "text": "-6 < n <= 0                      -> \"0.\" then -n zeros then the digits",
+   "ambiguity": 0.66
+  },
+  {
+   "id": "TABLE NUMBER-TEXT row 4",
+   "text": "otherwise                        -> d[.ddd] then \"e\", then \"+\" or \"-\", then abs(n-1) (1e+21, 1e-7, 1.5e-7)",
+   "ambiguity": 0.72
+  }
+ ],
+ "ranked": [
+  "R17",
+  "TABLE NUMBER-TEXT row 2",
+  "R15",
+  "TABLE NUMBER-TEXT row 4",
+  "TABLE NUMBER-TEXT row 3",
+  "R14",
+  "R5",
+  "TABLE NUMBER-TEXT row 1",
+  "R9",
+  "TABLE MALFORMED row 1",
+  "TABLE MALFORMED row 3",
+  "TABLE MALFORMED row 4",
+  "TABLE TEXT-ESCAPE row 5",
+  "R6",
+  "R8",
+  "R11",
+  "R13",
+  "TABLE MALFORMED row 5",
+  "R2",
+  "TABLE MALFORMED row 2",
+  "R16",
+  "R1",
+  "R12",
+  "R3",
+  "R7",
+  "TABLE TEXT-ESCAPE row 4",
+  "R4",
+  "R10",
+  "TABLE TEXT-ESCAPE row 3",
+  "TABLE TEXT-ESCAPE row 1",
+  "TABLE TEXT-ESCAPE row 2"
+ ],
+ "at": "2026-10-28T03:35:51Z"
+}

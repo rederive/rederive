@@ -1,0 +1,82 @@
+UNIT display_value
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/sir/canon.mjs display — the human display of a tagged canonical value; reproduce it exactly, accidents included
+ORACLE-CLASS deterministic
+SIG display_value(tv: json) -> text | none
+ENVELOPE tv is any json value. Inside a node (R1) the fields the display reads hold: v of a text node — text, bool, none or
+  absent; v of an f64, i64, u64 or bytes node — text, none or absent; v of a bool node — text, bool, none or absent; msg of a
+  throw node — text, bool, none or absent; v of a
+  bigint node — text, bool, none or absent; v of a list, tuple, record or map node — anything (R7 says when it throws); a
+  record entry's first item — text. Other fields and other keys are never read. Text is well-formed Unicode. Nesting is
+  bounded only by the codec (R10). A number or a list or map in one of the leaf fields above is OUT (OUT-OF-DOMAIN).
+DEPENDS-ON none
+DESCRIPTION Render a tagged canonical value (the codec's tree: a map with a text tag t and the tag's fields) as one line of
+  human-readable text, the form every grade report and frozen.md prints. The result is text, or none when the top-level
+  node is ABSENT (R5). A malformed tree degrades as R2–R7 state; it throws only where R2, R6 or R7 say so.
+BEHAVIOR
+R1 A NODE is a map whose entry t is text. Its display is chosen by t compared exactly (case-sensitive, whole text) against
+  TABLE NODE; entries other than t and the field the row names (v or msg) are ignored (cu, bits, any extra key).
+R2 A none at a node position — tv itself, an element of a list or tuple, the second item of a record entry, or either
+  item of a map entry — throws. CITED FIDELITY package
+R3 Anything else that is not a node — text, a number, a bool, a list, a map without a text t — displays "?". A node whose t
+  names no row of TABLE NODE (an unknown tag, a differently cased tag) also displays "?".
+TABLE NODE — t | display (a field "absent" means the node has no such key; "none" means it holds none)
+  none        | "null"
+  "undefined" | "undefined" (the js extension's present-but-valueless tag)
+  text        | v text -> QUOTE(v) (R4); v bool -> "true" / "false"; v none -> "null"; v absent -> ABSENT-MISSING (R5)
+  f64 i64 u64 bytes | v text -> v verbatim, never re-rendered (the f64 bits are not read); v none -> ABSENT-NULL; v absent -> ABSENT-MISSING
+  bigint      | v text -> v followed by "n" (v is not checked: "12" -> "12n", "" -> "n"); v true / false -> "truen" / "falsen"; v none -> "nulln"; v absent -> "undefinedn" (never ABSENT)
+  bool        | v true -> "true"; v false -> "false"; v text -> v verbatim; v none -> "null"; v absent -> "undefined"
+  throw       | "throw(" X ")" — X = QUOTE(msg) for a text msg; "true" / "false" for a bool msg; QUOTE of the empty text (two double quotes) when msg is none or absent
+  list tuple  | "[" the displays of the elements of v, joined by "," "]"
+  record      | "{" for each entry: FIELDNAME of its first item (R11), ":", the display of its second item; entries joined by ", " (comma, space) "}"
+  map         | "{" for each entry: the display of its first item, ":", the display of its second item; entries joined by "," "}"
+R4 QUOTE(s) = a double quote, s with each character replaced per TABLE ESCAPE, a double quote. Every character not in
+  the table is written as itself — including "/", DEL (U+007F), U+0085, U+2028, U+2029 and every non-ASCII scalar.
+  CITED FIDELITY package — the host's JSON string serializer
+TABLE ESCAPE — character | written as (the characters between the outer quotes of the cell)
+  U+0022 quotation mark | "\""
+  U+005C reverse solidus | "\\"
+  U+0008 | "\b"
+  U+000C | "\f"
+  U+000A | "\n"
+  U+000D | "\r"
+  U+0009 | "\t"
+  any other U+0000..U+001F | "\u" then 4 LOWERCASE hex digits (U+001F -> "\u001f")
+R5 ABSENT. A text node with no v, and an f64/i64/u64/bytes node with no v or a none v, display no text: ABSENT-MISSING
+  (no v) or ABSENT-NULL (v none). Where an ABSENT lands decides what it prints:
+  as tv itself -> the result is none (both kinds);
+  as an element of a list or tuple -> it contributes the empty text between its commas (both kinds: "[" ABSENT "]" is "[]",
+  two ABSENTs are "[,]");
+  as a record entry's second item, or as either item of a map entry -> ABSENT-MISSING prints "undefined", ABSENT-NULL
+  prints "null". CITED FIDELITY package
+R6 ENTRIES (record and map). Each element of v is an entry. A list entry supplies its first two items; items beyond the
+  second are ignored. A text entry is read as the list of its Unicode scalar values: its first two items are one-character
+  texts — a record writes the first as its field name through FIELDNAME (R11); every item that is DISPLAYED (a record's second, both of
+  a map's) is a text, so "?" by R3. An entry with fewer than two items throws; an entry that
+  is a none, bool, number or map throws. CITED FIDELITY package
+R7 The v of a list, tuple, record or map node must be a list: absent, none, text, bool, number or map -> throws.
+R8 Order is as stored: elements and entries print in the order v holds them — never sorted, never de-duplicated (a map
+  with two equal keys prints both).
+R9 No escaping outside QUOTE: the verbatim v of the f64/i64/u64/bytes, bigint and bool rows of TABLE NODE is written raw, so a v
+  holding ",", "]" or a quote is indistinguishable from structure.
+R10 Depth: the display has no nesting cap of its own; every depth the codec admits renders. CITED FIDELITY package
+R11 FIELDNAME(n) = n written as itself when n is a PLAIN IDENTIFIER, else QUOTE(n) (R4). CITED FIDELITY package — FINDINGS #95
+PINNED charset PLAIN-IDENTIFIER = the whole text, non-empty: first character one of A-Z a-z _ (ASCII only), every later character one of A-Z a-z 0-9 _ (ASCII only); nothing else, no trailing line break CITED R11 — the code's identifier test
+  So "a", "_", "A_9" print raw; "", "1a", "a b", "a-b", "é", "a" followed by a line feed, and any name holding ":" or "," are quoted.
+INVARIANT the result is none only when tv itself is ABSENT (R5); a throw comes only from R2, R6 or R7.
+INVARIANT a well-formed canonical tree (every v and msg present and of its canonical type) never throws and never yields none.
+OUT-OF-DOMAIN what the package does outside ENVELOPE (not graded, not reproduced): a number in a leaf field is rendered
+  by the host's number-to-text (f64/i64/u64/bytes return it as a non-text value at the top level); a list or map there is
+  rendered by the host's own object-to-text or JSON writer; a bool v in an f64/i64/u64/bytes node is returned as a bool at
+  the top level; a number, list or map in a bigint v is rendered by the host's text
+  conversion followed by "n"; a non-text record field name is tested and printed through the host's text conversion and
+  JSON writer; a text holding a lone surrogate
+  is quoted with that surrogate as \u and 4 lowercase hex digits (js envelope extension only); nesting deeper than the
+  host stack overflows with the host's own error.
+ORACLE value -> oracles/display_value.json  CANONICAL-SHA256 e4b4f7b43f32841e14032135ff9b10eabf7eef18feec26f4cb6b97a90a25e9b0
+SCOPE IN: R1–R10 over ENVELOPE, including every degradation they state (ABSENT, "?", the throws). OUT: OUT-OF-DOMAIN; the
+  canonical string, encode and decode (other units).
+PROVENANCE rederive@bb8ded84fa50 (MIT), cli/sir/canon.mjs, export display(tv); cut 2026-10-27 for REDERIVE_SELF_PLAN Tier 3
+  from the pinned authority snapshot selfhost/.authority/bb8ded84fa50.

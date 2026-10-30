@@ -1,0 +1,56 @@
+UNIT adopt_replace_block
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/lib/adopt.mts replaceUnmanagedBlock — the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG adopt_replace_block(existing: text, block: record[heading: text, startLine: i64, endLine: i64], managed: text, kept: list[text]) -> text
+ENVELOPE existing, managed, block.heading and every kept element are well-formed Unicode text (no unpaired surrogate) of
+  any content: empty, whitespace-only, LF, CR LF, lone CR or mixed line ends, any character. block.startLine and
+  block.endLine are any integers of magnitude at most 2^53 - 1; a pair that is not a range of existing throws (R2), and so
+  does a managed text that is not VISIBLE (R3). kept is a list, possibly empty, of any texts.
+DEPENDS-ON none
+DESCRIPTION The `rdv init --adopt` splice: existing is a CLAUDE.md, block names the line range [startLine, endLine) that
+  holds an unmanaged copy of a profile section, managed is the managed section that replaces it, and kept are the giver's
+  rules no managed sentence represents. The result is the giver's text before the range, then managed, then (when any
+  kept rule is VISIBLE) a new "Project rules" section, then the giver's text after the range — byte for byte outside the
+  range except the blank lines at its two edges — the parts separated by one blank line in the line ending of the giver's
+  lines outside the range.
+BEHAVIOR
+R1 LINES: existing is cut at every LF (U+000A); k LFs give N = k + 1 lines (the empty text is one empty line; a final LF
+  leaves a final empty line). A CR stays part of its line; U+2028, U+2029, VT, FF and NEL are ordinary content.
+R2 RANGE: S = block.startLine, E = block.endLine. Unless 0 <= S < E <= N the call throws. This check comes first.
+R3 VISIBLE: a text is VISIBLE when it holds at least one character that is in neither WS nor CF; the empty text, and a
+  text of only WS and CF characters, is not. If managed is not VISIBLE the call throws. block.heading is never read.
+R4 EOL: list the lines OUTSIDE the range in order, lines 0 .. S-1 then lines E .. N-1 (BLANK lines included). EOL is CR LF
+  when some line of that list OTHER THAN ITS LAST ends with a CR; otherwise LF. Lines inside the range never count, nor
+  does a CR ending the last listed line: when E = N, a CR ending line S-1 is not counted. An empty list gives LF.
+R5 A line is BLANK when every character of it is a space (U+0020), a tab (U+0009) or a CR; the empty line is BLANK. This is
+  NOT the WS set: a line holding NBSP, FF, VT or U+3000 is content.
+R6 BEFORE: let p be the last line index below S whose line is not BLANK. With no such line BEFORE is empty. Otherwise BEFORE
+  is existing verbatim from its start up to and excluding the LF that follows line p; when EOL is CR LF one CR ending line
+  p is excluded too, and when EOL is LF that CR stays as BEFORE's last character. The BLANK lines p+1 .. S-1 are dropped;
+  trailing spaces of line p survive.
+R7 AFTER: let q be the first line index at or above E whose line is not BLANK. With no such line AFTER is empty. Otherwise
+  AFTER is existing verbatim from the start of line q to its end, including whatever ends it (a final LF or CR LF, a lone
+  CR, or nothing). The BLANK lines E .. q-1 are dropped; indentation of line q survives.
+R8 CONVERT a text to EOL: scanning left to right, each CR LF pair, each other CR and each other LF becomes one EOL (CR CR LF
+  gives two EOLs, LF CR gives two).
+R9 MANAGED: managed with its leading and trailing runs of WS characters removed (interior untouched; CF characters are not
+  removed), then CONVERT.
+R10 RULES: the kept elements in order, omitting every element that is not VISIBLE. With none left RULES is empty. Otherwise
+  each remaining element loses the maximal run of CR and LF characters at its end (only those two characters: a space,
+  tab or NEL ends the run), then is CONVERTed; RULES is HEADER, EOL, EOL, then those elements joined by EOL EOL. Nothing
+  else is trimmed: leading whitespace, interior line ends and trailing whitespace other than CR and LF survive.
+R11 RESULT: of BEFORE, MANAGED, RULES, AFTER in this order drop the empty ones and join the rest with EOL EOL. When AFTER is
+  empty, append one EOL; otherwise append nothing (the result ends exactly as existing does). CITED FIDELITY package
+PINNED charset WS = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000-U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED R3 R9 — ECMA-262 WhiteSpace plus LineTerminator, 25 code points; U+0085, U+180E, U+200B are NOT members
+PINNED charset CF = U+00AD U+0600-U+0605 U+061C U+06DD U+070F U+0890-U+0891 U+08E2 U+180E U+200B-U+200F U+202A-U+202E U+2060-U+2064 U+2066-U+206F U+FEFF U+FFF9-U+FFFB U+110BD U+110CD U+13430-U+1343F U+1BCA0-U+1BCA3 U+1D173-U+1D17A U+E0001 U+E0020-U+E007F CITED R3 — General_Category Cf as of Unicode 17.0 (the authority's engine: node 24.16, ICU 78.3), 21 ranges; U+FEFF is in both sets; U+0085 (Cc) is in neither
+PINNED text HEADER = "## Project rules (kept by `rdv init --adopt` — review and merge)" CITED R10 — adopt.mts line 136; — is the EM DASH U+2014, one character, between single spaces
+INVARIANT MANAGED is never empty, so the result is never empty.
+ORACLE value -> oracles/adopt_replace_block.json  CANONICAL-SHA256 dcb5ed208d8bc88026556b78450dde42727b02494fb3e4877a84fab2d4361fd0
+SCOPE IN: R1-R11 over the envelope, both throws (the message text is not graded). OUT: locating the block
+  (findUnmanagedDuplicate), choosing kept (extractKeptContent), the marker discipline of managed, any file I/O, the
+  omitted-kept default of the real signature (kept is always passed here), and non-integer or non-number line fields (a
+  js-only value; the real code throws on them).
+PROVENANCE rederive@6199e2cc8b75 (MIT), cli/lib/adopt.mts, function replaceUnmanagedBlock (lines 119-142); seam
+  selfhost/seams/adopt_replace_block.mjs.

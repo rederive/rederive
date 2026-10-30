@@ -1,0 +1,26 @@
+UNIT divergence_of
+LANG ts
+PRIMARY-SHA256 0ce7a880e772c6442115ba46d2c5225feb139afcaab6b040c501da8eead05955
+SIG export default function divergence_of(round: number, artifacts: readonly Artifact[]): Verdict | null
+ABI TypeScript compiles to the js runtime and is driven exactly as js. Declare in the artifact
+  type Miss = { readonly slice: string | null; readonly name: string; readonly args: readonly string[]; readonly expected: string }
+  type Artifact = { readonly artifact: string; readonly control: boolean | null; readonly error: string | null;
+  readonly rungs: readonly string[] | null; readonly typeCheck: { readonly applicable: boolean; readonly ok: boolean | null } | null;
+  readonly _misses: readonly Miss[] | null }
+  type Tally = { name: string; args: readonly string[]; expected: string; failedBy: string[]; passedBy: number; of: number }
+  type Verdict = { round: number; quorum: string; verdict: string; heldoutDisagree: Tally[]; frozenMissed: Tally[] | null }
+  i64 = number; text = string; bool = boolean; none = null; list = an array; record = an object type with exactly those
+  fields; every input field is present (none as null). frozenMissed is always written, null when R8 leaves it none. STRICT:
+  strict: true, no any, no non-null assertions (!), no @ts-ignore, no @ts-expect-error; narrow rungs with === null before
+  reading it. The R5 throws are thrown Errors (throw explicitly); the message is not graded. ES module default export;
+  imports nothing.
+ENVELOPE as the primary; no widening.
+MECHANISM (restated from js — language files are self-contained) control counts only when it is === true; error counts
+  whenever it is !== null, the empty string included (R3). R4(a) is rungs.includes("harness-verified") — element equality,
+  never a substring test; R4(c) is _misses null or of length 0. A slice of null passes R5 and is tallied as "heldout" (slice ?? "heldout", R6). Run every
+  R5 check over all graded artifacts before counting votes. Group misses in a Map<string, Tally> (first-insertion order,
+  R7) — never a plain object keyed by name, which reorders integer-like names and collides with inherited members.
+  failedBy dedupe is includes on the artifact-name strings.
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs divergenceOf. Language file re-cut 2026-10-27 (round 5, delta 5b) with the
+  primary, before any blind re-emission.

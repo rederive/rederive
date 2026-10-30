@@ -1,0 +1,16 @@
+UNIT boundedFilter
+KIND FUNCTIONAL
+FIDELITY spec
+SIG boundedFilter(array, concurrency, gate) -> Promise<array>
+DESCRIPTION Takes an array of integers and a concurrency limit. Returns only the elements from the input array for which the caller-supplied gate resolves to a truthy value, in their original input order.
+DESCRIPTION Each element in the input array is tested exactly once by awaiting gate.open(element). The gate is a harness-owned predicate function supplied by the caller. The unit awaits each gate invocation; the gate function itself determines whether the element passes the filter.
+DESCRIPTION Gate invocations are concurrent but bounded: at most min(concurrency, array.length) gate.open calls may be pending (in flight, awaiting resolution) at any moment. An invocation enters in-flight state when gate.open(element) is called and leaves in-flight state when the promise resolves.
+DESCRIPTION The output array is keyed strictly by input position: if input[i] and input[j] both pass the gate and i < j, they appear in the same relative order in the output (not sorted by completion time).
+DESCRIPTION For the use case of filtering even integers, the gate would resolve to true for even numbers and false for odd numbers. The unit does not compute evenness itself; that logic lives in the gate function supplied by the caller.
+DESCRIPTION If the input array is empty, the output is an empty array. The gate is not invoked.
+PAR Each element's gate.open invocation runs concurrently, subject to the concurrency bound.
+INVARIANT Output array order preserves input array order: if elements at positions i and j (i < j) both pass the gate filter, they appear in the output in the same order.
+INVARIANT Output contains exactly those elements from the input for which gate.open(element) resolves to a value that is truthy (not false, not null, not undefined, not 0).
+INVARIANT At most min(concurrency, array.length) calls to gate.open are in the in-flight state (awaiting resolution) at any instant.
+INVARIANT Concurrent examinations of different elements do not interfere: each gate.open call is independent, and the order of arrival of their results does not affect the result (only the concurrency bound is enforced).
+INVARIANT When array is empty, gate.open is not called, and the unit returns an empty array immediately.

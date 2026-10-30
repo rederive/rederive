@@ -1,0 +1,132 @@
+UNIT isNumber
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isNumber(num: any) -> boolean
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — exact + complete; transcribed from the source)
+# ---------------------------------------------------------------------------
+# Source (verbatim semantics, is-number@7.0.0/index.js):
+#
+#   module.exports = function(num) {
+#     if (typeof num === 'number') {
+#       return num - num === 0;
+#     }
+#     if (typeof num === 'string' && num.trim() !== '') {
+#       return Number.isFinite ? Number.isFinite(+num) : isFinite(+num);
+#     }
+#     return false;
+#   };
+#
+# NODE 1 (BRANCH: typeof num === 'number')
+#   When the argument is a primitive of type 'number' (this is the JS `typeof`
+#   operator — boxed `new Number(x)` is typeof 'object', NOT 'number', and falls
+#   through to NODE 3):
+#     RETURN (num - num === 0)
+#   Semantics of `num - num === 0`:
+#     - For any FINITE number (incl. 0, -0, negatives, MAX_VALUE, subnormals):
+#       num - num === 0  -> RETURN true.
+#     - For NaN:        NaN - NaN === NaN, and NaN === 0 is false -> RETURN false.
+#     - For +Infinity:  Infinity - Infinity === NaN -> RETURN false.
+#     - For -Infinity:  (-Inf) - (-Inf) === NaN     -> RETURN false.
+#     This is exactly "finite, non-NaN number". -0 returns true
+#     (-0 - -0 === 0, and 0 === -0 is true under ===).
+#     Note: a numeric LITERAL that overflows to Infinity (e.g. 1e309) is already
+#     the primitive value Infinity at call time -> RETURN false.
+#
+# NODE 2 (BRANCH: typeof num === 'string' AND num.trim() !== '')
+#   Reached only when NODE 1 was false (num is not a 'number' primitive).
+#   GATE A: typeof num === 'string'  (primitive string; boxed `new String(..)`
+#           is typeof 'object' -> fails this gate -> NODE 3).
+#   GATE B: num.trim() !== ''  (uses String.prototype.trim, which strips the
+#           ECMAScript WhiteSpace + LineTerminator set, INCLUDING U+FEFF BOM,
+#           U+00A0 NBSP, U+1680, U+2000..U+200A, U+2028, U+2029, U+202F, U+205F,
+#           U+3000 ideographic space, plus \t \n \v \f \r and ' ').
+#           If the string is empty OR consists ENTIRELY of those whitespace
+#           characters, trim() yields '' and GATE B FAILS -> fall to NODE 3
+#           -> RETURN false.
+#   If BOTH gates pass:
+#     RETURN (Number.isFinite ? Number.isFinite(+num) : isFinite(+num))
+#     - `+num` is the JS unary-plus / Number() string-to-number coercion. It:
+#         * strips leading/trailing ECMAScript whitespace (same set as trim),
+#         * accepts decimal: '5', '-5', '+5', '.5', '1.', '00.5', '1e3', '1E3',
+#           '+.5', and surrounding-whitespace variants -> finite -> true,
+#         * accepts the literal radix prefixes: hex '0x1'/'0X1F' (case-insensitive
+#           x), binary '0b101'/'0B101', octal '0o17'/'0O17' -> finite -> true,
+#         * accepts the strings 'Infinity'/'-Infinity'/'+Infinity' -> +num is
+#           ±Infinity -> Number.isFinite is FALSE -> RETURN false,
+#         * yields NaN for any malformed numeric string ('abc', '5px', '1,000',
+#           '1.2.3', '1_000' [numeric separators NOT allowed by Number()],
+#           '5n', '0xZZ', 'e3', '.', '-', non-ASCII digits like U+0660 / fullwidth
+#           '５', 'NaN') -> Number.isFinite(NaN) is false -> RETURN false.
+#     - Number.isFinite is present on all supported runtimes (node >=0.12), so the
+#       global-isFinite fallback branch is effectively dead on modern Node; both
+#       branches return the same boolean for the +num value here (since +num is
+#       already a number, global isFinite and Number.isFinite agree). Use
+#       Number.isFinite(+num) as the canonical computation.
+#
+# NODE 3 (DEFAULT)
+#   RETURN false.
+#   Reached for: typeof 'boolean' (true/false), 'undefined', null (typeof
+#   'object'), 'bigint' (e.g. 5n -> typeof 'bigint', not 'number' or 'string'),
+#   'symbol', 'function', and all 'object' values (plain objects {}, arrays []
+#   and [5], RegExp, Date, boxed new Number(5), boxed new String('5'), etc.).
+#   Also reached for an empty/whitespace-only string (GATE B failure) and for a
+#   'string' whose +num is NaN or ±Infinity (NODE 2 computed false — same return).
+#
+# ---------------------------------------------------------------------------
+# VERIFIED TYPE ENVELOPE (each row run against the REAL package)
+# ---------------------------------------------------------------------------
+#   RETURNS true:
+#     - number primitive that is finite & non-NaN: 5, 0, -0, -3.5, 1.2,
+#       Number.MAX_VALUE  (and any finite double)
+#     - numeric string (trim non-empty AND +num finite):
+#         '5' '1.2' '-5' '+5' '.5' '1.' '00.5' '1e3' '0x1' '0X1F' '0b101' '0o17'
+#         '-0' '0.0' '0x0' '  5  ' (surrounding ASCII/Unicode whitespace, incl.
+#         NBSP/\f/\v/\r/\t pads)
+#   RETURNS false:
+#     - number primitive NaN, Infinity, -Infinity (and any literal overflowing
+#       to Infinity at call time, e.g. 1e309)
+#     - string '' (empty), '   ' (whitespace-only, incl. BOM-only '﻿',
+#       NBSP-only, ideographic-space-only, '\t\n')
+#     - non-numeric string: 'abc' 'Infinity' '-Infinity' 'NaN' '5px' '1,000'
+#       '1.2.3' '1_000' '5n' '0xZZ' 'e3' '.' '-' '٠'(U+0660) '５'(fullwidth)
+#     - null, undefined
+#     - boolean true, boolean false
+#     - bigint (e.g. 5n)
+#     - plain object {}, array [], array [5]
+#     - boxed new Number(5), boxed new String('5')
+#     - RegExp /5/, function, Symbol
+#
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+#   Deterministic, pure, side-effect-free. No clock/RNG/IO/net seam.
+#   Oracle is the (input -> boolean) value table; the harness computes expecteds
+#   by running the real fn. genInputs supplies the stratified inputs.
+#
+# ---------------------------------------------------------------------------
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire three-node pipeline above.
+#     The total contract is captured by the source's three branches; the unit
+#     leans on host JS primitives (typeof, the `-` operator's IEEE-754 NaN
+#     semantics, String.prototype.trim's whitespace set, and the Number()/unary-+
+#     string-to-number grammar). A blind re-emitter MUST reproduce these via the
+#     target's equivalent built-ins (NOT a hand-rolled numeric parser) so the
+#     whitespace set and radix-prefix grammar match exactly.
+#   CARRIED DATA: none (no literal tables).
+#   OUT-OF-CONTRACT: none (no stateful mutators, no side APIs).
+#   OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because they do not
+#     survive the oracle JSON codec round-trip): live functions, Symbol values,
+#     and identity-bearing boxed primitives (new Number/new String) where the
+#     wrapper identity matters. Their behavior is nonetheless fully specified:
+#       function   -> NODE 3 -> false
+#       Symbol     -> NODE 3 -> false
+#       new Number(5), new String('5') -> typeof 'object' -> NODE 3 -> false
+#     (genInputs DOES emit codec-faithful members of the false set: null,
+#      undefined, NaN, ±Infinity, booleans, {}, [], bigint — see the generator.)
+#
+# ---------------------------------------------------------------------------
+PROVENANCE is-number@7.0.0  (jonschlinkert) — repo github.com/jonschlinkert/is-number,
+#   MIT License, source file index.js (single-function default/whole-module export:
+#   module.exports = function(num){...}). EXPORT NAME null (default export).

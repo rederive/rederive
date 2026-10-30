@@ -1,0 +1,30 @@
+UNIT kill_precedence
+LANG rust
+PRIMARY-SHA256 0f81f4f0f11e4dcd4da7d2f40b414068e0a01ac1bff3585e60dbfdfbac2827cb
+SIG pub fn kill_precedence(events: &[(u64, &str)]) -> Option<u64>
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn kill_precedence) with NO
+  [dependencies] at all — no main, no I/O, no binary, no unsafe. The verifier generates its own harness crate from the
+  abstract SIG: one JSON array of args per stdin line; it builds the slice from that JSON and calls
+  kill_precedence(&events); the result is printed as one JSON line. Compiling that harness against this SIG IS the
+  signature check; a panic is recorded as a throw.
+ABI type mapping: `events` is a slice of (id, cause) tuples — the abstract record's fields in DECLARED ORDER, id first,
+  cause second; u64 is a native u64, exact across the whole range; text is a &str; none = None; a u64 result = Some(id)
+  with the id exactly as it arrived. A throw (R2, OUT-OF-DOMAIN 1) is a panic (panic!, unwrap, expect); the message is
+  not graded.
+ENVELOPE as the primary; no widening is claimed. OUT-OF-DOMAIN 2 in this language: a JSON element that is not an object
+  with a u64 `id` and a text `cause` never reaches the unit — the verifier's harness reports it on that line as its own
+  fault, never as the artifact's.
+MECHANISM the cause token is matched by exact equality of the &str against the five tokens of TABLE RANKS (a match on the
+  &str, or a lookup in a fixed slice of (token, rank) pairs); no trim, no to_lowercase, no prefix test. An internal enum for
+  the rank is fine; the boundary is the text token. The R2 check is a full pass over the slice — for &(id, cause) in events
+  — before any credit is computed, or any equivalent that never yields Some when a token anywhere in the slice is unknown.
+MECHANISM the credit (R3–R4) is the minimum of the (rank, id) pairs under the lexicographic order of a tuple of integers —
+  events.iter().min_by_key(|&&(id, cause)| (rank_of(cause), id)), or a scan keeping the strictly smaller pair — with the
+  id compared as u64 (Ord), never through f64. An equal pair (a duplicate id at the same rank, R5) changes nothing
+  whichever event is kept.
+DEPENDS-ON none
+PROVENANCE greenfield language file, cut 2026-09-25 with the primary before any blind re-emission; the ABI follows the lab's
+  rust driver (drivers/rust.mjs: the harness is generated from the abstract SIG, a panic is a throw; the u64 result
+  transport verified lossless on 2026-09-25 — 2^53+1 and 2^64-1 round-trip exactly through the real harness, sir-lab commit
+  0b31c1f); re-cut 2026-09-25 to the native ABI after sir-lab 9c2dfc6 (zero-dep leaves); the Value-typed cut was VERIFIED
+  3/3 at round 2.

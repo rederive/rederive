@@ -1,0 +1,24 @@
+UNIT check_carried
+LANG ts
+PRIMARY-SHA256 48345c0139463424c8369a2dd17b8f99b22d5dbe4a32e3f5583cb189c642bc28
+SIG export default function checkCarried(decl: Json, table: Json): CarriedCheck
+ABI TypeScript compiles to the js runtime and is driven exactly as js: checkCarried(decl, table) on fresh copies of the
+  vector's args. Declare in the artifact
+  type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
+  type AssertionResult = { expr: string, equals: Json, got: Json, ok: boolean }
+  type CarriedCheck = { sha: string, hashOk: boolean | null, results: AssertionResult[], attested: boolean, status: string, entries: number }
+  An ABSENT got (R4) is written null in the result (the oracle reads absent and null alike as none); ok (R5) must still
+  tell ABSENT from a present null — decide presence first, never from the value. The module may import createHash from
+  node:crypto and nothing else. STRICT: strict: true with no any, no non-null assertions (!), no @ts-ignore and no
+  @ts-expect-error; narrow with typeof, Array.isArray and === null. A throw (R1) is a thrown Error; the message is
+  not graded. ES module default export.
+ENVELOPE as the primary; no widening.
+MECHANISM (restated from js — language files are self-contained) sha = createHash('sha256').update(Buffer.from(CANON)).digest('hex').
+  CANON by a recursive writer: Object.keys(m).sort() (UTF-16 code-unit order), JSON.stringify for each key, text leaf
+  and finite number (it IS the ESCAPE table and NUMBER-TEXT); never JSON.stringify of a whole map (integer-like keys jump
+  the sort). Test Number.isFinite and Object.is(x, -0) before writing a number; no CANON throws, for the table and for an
+  equals alike (R1). GOT: presence by Object.hasOwn(table, key) only (never `in`, never a bare index — they read
+  Object.prototype); count = Object.keys(table).length. PIN (R3): typeof S === 'string' and /^[0-9a-f]{64}$/;
+  S undefined or null is ABSENT (hashOk null), any other non-PIN throws. Results hold exactly expr, equals, got, ok.
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs checkCarried + canonical + canonicalValue. Language file re-cut 2026-10-27 with the primary (delta round 5b).

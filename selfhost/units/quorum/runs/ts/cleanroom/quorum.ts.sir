@@ -1,0 +1,11 @@
+UNIT quorum
+LANG ts
+PRIMARY-SHA256 ece801dc428005b1cf887ee7a8bf2acec2607638c1208195ce76669d9807b969
+SIG export default function quorum(fulls: readonly boolean[], need: number): { fullCount: number; hasQuorum: boolean; winnerIdx: number }
+ABI TypeScript compiles to the js runtime: list[bool] = readonly boolean[]; i64 = number; the record is a plain object with
+  exactly the three named properties. A throw (R1) is a thrown Error; the message is not graded. STRICT: the artifact must
+  type-check under strict: true against this SIG, with no any, no non-null assertions, no @ts-ignore or @ts-expect-error.
+MECHANISM (restated from js — language files are self-contained) R1 is the test: not Number.isInteger(need), or need < 1 ->
+  throw, so a non-integer number also throws; "true entry" is entry === true; the first true position is a forward scan.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/verdict.mts quorum, cut 2026-10-26 (round 2) before any blind re-emission.

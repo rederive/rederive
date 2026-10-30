@@ -1,0 +1,23 @@
+UNIT strip
+LANG js
+PRIMARY-SHA256 2749032c7a18955a230232736dc89e388f657fce21c7ee5f08b5a47f9687e5f4
+SIG export function strip(str)
+NOTE named export `strip` (the shipped control also re-exports it as `stripColors`; only `strip` is graded).
+ABI text = string (UTF-16 code units). Every character of CODE is a single ASCII code unit, so scanning code units is
+  identical to scanning code points; a surrogate pair is never split or touched. Result: a string. The artifact is an ES
+  module that imports nothing and must not require the package.
+ENVELOPE js WIDENS str to any JS value: it is first converted to a string by string concatenation with the empty string
+  ('' + str, ToPrimitive with the default hint), then R1-R4 apply. Hence 42 -> "42", null -> "null", true -> "true",
+  undefined -> "undefined", -0 -> "0", an array -> its elements joined by "," (codes inside them then stripped), a
+  plain object -> "[object Object]", an object whose valueOf returns a primitive -> that primitive's string (valueOf
+  wins over toString), a bigint -> its digits; a symbol THROWS a TypeError. A lone surrogate is kept like any other
+  character.
+MECHANISM R1-R4 = one call str.replace(CODE_RE, '') on the coerced string: the g flag gives R3's leftmost,
+  non-overlapping, resume-after-match scan and replace's single pass gives R4. \d in a regex without the u flag (and
+  with it) is ASCII-only, matching DIGIT.
+MECHANISM coercion = ('' + str). Do NOT use String(str) or a template literal: those use the string hint (toString wins
+  over valueOf) and String(symbol) does not throw.
+DEPENDS-ON none
+PINNED regex CODE_RE = /\x1B\[\d+m/g CITED R2 — the package's own pattern; its accept-set is the grammar CODE
+PROVENANCE colors@1.4.0 lib/colors.js (Marak/colors.js, MIT); the shipped control runs/js/emit_0.mjs exports
+  `export function strip`. Language file cut 2026-10-28 with the primary.

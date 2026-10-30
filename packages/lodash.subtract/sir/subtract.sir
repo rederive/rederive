@@ -1,0 +1,397 @@
+UNIT subtract
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG subtract(minuend, subtrahend) -> number | <raw passthrough value>
+# Default export: module.exports = subtract. The blind re-emitter MUST `export default subtract`
+# (a single default-exported function; NO named exports). importKind = 'default'.
+DEPENDS-ON none   # zero runtime deps; pure-math closure built by createMathOperation(op, 0)
+
+# ============================================================================
+# PURITY
+# ============================================================================
+# subtract is READ-ONLY / PURE: no side effects, no I/O, no mutation of its
+# arguments (objects/arrays passed in are read via coercion only, never written).
+# No ambient seam (no clock/RNG/env/fs/net). ORACLE-CLASS deterministic, value mode.
+
+# ============================================================================
+# BEHAVIOR  (exact reproduction of createMathOperation(op, 0) with
+#            op = function(minuend, subtrahend){ return minuend - subtrahend; })
+# ============================================================================
+# The function is the closure returned by createMathOperation. Reproduce this
+# control flow EXACTLY (operand names below: value=minuend, other=subtrahend):
+#
+#   function subtract(value, other) {            # value=arg0, other=arg1
+#     var result;
+#     # NODE A — both-undefined default:
+#     if (value === undefined && other === undefined) return 0;   # defaultValue = 0
+#
+#     # NODE B — seed result from value if present:
+#     if (value !== undefined) result = value;   # result holds the RAW value (no coercion yet)
+#
+#     # NODE C — combine with other if present:
+#     if (other !== undefined) {
+#       # NODE C1 — only `other` present (value was undefined):
+#       if (result === undefined) return other;  # returns RAW `other`, UNCOERCED, as-is
+#
+#       # NODE C2 — both present: choose coercion BRANCH by string-ness of EITHER operand:
+#       if (typeof value == 'string' || typeof other == 'string') {
+#         # STRING BRANCH: stringify BOTH via baseToString, then apply operator.
+#         value = baseToString(value);
+#         other = baseToString(other);
+#       } else {
+#         # NUMBER BRANCH: numberify BOTH via baseToNumber, then apply operator.
+#         value = baseToNumber(value);
+#         other = baseToNumber(other);
+#       }
+#       # NODE D — apply operator to the (now-coerced) operands:
+#       result = value - other;      # JS '-' operator; numeric subtraction
+#     }
+#     return result;
+#   }
+#
+# CRITICAL NUANCES (these are exactly where naive paraphrase diverges):
+#
+#  (1) BOTH undefined  -> returns 0  (the defaultValue). subtract() and
+#      subtract(undefined, undefined) both -> 0.
+#
+#  (2) EXACTLY ONE undefined  -> returns the OTHER operand RAW and UNCOERCED
+#      (NOT toNumber, NOT toString). The return is the IDENTICAL value/reference:
+#        subtract(5, undefined)        -> 5
+#        subtract("abc", undefined)    -> "abc"   (string, not NaN)
+#        subtract({valueOf:..}, undef) -> the SAME object reference
+#        subtract(undefined, "5")      -> "5"     (string, not 5)
+#        subtract(undefined, 5)        -> 5
+#      Whichever side is present is returned verbatim; the missing side is ignored.
+#      (Implementation detail: when only `other` is present, NODE C1 returns `other`
+#       directly; when only `value` is present, NODE C is skipped and `result`=value.)
+#
+#  (3) BOTH present -> the coercion BRANCH is selected by:
+#        (typeof value === 'string')  OR  (typeof other === 'string')
+#      i.e. if AT LEAST ONE operand is a (primitive) string -> STRING BRANCH;
+#      otherwise -> NUMBER BRANCH. The operator '-' is the SAME in both branches;
+#      the branches differ only in the *pre-coercion* applied to each operand.
+#      NOTE: an OBJECT/ARRAY operand (even one whose valueOf returns a string) has
+#      `typeof === 'object'`, NOT 'string'. So `subtract(obj, 5)` is the NUMBER
+#      branch unless the OTHER operand is a primitive string. Branch selection looks
+#      at `typeof` of the RAW operands BEFORE any coercion.
+#
+# ----------------------------------------------------------------------------
+# baseToNumber(value)  [used by the NUMBER BRANCH on each operand]
+# ----------------------------------------------------------------------------
+#   Source (verbatim semantics):
+#       if (typeof value == 'number') return value;     # incl. NaN, +/-Inf, -0
+#       if (isSymbol(value))          return NaN;        # NO throw
+#       return +value;                                   # JS unary-plus ToNumber
+#   `+value` for non-number/non-symbol:
+#     - null            -> 0
+#     - undefined       -> (cannot reach here in number branch: undefined handled earlier)
+#     - true            -> 1 ;  false -> 0
+#     - bigint          -> THROWS TypeError "Cannot convert a BigInt value to a number"
+#                          (JS unary-plus on a BigInt throws). See OUT-OF-ENVELOPE.
+#     - OBJECT / ARRAY  -> see "OBJECT/ARRAY COERCION" below. `+value` is JS ToNumber,
+#                          which runs ToPrimitive(value, hint="number") then ToNumber on
+#                          the resulting primitive. ToPrimitive hint="number" tries
+#                          valueOf() FIRST, toString() SECOND.
+#   isSymbol(v) := (typeof v === 'symbol') OR
+#                  (v is object-like AND Object.prototype.toString.call(v) === '[object Symbol]')
+#
+# ----------------------------------------------------------------------------
+# baseToString(value)  [used by the STRING BRANCH on each operand]
+# ----------------------------------------------------------------------------
+#   Source (verbatim semantics):
+#       if (typeof value == 'string') return value;             # unchanged
+#       if (isSymbol(value)) return symbolToString.call(value);  # e.g. "Symbol(x)"; "" if no Symbol
+#       var result = (value + '');                               # <<< NOTE: (value + ''), NOT String(value)
+#       return (result == '0' && (1 / value) == -Infinity) ? '-0' : result;
+#   THE LOAD-BEARING DETAIL: lodash uses `(value + '')`, which is the JS ADDITION
+#   operator with a string operand. For an OBJECT/ARRAY operand, `value + ''` runs
+#   ToPrimitive(value, hint="default"), then string-concatenates. ToPrimitive
+#   hint="default" for ordinary objects uses the SAME method order as hint="number":
+#   it tries valueOf() FIRST, toString() SECOND. This is NOT String(value) and NOT
+#   `${value}` and NOT value.toString() — those use hint="string" (toString FIRST),
+#   which diverges for objects whose valueOf and toString differ. See HARDEN note below.
+#   `value + ''` for non-string/non-symbol:
+#     - null    -> "null"      - true -> "true"   - false -> "false"
+#     - NaN     -> "NaN"       - Infinity -> "Infinity"  - -Infinity -> "-Infinity"
+#     - number 7-> "7"         - -0 (number) -> "-0" (special-cased above)
+#     - bigint 5n -> "5"       (BigInt ToString does NOT throw)
+#     - OBJECT / ARRAY -> see "OBJECT/ARRAY COERCION" below.
+#
+# ============================================================================
+# *** OBJECT / ARRAY COERCION — THE HARDENED CORE (this round's fix) ***
+# ============================================================================
+# THE ONE RULE, stated once and used by BOTH branches:
+#   For an OBJECT or ARRAY operand, the primitive used is computed by JS ToPrimitive
+#   with a hint that is "number" (number branch, via `+value`) or "default" (string
+#   branch, via `value + ''`). For ORDINARY objects/arrays BOTH of these hints use
+#   the SAME ABSTRACT-OPERATION ORDER:
+#         (a) call value.valueOf();  if it returns a PRIMITIVE, use that primitive.
+#         (b) otherwise call value.toString();  if it returns a primitive, use that.
+#         (c) otherwise TypeError (not reachable for the inputs in this contract).
+#   => valueOf() ALWAYS WINS when it returns a primitive. toString() is consulted
+#      ONLY when valueOf() returns a non-primitive (e.g. plain objects and arrays,
+#      whose default Object/Array .valueOf returns `this`, a non-primitive).
+#
+#   *** THE BUG THIS ROUND FIXES (read carefully) ***
+#   The prior blind re-emitters modeled the STRING BRANCH object coercion as
+#   `String(value)` / `` `${value}` `` / `value.toString()`. Those are ToPrimitive
+#   hint="STRING" (toString FIRST). lodash uses `(value + '')` = hint="DEFAULT"
+#   (valueOf FIRST). When an object's valueOf() and toString() return DIFFERENT
+#   values (the differential harness seeds objects/arrays with a custom valueOf
+#   returning number Nv AND a custom toString returning a different number-string
+#   Nt), the two models diverge:
+#       value = {valueOf:()=>100, toString:()=>'7'}
+#       lodash baseToString(value) = (value + '') = "100"   (valueOf-first)  ## CORRECT
+#       WRONG model String(value)  = "7"                    (toString-first) ## the divergence
+#   So for EVERY object/array operand, in BOTH branches, you MUST take valueOf()
+#   first. Concretely a faithful re-emitter implements the object path as
+#   `+value` (number branch) and `value + ''` (string branch) — DO NOT substitute
+#   String(...)/`${...}`/.toString() for `value + ''`.
+#
+#   STEP-BY-STEP for a non-symbol, non-bigint OBJECT/ARRAY operand `obj`:
+#     NUMBER BRANCH:  prim = ToPrimitive(obj, "number")     # valueOf-first
+#                     coerced = ToNumber(prim)              # i.e. `+obj`
+#     STRING BRANCH:  prim = ToPrimitive(obj, "default")    # valueOf-first (same order)
+#                     str  = ToString(prim)                 # i.e. `obj + ''`
+#                     then NODE D's '-' re-applies ToNumber(str)
+#     In BOTH branches the EFFECTIVE numeric value of `obj` equals ToNumber applied
+#     to ToPrimitive(obj) where ToPrimitive took valueOf first. So:
+#       - obj.valueOf() -> a NUMBER Nv         => obj contributes Nv to the subtraction
+#                                                  (string branch: String(Nv) re-parses to Nv).
+#       - obj.valueOf() -> a NUMERIC STRING S  => obj contributes ToNumber(S), where ToNumber
+#                                                  on a STRING understands decimal/float/exponent/
+#                                                  sign/hex(0x)/binary(0b)/octal(0o)/Infinity/
+#                                                  whitespace-trim/""->0; bad strings -> NaN.
+#                                                  (number branch: +obj = +"...S..." parses S;
+#                                                   string branch: obj+'' = S then '-' parses S.
+#                                                   Same result.)
+#       - obj.valueOf() -> a NON-PRIMITIVE     => fall to obj.toString(); use that primitive,
+#         (default for plain {} and arrays:      then ToNumber it.
+#          valueOf returns `this`)
+#
+#   CONSEQUENCES, by concrete operand shape (all VERIFIED against @4.2.0; see WORKED EXAMPLES):
+#     - {valueOf:()=>N}            (N a number)        -> contributes N   (BOTH branches)
+#     - {valueOf:()=>"0x1A"}       (numeric string)    -> contributes 26  (hex parse, BOTH branches)
+#     - {valueOf:()=>"0b101"}                          -> 5     - {valueOf:()=>"0o17"} -> 15
+#     - {valueOf:()=>"  5  "}      (whitespace)        -> 5  (trimmed)
+#     - {valueOf:()=>"0b2"} / {valueOf:()=>"abc"}      -> NaN  (bad string)
+#     - {valueOf:()=>100, toString:()=>'7'}            -> contributes 100  (valueOf WINS, BOTH branches)
+#     - {valueOf:()=>({}), toString:()=>'42'}          -> contributes 42  (valueOf non-primitive -> toString)
+#     - plain {} (no custom valueOf/toString)          -> valueOf returns this (non-prim) -> toString
+#                                                          -> "[object Object]" -> ToNumber -> NaN  (BOTH branches)
+#     - []  (empty array)          -> valueOf returns this -> toString = "" -> ToNumber("") -> 0  (BOTH branches)
+#     - [n] (single element)       -> toString = String(n) (the element) -> ToNumber(that)        (BOTH branches)
+#                                        [5]->5 ; ['0x1A']->26 ; [' 5 ']->5 ; ['']->0 ; [null]->0 ; [undefined]->0
+#                                        (Array.prototype.join coerces null/undefined element to "")
+#     - [a,b,...] (multi element)  -> toString = "a,b,..." (comma-joined) -> ToNumber -> usually NaN
+#                                        [5,6]->"5,6"->NaN  (BOTH branches)
+#
+#   WHY THE TWO BRANCHES AGREE NUMERICALLY FOR OBJECTS:  number branch yields ToNumber(prim);
+#   string branch yields ToNumber(ToString(prim)) via NODE D's '-'. For a prim that is a
+#   number Nv these agree (String(Nv) re-parses to Nv, modulo -0 which baseToString renders
+#   "-0" and '-' parses back to -0; -0 - x and 0 - x differ only when x is also a signed zero).
+#   For a prim that is a numeric string S they agree (both parse S the same way). The ONE
+#   subtlety where a per-branch String() round-trip could matter — a valueOf returning the
+#   number -0 — is covered: number branch contributes -0; string branch baseToString(-0)="-0"
+#   then '-' parses "-0" -> -0; identical.
+#
+# ----------------------------------------------------------------------------
+# NODE D operator: result = value_coerced - other_coerced
+# ----------------------------------------------------------------------------
+#   The JS subtraction operator applies ToNumber to each side AGAIN.
+#   - In the NUMBER BRANCH the operands are already numbers (or NaN), so '-' is
+#     plain float subtraction.
+#   - In the STRING BRANCH the operands are STRINGS; '-' re-coerces each string
+#     via the JS string->number rules, which DO understand:
+#       decimal ("5"), float (".5","1.5"), exponent ("1e3","1.5e2"),
+#       sign ("+5","-5"), hex ("0x1A"->26), binary ("0b101"->5), octal ("0o17"->15),
+#       leading/trailing whitespace trimmed ("  5  "->5, "\t5\n"->5),
+#       "" and whitespace-only -> 0,  "Infinity"/"-Infinity" -> +/-Inf.
+#       Non-numeric ("abc","0x","0b","0o2"(bad binary)) -> NaN.
+#     => For string OPERANDS, the result equals (Number(str_a) - Number(str_b)).
+#
+# ============================================================================
+# WORKED EXAMPLES (every one verified against the REAL package @4.2.0)
+# ============================================================================
+#   --- both undefined / one undefined (RAW passthrough) ---
+#   subtract()                         -> 0
+#   subtract(undefined, undefined)     -> 0
+#   subtract(5, undefined)             -> 5
+#   subtract(undefined, 5)             -> 5
+#   subtract("5", undefined)           -> "5"     (raw string)
+#   subtract(undefined, "5")           -> "5"     (raw string)
+#   subtract(undefined, "abc")         -> "abc"   (raw string)
+#   --- number branch (both non-string) ---
+#   subtract(6, 4)                     -> 2
+#   subtract(4, 6)                     -> -2
+#   subtract(-3, -5)                   -> 2
+#   subtract(1.5, 0.25)                -> 1.25
+#   subtract(0.1, 0.2)                 -> -0.1     (IEEE-754 float result)
+#   subtract(0, 0)                     -> 0  (positive zero; 1/result === +Infinity)
+#   subtract(-0, 0)                    -> -0 (negative zero; 1/result === -Infinity)
+#   subtract(0, -0)                    -> 0  (positive zero)
+#   subtract(NaN, 1) / subtract(1,NaN) -> NaN
+#   subtract(Infinity, 1)              -> +Infinity
+#   subtract(Infinity, Infinity)       -> NaN
+#   subtract(-Infinity, 1)             -> -Infinity
+#   subtract(Infinity, -Infinity)      -> +Infinity
+#   subtract(true, false)              -> 1     (1 - 0)
+#   subtract(true, true)               -> 0
+#   subtract(null, null)               -> 0     (0 - 0)
+#   subtract(null, 5)                  -> -5    (0 - 5)
+#   subtract(5, null)                  -> 5     (5 - 0)
+#   subtract(Symbol(), 1)              -> NaN   (isSymbol -> NaN; NO throw)
+#   subtract(1, Symbol())              -> NaN
+#   --- number branch OBJECT/ARRAY coercion (valueOf-first; THE HARDENED CASES) ---
+#   subtract({valueOf:()=>10}, 3)              -> 7     (+obj = 10; 10-3)
+#   subtract(3, {valueOf:()=>10})              -> -7
+#   subtract({valueOf:()=>100,toString:()=>'7'}, 3) -> 97   (valueOf WINS, not 7)
+#   subtract({valueOf:()=>({}),toString:()=>'42'}, 0) -> 42 (valueOf non-prim -> toString)
+#   subtract({valueOf:()=>"0x1A"}, 0)          -> 26    (+obj parses hex string)
+#   subtract({valueOf:()=>"0b101"}, 0)         -> 5
+#   subtract({valueOf:()=>"0o17"}, 0)          -> 15
+#   subtract({valueOf:()=>"  5  "}, 0)         -> 5     (whitespace trimmed)
+#   subtract({valueOf:()=>"0b2"}, 0)           -> NaN   (bad binary string)
+#   subtract({valueOf:()=>"abc"}, 0)           -> NaN
+#   subtract({}, 0)                            -> NaN   (plain {}; valueOf=this -> "[object Object]" -> NaN)
+#   subtract({}, 76.44)                        -> NaN   (plain {}; harness seeds valueOf, see NOTE below)
+#   subtract([5], 0)                           -> 5     (toString "5")
+#   subtract([], 0)                            -> 0     (toString "" -> 0)
+#   subtract([5,6], 0)                         -> NaN   (toString "5,6" -> NaN)
+#   subtract(['0x1A'], 0)                      -> 26    (toString "0x1A" -> 26)
+#   subtract([' 5 '], 0)                       -> 5     (toString " 5 " -> trimmed 5)
+#   subtract([''], 0)                          -> 0     (toString "" -> 0)
+#   subtract([null], 0)                        -> 0     (join coerces null elt to "" -> 0)
+#   subtract([undefined], 0)                   -> 0     (join coerces undefined elt to "" -> 0)
+#   subtract([], {})                           -> NaN   (BOTH plain; 0 - NaN ; but see harness NOTE)
+#   --- string branch (>=1 PRIMITIVE string operand) ---
+#   subtract("5", "2")                 -> 3
+#   subtract("5", 2)                   -> 3      (string branch: "5"-"2")
+#   subtract(5, "2")                   -> 3
+#   subtract("10", "0x10")             -> -6     (10 - 16)
+#   subtract("0x1A", 0)                -> 26
+#   subtract("0b101", 0)               -> 5
+#   subtract("0o17", 0)                -> 15
+#   subtract("0o17", "0o2")            -> 13     (15 - 2)
+#   subtract("  5  ", 0)               -> 5
+#   subtract("\t5\n", 0)               -> 5
+#   subtract("1e3", 0)                 -> 1000
+#   subtract("1.5e2", "0")             -> 150
+#   subtract(".5", 0)                  -> 0.5
+#   subtract("+5", 0)                  -> 5
+#   subtract("-5", 0)                  -> -5
+#   subtract("abc", 0)                 -> NaN
+#   subtract("0b2", 0)                 -> NaN    (bad binary)
+#   subtract("0x", 0) / subtract("0b",0)-> NaN
+#   subtract("", 0)                    -> 0      (Number("") -> 0)
+#   subtract("  ", 0)                  -> 0      (whitespace-only -> 0)
+#   subtract("   ", 0)                 -> 0      (whitespace-only -> 0)
+#   subtract("5", "")                  -> 5      (5 - 0)
+#   subtract("Infinity", 1)            -> +Infinity
+#   subtract("-Infinity", 1)           -> -Infinity
+#   subtract("Infinity", "Infinity")   -> NaN
+#   --- string branch: NON-string primitive stringified -> "true"/"null"/"NaN" -> NaN ---
+#   # When a NON-string PRIMITIVE operand is paired with a primitive string, it is
+#   # stringified via baseToString, NOT numberified. This flips boolean/null/NaN -> NaN:
+#   subtract(true, "5")                -> NaN    (baseToString(true)="true" -> NaN)
+#   subtract("5", true)                -> NaN
+#   subtract("5", false)               -> NaN
+#   subtract(null, "5")                -> NaN    (baseToString(null)="null" -> NaN)
+#   subtract("5", null)                -> NaN
+#   subtract(NaN, "1")                 -> NaN    (baseToString(NaN)="NaN" -> NaN)
+#   subtract(-0, "5")                  -> -5     (baseToString(-0)="-0" -> -0; -0-5=-5)
+#   subtract("5", -0)                  -> 5
+#   subtract(Symbol("x"), "5")         -> NaN    (baseToString(symbol)="Symbol(x)" -> NaN; NO throw)
+#   subtract("5", Symbol("x"))         -> NaN
+#   --- string branch OBJECT/ARRAY coercion (valueOf-first via (value+''); THE HARDENED CASES) ---
+#   subtract({valueOf:()=>10}, "3")            -> 7     (baseToString -> "10"; 10-3)
+#   subtract("3", {valueOf:()=>10})            -> -7
+#   subtract({valueOf:()=>100,toString:()=>'7'}, "3") -> 97  (valueOf WINS -> "100"; NOT "7")
+#   subtract("3", {valueOf:()=>100,toString:()=>'7'}) -> -97
+#   subtract({valueOf:()=>({}),toString:()=>'42'}, "0") -> 42 (valueOf non-prim -> toString "42")
+#   subtract({valueOf:()=>"0x1A"}, "0")        -> 26    (baseToString -> "0x1A"; '-' parses 26)
+#   subtract({valueOf:()=>"abc"}, "0")         -> NaN
+#   subtract({valueOf:()=>26}, "   ")          -> 26    (26 - whitespace("   "->0))
+#   subtract({}, "0")                          -> NaN   (plain {} -> "[object Object]" -> NaN)
+#   subtract({}, "-5")                         -> NaN   (plain {} -> NaN; but see harness NOTE)
+#   subtract("3.14", {})                       -> NaN   (plain {} -> NaN; but see harness NOTE)
+#   subtract([5], "3")                         -> 2     (baseToString([5])="5"; 5-3)
+#   subtract([], "0")                          -> 0     (baseToString([])=""; 0-0)
+#   subtract([5,6], "0")                       -> NaN   ("5,6" -> NaN)
+#   subtract(['0x1A'], "0")                    -> 26
+#
+# ----------------------------------------------------------------------------
+# DIFFERENTIAL-HARNESS NOTE (why the divergence report showed `{}` -> definite numbers)
+# ----------------------------------------------------------------------------
+#   The saturation differential SEEDS each plain-object / array input drawn from
+#   genInputs with a deterministic custom `valueOf` (returning a fixed number Nv) and
+#   often a custom `toString` (returning a DIFFERENT number-string Nt). It runs BOTH the
+#   real package and the re-emitted function on the IDENTICAL seeded object. Therefore:
+#     - a seeded object/array coerces to its Nv (valueOf-first) in BOTH branches;
+#     - re-emitters MUST take valueOf first (use `+value` and `value + ''`), NEVER
+#       String(value)/`${value}`/.toString(), or they pick up Nt and diverge.
+#   The literal `{}` / `[]` shown in divergence.json args are the PRE-SEED shapes; the
+#   harness attaches the seeded valueOf before the call. The blind re-emitter never sees
+#   the seed — it only needs to honor valueOf-first ToPrimitive so the SAME seeded object
+#   yields the SAME number the real package computes.
+#
+# ============================================================================
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because not codec-faithful
+# OR because the throw is reachable only via a non-round-trippable arg)
+# ============================================================================
+# - bigint in the NUMBER BRANCH (both operands non-string, at least one bigint):
+#     subtract(5n, 2)  /  subtract(2, 5n)  /  subtract(5n, 2n)
+#       -> THROWS TypeError "Cannot convert a BigInt value to a number"
+#          (baseToNumber does +value; JS unary-plus on BigInt throws).
+#   bigint in the STRING BRANCH (paired with a string) does NOT throw:
+#     subtract(5n, "2") -> 3   (baseToString(5n)="5", 5-2).
+#   We keep bigint OUT of genInputs to avoid persisting un-reproducible {__throw}
+#   ambiguity. The throw is fully specified here for the blind re-emitter.
+# - undefined as an arg IS in-envelope and IS emitted (it is the both/one-undefined
+#   logic, handled before any coercion) — undefined here is the ARG VALUE, distinguished
+#   by arity/position, not an array hole, so it round-trips as intended.
+# - Symbol args: a real `symbol` primitive does NOT survive JSON codec round-trip and
+#   is therefore NOT emitted by genInputs; its behavior (->NaN in both branches, no throw)
+#   is fully documented above so a blind engineer reconstructs it from spec.
+# - NaN / +/-Infinity / -0 as NUMBER args DO round-trip via the toolkit codec and ARE emitted.
+# - Plain objects / arrays / {valueOf}-objects ARE emitted by genInputs as their pre-seed
+#   shapes; the harness seeds the valueOf. Re-emitter behavior is governed by the
+#   valueOf-first rule above. genInputs does NOT bake a custom valueOf into the persisted
+#   input (functions are dropped by the codec), so it emits plain {} / [] / [n] / [a,b]
+#   shapes and the SIR's object/array rule (valueOf-first) is what makes the differential agree.
+
+# ============================================================================
+ORACLE value -> oracle.json
+# Each oracle entry: input tuple [minuend, subtrahend] -> expected return (a number,
+# or the raw passthrough value for the one-undefined case). NaN/+/-Infinity/-0 are
+# distinguished. No throw paths are emitted (see OUT-OF-ENVELOPE).
+
+# ============================================================================
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire createMathOperation closure
+#     control flow (NODES A-D), baseToNumber, baseToString, isSymbol, isObjectLike,
+#     the both/one-undefined defaulting + RAW passthrough, the string-vs-number
+#     branch selection, the JS '-' operator semantics, AND the OBJECT/ARRAY coercion
+#     rule (valueOf-first ToPrimitive in BOTH branches: `+value` and `value + ''`).
+#     All inline in this file.
+#   CARRIED DATA: none. Only two literal constants exist and are reproduced inline:
+#     defaultValue = 0 ; the operator is (a,b)=>a-b. No tables.
+#   OUT-OF-CONTRACT: none (pure; no stateful mutators, no side APIs).
+# Self-consistent with genInputs: every char-class / value the generator can emit
+# (each numeric/hex/binary/octal/exponent/signed/whitespace string, each bad string,
+#  booleans, null, NaN, +/-Infinity, -0, {valueOf}-objects, {valueOf,toString}-objects,
+#  plain objects, empty/single/multi-element arrays, the undefined-on-each-side cases,
+#  plus seeded random numbers/strings/objects/arrays) has its mapping defined explicitly
+#  above. In particular the OBJECT/ARRAY coercion rule (valueOf-first in BOTH branches)
+#  is the load-bearing fix that makes the harness-seeded {}/[] inputs converge. The
+#  generator does NOT emit bigint, symbols, or functions as standalone arg values.
+
+# ============================================================================
+PROVENANCE
+#   package: lodash.subtract@4.2.0  (npm "Custom Build", modularize exports="npm")
+#   repo: lodash/lodash   license: MIT
+#   source file: node_modules/lodash.subtract/index.js
+#   defining expr: var subtract = createMathOperation(function(minuend, subtrahend){
+#                    return minuend - subtrahend; }, 0); module.exports = subtract;
+#   coercion helpers (verbatim semantics, this file): baseToNumber uses `+value`,
+#   baseToString uses `(value + '')` — both valueOf-first ToPrimitive for objects.

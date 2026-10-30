@@ -1,0 +1,139 @@
+# =============================================================================
+# SIR — strip-bom default export
+# =============================================================================
+UNIT stripBom
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure function. No clock/RNG/env/fs/net seam. Nothing to inject.
+
+SIG stripBom(x: any) -> string   # throws TypeError on non-string x
+
+DEPENDS-ON none
+# Zero runtime dependencies. Uses only intrinsic ECMAScript:
+#   typeof, String.prototype.charCodeAt, String.prototype.slice, throw new TypeError(...).
+
+# -----------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — exact + complete)
+# -----------------------------------------------------------------------------
+# The unit takes exactly ONE positional argument, here called `x` (the original
+# source parameter name; the name is observable ONLY through `typeof x`, which is
+# independent of the identifier — see node-2). Pipeline:
+#
+#   node-1  TYPE GUARD
+#     IF (typeof x) !== 'string'  THEN
+#       throw new TypeError('Expected a string, got ' + (typeof x))
+#     # The thrown error:
+#     #   - constructor/name:  TypeError
+#     #   - message:           the literal prefix string 'Expected a string, got '
+#     #                        (note the single trailing space after the comma)
+#     #                        concatenated with the runtime result of (typeof x).
+#     # The message is computed from `typeof x`, NOT from the value itself and NOT
+#     # from any variable name. Exact `typeof` results that the in-scope generator
+#     # can reach (each MUST yield the message shown):
+#     #   number   -> 'Expected a string, got number'    (e.g. 42, 0, -0)
+#     #   bigint   -> 'Expected a string, got bigint'     (e.g. 7n)
+#     #   boolean  -> 'Expected a string, got boolean'    (true / false)
+#     #   object   -> 'Expected a string, got object'     (null, {}, [], RegExp,
+#     #                                                     Set, Map, Uint8Array,
+#     #                                                     Buffer — ALL 'object')
+#     #   undefined-> 'Expected a string, got undefined'  (see OUT-OF-ENVELOPE)
+#     #   symbol   -> 'Expected a string, got symbol'     (see OUT-OF-ENVELOPE)
+#     #   function -> 'Expected a string, got function'   (see OUT-OF-ENVELOPE)
+#     # CRITICAL: `typeof null === 'object'` and `typeof []  === 'object'`. There
+#     # is NO Array.isArray / null special-casing. Every non-string object-y value
+#     # collapses to the single word 'object' in the message.
+#
+#   node-2  LEADING-BOM CHECK  (x is now known to be a string)
+#     IF x.charCodeAt(0) === 0xFEFF  THEN
+#       return x.slice(1)            # drop exactly the first UTF-16 code unit
+#     # 0xFEFF is U+FEFF, the UTF-16 BOM / ZERO WIDTH NO-BREAK SPACE. A UTF-8 BOM
+#     # (bytes EF BB BF) decodes to this same U+FEFF code point when the bytes are
+#     # read as a string, which is why the comparison is against 0xFEFF.
+#     # charCodeAt(0) on the EMPTY string returns NaN; NaN === 0xFEFF is false, so
+#     # the empty string falls through to node-3 and is returned unchanged ("").
+#     # slice(1) removes ONLY index 0 (one UTF-16 code unit). It does NOT loop:
+#     #   - "﻿﻿x"  -> "﻿x"   (only the first BOM is removed)
+#     #   - a single BOM "﻿" -> ""     (slice(1) of length-1 string is "")
+#
+#   node-3  PASS-THROUGH
+#     return x                       # the string unchanged
+#     # Reached when x is a string whose charCodeAt(0) !== 0xFEFF, including:
+#     #   - the empty string ""              -> ""
+#     #   - any string with no leading BOM   -> identical string
+#     #   - a string with a BOM NOT at index 0, e.g. "a﻿b" -> "a﻿b"
+#     #     (the interior BOM is KEPT — only index-0 is examined)
+#     #   - a string starting with a surrogate (e.g. emoji "\u{1F600}x"): the first
+#     #     UTF-16 code unit is the high surrogate 0xD83D, != 0xFEFF -> kept whole.
+#
+# DETERMINISM: output depends ONLY on the input argument. No ambient reads.
+# READ-ONLY / NO MUTATION / NO SIDE EFFECTS: JavaScript strings are immutable;
+#   the function never mutates its argument, touches no shared state, performs no
+#   I/O, and returns either the same string reference (node-3) or a fresh sliced
+#   string (node-2). The mutation / side-effect / state sections are N/A.
+
+# -----------------------------------------------------------------------------
+# ORACLE
+# -----------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Value-mode. For each input tuple [x]:
+#   - if x is a string: expected is the returned string (node-2 or node-3).
+#   - if x is a non-string codec-faithful value: expected is the recorded throw,
+#     captured via the factory's {__throw} convention — name 'TypeError' and the
+#     exact message 'Expected a string, got ' + typeof(x). The blind re-emitter
+#     reconstructs the SAME message from `typeof x` per node-1.
+
+# -----------------------------------------------------------------------------
+# SCOPE
+# -----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the typeof type-guard and the exact TypeError + message template (node-1)
+#   - the charCodeAt(0) === 0xFEFF leading-BOM test (node-2)
+#   - slice(1) single-code-unit removal, non-looping (node-2)
+#   - empty-string / interior-BOM / surrogate pass-through (node-3)
+#
+# CARRIED DATA: none. The only literal constant is 0xFEFF (a single Unicode code
+#   point, inlined in BEHAVIOR) and the message prefix string. No table; no
+#   carried.json.
+#
+# OUT-OF-ENVELOPE (behavior fully specified here, but NOT emitted by genInputs
+#   because the value does not survive the JSON-stringify(encode(args)) round-trip;
+#   a blind re-emitter still reconstructs the behavior from this spec):
+#   - undefined  -> throws TypeError 'Expected a string, got undefined'
+#                   (undefined does not round-trip as an array element)
+#   - NaN        -> throws TypeError 'Expected a string, got number'
+#   - Infinity / -Infinity -> throws TypeError 'Expected a string, got number'
+#   - Symbol value          -> throws TypeError 'Expected a string, got symbol'
+#                   (symbols are not JSON-serializable)
+#   - function value        -> throws TypeError 'Expected a string, got function'
+#                   (functions are not JSON-serializable)
+#   - boxed primitives (new String('x'), new Number(1), new Boolean())
+#                   -> all `typeof === 'object'` -> throws ... 'got object'
+#                   (identity does not round-trip; excluded from genInputs)
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): NONE. Pure read-only function.
+
+# -----------------------------------------------------------------------------
+# EMISSION SHAPE (instruction to the SOURCE-BLIND re-emitter)
+# -----------------------------------------------------------------------------
+# The original CommonJS source is `module.exports = x => { ... }` (an arrow
+# function assigned to module.exports, with NO named properties on the export).
+# The factory loader normalizes that single-value CJS export to an ES-module
+# DEFAULT export. Therefore the re-emitted module MUST be:
+#
+#     export default function stripBom(x) { ... }      # or an equivalent
+#     export default (x) => { ... }                    # default-exported fn value
+#
+# The callable under test IS the default export itself (a function). There are
+# NO named exports and NO own-enumerable properties on the function (Object.keys
+# of the export is []).
+
+# -----------------------------------------------------------------------------
+# PROVENANCE
+# -----------------------------------------------------------------------------
+# package:  strip-bom@3.0.0
+# repo:     sindresorhus/strip-bom
+# license:  MIT (Copyright (c) Sindre Sorhus)
+# source:   node_modules/strip-bom/index.js  (14 lines, 'use strict')
+# verified: ran the real package across all branches/edges on 2026-06-24:
+#   leading-BOM strip, interior-BOM keep, double-BOM single-strip, empty "",
+#   just-BOM "", surrogate-first keep, and every typeof throw-message variant.

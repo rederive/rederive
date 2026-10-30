@@ -1,0 +1,86 @@
+{
+ "status": "ok",
+ "unit": "carried_declared",
+ "primary": "selfhost/units/carried_declared/sir/carried_declared.sir",
+ "primarySha256": "f22b9eea6d3d89d34dd82f453c33f79a5960dfe8f916c84e69e917bf852490cc",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Lines. SP = space or tab, the only separator: every other character (no-break space, U+3000, U+2028 …) is content. The text splits into lines at CRLF, CR and LF only. In each line, every U+FEFF inside the line's leading run of SP and U+FEFF (in any mix) is removed, then trailing SP is removed; the line's INDENT is then its leading SP run, and its CONTENT the rest. A line that is now empty is skipped.",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "R2",
+   "text": "Comments. HASH is the number sign U+0023. A line whose CONTENT starts with HASH is a comment line: skipped entirely (it neither starts nor ends a directive). Otherwise the CODE is the CONTENT cut before its first HASH that is preceded by SP, followed by SP or the end, and not inside a quoted span (PINNED grammar QUOTED-SPAN), with trailing SP removed; with no such HASH the CODE is the CONTENT.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R3",
+   "text": "Directives. A line with an empty INDENT whose CODE's first token (up to the first SP, or all of it) is a NAME, or a NAME followed by one colon, where NAME is an ASCII capital then any of ASCII capitals, digits and hyphens, and NAME is not CITED, starts a new directive of that NAME (the colon is dropped). Every other line is a continuation of the latest directive, and is dropped when no directive has started yet. Unknown NAMEs are directives too.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R4",
+   "text": "Attributes. In the text after a directive's NAME token, and in a continuation's CODE read with one SP put before it, an attribute begins at each CITED, EARNED or ANCHOR that is preceded by SP, followed by SP or the end, and not inside a quoted span. Everything from the first attribute on is dropped and SP is trimmed from both ends: that is the directive's ARGS, or the continuation's BODY. A continuation whose BODY is empty contributes nothing.",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R5",
+   "text": "No directive named CARRIED -> none. CARRIED-DATA, an indented CARRIED and a CARRIED glued to its name by a non-SP character are not CARRIED directives.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R6",
+   "text": "A directive named CANONICAL-SHA256, SHAPE or AUTHORITY anywhere in the text (R3: column 0, its colon form included) -> throws. Two or more CARRIED directives -> throws. The one CARRIED's ARGS must read NAME SP+ FROM SP+ SOURCE to their end, where NAME is an ASCII letter or underscore then any of ASCII letters, digits and underscores, FROM is exactly those four capitals, and SOURCE is one or more characters, none of them U+2028 or U+2029. Anything else (an empty ARGS, a binding with =, two words before FROM, a non-ASCII name, the head split onto a continuation) -> throws. name = NAME; from = SOURCE as written (the SP run after FROM is not part of it; other spaces such as a no-break space are kept).",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "R7",
+   "text": "Sub-fields. Each BODY of the CARRIED's continuations, in order, that starts with CANONICAL-SHA256, SHAPE or AUTHORITY (case exact) where the keyword is NOT followed by an ASCII capital, digit or hyphen is a KEYWORD LINE; every other BODY is prose and is ignored (a lowercase keyword, SHAPES, SHAPE-X, CANONICAL-SHA2560). A keyword line must be exactly the keyword, or the keyword then SP+ then a VALUE of any characters (U+2028 included); VALUE is the text after the SP run (the empty text for the bare keyword). Any other keyword line -> throws (a colon, a no-break space or a brace glued to the keyword, a lowercase letter or underscore after it). Lines after the next directive (NOTE, ORACLE, an unknown NAME) are not the CARRIED's continuations.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R8",
+   "text": "CANONICAL-SHA256: a second one -> throws; a VALUE that is not exactly 64 characters of 0-9 a-f (lowercase) -> throws. sha = VALUE; no such sub-field -> none.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R9",
+   "text": "SHAPE: a second one -> throws; an empty VALUE -> throws (only SP counts as empty: a SHAPE of one no-break space reads). shape = VALUE as written; no such sub-field -> none.",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "R10",
+   "text": "AUTHORITY: the VALUE must read, to its end: { SP* expr: SP* STRING SP* , SP* equals: SP* E SP* } — the literals exact and in this order, no other field. STRING is a double quote, then any run of (a backslash and any one character, U+2028 included) or (a character other than a double quote and a backslash), then a double quote. E is everything between the SP run after equals: and the SP run before the final closing brace, so it may itself hold braces. Not that form -> throws.",
+   "ambiguity": 0.57
+  },
+  {
+   "id": "R11",
+   "text": "expr = STRING decoded as one JSON string and equals = E parsed as one JSON text (PINNED grammar JSON-VALUE); either not JSON -> throws (an E of only SP, an extra field, single quotes, a leading-zero numeral, a raw control character inside the string, a no-break space between JSON tokens). Every numeral in E outside its strings is tested against its nearest double X: X infinite, or the magnitude of X above 2^53, or X zero while a digit 1-9 appears before the numeral's exponent part (an underflow), or an integer-form numeral (an optional minus and digits only) not equal to X exactly -> throws (9007199254740993, 9007199254740994, 1e16, 1e-400 throw; 9007199254740993.0 reads as 2^53, 0e-400 reads). An expr with no character outside the PINNED charset INVISIBLE -> throws. The assertion (expr, equals) is appended.",
+   "ambiguity": 0.57
+  },
+  {
+   "id": "R12",
+   "text": "JSON values: a numeral denotes the double nearest its decimal value (ties to even); 1.0 and 1E0 are the number 1; a zero spelled with a minus is negative zero. Strings decode the escapes of RFC 8259 section 7 (a surrogate pair of u escapes joins into one character). An object is a map; a key repeated in one object keeps its last value. So equals is none, bool, f64, text, a list or a map of those.",
+   "ambiguity": 0.45
+  }
+ ],
+ "ranked": [
+  "R10",
+  "R11",
+  "R6",
+  "R12",
+  "R4",
+  "R3",
+  "R7",
+  "R2",
+  "R1",
+  "R9",
+  "R8",
+  "R5"
+ ],
+ "at": "2026-10-28T02:51:32Z"
+}

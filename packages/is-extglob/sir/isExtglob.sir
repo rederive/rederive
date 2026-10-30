@@ -1,0 +1,171 @@
+UNIT isExtglob
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isExtglob(str: any) -> boolean
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# PURPOSE
+#   Returns true iff `str` is a JS string that contains an UNESCAPED extglob
+#   opening: one of the chars @ ? ! + * immediately followed by '(' AND with a
+#   matching ')' somewhere later on the same line. Backslash-escaped characters
+#   are skipped (an escape consumes the next char), so escape-parity decides
+#   whether a following extglob opener counts. Any non-string, and the empty
+#   string, return false.
+#
+# THE EXACT REGEX (verbatim, load-bearing — reproduce byte-for-byte):
+#   /(\\).|([@?!+*]\(.*\))/g
+#   Decomposed:
+#     ALT-1  (\\).      group 1 = a literal backslash; then ANY ONE char.
+#                       NOTE: '.' (no /s flag) matches any char EXCEPT newline,
+#                       and the '.' is REQUIRED — a lone trailing backslash with
+#                       no following char does NOT match ALT-1.
+#                       group 1 captures only the backslash; the following char
+#                       is consumed by the bare '.' but not captured.
+#     ALT-2  ([@?!+*]\(.*\))
+#                       group 2 = one of the chars in the class [@ ? ! + *],
+#                       then a literal '(', then '.*' (GREEDY, any chars except
+#                       newline, zero or more), then a literal ')'.
+#                       Because '.*' is greedy it spans to the LAST ')' on that
+#                       newline-free segment.
+#   The 'g' flag is present but IRRELEVANT to behavior: a FRESH RegExp object is
+#   constructed each loop iteration (regex literal evaluated inside the while
+#   condition), so lastIndex always starts at 0; forward progress is made solely
+#   by str = str.slice(...). A re-emitter MAY use a non-global regex with .exec
+#   or .match — observable behavior is identical as long as it finds the
+#   LEFTMOST match and the two capture groups, and re-runs from a sliced suffix.
+#
+# ---------------------------------------------------------------------------
+BEHAVIOR
+  # ---- NODE 1: type / empty guard ----
+  # if (typeof str !== 'string' || str === '') return false
+  # This is the FIRST check. Anything that is not a primitive string value
+  # (number, null, undefined, plain object, array, boolean, NaN, RegExp,
+  #  Symbol, function, boxed String object, ...) -> false.
+  # The empty string '' -> false.
+  IF (type-of str) != "string"  -> return false
+  IF str == ""                  -> return false
+
+  # ---- NODE 2: scan loop (leftmost-match, escape-skip, slice-advance) ----
+  # Repeat until no match:
+  #   match := LEFTMOST match of /(\\).|([@?!+*]\(.*\))/ in str
+  #   (i.e. RegExp.prototype.exec on a fresh global regex, or equivalent .match)
+  #
+  #   IF no match            -> return false   (loop exits)
+  #
+  #   IF match captured group 2 (the extglob alternative ALT-2)
+  #                          -> return true    (immediately)
+  #
+  #   ELSE  (match captured group 1 — an escape "\X" via ALT-1)
+  #        # advance past the entire consumed match, then continue scanning.
+  #        str := str.slice(match.index + match[0].length)
+  #        # match[0] for ALT-1 is 2 chars: the backslash + the next char.
+  #        # match.index is where that match started.
+  #        loop
+  #
+  # KEY POINT ON ALTERNATION PRIORITY:
+  #   The regex picks the LEFTMOST match position. At a given leftmost position,
+  #   the regex tries ALT-1 first then ALT-2 (left-to-right alternation), but
+  #   because the engine finds the overall-leftmost match, what matters is which
+  #   alternative can match at the earliest index. A backslash earlier in the
+  #   string yields an ALT-1 match before any later extglob; the loop then slices
+  #   past it (consuming the escaped char) and re-scans the remainder.
+  #
+  # WHY ESCAPE-PARITY DECIDES (worked examples — all VERIFIED against package):
+  #   '\@(a)'      : leftmost match is ALT-1 "\@" at idx0 (greedily the engine
+  #                  cannot match ALT-2 at idx0 because idx0 is '\'; ALT-1 matches
+  #                  "\@"); slice -> "(a)"; rescan "(a)" -> no opener char before
+  #                  '(' -> no match -> FALSE.
+  #   '\\@(a)'     : ALT-1 matches "\\" (backslash+backslash) at idx0; slice ->
+  #                  "@(a)"; rescan -> ALT-2 "@(a)" -> TRUE.
+  #   '\\\@(a)'    : (3 backslashes) ALT-1 "\\" -> slice "\@(a)" -> ALT-1 "\@" ->
+  #                  slice "(a)" -> FALSE.
+  #   '\\\\@(a)'   : (4 backslashes) two "\\" pairs consumed -> "@(a)" -> TRUE.
+  #   'z\@(a)'     : leftmost ALT-1 is "\@" at idx1; slice -> "(a)" -> FALSE.
+  #   'z\@(a)@(b)' : ALT-1 "\@" -> slice "(a)@(b)" -> rescan -> ALT-2 "@(b)" -> TRUE.
+  #   '\a'         : ALT-1 "\a" consumes whole string -> slice "" -> no match -> FALSE.
+  #   '\'   (lone) : ALT-1 needs a char after '\'; none -> no match -> FALSE.
+  #   'abc\'       : trailing lone backslash, ALT-1 can't complete -> no match -> FALSE.
+  #
+  # NEWLINE BEHAVIOR ('.' excludes newline, no /s flag) — VERIFIED:
+  #   '@(a\nb)'    : after "@(", '.*' can only match "a" (stops at newline);
+  #                  the ')' after the newline is unreachable in one '.*' span ->
+  #                  ALT-2 cannot complete on that segment -> no match -> FALSE.
+  #   'a\n@(b)'    : leftmost ALT-2 "@(b)" sits on the 2nd line entirely -> TRUE.
+  #   '@(ab)\nc'   : "@(ab)" completes before the newline -> TRUE.
+  #
+  # GREEDY '.*' (spans to LAST ')' on the segment) — VERIFIED:
+  #   '@(a) and *(b)' -> ALT-2 group2 spans "@(a) and *(b)" greedily -> TRUE.
+  #   '@(a)b)c'       -> ALT-2 group2 = "@(a)b)c" (greedy to last ')') -> TRUE.
+  #   '@(a)@(b)'      -> TRUE (group2 matches first opener through last ')').
+  #
+  # OPENER-WITHOUT-PAREN / PAREN-WITHOUT-OPENER (no ALT-2) — VERIFIED:
+  #   '@(a'   -> '(' present but no ')'  -> ALT-2 fails -> FALSE.
+  #   '@('    -> no ')'                  -> FALSE.
+  #   '@x(y)' -> '@' not immediately followed by '(' -> FALSE.
+  #   '*('    -> no ')'                  -> FALSE.
+  #   '@?!+*' -> no '(' after any opener -> FALSE.
+  #   '@(?(!(+(*(' -> after first "@(", '.*' is greedy but there is NO ')' at all
+  #                  -> ALT-2 fails -> FALSE.
+  #   '*.js'  -> '*' not followed by '(' -> FALSE.
+  #
+  # EMPTY-BODY EXTGLOBS ('.*' allows zero chars) — VERIFIED:
+  #   '@()'  -> ALT-2 "@()" with empty body -> TRUE.
+  #   '*()'  -> TRUE.
+  #
+  # ALL FIVE OPENER CHARS — VERIFIED each:
+  #   '@(pattern)' TRUE, '?(pattern)' TRUE, '!(pattern)' TRUE,
+  #   '+(pattern)' TRUE, '*(pattern)' TRUE.
+  #
+  # TERMINATION: the loop always makes forward progress — ALT-2 returns true
+  # immediately; ALT-1 consumes >=2 chars (backslash + one char) so str strictly
+  # shrinks; no-match returns false. No infinite loop is possible.
+
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+  # Pure deterministic function of its single argument. No seam (no clock/RNG/
+  # io/net). The oracle records expected boolean (or {__throw} — but NOTE this
+  # function NEVER throws for any codec-faithful input; the type guard returns
+  # false for all non-strings). Compare expected === actual.
+
+# ---------------------------------------------------------------------------
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The two-clause NODE 1 guard: (typeof str !== 'string') OR (str === '')
+      -> false, evaluated BEFORE any scanning.
+    - The exact regex /(\\).|([@?!+*]\(.*\))/  with its two capture groups,
+      its '.'-excludes-newline semantics, and greedy '.*'.
+    - The leftmost-match + group2-wins-immediately + slice-advance-on-group1
+      scan loop, with escape-parity as the emergent consequence.
+    - Opener char class is EXACTLY [@ ? ! + *] (at-sign, question, bang, plus,
+      star). No other char (e.g. '(' alone, '$', '^') is an opener.
+  CARRIED DATA: none. (No literal tables.)
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+  they do not survive the JSON oracle codec, but a blind re-emitter must still
+  handle them per NODE 1):
+    - Symbol argument: typeof is "symbol" -> NODE 1 -> false. (Symbols are not
+      JSON-codec-faithful; documented here, not generated.)
+    - function argument: typeof "function" -> false. (Not codec-faithful.)
+    - boxed String object (new String("@(a)")): typeof is "object" -> false
+      (NOT "string") -> false. (Boxed primitives are not codec-faithful.)
+    - undefined / NaN / +-Infinity as the argument: typeof "undefined"/"number"
+      -> false. These are non-round-trippable as standalone JSON args, so they
+      are described here but NOT emitted; behavior is still false.
+
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE (default export):
+#   The emission is an ES module loaded via import(). This unit is the package's
+#   DEFAULT export (module.exports = function isExtglob(str){...}).
+#   The blind re-emitter MUST expose the function as the module DEFAULT export:
+#       export default function isExtglob(str) { ... }
+#   (or `const isExtglob = ...; export default isExtglob;`). It must NOT be a
+#   named export. Signature: one positional argument, returns a primitive boolean.
+#   PURE: no state, no mutation of the argument, no deep-clone needed.
+
+# ---------------------------------------------------------------------------
+PROVENANCE
+  package: is-extglob@2.1.1
+  author:  Jon Schlinkert (jonschlinkert)
+  repo:    https://github.com/jonschlinkert/is-extglob
+  license: MIT
+  source:  node_modules/is-extglob/index.js  (the whole module body, 20 lines)

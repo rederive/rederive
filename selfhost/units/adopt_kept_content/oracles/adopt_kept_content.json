@@ -1,0 +1,2096 @@
+{
+ "unit": "adopt_kept_content",
+ "sig": "adopt_kept_content(unmanaged: text, managed: text) -> list[text]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "   \n\t\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Only prose here.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "~~~md\n```bash\nrm -rf build\n```\n~~~",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```sh\nrm -rf build\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "~~~md\n```bash\nrm -rf build\n```\n~~~",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "~~~\n```\nrm x\n```\n~~~\n\n``````\nq\n```\n``````",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "~~~\nrm x\n~~~\n\n```\nq\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "~~~\n```\nrm x\n```\n~~~",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "``````\nq\n```\n``````",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "```\nv\n``` x\n# H\n```",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nv\n# H\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```\nv\n``` x\n# H\n```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "Skip **/node_modules/** always.\n\nUse x**2** y.\n\nGlob *.log* here.\n\nUse **bold** here.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Skip /node_modules/ always.\n\nUse x2 y.\n\nGlob .log here.\n\nUse bold here.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Skip **/node_modules/** always.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "Use x**2** y.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "Glob *.log* here.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "Use **bold** here.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\u0000 Run `ls -S. Then` now.\n\n\u0001ls\u0001 -S.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x\u0000 run `ls -s. Then` NOW.\n\n`ls` -S.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "x\u0000 Run `ls -S. Then` now.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "\u0001ls\u0001 -S.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "Never deploy. Ask first.\n\nA. B.\n\nC. D.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Never deploy. Except today. Ask first.\n\nX. A. B. Y.\n\nD. C.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Never deploy. Ask first.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "C. D.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "Rule.\n\n```bash",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Other.\n```bash",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Rule.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```bash",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "```bash\nls\n```\n\n```\nq\n```\n\n```x```\n\n```\n```",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```py\nls\n```\n\n~~~\nq\n~~~\n\n~~~\n```x```\n~~~\n\n```\n\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```bash\nls\n```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nq\n```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```x```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\u0000 Run.\n\nA \u0001b\u0001 C.\n\nQ\u0000  r.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x\u0000 Run.\n\nA \u0001b\u0001 C.\n\nq\u0000 r.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Q\u0000  r.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "\u0002x\u0000 y.\n\n\u0002Abc.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "\u0002x\u0000 y.\n\n\u0002abc.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "```x```\n\n~~~\n```x```\n~~~\n\n```bash\n```",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "~~~\n  ```x```\n~~~\n\n```x```\n\n```bash",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```bash\n```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n```\n\nb\n```bash",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "c\n```bash",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "a",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\n\nb\n```bash",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "```\nq\n```````\nafter.\n\n````\nr\n```\n```````",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nq\n```\n\n~~~\nr\n```\n~~~",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "after.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "````\nr\n```\n```````",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "#  \n\n- A. A.\n\n- B. B.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "#  \n\nA. A.\n\nB. X. B.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "# ",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- B. B.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Rules\n\n1. Never push to main. Ask Lane first.\n2. Run tests.\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin x -->\n- Ask Lane first.\n- Run tests.\n<!-- rederive:end -->",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "## Rules",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "1. Never push to main. Ask Lane first.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "- Never deploy on Friday. Ask Lane first.\n\nA. B.\n\nC. D.\n\nE. E.\n\nF.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "- Ask Lane first.\n- Never deploy on Friday.\n\nB. A.\n\nC. X. D.\n\nE.\n\nY. F. Z.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "- Never deploy on Friday. Ask Lane first.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "A. B.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "C. D.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "E. E.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "A. A.\n\nA.\n\n- B. A.\n- A. B.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "X. A. Y. A.\n\n- A. B. A.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "A. A.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "### Never deploy on Fridays\n- Run tests.\n# A. B.\n## A.\n# Rules\nRules\n#  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Run tests.\n\nA.\n## Rules",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "### Never deploy on Fridays",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# A. B.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "Rules #",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "# A. B.\n\n- Keep `src/` clean.\n* Use **bold** rules.\n10. Ten.\n007. Seven.\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "A.\nB.\n\nkeep `src/` clean.\n\nUSE BOLD RULES.\n\nTen.\n\n7. Seven.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "* Use **bold** rules.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "~~~\n```\nrm x\n```\n~~~\n\n~~~\n```\n~~~",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "~~~\nrm x\n~~~",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "~~~\n```\nrm x\n```\n~~~",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "~~~\n```\n~~~",
+      "cu": "utf8"
+     }
+    ]
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "``````\nq\n```\n``````\n\n````\n```\nr\n```\n````\nafter.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nq\n```\n\n````\nr\n````",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "``````\nq\n```\n``````",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "````\n```\nr\n```\n````",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "after.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "```\nq\n````\nafter.\n\n```\nq\n~~~\nr\n```sh\ns\n```  \nafter two.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nq\n```\n\n```\nq\nr\ns\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "after.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nq\n~~~\nr\n```sh\ns\n```  ",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "after two.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "~~~\nq\n~~~~\nafter.\n~~~~\nr\n~~~\n~~~~~\n\n```\nz\n  ```\t\nend.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "~~~\nq\n~~~\n\n```\nz\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "after.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "~~~~\nr\n~~~\n~~~~~",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "end.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "```bash\nls\n```\n\n```\nv\n``` x\n# H\n```\n\n```\nk\n```x```\n```",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```py\nls\n```\n\n# H\n\n```\nk\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```bash\nls\n```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nv\n``` x\n# H\n```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nk\n```x```\n```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "```bash\nmake test\n\n# not a heading\n- not a list. Two parts\n```\nafter.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "~~~\nmake test\n# not a heading\n\n- not a list. Two parts\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```bash\nmake test\n\n# not a heading\n- not a list. Two parts\n```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "after.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "```\nmake test\n```\n\n```\nMake test\n```\n\nmake test\n\n```\nstep 2\nstep 1\n```",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nMake test\n```\n\n```\nmake test\n```\n\n```\nstep 1\nstep 2\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "make test",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nstep 2\nstep 1\n```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "```\nmake   test\n\n```\n```\n\n```\n```\n   ```\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\n  make test  \n```\n```\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n```\nopen\n## h\n- l",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nopen\n## h\n- l",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "a",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nopen\n## h\n- l",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "```x```\n\n``````\nq",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\n```x```\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```x```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "``````\nq",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "```x```\n\n```   ```\n```` ```\n  ```x```  \nq\n```x``` y\n\n```a\rb```\nr\n```a b```",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```x```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```   ```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```` ```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "q",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```x``` y\n\n```a\rb```\nr\n```a b```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "```make deploy```\nfoo\nbar",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "foo bar",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "```make deploy```",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "Run `ls` -S.\n\nRun ` ls ` now.\n\nRun `ls -S`.\n\nRun `ls -s` NOW.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Run `ls -S`.\n\nRun `ls` now.\n\nRun `ls` -S.\n\nRUN `ls -s` now.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Run ` ls ` now.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "**a ***\n\n*a**b*\n\n_*a*_\n\né*a*\n\n**a**b\n\n* a*\n\n*a *\n\n****\n\n*****\n\n**x**y**z**",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a *\n\nab\n\n_a_\n\néa\n\nab\n\n a\n\na \n\n**\n\n*\n\nxyz",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "**a ***",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "*a**b*",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "_*a*_",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "é*a*",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "**a**b",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "* a*",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "*a *",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "****",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "*****",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "**x**y**z**",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "\u0001ls\u0001 -S.\n\n`a`*b* `c`.\n\nX `a` b `c\n\nx `` y\n\na ` b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "`ls` -S.\n\n`a`b `c`.\n\nx `a` B `c\n\nx  y\n\nA ` B",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "\u0001ls\u0001 -S.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "`a`*b* `c`.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "x `` y",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "ΑΣ `Σ` ΑΣ.\n\nNever commit .env files\n\nRun   the\ttests  now.\n\nCafé rules apply. ÉCOLE matters.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "ας `Σ` ας.\n\nNever commit .env files.\n\nrun the tests now.\n\ncafé rules apply. école matters.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Never commit .env files",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "***\n\n* * *",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "**",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "***",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "* * *",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "Use `x`, not \u00000\u0000.\n\nA \u00001`x` b.\n\nC. \u0000d. `e`. `f` G.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Use `x`, not `x`.\n\nA undefined0\u0000 b.\n\nc. \u0000d. `e`. `f` g.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Use `x`, not \u00000\u0000.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "A \u00001`x` b.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "C. \u0000d. `e`. `f` G.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "- First rule wraps\n  onto a second line. Second sentence\nkeeps going.\n\nA paragraph\nthat wraps.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "First rule wraps onto a second line. Second sentence keeps going. Extra.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "A paragraph that wraps.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "Para line one\n- item starts\ncontinues item\n# Head\ntail para\n\n- \nfoo\n\n- foo  \nbar\n\n-  x\n- x \n- x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tail para",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Para line one",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- item starts continues item",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# Head",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "-  foo",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- foo   bar",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- x",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- x ",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- x",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "-\n-- not a list\n+ plus\n1) paren\n1.no-space\n*emph* text\n\n1. one\n   2. two\n10.ten",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "one",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "- -- not a list + plus 1) paren 1.no-space *emph* text",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "2. two 10.ten",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "   # Indented\n#NoSpace\n####### Seven\n# Trail (x)  \n  # Indented later\n# One\n###### Six\n#  \n## Never deploy on Fridays (rule)\nbody.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "One",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "# Indented",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "#NoSpace ####### Seven",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# Trail (x)",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# Indented later",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "###### Six",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# ",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "## Never deploy on Fridays (rule)",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "body.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\n#  \n#\rx\n#\r\n#  x\n# x ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "q",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "x",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# ",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# x",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "#",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# x",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# x",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\n#  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "```\nq\n```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "x #",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "e.g. Foo. 'x.' Bar.) (Baz ! `q` Ok? \"Quoted.\" Next.] Then... Done!! Yes.)) No",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "e.g. Zz. Foo. 'x.' Zz. Bar.) Zz. (Baz ! Zz. `q` Ok? \"Quoted.\" Zz. Next.] Zz. Then... Zz. Done!! Zz. Yes.)) No",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "e.g. Foo. 'x.' Bar.) (Baz ! `q` Ok? \"Quoted.\" Next.] Then... Done!! Yes.)) No",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "Ends with dot. lower start. Écrit. 1. digit. A",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Ends with dot. lower start.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Ends with dot. lower start. Écrit. 1. digit. A",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "A. B c.D e.﻿F g.　H i. J k.\u000bL m. N",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "A. Zz. B c.D e. Zz. F g. Zz. H i. Zz. J k. Zz. L m. Zz. N",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "A. B c.D e.﻿F g.　H i. J k.\u000bL m. N",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "Run `a.` Then `b`. Next `c. D`.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Next `c. D`. Zz. Run `a.` Then `b`.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Run `a.` Then `b`. Next `c. D`.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Rules\r\n- a thing.\r\n- Other thing.\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "- a thing.\n- Other thing.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "## Rules",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "- a thing.\n- Other thing.\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Rules\r\n- a thing.\r\n- Other thing.\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "# x\r\r\n# y\r\r\r\n- z\r\r\r\n```\r\r\nq\r\r\n```\r\r\na\r\r\nb\r\r\r\nc",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "w",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "# x",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "# y - z",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "```\nq\n```",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "a b c",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q.\n\nR.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!--\n rederive:begin\n x\n -->Q.\n\nR.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin <!-- x --> -->Q.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Q.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q.\n\nP.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin <!-- rederive:begin -->Q.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "P.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!--  rederive:begin\n\n-->\nQ.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin x<!-->Q.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Q.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q. R.\n\nS.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile\nQ. R.\n\nS.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Q. R.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q.\n\nR.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin a\nR.\n<!-- rederive:begin b -->\nQ.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "R.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "Keep me. Drop me.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin p -->\nDrop me. Keep me.\n<!-- rederive:end -->\nIgnored.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Keep me. Drop me.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "Before. After.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Before.\n<!-- a comment -->\nAfter.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Before. After.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "P.\n\nQ.\n\nR.\n\nS.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:beginner -->P.\n<!-- rederive:begin_x -->Q.\n<!-- rederive:begin-x -->R.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "P.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "Q.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "S.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "Q. R.\n\nZ.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "R.\n<!-- rederive:end -->\nQ.\n\n<!-- rederive:end -->\n<!-- rederive:begin -->Z.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Q. R.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "Joined text.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin -->Joined<!--  rederive:end  --> text.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Joined text.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "Joined text.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin -->Joined text.<!--\trederive:end\n-->",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "Keep me.\n<!-- rederive:end -->\nAlso keep me.\n\n<!-- rederive:begin -->\n- Ask first.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Keep me.\n\n- Ask first.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "Keep me. <!-- rederive:end --> Also keep me.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "<!-- rederive:begin -->",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "  # Head\nbody\n\n- Same. Same.\n- Same.\n\nSame.",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Other.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "# Head",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "body",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- Same. Same.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "- Same.",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "Same.",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "body",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "  # Head\nbody",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "- Review the GDD:\n- Ask before touching the giver.  Do not edit migrations.\n- Ask before touching Lane.\" Keep Lane? Keep *.env.]\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\r\n## Rules\r\n\r\n* Review the GDD: Ask before touching tests\r\n\r\n## Ask before touching the giver. DO NOT EDIT MIGRATIONS.\r\n\r\n## Ask before touching Lane.\" KEEP LANE? Keep *.env.]\r\n<!-- rederive:end -->\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "- Review the GDD:",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "~~~text\ngit push -S\ngit push -S\n```sh\n\n## Process (v2)\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\r\n## Rules\r\n\r\nProcess (v2)\r\n1. (`make` §11.'\r\n<!-- rederive:end -->\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "~~~text\ngit push -S\ngit push -S\n```sh\n\n## Process (v2)",
+      "cu": "utf8"
+     }
+    ]
+   }
+  }
+ ],
+ "canonicalSha256": "982e9570796b15f063574fcfe93ee3947ac7b2425e8fd24344f252302cf0475c"
+}

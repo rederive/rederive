@@ -1,0 +1,214 @@
+UNIT repeat
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG repeat(string = '', n = 1, guard = undefined) -> string
+    # Default export (CommonJS `module.exports = repeat`). Blind re-emitter MUST `export default <fn>`.
+    # The 3rd parameter `guard` is an internal lodash iteratee-protocol hook. The oracle generator
+    # NEVER supplies it (always emits 0/1/2 args), so in the verified envelope `guard === undefined`
+    # ALWAYS. The `guard` branch is documented below for completeness but is OUT-OF-ENVELOPE for grading.
+
+DEPENDS-ON none
+    # Zero runtime dependencies. Self-contained single file. Uses only host built-ins
+    # (Math.floor, parseInt, String/Number coercion, RegExp). No carried constant data
+    # (no S-box / charmap / locale table) — the few numeric constants below are inlined literals
+    # reproducible from their definitions, NOT an attestable table. No carried.json.
+
+BEHAVIOR
+    # ============================================================================================
+    # CONSTANTS (inlined literals — reproduce exactly)
+    #   INFINITY        = 1 / 0                    # +Infinity
+    #   MAX_SAFE_INTEGER = 9007199254740991        # == 2^53 - 1
+    #   MAX_INTEGER     = 1.7976931348623157e+308  # == Number.MAX_VALUE
+    #   NAN             = 0 / 0                     # NaN
+    #   reTrim     = /^\s+|\s+$/g
+    #   reIsBadHex = /^[-+]0x[0-9a-f]+$/i
+    #   reIsBinary = /^0b[01]+$/i
+    #   reIsOctal  = /^0o[0-7]+$/i
+    # ============================================================================================
+    #
+    # TOP-LEVEL PIPELINE  repeat(string, n, guard):
+    #   NODE 1 (n defaulting / iteratee guard):
+    #     if (guard ? isIterateeCall(string, n, guard) : (n === undefined))
+    #         then n := 1                          # default; NOTE: strict `=== undefined` ONLY,
+    #                                              # NOT a falsy/null/NaN test.
+    #     else  n := toInteger(n)                  # coerce-and-truncate (see TOINTEGER below)
+    #   NODE 2: return baseRepeat( toString(string), n )
+    #
+    #   IN-ENVELOPE SIMPLIFICATION (guard always undefined for the oracle):
+    #     n := (n === undefined) ? 1 : toInteger(n)
+    #     return baseRepeat(toString(string), n)
+    #
+    # --------------------------------------------------------------------------------------------
+    # toString(value)  -> string             # coerce the FIRST arg to a string
+    #   if value == null   (i.e. value === null OR value === undefined)  -> return ''
+    #   else return baseToString(value)
+    #
+    # baseToString(value) -> string:
+    #   if typeof value == 'string'  -> return value                    # identity (fast path)
+    #   if isSymbol(value)           -> return Symbol.prototype.toString.call(value)   # OUT-OF-ENVELOPE (Symbols not emitted)
+    #   result := (value + '')                                          # JS String() coercion
+    #   if (result == '0' && (1 / value) == -INFINITY) -> return '-0'   # preserve sign of negative zero
+    #   else return result
+    #
+    #   CONSEQUENCES of baseToString for codec-faithful first args (all VERIFIED):
+    #     'abc'        -> 'abc'                # string identity
+    #     ''           -> ''                   # empty string identity
+    #     123          -> '123'
+    #     0            -> '0'
+    #     -0           -> '-0'   (the negative-zero special case fires)   # OUT-OF-ENVELOPE: -0 is not JSON-round-trippable, not emitted
+    #     true         -> 'true'  ;  false -> 'false'
+    #     null         -> ''  (via toString null==null guard, baseToString not reached)
+    #     undefined    -> ''  (via toString null==null guard)
+    #     [1,2,3]      -> '1,2,3'   (Array#toString = join(','))
+    #     [5]          -> '5'
+    #     []           -> ''        (empty array stringifies to '')
+    #     {a:1}        -> '[object Object]'
+    #     {}           -> '[object Object]'
+    #     nested arr [[1],2] -> '1,2'
+    #
+    # --------------------------------------------------------------------------------------------
+    # toInteger(value) -> integer-valued number   # coerce SECOND arg
+    #   result := toFinite(value)
+    #   remainder := result % 1
+    #   return (result === result)                                   # i.e. result is not NaN
+    #            ? (remainder ? result - remainder : result)          # TRUNCATE TOWARD ZERO
+    #            : 0
+    #   # remainder has the SAME SIGN as result, so result - remainder truncates toward 0:
+    #   #   2.9  -> 2,  3.999 -> 3,  -2.9 -> -2,  0.5 -> 0
+    #
+    # toFinite(value) -> finite number:
+    #   if (!value)  -> return (value === 0) ? value : 0     # falsy: 0/-0 pass through as-is, '' / null / false / NaN -> 0
+    #                                                        # (undefined never reaches here: NODE 1 maps it to n=1)
+    #   value := toNumber(value)
+    #   if (value === INFINITY || value === -INFINITY)
+    #        -> return (value < 0 ? -1 : 1) * MAX_INTEGER    # Infinity -> +/-1.7976931348623157e+308
+    #   return (value === value) ? value : 0                 # NaN -> 0
+    #
+    # toNumber(value) -> number:
+    #   if typeof value == 'number'  -> return value
+    #   if isSymbol(value)           -> return NAN                       # OUT-OF-ENVELOPE (Symbols not emitted)
+    #   if isObject(value):                                             # OUT-OF-ENVELOPE for n (n-objects not emitted)
+    #        other := (typeof value.valueOf == 'function') ? value.valueOf() : value
+    #        value := isObject(other) ? (other + '') : other
+    #   if typeof value != 'string'  -> return (value === 0) ? value : +value
+    #        # bigint reaches here: +bigint THROWS TypeError (host) — OUT-OF-ENVELOPE (bigint n not emitted)
+    #   # --- string path ---
+    #   value := value.replace(reTrim, '')                              # strip leading/trailing whitespace
+    #   isBinary := reIsBinary.test(value)                              # /^0b[01]+$/i
+    #   if (isBinary || reIsOctal.test(value))                          # octal /^0o[0-7]+$/i
+    #        -> return parseInt(value.slice(2), isBinary ? 2 : 8)       # parse binary/octal body
+    #   if reIsBadHex.test(value)   -> return NAN                       # /^[-+]0x[0-9a-f]+$/i  signed-hex -> NaN
+    #   return +value                                                   # else JS unary-plus numeric coercion
+    #
+    #   CONSEQUENCES of n-coercion for codec-faithful n values (all VERIFIED):
+    #     number 3      -> 3            float 2.9 -> 2        float 0.5 -> 0
+    #     -3            -> -3 (then n<1 guard -> '')          -2.9 -> -2 (n<1 -> '')
+    #     0             -> 0            null -> 0 (falsy)      false -> 0 (falsy)
+    #     '3'           -> 3            '3.7' -> 3            '   3  ' -> 3 (trimmed)
+    #     '1e3'         -> 1000         '' -> +'' = 0
+    #     '0x10'        -> +('0x10') = 16     (unsigned hex via unary plus, NOT reIsBadHex)
+    #     '0b101'       -> 5 (binary)        '0o17' -> 15 (octal)
+    #     '-0x1'        -> NaN -> 0 ('')   (reIsBadHex matches signed hex)  -> ''
+    #     'abc'         -> +'abc' = NaN -> 0   -> ''
+    #     # NaN / Infinity / undefined as number arg: NOT JSON-round-trippable -> OUT-OF-ENVELOPE (see SCOPE)
+    #
+    # --------------------------------------------------------------------------------------------
+    # baseRepeat(string, n)  -> string       # string already coerced; n already integer-valued
+    #   result := ''
+    #   GUARD (NODE B1):
+    #     if (!string  ||  n < 1  ||  n > MAX_SAFE_INTEGER)  -> return ''
+    #       # !string is true for '' (empty string)  -> returns '' regardless of n
+    #       # n < 1 covers n <= 0, negative, and 0   -> returns ''
+    #       # n > MAX_SAFE_INTEGER is STRICTLY GREATER (9007199254740992 and up) -> returns ''
+    #       #   *** n === MAX_SAFE_INTEGER (9007199254740991) does NOT short-circuit here ***
+    #   EXPONENTIATION-BY-SQUARING DOUBLING LOOP (NODE B2):
+    #     do {
+    #       if (n % 2)      result += string     # odd bit -> append current doubled chunk
+    #       n := Math.floor(n / 2)
+    #       if (n)          string += string     # double the chunk for the next bit
+    #     } while (n)
+    #     return result
+    #   # Produces `string` concatenated exactly `n` times (n a positive integer).
+    #
+    # --------------------------------------------------------------------------------------------
+    # HOST-RUNTIME THROW (NODE B3 — emergent, not lodash logic):
+    #   If a NON-empty string passes the GUARD with n >= MAX_SAFE_INTEGER (i.e. n === MAX_SAFE_INTEGER,
+    #   the one integer that is not > MAX_SAFE_INTEGER but produces an astronomically large result),
+    #   OR more generally if the final result length would exceed the V8/JS-engine max string length,
+    #   the `result += string` / `string += string` concatenation THROWS RangeError("Invalid string length").
+    #   VERIFIED boundaries on this host (V8 / Node 24):
+    #     repeat('a', 9007199254740991)  -> THROW RangeError    (n === MAX_SAFE_INTEGER, non-empty string)
+    #     repeat('',  9007199254740991)  -> ''                  (empty string short-circuits at GUARD, no throw)
+    #     repeat('a', 9007199254740992)  -> ''                  (n > MAX_SAFE_INTEGER short-circuits at GUARD)
+    #     repeat('a', 536870888)         -> ok, length 536870888
+    #     repeat('a', 536870896)         -> THROW RangeError    (result length over the host string cap)
+    #   This RangeError is a HOST string-length limit, engine-version dependent in its exact threshold;
+    #   it is NOT exercised by genInputs (max emitted result length is a few thousand chars). DOCUMENTED,
+    #   not graded. A blind re-emitter on the same engine reproduces it for the same n; the oracle avoids it.
+    #
+    # ============================================================================================
+    # WORKED EXAMPLES (all VERIFIED against the real package):
+    #   repeat('*', 3)        -> '***'
+    #   repeat('abc', 2)      -> 'abcabc'
+    #   repeat('abc', 0)      -> ''
+    #   repeat('ab', 5)       -> 'ababababab'
+    #   repeat('x', 7)        -> 'xxxxxxx'
+    #   repeat('x', 1)        -> 'x'
+    #   repeat('a')           -> 'a'        # n===undefined default -> 1
+    #   repeat('a', -3)       -> ''
+    #   repeat('a', 2.9)      -> 'aa'       # truncate toward 0
+    #   repeat('', 5)         -> ''         # empty string
+    #   repeat('a', null)     -> ''         # null -> 0 -> n<1
+    #   repeat('a', '3')      -> 'aaa'
+    #   repeat('a', '0x10')   -> 'a'x16
+    #   repeat('a', '0b101')  -> 'a'x5
+    #   repeat('a', '0o17')   -> 'a'x15
+    #   repeat('a', '-0x1')   -> ''
+    #   repeat('a', 'abc')    -> ''
+    #   repeat(123, 2)        -> '123123'
+    #   repeat(null, 3)       -> ''
+    #   repeat([1,2,3], 2)    -> '1,2,31,2,3'
+    #   repeat({a:1}, 2)      -> '[object Object][object Object]'
+    #   repeat(0, 3)          -> '000'
+    #   repeat(true, 2)       -> 'truetrue'
+    #   repeat('é', 3)        -> 'ééé'
+    #   repeat('🎉', 2)       -> '🎉🎉'
+    #   repeat('日本', 2)     -> '日本日本'
+
+ORACLE value -> oracle.json
+
+SCOPE
+    # IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — NODE 1 default/coerce,
+    #   toString/baseToString first-arg coercion (incl. -0, arrays, objects, booleans, numbers,
+    #   null/undefined), toInteger/toFinite/toNumber second-arg coercion (incl. floats truncated
+    #   toward zero, negatives, octal/binary/hex strings, whitespace trim, bad-signed-hex -> NaN -> 0),
+    #   the baseRepeat GUARD ('' / n<1 / n > MAX_SAFE_INTEGER short-circuits), and the
+    #   exponentiation-by-squaring doubling loop.
+    #
+    # CARRIED DATA: NONE. No attestable constant table. The four numeric constants and four regexes
+    #   are inlined literals reproducible from their definitions. No carried.json is produced.
+    #
+    # OUT-OF-ENVELOPE (documented, NOT emitted by genInputs — a blind re-emitter still reconstructs
+    #   these from the spec, but the oracle does not grade them because they are not codec-faithful
+    #   or are host/identity dependent):
+    #     * `n` as bigint  -> THROWS TypeError("Cannot convert a BigInt value to a number") via +value.
+    #       (bigint IS codec-faithful, but the throw message is host-specific; documented, not emitted.)
+    #     * `n` as NaN / +Infinity / -Infinity / undefined-literal numeric: NOT JSON-round-trippable
+    #       (serialize to null), so cannot be a stored expected. Behaviors per spec:
+    #         NaN -> 0 -> ''   ;   Infinity -> +1.79e308 > MAX_SAFE_INTEGER -> ''   ;
+    #         -Infinity -> -1.79e308 < 1 -> ''   ;   undefined -> default n=1.
+    #     * first arg `-0` (numeric) -> '-0' (sign-preserving baseToString). `-0` is not JSON-faithful
+    #       (serializes to 0), so not emitted.
+    #     * Symbol args (string or n) -> not codec-faithful; baseToString/toNumber special-case them.
+    #     * Function args, the `guard`/iteratee third argument (isIterateeCall path) -> not emitted;
+    #       guard is always undefined in the envelope.
+    #     * HOST RangeError("Invalid string length") for n >= MAX_SAFE_INTEGER on a non-empty string
+    #       or any result exceeding the engine string cap -> documented (NODE B3), not exercised.
+
+PROVENANCE
+    # package: lodash.repeat@4.1.0  (npm)
+    # repo:    lodash/lodash  (custom modularized build: `lodash modularize exports="npm" -o ./`)
+    # license: MIT  (Copyright jQuery Foundation and other contributors)
+    # source:  node_modules/lodash.repeat/index.js  (function repeat, lines 514-521;
+    #          baseRepeat 76-94; toString 488-490; baseToString 104-114; toInteger 416-421;
+    #          toFinite 378-388; toNumber 446-465)

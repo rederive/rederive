@@ -1,0 +1,165 @@
+PHASE 5 — GENERATION (SIR v0.4)
+Acceptance gate: can a COLD re-emitter build a v0.4 construct from the SIR ALONE?
+
+WHY THIS IS THE GATE
+  Every SIR construct before v0.4 is self-describing: TAKES, GIVES, INVARIANT
+  explain themselves, which is why blind quorum works at all. PAR and RING are the
+  first whose SEMANTICS are not inferable from their SYNTAX. The plan's rule (A3) is
+  that the keyword is a HINT and the contract lives in DESCRIPTION + INVARIANT lines.
+  If that holds, cold emitters converge with no schema and no fragments. If they
+  diverge, the construct needed a footnote to be understood — which means it is
+  specified wrong, and the SIR gets hardened rather than the prompt getting a rule.
+
+SETUP
+  Two cleanroom SIRs, contracts carried entirely in DESCRIPTION/INVARIANT lines:
+    boundedMap.sir  (PAR)  — position-keyed result, concurrency bound, empty case
+    ringToken.sir   (RING) — token take/pass/release, mutual exclusion, no loss
+  Emitters: sir-reemitter-cr, Read+Write only, 3 per unit, pointed at the SIR file
+  and NOTHING else — no schema, no fragments, no prior art, no sight of each other.
+  Grader (grade.mjs): rdv's par/ring machinery — exhaustive schedule exploration
+  over a harness-owned gate, plus the token channel (holders, events, halt).
+
+ROUND 1 — GATE FAILED, and the failure is the finding
+  boundedMap  quorum 1/3    ringToken  quorum 3/3
+
+  The three boundedMap emissions were STRUCTURALLY IDENTICAL: same worker-pool
+  shape, Math.min(concurrency, length) workers, shared cursor, result[i] keyed by
+  INPUT POSITION. Concurrency bound respected in all three, no schedule halted.
+  The PAR construct converged 3/3.
+
+  The divergence was one line — whether *2 is the unit's work or the gate's:
+    bm_1, bm_3:  result[i] = await gate.open(input[i])        (gate computes it)
+    bm_2:        await gate.open(v); result[i] = v * 2        (unit computes it)
+
+  The SIR said "Maps each element to element*2" AND "Each mapping is performed by
+  awaiting gate.open(value)". Two of three read the second sentence as the
+  definition of mapping. They were right to; the sentence permits it.
+
+  The emitters' own reports settle whether this was carelessness. bm_3 raised it
+  unprompted as a "key judgment call" and argued for its reading:
+
+    "I treated 'the gate resolves it' literally — result[i] = whatever
+     gate.open(input[i]) resolves to, rather than having my code independently
+     compute value*2. The SIR's 'maps to element*2' reads as describing the
+     composed behavior once you plug in a correctly-behaving oracle gate, not an
+     operation performed inside this unit. If the oracle's gate mock resolves to
+     the doubled value itself, this is the only interpretation that avoids
+     double-doubling."
+
+  That is a careful reading of an ambiguous sentence, not a slip — it even names
+  the failure mode (double-doubling) that the other reading would cause if the
+  gate did compute the mapping. An emitter that deliberates and still lands
+  somewhere the author did not intend is reporting a defect in the contract.
+  After the harden, round 2's bmr_2 stated the resolved split back plainly:
+  "doubling is the unit's own work, gate is a pure completion source."
+
+  FINDING: the v0.4 construct was understood unanimously. The ambiguity was in an
+  ordinary v0.1-level sentence sitting next to it, about the COLLABORATION BOUNDARY
+  — which side of the unit/harness split does the work. That is the failure mode
+  concurrency contracts actually have, and it is not about concurrency.
+
+  SECOND FINDING (against the grader, not the emitters): the first grader reported
+  "keyed by completion order?" for a result with the RIGHT ORDER and WRONG VALUES.
+  A guess dressed as a diagnosis. Fixed to compare the multiset first and name only
+  what the evidence supports. A grader that misdiagnoses is worse than one that
+  says "wrong" — it sends the harden loop at the wrong line.
+
+HARDEN
+  boundedMap.sir only, and only on the payload sentence — no footnote about PAR,
+  since PAR was not what failed. Stated that the doubling is the unit's work, that
+  gate.open is only a completion source resolving with its argument unchanged, and
+  added the INVARIANT result[i] === input[i] * 2.
+
+ROUND 2 — GATE PASSED (fresh emitters, no memory of round 1)
+  boundedMap  quorum 3/3    ringToken  quorum 3/3    6/6 distinct files (md5)
+
+  Checks passed by every emission:
+    PAR  — result keyed by input position across ALL schedules (4, 8, 54 exhaustive
+           for n=3/c=2, n=4/c=2, n=5/c=3); concurrency bound never exceeded; no
+           schedule halted; empty input returns [] without opening the gate.
+    RING — index-ordered result; at most ONE token holder at any instant; token
+           released exactly once by the last actor with nobody holding at return;
+           reduced to exactly 1 schedule (R_ring subset R_free — a unit that opened
+           every gate at once but emitted index order would pass the value check
+           and is rejected here); token path held(0)->passed(0->1)->...->released(n-1);
+           empty items touches neither gate.open nor the token.
+
+CLOCK HALF — scheduler (§20) and lifecycle (§21)
+  Marking par/ring "generable" exposed a gap: only 2 of the 4 v0.4 features had been
+  through the generation gate. Two more cleanroom SIRs, same protocol:
+    fireOrder.sir   (scheduler)  — arm one timer per event, result in FIRE order
+    raceTimeout.sir (lifecycle)  — race a gate against a timeout, clear on the win
+
+  Both were chosen so the defect hides where the return value cannot show it. The
+  grader (grade-clock.mjs) runs virtual time with an armed/fired/cleared channel and
+  was validated against 4 adversarial controls BEFORE seeing any emission:
+    fo_sorted    right answer, arms zero timers (a sort in a scheduler's signature)  REJECTED
+    fo_unstable  real timers, ties broken by reverse arm order                       REJECTED
+    rto_leaky    correct value on both paths, never clears the timer                 REJECTED
+    rto_lazy     correct value, arms only after awaiting (nothing is raced)          REJECTED
+
+  fo_unstable PASSED the distinct-delay case [30,10,20] and failed only on ties —
+  a live demonstration that the tie-break defect is invisible unless tested for.
+
+  RESULT — both 3/3 on the FIRST round, no hardening needed:
+    fireOrder    3/3   every emitter armed one timer per event up front and broke
+                       ties by arm order; two of the three were BYTE-IDENTICAL
+    raceTimeout  3/3   every emitter cleared the timer on the gate-wins path, armed
+                       before awaiting, and returned exactly one of the two keys
+
+  A grader that has never rejected anything proves nothing; these two had teeth
+  before they were pointed at the work being graded.
+
+CONSEQUENCE — `implemented` and `generable` are now separate claims
+  capabilities.json carries both: `implemented` (rdv can CHECK a unit using this)
+  and `generable` (a decomposer may WRITE one, earned by this gate). payload.mjs
+  gates the injected fragment on `generable`, so a feature that is verifiable but
+  not yet writable cannot reach a decomposer's context. Refusal is about the
+  feature's standing, not about whether a fragment file exists — a generable
+  feature with no fragment is COVERED by the invariant core, which is why the
+  factory has emitted `vectors` units since before fragments existed. All three
+  refusal branches (unknown / not implemented / not generable) exercised.
+
+SIDE FINDING — Phase 4b had left @fixture/ring red, and nobody noticed
+  A regression sweep run at the end of this phase found `rdv check` FAILING on
+  @fixture/ring: held-out 0/2 on a unit that is correct. Cause: Phase 4b enriched
+  runRing's observation with a `liveness` channel, and that fixture's frozen oracle
+  predates it, so the deep-compare missed on a field the expectation had never heard
+  of. Phase 4b was validated against the NEW @fixture/ring-live bundle and its own
+  verify.mjs, and never re-ran the OLD bundle's rdv check.
+
+  rdv's behavior here is CORRECT and worth stating: adding an observation channel
+  invalidates every stale oracle LOUDLY. The tempting fix — grade only the fields
+  present in `expected` — would have made old bundles silently skip new channels,
+  which is precisely the verification decay this product exists to prevent.
+
+  Fixed by re-stamping the oracle, and the re-stamp was kept honest three ways:
+    - the stamper DERIVES liveness from an instrumented run (it does not hardcode
+      observed:false), so a unit that starts using the token gets the richer shape
+      without anyone remembering to update the stamper;
+    - the diff against the previous oracle is EXACTLY the added liveness field —
+      R_free (6/24) and drops (5/23) are unchanged, so no existing assertion moved;
+    - the manifest seal caught the re-stamp (oracle:false) and had to be updated
+      deliberately, and afterwards the broken variant was re-checked WITH ITS HASHES
+      RESEALED so only behavior could reject it: still 0/2. The fixture kept its teeth.
+
+  The lesson generalizes past this bug: enriching what a channel observes is a
+  breaking change to every frozen oracle of that mode, and the sweep that catches it
+  has to be the real `rdv check` on shipped bundles, not the phase's own harness.
+
+VERDICT
+  A3 HOLDS, with the round-1 correction: a v0.4 construct is admissible when
+  independent emitters converge on it from the SIR alone, and the harden loop's
+  target is whichever sentence they actually diverged on — which was not the
+  concurrency keyword. Rule added to sir-decomposer.md as "CONCURRENCY KEYWORDS
+  ARE HINTS", including the collaboration-boundary requirement, carrying the
+  round-1 numbers as its justification.
+
+  All four v0.4 features have now passed the generation gate, so v0.4 is closed on
+  both sides: rdv can check each construct, and a cold agent can write each one.
+
+REPRODUCE
+  node grade.mjs       emissions        # PAR/RING round 1, exits 1
+  node grade.mjs       emissions-r2     # PAR/RING round 2, exits 0
+  node grade-clock.mjs controls         # adversarial controls, exits 1 (all rejected)
+  node grade-clock.mjs emissions-clock  # scheduler/lifecycle, exits 0

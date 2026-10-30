@@ -1,0 +1,82 @@
+UNIT carried_declared
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs carriedDeclared(primaryText) over cli/sir/sir-parse.mjs parse (legacy mode) — the
+  primary's CARRIED declaration read through the parser; reproduce it exactly, accidents included
+ORACLE-CLASS deterministic
+SIG carried_declared(text: text) -> record[name: text, from: text, sha: text | none, shape: text | none, assertions: list[record[expr: text, equals: json]]] | none
+ENVELOPE text is well-formed (no lone surrogate). Inside an AUTHORITY value (R10) no escape denotes a lone surrogate, and json
+  nests at most 64 deep. Throws are IN scope as observations: R6 R8 R9 R10 R11 say when.
+DEPENDS-ON none
+DESCRIPTION Read the carried-table declaration out of the text of a SIR primary, through the SIR line parser: the one CARRIED
+  directive's head gives the table's name and source; its own continuation lines give the CANONICAL-SHA256 hash, the SHAPE and
+  the AUTHORITY { expr, equals } assertions, each equals parsed as JSON. No CARRIED directive -> none. A malformed head, hash,
+  SHAPE or AUTHORITY line, a sub-field keyword that lost its indent, a repeated hash or SHAPE, or a second CARRIED throws; nothing partial is returned. The record's
+  fields, in order: name, from, sha, shape, assertions; each assertion is (expr, equals). All positions are code points.
+BEHAVIOR
+R1 Lines. SP = space or tab, the only separator: every other character (no-break space, U+3000, U+2028 …) is content. The
+  text splits into lines at CRLF, CR and LF only. In each line, every U+FEFF inside the line's leading run of SP and U+FEFF
+  (in any mix) is removed, then trailing SP is removed; the line's INDENT is then its leading SP run, and its CONTENT the rest.
+  A line that is now empty is skipped.
+R2 Comments. HASH is the number sign U+0023. A line whose CONTENT starts with HASH is a comment line: skipped entirely (it
+  neither starts nor ends a directive). Otherwise the CODE is the CONTENT cut before its first HASH that is preceded by SP,
+  followed by SP or the end, and not inside a quoted span (PINNED grammar QUOTED-SPAN), with trailing SP removed; with no
+  such HASH the CODE is the CONTENT.
+R3 Directives. A line with an empty INDENT whose CODE's first token (up to the first SP, or all of it) is a NAME, or a NAME
+  followed by one colon, where NAME is an ASCII capital then any of ASCII capitals, digits and hyphens, and NAME is not
+  CITED, starts a new directive of that NAME (the colon is dropped). Every other line is a continuation of the latest
+  directive, and is dropped when no directive has started yet. Unknown NAMEs are directives too.
+R4 Attributes. In the text after a directive's NAME token, and in a continuation's CODE read with one SP put before it, an
+  attribute begins at each CITED, EARNED or ANCHOR that is preceded by SP, followed by SP or the end, and not inside a quoted
+  span. Everything from the first attribute on is dropped and SP is trimmed from both ends: that is the directive's ARGS,
+  or the continuation's BODY. A continuation whose BODY is empty contributes nothing.
+R5 No directive named CARRIED -> none. CARRIED-DATA, an indented CARRIED and a CARRIED glued to its name by a non-SP
+  character are not CARRIED directives.
+R6 A directive named CANONICAL-SHA256, SHAPE or AUTHORITY anywhere in the text (R3: column 0, its colon form included)
+  -> throws. Two or more CARRIED directives -> throws. The one CARRIED's ARGS must read NAME SP+ FROM SP+ SOURCE to their end, where
+  NAME is an ASCII letter or underscore then any of ASCII letters, digits and underscores, FROM is exactly those four
+  capitals, and SOURCE is one or more characters, none of them U+2028 or U+2029. Anything else (an empty ARGS, a binding
+  with =, two words before FROM, a non-ASCII name, the head split onto a continuation) -> throws. name = NAME; from = SOURCE
+  as written (the SP run after FROM is not part of it; other spaces such as a no-break space are kept).
+R7 Sub-fields. Each BODY of the CARRIED's continuations, in order, that starts with CANONICAL-SHA256, SHAPE or AUTHORITY
+  (case exact) where the keyword is NOT followed by an ASCII capital, digit or hyphen is a KEYWORD LINE; every other BODY is
+  prose and is ignored (a lowercase keyword, SHAPES, SHAPE-X, CANONICAL-SHA2560). A keyword line must be exactly the keyword,
+  or the keyword then SP+ then a VALUE of any characters (U+2028 included); VALUE is the text after the SP run (the empty text
+  for the bare keyword). Any other keyword line -> throws (a colon, a no-break space or a brace glued to the keyword, a
+  lowercase letter or underscore after it). Lines after the next directive (NOTE, ORACLE, an unknown NAME) are not the
+  CARRIED's continuations.
+R8 CANONICAL-SHA256: a second one -> throws; a VALUE that is not exactly 64 characters of 0-9 a-f (lowercase) -> throws.
+  sha = VALUE; no such sub-field -> none.
+R9 SHAPE: a second one -> throws; an empty VALUE -> throws (only SP counts as empty: a SHAPE of one no-break space reads).
+  shape = VALUE as written; no such sub-field -> none.
+R10 AUTHORITY: the VALUE must read, to its end: { SP* expr: SP* STRING SP* , SP* equals: SP* E SP* } — the literals exact
+  and in this order, no other field. STRING is a double quote, then any run of (a backslash and any one character, U+2028
+  included) or (a character other than a double quote and a backslash), then a double quote. E is everything between the SP run after
+  equals: and the SP run before the final closing brace, so it may itself hold braces. Not that form -> throws.
+R11 expr = STRING decoded as one JSON string and equals = E parsed as one JSON text (PINNED grammar JSON-VALUE); either not
+  JSON -> throws (an E of only SP, an extra field, single quotes, a leading-zero numeral, a raw control character inside the
+  string, a no-break space between JSON tokens). Every numeral in E outside its strings is tested against its nearest double
+  X: X infinite, or the magnitude of X above 2^53, or X zero while a digit 1-9 appears before the numeral's exponent part (an
+  underflow), or an integer-form numeral (an optional minus and digits only) not equal to X exactly -> throws (9007199254740993,
+  9007199254740994, 1e16, 1e-400 throw; 9007199254740993.0 reads as 2^53, 0e-400 reads). An expr with no character outside
+  the PINNED charset INVISIBLE -> throws. The assertion
+  (expr, equals) is appended.
+R12 JSON values: a numeral denotes the double nearest its decimal value (ties to even); 1.0 and 1E0 are the number 1; a
+  zero spelled with a minus is negative zero. Strings decode the escapes of RFC 8259 section 7 (a surrogate pair of u
+  escapes joins into one character). An object is a map; a key repeated in one object keeps its last value. So equals is
+  none, bool, f64, text, a list or a map of those.
+INVARIANT the result depends only on the CARRIED directive's own line and its continuations, and on whether a directive named
+  CANONICAL-SHA256, SHAPE or AUTHORITY exists; any throw leaves no partial result.
+OUT-OF-DOMAIN outside ENVELOPE: a u escape of a lone surrogate yields text that is not well-formed (an expr of one reads). Not
+  graded.
+PINNED charset WS = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000 U+2001 U+2002 U+2003 U+2004 U+2005 U+2006 U+2007 U+2008 U+2009 U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED FIDELITY package — U+0085 and U+180E are NOT in it
+PINNED charset CF = U+00AD U+0600-U+0605 U+061C U+06DD U+070F U+0890 U+0891 U+08E2 U+180E U+200B-U+200F U+202A-U+202E U+2060-U+2064 U+2066-U+206F U+FEFF U+FFF9-U+FFFB U+110BD U+110CD U+13430-U+1343F U+1BCA0-U+1BCA3 U+1D173-U+1D17A U+E0001 U+E0020-U+E007F CITED FIDELITY package — General_Category Cf as of Unicode 17.0
+PINNED charset INVISIBLE = WS together with CF CITED R11 — the expr emptiness test; U+0085 is visible
+PINNED grammar QUOTED-SPAN = scanning left to right, a double quote opens a span when it is the first character, or follows one of space tab ( [ { , = : ; | < > ! & - ~ (not + * ?) or directly follows the closing quote of the previous span; the span closes at the next double quote not taken by an escape, where a backslash takes itself and the next code point; with no closing quote the scan stops and no further span exists; a position is inside when strictly between the opening and closing quotes CITED FIDELITY package — the parser's one literal-protection rule (R2 R4)
+PINNED grammar JSON-VALUE = RFC 8259 JSON-text: optional insignificant whitespace (U+0020 U+0009 U+000A U+000D only), one value, optional insignificant whitespace, nothing else CITED FIDELITY package — the reader's JSON parse
+ORACLE value -> oracles/carried_declared.json  CANONICAL-SHA256 72cbe3271e1a1ffe36b63c828a86a3fbe9cbfeb8401351a5e74a3564aba72c6e
+SCOPE IN: R1–R12 over ENVELOPE, throws included (the message is not graded). OUT: the parser's errors and warnings, what the
+  harness later does with the record (hash check, assertion evaluation), the language files' CARRIED bindings.
+PROVENANCE rederive@6199e2cc8b75 (MIT), cli/sir/v05.mjs export function carriedDeclared(primaryText) and cli/sir/sir-parse.mjs
+  parse / sirLines / splitTrailingComment / splitAttributes / quotedSpans, read from the pinned authority
+  selfhost/.authority/6199e2cc8b75/; driven by selfhost/seams/carried_declared.mjs.

@@ -1,0 +1,36 @@
+UNIT lint_leak
+LANG rust
+PRIMARY-SHA256 17c912246c65f299d2dccd7c0b2a03dfe8b411adc1018f8ffcf3daad020be907
+SIG pub fn lint_leak(text: &str, is_primary: bool) -> serde_json::Value
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn lint_leak) depending on serde_json
+  only; no main, no I/O, no binary, no unsafe. The verifier generates its own harness crate from the abstract SIG and
+  prints the result as one JSON line; compiling that harness against this SIG is the signature check.
+ABI text=&str (UTF-8; every input inside the envelope is well-formed); bool=bool; the result is a Value::Object with the
+  one key "hits" holding a Value::Array of Value::Object hits with keys "line" (a Number, the 1-based line index; an
+  integer or an f64 Number both read back as the same f64), "what" and "text" (Value::String). Key order inside a hit is
+  immaterial (the canonical form sorts keys); the ORDER of the hits array is the contract (R4, R6).
+MECHANISM LINES (R1): cut at "\r\n", "\r" and "\n" by a scan; str::lines is wrong (it keeps a lone CR inside a line and
+  drops a final empty line, shifting line numbers). Keep U+2028 and U+2029 inside the line. Per line: in the leading run of
+  ' ', '\t' and '\u{FEFF}' chars drop every '\u{FEFF}' (keep the rest in order), then trim trailing ' '/'\t'.
+MECHANISM SPACING is ' ' and '\t' only: never str::trim, char::is_whitespace or split_whitespace anywhere (they cut at
+  U+00A0, U+3000, U+2028 and more). GLUE (R6b) is the pinned set below, tested on the one char after the name run (after one ':' if
+  the run is followed by ':'); R6c: a leading run of GLUE chars, then the name run, then ' ', '\t', ':', a GLUE char or the end;
+  char::is_whitespace covers only its White_Space half, the Cf half (U+00AD, U+180E, U+200B, U+2060, U+FEFF, U+E0001 and
+  the rest) must come from the table.
+MECHANISM DISPLAY (R7) = line.chars().take(96).collect::<String>() after trimming leading ' ' and '\t': a Rust char is one
+  code point, the primary's unit. Never cut at a byte offset.
+MECHANISM no regex crate is needed: the reading, the blanking (R5) and every TABLE DIALECT row are left-to-right scans
+  over chars. WORD (R8) = is_ascii_alphanumeric or '_'. Row 7's case-insensitivity = eq_ignore_ascii_case on ASCII
+  letters only. Row 1 scans from each "/^" to the first "$/", giving up at U+2028 or U+2029. A QUOTED LITERAL: a '"'
+  opens only when it is the first char of the text read, the char right after a literal's closing '"', or the char
+  before it is one of ' ' '\t' '(' '[' '{' ',' '=' ':' ';' '|' '<' '>' '!' '&' '-' '~' (TABLE OPENERS; not '+' '*' '?'); walk escape pairs ('\\' then any one char) and plain chars to the closing '"'; when none comes, stop
+  (no later literal). Resume after the closing '"'. Find literals separately in CONTENT (R3), in ATTRTEXT (R4: a mark
+  whose keyword starts strictly inside a literal is skipped) and in each segment (R5). Keep spans as char indices of the
+  text they were found in.
+MECHANISM R4 order: per line, a Vec of hits plus the set of labels already hit on that line; segments in order, rows in
+  TABLE DIALECT order.
+DEPENDS-ON serde_json (crate, version 1)
+PINNED charset WORD = A-Z a-z 0-9 _ CITED R8 — ASCII only, the host's word set
+PINNED charset GLUE = '\u{0B}'..='\u{0C}' '\u{85}' '\u{A0}' '\u{AD}' '\u{600}'..='\u{605}' '\u{61C}' '\u{6DD}' '\u{70F}' '\u{890}'..='\u{891}' '\u{8E2}' '\u{1680}' '\u{180E}' '\u{2000}'..='\u{200F}' '\u{2028}'..='\u{202F}' '\u{205F}'..='\u{2064}' '\u{2066}'..='\u{206F}' '\u{3000}' '\u{FEFF}' '\u{FFF9}'..='\u{FFFB}' '\u{110BD}' '\u{110CD}' '\u{13430}'..='\u{1343F}' '\u{1BCA0}'..='\u{1BCA3}' '\u{1D173}'..='\u{1D17A}' '\u{E0001}' '\u{E0020}'..='\u{E007F}' CITED R6 — the primary's GLUE pin (White_Space or Cf at Unicode 17.0, less space, tab, LF, CR); a match on these ranges, no unicode crate
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs and cli/sir/sir-parse.mjs (MIT). Round 5, re-cut 2026-10-27 with the
+  primary; the ABI follows the lab's rust driver (a json result crossing as JSON text, serde_json the only dependency).

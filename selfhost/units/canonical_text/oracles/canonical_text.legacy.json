@@ -1,0 +1,515 @@
+{
+ "mode": "vectors",
+ "unit": "canonical_text",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    ""
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v1",
+   "args": [
+    "UNIT foo\nKIND FUNCTIONAL\n"
+   ],
+   "expected": "UNIT foo\nKIND FUNCTIONAL\n"
+  },
+  {
+   "name": "v2",
+   "args": [
+    "UNIT a\nKIND b"
+   ],
+   "expected": "UNIT a\nKIND b\n"
+  },
+  {
+   "name": "v3",
+   "args": [
+    "UNIT a\r\nKIND b\r\n"
+   ],
+   "expected": "UNIT a\nKIND b\n"
+  },
+  {
+   "name": "v4",
+   "args": [
+    "UNIT a\rKIND b\r"
+   ],
+   "expected": "UNIT a\nKIND b\n"
+  },
+  {
+   "name": "v5",
+   "args": [
+    "UNIT a\r\nKIND b\rSIG c\nNOTE d\n\rNOTE e\r\r\n"
+   ],
+   "expected": "UNIT a\nKIND b\nSIG c\nNOTE d\nNOTE e\n"
+  },
+  {
+   "name": "v6",
+   "args": [
+    "DESCRIPTION first\n  two\n    four\n\ttab\n \t mixed\n\t \tagain"
+   ],
+   "expected": "DESCRIPTION first\n  two\n  four\n  tab\n  mixed\n  again\n"
+  },
+  {
+   "name": "v7",
+   "args": [
+    "UNIT a   \nKIND b\t\t\nSIG c \t \nNOTE d \nNOTE e　\nNOTE f  \t"
+   ],
+   "expected": "UNIT a\nKIND b\nSIG c\nNOTE d \nNOTE e　\nNOTE f \n"
+  },
+  {
+   "name": "v8",
+   "args": [
+    "UNIT a\n\n   \n\t\t\n \t \nKIND b\n\n\n"
+   ],
+   "expected": "UNIT a\nKIND b\n"
+  },
+  {
+   "name": "v9",
+   "args": [
+    "   \n\t\n \t\n"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v10",
+   "args": [
+    " \n　　\n"
+   ],
+   "expected": " \n　　\n"
+  },
+  {
+   "name": "v11",
+   "args": [
+    "UNIT a\n nbsp at column 0\n \t indent then nbsp\n　ideographic"
+   ],
+   "expected": "UNIT a\n nbsp at column 0\n   indent then nbsp\n　ideographic\n"
+  },
+  {
+   "name": "v12",
+   "args": [
+    "﻿UNIT a\nKIND b"
+   ],
+   "expected": "UNIT a\nKIND b\n"
+  },
+  {
+   "name": "v13",
+   "args": [
+    "UNIT a\n﻿KIND b\nNOTE x﻿y"
+   ],
+   "expected": "UNIT a\nKIND b\nNOTE x﻿y\n"
+  },
+  {
+   "name": "v14",
+   "args": [
+    "﻿﻿UNIT a"
+   ],
+   "expected": "UNIT a\n"
+  },
+  {
+   "name": "v15",
+   "args": [
+    "\n﻿UNIT a"
+   ],
+   "expected": "UNIT a\n"
+  },
+  {
+   "name": "v16",
+   "args": [
+    "UNIT a b\nKIND c d\nNOTE e"
+   ],
+   "expected": "UNIT a b\nKIND c d\nNOTE e\n"
+  },
+  {
+   "name": "v17",
+   "args": [
+    "UNIT a\n\u000b\n\fx\n  \u000b"
+   ],
+   "expected": "UNIT a\n\u000b\n\fx\n  \u000b\n"
+  },
+  {
+   "name": "v18",
+   "args": [
+    "R1 a\nprose CITED x\nR1 a CITED x\n  b CITED y\nR1 a\n  see the ANCHOR field"
+   ],
+   "expected": "R1 a\nprose CITED x\nR1 a CITED x\n  b CITED y\nR1 a\n  see the ANCHOR field\n"
+  },
+  {
+   "name": "v19",
+   "args": [
+    "R1 a\n  ﻿after indent\n\t﻿﻿tab marks\n ﻿ ﻿second run stays\n  ﻿  \n﻿ ﻿x\nNOTE y"
+   ],
+   "expected": "R1 a\n  after indent\n  tab marks\n  second run stays\n  x\nNOTE y\n"
+  },
+  {
+   "name": "v20",
+   "args": [
+    "  orphan\nprose before\nUNIT a"
+   ],
+   "expected": "  orphan\nprose before\nUNIT a\n"
+  },
+  {
+   "name": "v21",
+   "args": [
+    "UNIT get_rgb\nKIND FUNCTIONAL\nFIDELITY spec\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\nORACLE-CLASS deterministic\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\nthree numeric channels and an optional alpha. Anything else -> none.\nDEPENDS-ON none\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\nBEHAVIOR\nR1 Empty text -> none.\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\nA form must account for the WHOLE text # not a comment here\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\nTABLE FORMS — first matching row\n\"#\" then 6 hex digits | HEX6\n\"rgb(\" | NUMERIC\nPINNED charset WS = 0009 0020 CITED R1\nORACLE value -> oracles/get_rgb.json\nPROVENANCE color-string@2.1.4 (MIT)\n"
+   ],
+   "expected": "UNIT get_rgb\nKIND FUNCTIONAL\nFIDELITY spec\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\nORACLE-CLASS deterministic\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\nthree numeric channels and an optional alpha. Anything else -> none.\nDEPENDS-ON none\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\nBEHAVIOR\nR1 Empty text -> none.\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\nA form must account for the WHOLE text # not a comment here\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\nTABLE FORMS — first matching row\n\"#\" then 6 hex digits | HEX6\n\"rgb(\" | NUMERIC\nPINNED charset WS = 0009 0020 CITED R1\nORACLE value -> oracles/get_rgb.json\nPROVENANCE color-string@2.1.4 (MIT)\n"
+  },
+  {
+   "name": "v22",
+   "args": [
+    "UNIT get_rgb  \r\nKIND FUNCTIONAL  \r\nFIDELITY spec  \r\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb  \r\nORACLE-CLASS deterministic  \r\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none  \r\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with  \r\n\tthree numeric channels and an optional alpha. Anything else -> none.  \r\nDEPENDS-ON none  \r\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.  \r\nBEHAVIOR  \r\nR1 Empty text -> none.  \r\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package  \r\n\tA form must account for the WHOLE text # not a comment here  \r\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7  \r\nTABLE FORMS — first matching row  \r\n\t\"#\" then 6 hex digits | HEX6  \r\n\t\"rgb(\" | NUMERIC  \r\nPINNED charset WS = 0009 0020 CITED R1  \r\nORACLE value -> oracles/get_rgb.json  \r\nPROVENANCE color-string@2.1.4 (MIT)  \r\n"
+   ],
+   "expected": "UNIT get_rgb\nKIND FUNCTIONAL\nFIDELITY spec\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\nORACLE-CLASS deterministic\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\n  three numeric channels and an optional alpha. Anything else -> none.\nDEPENDS-ON none\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\nBEHAVIOR\nR1 Empty text -> none.\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\n  A form must account for the WHOLE text # not a comment here\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\nTABLE FORMS — first matching row\n  \"#\" then 6 hex digits | HEX6\n  \"rgb(\" | NUMERIC\nPINNED charset WS = 0009 0020 CITED R1\nORACLE value -> oracles/get_rgb.json\nPROVENANCE color-string@2.1.4 (MIT)\n"
+  },
+  {
+   "name": "v23",
+   "args": [
+    "UNIT ünï\nDESCRIPTION 日本語 — em dash\n  ✓ cont 🙂\t"
+   ],
+   "expected": "UNIT ünï\nDESCRIPTION 日本語 — em dash\n  ✓ cont 🙂\n"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    " ﻿ ﻿x\n\t﻿\t﻿﻿ y\n﻿ ﻿\t﻿"
+   ],
+   "expected": "  x\n  y\n"
+  },
+  {
+   "name": "v25",
+   "args": [
+    "  x\n  y\n"
+   ],
+   "expected": "  x\n  y\n"
+  },
+  {
+   "name": "v26",
+   "args": [
+    "UNIT get_rgb\r\r \t\rKIND FUNCTIONAL\r\r \t\rFIDELITY spec\r\r \t\rANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\r\r \t\rORACLE-CLASS deterministic\r\r \t\rSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\r\r \t\rENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\r\r \t\r    three numeric channels and an optional alpha. Anything else -> none.\r\r \t\rDEPENDS-ON none\r\r \t\rDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\r\r \t\rBEHAVIOR\r\r \t\rR1 Empty text -> none.\r\r \t\rR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\r\r \t\r    A form must account for the WHOLE text # not a comment here\r\r \t\rR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\r\r \t\rTABLE FORMS — first matching row\r\r \t\r    \"#\" then 6 hex digits | HEX6\r\r \t\r    \"rgb(\" | NUMERIC\r\r \t\rPINNED charset WS = 0009 0020 CITED R1\r\r \t\rORACLE value -> oracles/get_rgb.json\r\r \t\rPROVENANCE color-string@2.1.4 (MIT)\r"
+   ],
+   "expected": "UNIT get_rgb\nKIND FUNCTIONAL\nFIDELITY spec\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\nORACLE-CLASS deterministic\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\n  three numeric channels and an optional alpha. Anything else -> none.\nDEPENDS-ON none\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\nBEHAVIOR\nR1 Empty text -> none.\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\n  A form must account for the WHOLE text # not a comment here\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\nTABLE FORMS — first matching row\n  \"#\" then 6 hex digits | HEX6\n  \"rgb(\" | NUMERIC\nPINNED charset WS = 0009 0020 CITED R1\nORACLE value -> oracles/get_rgb.json\nPROVENANCE color-string@2.1.4 (MIT)\n"
+  },
+  {
+   "name": "v27",
+   "args": [
+    "﻿UNIT get_rgb\t\nKIND FUNCTIONAL\t\nFIDELITY spec\t\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\t\nORACLE-CLASS deterministic\t\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\t\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\t\n \t three numeric channels and an optional alpha. Anything else -> none.\t\nDEPENDS-ON none\t\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\t\nBEHAVIOR\t\nR1 Empty text -> none.\t\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\t\n \t A form must account for the WHOLE text # not a comment here\t\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\t\nTABLE FORMS — first matching row\t\n \t \"#\" then 6 hex digits | HEX6\t\n \t \"rgb(\" | NUMERIC\t\nPINNED charset WS = 0009 0020 CITED R1\t\nORACLE value -> oracles/get_rgb.json\t\nPROVENANCE color-string@2.1.4 (MIT)\t"
+   ],
+   "expected": "UNIT get_rgb\nKIND FUNCTIONAL\nFIDELITY spec\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\nORACLE-CLASS deterministic\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\n  three numeric channels and an optional alpha. Anything else -> none.\nDEPENDS-ON none\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\nBEHAVIOR\nR1 Empty text -> none.\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\n  A form must account for the WHOLE text # not a comment here\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\nTABLE FORMS — first matching row\n  \"#\" then 6 hex digits | HEX6\n  \"rgb(\" | NUMERIC\nPINNED charset WS = 0009 0020 CITED R1\nORACLE value -> oracles/get_rgb.json\nPROVENANCE color-string@2.1.4 (MIT)\n"
+  },
+  {
+   "name": "v28",
+   "args": [
+    "UNIT get_rgb \r\n\r\nKIND FUNCTIONAL \r\n\r\nFIDELITY spec \r\n\r\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb \r\n\r\nORACLE-CLASS deterministic \r\n\r\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none \r\n\r\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with \r\n\r\nthree numeric channels and an optional alpha. Anything else -> none. \r\n\r\nDEPENDS-ON none \r\n\r\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none. \r\n\r\nBEHAVIOR \r\n\r\nR1 Empty text -> none. \r\n\r\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package \r\n\r\nA form must account for the WHOLE text # not a comment here \r\n\r\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7 \r\n\r\nTABLE FORMS — first matching row \r\n\r\n\"#\" then 6 hex digits | HEX6 \r\n\r\n\"rgb(\" | NUMERIC \r\n\r\nPINNED charset WS = 0009 0020 CITED R1 \r\n\r\nORACLE value -> oracles/get_rgb.json \r\n\r\nPROVENANCE color-string@2.1.4 (MIT) \r\n"
+   ],
+   "expected": "UNIT get_rgb\nKIND FUNCTIONAL\nFIDELITY spec\nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb\nORACLE-CLASS deterministic\nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none\nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with\nthree numeric channels and an optional alpha. Anything else -> none.\nDEPENDS-ON none\nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none.\nBEHAVIOR\nR1 Empty text -> none.\nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package\nA form must account for the WHOLE text # not a comment here\nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7\nTABLE FORMS — first matching row\n\"#\" then 6 hex digits | HEX6\n\"rgb(\" | NUMERIC\nPINNED charset WS = 0009 0020 CITED R1\nORACLE value -> oracles/get_rgb.json\nPROVENANCE color-string@2.1.4 (MIT)\n"
+  },
+  {
+   "name": "v29",
+   "args": [
+    "UNIT get_rgb \nKIND FUNCTIONAL \nFIDELITY spec \nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb \nORACLE-CLASS deterministic \nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none \nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with \nthree numeric channels and an optional alpha. Anything else -> none. \nDEPENDS-ON none \nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none. \nBEHAVIOR \nR1 Empty text -> none. \nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package \nA form must account for the WHOLE text # not a comment here \nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7 \nTABLE FORMS — first matching row \n\"#\" then 6 hex digits | HEX6 \n\"rgb(\" | NUMERIC \nPINNED charset WS = 0009 0020 CITED R1 \nORACLE value -> oracles/get_rgb.json \nPROVENANCE color-string@2.1.4 (MIT) \n"
+   ],
+   "expected": "UNIT get_rgb \nKIND FUNCTIONAL \nFIDELITY spec \nANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb \nORACLE-CLASS deterministic \nSIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none \nENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with \nthree numeric channels and an optional alpha. Anything else -> none. \nDEPENDS-ON none \nDESCRIPTION Parse a CSS-style color string into [r, g, b, a] or none. \nBEHAVIOR \nR1 Empty text -> none. \nR2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC. CITED FIDELITY package \nA form must account for the WHOLE text # not a comment here \nR3 HEX6 — \"#\" then six hex digits EARNED round-1 heldout v7 \nTABLE FORMS — first matching row \n\"#\" then 6 hex digits | HEX6 \n\"rgb(\" | NUMERIC \nPINNED charset WS = 0009 0020 CITED R1 \nORACLE value -> oracles/get_rgb.json \nPROVENANCE color-string@2.1.4 (MIT) \n"
+  },
+  {
+   "name": "v30",
+   "args": [
+    "UNIT a\n\r\nKIND b"
+   ],
+   "expected": "UNIT a\nKIND b\n"
+  },
+  {
+   "name": "v31",
+   "args": [
+    "\r\n\r\n"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v32",
+   "args": [
+    "\r"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v33",
+   "args": [
+    "\n"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v34",
+   "args": [
+    " "
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v35",
+   "args": [
+    "\t"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v36",
+   "args": [
+    "﻿"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v37",
+   "args": [
+    "﻿\n  \n"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v38",
+   "args": [
+    "﻿  indented first"
+   ],
+   "expected": "  indented first\n"
+  },
+  {
+   "name": "v39",
+   "args": [
+    " ﻿x"
+   ],
+   "expected": "  x\n"
+  },
+  {
+   "name": "v40",
+   "args": [
+    "R1 x CITED  \nR1 a\nloose   "
+   ],
+   "expected": "R1 x CITED\nR1 a\nloose\n"
+  },
+  {
+   "name": "v41",
+   "args": [
+    "UNIT a\nKIND b\r\r\n  c\r\r\n"
+   ],
+   "expected": "UNIT a\nKIND b\n  c\n"
+  },
+  {
+   "name": "v42",
+   "args": [
+    "UNIT a\n # gone\n   # also"
+   ],
+   "expected": "UNIT a\n # gone\n   # also\n"
+  },
+  {
+   "name": "v43",
+   "args": [
+    "R1 x\n  y CITED a EARNED b\r ANCHOR c"
+   ],
+   "expected": "R1 x\n  y CITED a EARNED b\n  ANCHOR c\n"
+  },
+  {
+   "name": "v44",
+   "args": [
+    "a \t \n\t \n \t"
+   ],
+   "expected": "a \n   \n \n"
+  },
+  {
+   "name": "v45",
+   "args": [
+    "x\n\n\ny"
+   ],
+   "expected": "x\ny\n"
+  },
+  {
+   "name": "v46",
+   "args": [
+    "\t\tdeep\n  \t  \t  deeper   "
+   ],
+   "expected": "  deep\n  deeper\n"
+  },
+  {
+   "name": "v47",
+   "args": [
+    "UNIT a \t \tb"
+   ],
+   "expected": "UNIT a \t \tb\n"
+  },
+  {
+   "name": "v48",
+   "args": [
+    "line one\n\r\n\r\rline two\n\n\rline three"
+   ],
+   "expected": "line one\nline two\nline three\n"
+  },
+  {
+   "name": "v49",
+   "args": [
+    "\n"
+   ],
+   "expected": "\n\n"
+  },
+  {
+   "name": "v50",
+   "args": [
+    "UNIT a\n﻿﻿﻿KIND b\n﻿ \t\n﻿\t﻿x\nNOTE y﻿\nNOTE z \t﻿"
+   ],
+   "expected": "UNIT a\nKIND b\n  x\nNOTE y﻿\nNOTE z \t﻿\n"
+  },
+  {
+   "name": "v51",
+   "args": [
+    "﻿\r﻿﻿\r\n﻿   \n"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v52",
+   "args": [
+    "R1 a\n﻿  continued after a mark\n  ﻿ mark after indent"
+   ],
+   "expected": "R1 a\n  continued after a mark\n  mark after indent\n"
+  },
+  {
+   "name": "v53",
+   "args": [
+    "PINNED regex X = /a # b/ CITED R1\n# a comment line\n  # an indented comment\nR1 x # trailing"
+   ],
+   "expected": "PINNED regex X = /a # b/ CITED R1\n# a comment line\n  # an indented comment\nR1 x # trailing\n"
+  },
+  {
+   "name": "v54",
+   "args": [
+    " ﻿ ﻿"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v55",
+   "args": [
+    "  ﻿\t﻿z"
+   ],
+   "expected": "  z\n"
+  },
+  {
+   "name": "v56",
+   "args": [
+    "\t﻿﻿﻿\r\n \t﻿y \t﻿\r﻿\t﻿"
+   ],
+   "expected": "  y \t﻿\n"
+  },
+  {
+   "name": "v57",
+   "args": [
+    "x \t﻿\n\t \t﻿ \n    ﻿　w"
+   ],
+   "expected": "x \t﻿\n   \n  　w\n"
+  },
+  {
+   "name": "v58",
+   "args": [
+    "日本 f(x) x\n# ﻿R12 \r\n-> R12\tx\r\nR12 日本\n\t\tf(x) \r\n a b a b UNIT  \r\n \tü \n"
+   ],
+   "expected": "日本 f(x) x\n# ﻿R12 \n-> R12\tx\nR12 日本\n  f(x)\n  a b a b UNIT  \n  ü \n"
+  },
+  {
+   "name": "v59",
+   "args": [
+    "    #\n R1\t->\n "
+   ],
+   "expected": "  #\n  R1\t->\n"
+  },
+  {
+   "name": "v60",
+   "args": [
+    "\t\tf(x) CITED\r \tKIND CITED # KIND  \t\nCITED\tü alpha R12 \n#\r\n alpha\tPINNED ->\n\tPINNED　\n\ta b　\n"
+   ],
+   "expected": "  f(x) CITED\n  KIND CITED # KIND\nCITED\tü alpha R12 \n#\n  alpha\tPINNED ->\n  PINNED　\n  a b　\n"
+  },
+  {
+   "name": "v61",
+   "args": [
+    "a ﻿b KIND ü\t\r\nf(x) CITED alpha\t->\n\tUNIT — R1\n\t\r\n\t\tü UNIT a ﻿b  \t\r\n﻿﻿ü　\r \talpha  \r\n\r\n    "
+   ],
+   "expected": "a ﻿b KIND ü\nf(x) CITED alpha\t->\n  UNIT — R1\n  ü UNIT a ﻿b\nü　\n  alpha  \n"
+  },
+  {
+   "name": "v62",
+   "args": [
+    "\t﻿﻿R12 f(x)\r UNIT PINNED  \t\r \t \r \t \ra b\t— —  \r"
+   ],
+   "expected": "  R12 f(x)\n  UNIT PINNED\na b\t— —  \n"
+  },
+  {
+   "name": "v63",
+   "args": [
+    "  ﻿﻿->\talpha #\t#\n \tR12 \n  R1\t#\tx \n ﻿ — ü\t— PINNED  \t\na b R1\t-> f(x)  \t\n\t\n    ->\nNOTE\t—"
+   ],
+   "expected": "  ->\talpha #\t#\n  R12 \n  R1\t#\tx \n  — ü\t— PINNED\na b R1\t-> f(x)\n  ->\nNOTE\t—\n"
+  },
+  {
+   "name": "v64",
+   "args": [
+    "﻿  ﻿﻿f(x) —\talpha  \t\nf(x) x x \n\t\talpha CITED\tR1 R1  \t\n\tCITED a b\tPINNED ->  \r\nalpha\tR1 PINNED\tPINNED \r\n ﻿f(x)\t\n"
+   ],
+   "expected": "  f(x) —\talpha\nf(x) x x \n  alpha CITED\tR1 R1\n  CITED a b\tPINNED ->  \nalpha\tR1 PINNED\tPINNED\n  f(x)\n"
+  },
+  {
+   "name": "v65",
+   "args": [
+    "﻿﻿-> \r\nü  \r\n    ü ü NOTE \r\n ﻿CITED x R12 日本  \r\n \t﻿\t﻿ü  \r\n  ü \r\n    \r\n\tUNIT R12 \r\n"
+   ],
+   "expected": "->\nü \n  ü ü NOTE\n  CITED x R12 日本  \n  ü  \n  ü \n  UNIT R12\n"
+  },
+  {
+   "name": "v66",
+   "args": [
+    "\t\nR12\nx\n R12 -> a b KIND  \nx —　\nalpha CITED \n ﻿f(x)\n﻿\tKIND PINNED NOTE  \t\n KIND KIND ->\t—　\n  日本 ü #  "
+   ],
+   "expected": "R12\nx\n  R12 -> a b KIND  \nx —　\nalpha CITED \n  f(x)\n  KIND PINNED NOTE\n  KIND KIND ->\t—　\n  日本 ü #  \n"
+  },
+  {
+   "name": "v67",
+   "args": [
+    "x R1 x ->\r \t# \rx ->\tR1  \t\n  ﻿﻿ ﻿UNIT  \r\n  -> alpha  \t\n\tR1 \r"
+   ],
+   "expected": "x R1 x ->\n  # \nx ->\tR1\n  UNIT  \n  -> alpha\n  R1\n"
+  },
+  {
+   "name": "v68",
+   "args": [
+    " \t日本 ü f(x)\n\tNOTE "
+   ],
+   "expected": "  日本 ü f(x)\n  NOTE\n"
+  },
+  {
+   "name": "v69",
+   "args": [
+    "NOTE alpha ->\n ü\nNOTE PINNED 日本　\r ü # \r\nNOTE\tü　\n alpha # CITED\r\n \n \tx　\r"
+   ],
+   "expected": "NOTE alpha ->\n  ü\nNOTE PINNED 日本　\n  ü # \nNOTE\tü　\n  alpha # CITED\n  x　\n"
+  },
+  {
+   "name": "v70",
+   "args": [
+    "alpha\r\n\tf(x) #　\r\n\t\ta b ü R12 CITED \r\n"
+   ],
+   "expected": "alpha\n  f(x) #　\n  a b ü R12 CITED \n"
+  },
+  {
+   "name": "v71",
+   "args": [
+    " ü　\r \ta b NOTE 日本\r\t\t— \r\rü PINNED  \t\r  -> UNIT x -> \r \t \r\r\t\tü UNIT\tUNIT ->  \r UNIT　\r"
+   ],
+   "expected": "  ü　\n  a b NOTE 日本\n  —\nü PINNED\n  -> UNIT x ->\n  ü UNIT\tUNIT ->  \n  UNIT　\n"
+  }
+ ]
+}

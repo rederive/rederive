@@ -1,0 +1,262 @@
+UNIT words
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG words(string = '', pattern?, guard?) -> string[]
+    # Calling convention for the blind re-emitter: this is the SINGLE DEFAULT export of the module.
+    # Emit it as:  export default words   (a function named `words`).
+    # Public arity that the oracle exercises is words(string, pattern?). The 3rd positional
+    # `guard` is an internal lodash-iteratee shim; see SCOPE/BEHAVIOR node B0a — it IS part of
+    # the contract and must be reproduced, but genInputs does not emit a non-null guard (codec
+    # reasons), so the held-out only checks the guard===undefined path via real package behavior.
+DEPENDS-ON none   # zero runtime deps; self-contained single file. No clock/RNG/IO/net — NO SEAM. Pure.
+
+# ============================================================================
+# BEHAVIOR  (exact ordered pipeline; reproduce verbatim)
+# ============================================================================
+#
+# words(string, pattern, guard):
+#
+# B0. COERCE the first arg to a string via lodash `toString` semantics:
+#       string = toString(string)
+#     where toString(value):
+#       - if value == null  (i.e. value === null OR value === undefined) -> return ''   (empty string)
+#       - else if typeof value === 'string' -> return value unchanged
+#       - else if value is a Symbol (typeof 'symbol', OR object-like with
+#               Object.prototype.toString.call(value) === '[object Symbol]') -> return the
+#               symbol's String() form (Symbol.prototype.toString.call). [OUT-OF-ENVELOPE: genInputs
+#               never emits a Symbol — it is not codec-round-trippable — but the rule is stated for completeness.]
+#       - else: let result = (value + '')   # JS default string coercion
+#               if result === '0' AND (1/value) === -Infinity  -> return '-0'   # preserves negative-zero sign
+#               else -> return result
+#     NOTE for the codec-faithful envelope: genInputs only ever passes a STRING as arg0, so in
+#     practice B0 is the identity. The non-string rules are documented so a blind emitter that
+#     implements full toString stays faithful; they are not graded by the oracle (out of envelope).
+#
+# B0a. GUARD normalization:
+#       pattern = guard ? undefined : pattern
+#     i.e. if `guard` is truthy, the supplied `pattern` is DISCARDED (forced to undefined), so the
+#     function takes the no-pattern path (B1). This exists so _.words can be used as an iteratee
+#     (e.g. _.map(arr, _.words)) where the 3rd map callback arg (the collection) would otherwise be
+#     mistaken for `pattern`. genInputs emits no truthy guard, so the oracle always has guard===undefined.
+#
+# B1. NO-PATTERN BRANCH:  if (pattern === undefined)  [reached when caller passes only `string`,
+#       OR passes pattern===undefined explicitly, OR guard was truthy per B0a]:
+#         return hasUnicodeWord(string) ? unicodeWords(string) : asciiWords(string)
+#       (defined in B2 / B3 / B4 below)
+#
+# B2. PATTERN BRANCH:  otherwise (pattern is NOT undefined — including null, '', a string, a RegExp,
+#       a number, a boolean, etc.):
+#         return string.match(pattern) || []
+#       This is the NATIVE JavaScript String.prototype.match. Reproduce by delegating to native match:
+#         - String.prototype.match coerces a non-RegExp `pattern` to a RegExp:
+#             * a STRING pattern is treated as a regex SOURCE with NO flags (NOT global). So it returns
+#               the FIRST match plus its capture groups: [fullMatch, g1, g2, ...], or null if no match.
+#               e.g. words('a1b2c3', '[a-z]+') -> ['a']   (first run only, no /g)
+#                    words('2024-01-02', '(\d+)-(\d+)') -> ['2024-01','2024','01']
+#             * a non-string non-RegExp (number/boolean/null) is also coerced via match's String(pattern)
+#               -> RegExp. words('a123b', 123) -> ['123'];  words('xtruey', true) -> ['true'];
+#               words('hello world', null) -> [] (match(null) -> /null/ has no match -> null -> [] via ||).
+#         - a RegExp WITHOUT the /g flag returns [fullMatch, g1, g2, ...] for the first match, else null.
+#             e.g. words('key=val', /(\w+)=(\w+)/) -> ['key=val','key','val']
+#         - a RegExp WITH the /g flag returns ALL non-overlapping full matches (capture groups dropped),
+#             or null if none.
+#             e.g. words('fred, barney, & pebbles', /[^, ]+/g) -> ['fred','barney','&','pebbles']
+#                  words('a=1 b=2', /(\w)=(\d)/g) -> ['a=1','b=2']
+#         - WHEN match() returns null (no match), the `|| []` converts it to [] (the function NEVER
+#             returns null). e.g. words('abc', /[0-9]+/g) -> [];  words('abc', '[0-9]+') -> [].
+#       Implementation note for the blind emitter: do NOT re-implement match — call the JS engine's
+#       String.prototype.match(pattern) and apply `|| []`. That reproduces every case above exactly.
+#
+# B3. hasUnicodeWord(string)  (the ascii-vs-unicode dispatcher, used only in B1):
+#         return reHasUnicodeWord.test(string)
+#       where  reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#       (NOT global; .test returns true if ANY of these alternatives appears anywhere):
+#         (a) a lowercase ASCII letter immediately followed by an uppercase ASCII letter   ([a-z][A-Z])
+#         (b) two+ uppercase ASCII letters immediately followed by a lowercase ASCII letter ([A-Z]{2,}[a-z])
+#         (c) an ASCII digit immediately followed by an ASCII letter                        ([0-9][a-zA-Z])
+#         (d) an ASCII letter immediately followed by an ASCII digit                        ([a-zA-Z][0-9])
+#         (e) ANY character that is NOT (ASCII letter OR ASCII digit OR a literal space ' ')([^a-zA-Z0-9 ])
+#       If true -> unicodeWords (B5). If false -> asciiWords (B4).
+#       Consequence: a string of only same-case ASCII letters/digits separated by spaces and with no
+#       case-humps, no digit/letter adjacency, and no non-[a-zA-Z0-9space] chars takes the ASCII path.
+#       Examples: 'hello world foo' -> ascii; 'FOO BAR' -> ascii; 'ABC DEF' -> ascii;
+#                 'camelCase' -> unicode (rule a); 'HTTPRequest' -> unicode (rule b);
+#                 'a0'/'0a' -> unicode (rules d/c); 'a.b' / 'café' / "don't" / 'a_b' -> unicode (rule e,
+#                 because '.', accented chars, apostrophe 0x27, and '_' are all non-[a-zA-Z0-9space]).
+#
+# B4. asciiWords(string)  (the ASCII word splitter, used in B1 when hasUnicodeWord is false):
+#         return string.match(reAsciiWord) || []
+#       where  reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#       i.e. GLOBAL match of maximal runs of characters that are NOT in any of these excluded ASCII
+#       code-point ranges:
+#         \x00-\x2f  (control chars, space, and punctuation up to '/')
+#         \x3a-\x40  (':' ';' '<' '=' '>' '?' '@')
+#         \x5b-\x60  ('[' '\' ']' '^' '_' '`')      # NOTE: '_' (0x5f) and '`' are SEPARATORS here
+#         \x7b-\x7f  ('{' '|' '}' '~' DEL)
+#       The KEPT characters are exactly: 0-9 (\x30-\x39), A-Z (\x41-\x5a), a-z (\x61-\x7a), and any
+#       char with code point >= 0x80 (because the excluded ranges stop at 0x7f — but the ASCII path is
+#       only taken when hasUnicodeWord is FALSE, and any char >= 0x80 trips rule (e), so in practice the
+#       ASCII path only ever sees [0-9A-Za-z ] plus possibly other excluded-range ASCII separators; the
+#       run is split on those separators). No camel-hump splitting happens here — runs are split ONLY by
+#       the excluded characters.
+#       Examples: 'fred, barney, & pebbles' -> ['fred','barney','pebbles'];
+#                 'hello world' -> ['hello','world'];  'a_b' is unicode-path (rule e), NOT here;
+#                 'FOO BAR' -> ['FOO','BAR'];  'ABC DEF' -> ['ABC','DEF'].
+#       Returns [] when no run matches (e.g. words('') -> match(reAsciiWord)===null -> []).
+#
+# B5. unicodeWords(string)  (the Unicode word splitter, used in B1 when hasUnicodeWord is true):
+#         return string.match(reUnicodeWord) || []
+#       reUnicodeWord is GLOBAL ('g' flag). It is COMPOSED from the named pieces below (the blind
+#       emitter SHOULD rebuild it from these pieces — string-concatenated then RegExp(..., 'g') — to
+#       avoid transcription error; the fully-compiled .source is also pinned verbatim in node RE-UNICODE
+#       at the bottom as the exact ground truth to diff against). Character-range pieces (literal strings,
+#       used inside character classes / regex source):
+#         rsAstralRange       = '\ud800-\udfff'
+#         rsComboMarksRange   = '̀-ͯ︠-︣'
+#         rsComboSymbolsRange = '⃐-⃰'
+#         rsDingbatRange      = '✀-➿'
+#         rsLowerRange        = 'a-z\xdf-\xf6\xf8-\xff'
+#         rsMathOpRange       = '\xac\xb1\xd7\xf7'
+#         rsNonCharRange      = '\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf'
+#         rsPunctuationRange  = ' -⁯'
+#         rsSpaceRange        = ' \t\x0b\f\xa0﻿\n\r   ᠎             　'
+#         rsUpperRange        = 'A-Z\xc0-\xd6\xd8-\xde'
+#         rsVarRange          = '︎️'
+#         rsBreakRange        = rsMathOpRange + rsNonCharRange + rsPunctuationRange + rsSpaceRange
+#       Capture-group / token pieces:
+#         rsApos       = "['’]"                        # apostrophe OR right-single-quote U+2019
+#         rsBreak      = '[' + rsBreakRange + ']'
+#         rsCombo      = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+#         rsDigits     = '\d+'
+#         rsDingbat    = '[' + rsDingbatRange + ']'
+#         rsLower      = '[' + rsLowerRange + ']'
+#         rsMisc       = '[^' + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + ']'
+#         rsFitz       = '\ud83c[\udffb-\udfff]'
+#         rsModifier   = '(?:' + rsCombo + '|' + rsFitz + ')'
+#         rsNonAstral  = '[^' + rsAstralRange + ']'
+#         rsRegional   = '(?:\ud83c[\udde6-\uddff]){2}'
+#         rsSurrPair   = '[\ud800-\udbff][\udc00-\udfff]'
+#         rsUpper      = '[' + rsUpperRange + ']'
+#         rsZWJ        = '‍'
+#         rsLowerMisc     = '(?:' + rsLower + '|' + rsMisc + ')'
+#         rsUpperMisc     = '(?:' + rsUpper + '|' + rsMisc + ')'
+#         rsOptLowerContr = '(?:' + rsApos + '(?:d|ll|m|re|s|t|ve))?'      # optional lower contraction
+#         rsOptUpperContr = '(?:' + rsApos + '(?:D|LL|M|RE|S|T|VE))?'      # optional UPPER contraction
+#         reOptMod        = rsModifier + '?'
+#         rsOptVar        = '[' + rsVarRange + ']?'
+#         rsOptJoin       = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+#         rsSeq           = rsOptVar + reOptMod + rsOptJoin
+#         rsEmoji         = '(?:' + [rsDingbat, rsRegional, rsSurrPair].join('|') + ')' + rsSeq
+#       The alternation (joined by '|', compiled with flag 'g'), IN ORDER:
+#         A1 = rsUpper + '?' + rsLower + '+' + rsOptLowerContr + '(?=' + [rsBreak, rsUpper, '$'].join('|') + ')'
+#              # optional leading-upper + lowercase run + optional lower-contraction, LOOKAHEAD a break/upper/end.
+#              #   -> matches the lowercase-led portion of a camelHump and Title-case words; keeps "fred's".
+#         A2 = rsUpperMisc + '+' + rsOptUpperContr + '(?=' + [rsBreak, rsUpper + rsLowerMisc, '$'].join('|') + ')'
+#              # run of (upper OR misc-letter), optional UPPER contraction, LOOKAHEAD break/end/upper-then-lower.
+#              #   -> matches ACRONYM runs: 'HTTP' in 'HTTPRequest', 'XML' in 'XMLParser'. (Stops before the
+#              #      final Upper that begins the next Title word.)
+#         A3 = rsUpper + '?' + rsLowerMisc + '+' + rsOptLowerContr
+#              # optional leading-upper + run of (lower OR misc-letter) + optional lower-contraction (NO lookahead).
+#              #   -> general words incl. accented/non-latin letters: 'déjà','café','Bàr','Ελληνικά','Привет'.
+#         A4 = rsUpper + '+' + rsOptUpperContr
+#              # run of uppercase + optional UPPER contraction.  -> 'HELLO','WORLD','YOU'LL'.
+#         A5 = rsDigits                                          # '\d+'  -> digit runs: '123','42','2','0'.
+#         A6 = rsEmoji                                           # emoji sequences (dingbats, regional flags,
+#              #   surrogate pairs, with optional variation selector, modifier, and ZWJ joins) as ONE token:
+#              #   '👍','🇺🇸','👨‍👩‍👧','☕'.
+#       CONTRACTION NUANCE (important, verified): the lower-contraction (A1/A3, suffixes d|ll|m|re|s|t|ve)
+#       only attaches to a LOWERCASE-letter run; the UPPER-contraction (A2/A4, D|LL|M|RE|S|T|VE) only
+#       attaches to an UPPERCASE run. So:
+#         "fred's"  -> ["fred's"]            (lower run + 's')
+#         "don't"   -> ["don't"]             (lower run + 't')
+#         "they're" -> ["they're"]   "we've" -> ["we've"]   "it's" -> ["it's"]
+#         "I'll go" -> ["I","ll","go"]       (the single upper 'I' is matched by A4 as upper run; "'ll" is
+#                                             a LOWER contraction which A4 does not accept, so it splits)
+#         "I'm"     -> ["I","m"]    "I'd" -> ["I","d"]
+#         "YOU'LL"  -> ["YOU'LL"]            (upper run + upper contraction 'LL')
+#         "o'clock" -> ["o","clock"]         ('clock' is not in the suffix set -> apostrophe not kept)
+#         "fred'sx" -> ["fred","sx"]         ('s' followed by 'x' fails A1's lookahead (?=break|Upper|$);
+#                                             so A1 backtracks dropping the contraction; A3 then matches
+#                                             "fred" without the apostrophe, leaving "sx" as its own word)
+#       Returns [] when no token matches.
+#
+# ============================================================================
+# CONCRETE VERIFIED PREDICTIONS (real lodash.words@4.2.0 — held-out anchors)
+# ============================================================================
+#   words('')                       -> []
+#   words('hello')                  -> ['hello']
+#   words('camelCase')              -> ['camel','Case']
+#   words('camelCaseHTTPRequest')   -> ['camel','Case','HTTP','Request']
+#   words('HTTPRequest')            -> ['HTTP','Request']
+#   words('XMLParser')              -> ['XML','Parser']
+#   words('fred, barney, & pebbles')-> ['fred','barney','pebbles']
+#   words('abc123def')              -> ['abc','123','def']
+#   words('12345')                  -> ['12345']
+#   words('5px')                    -> ['5','px']
+#   words('px5')                    -> ['px','5']
+#   words('déjà vu')                -> ['déjà','vu']
+#   words('fooBàr')                 -> ['foo','Bàr']
+#   words('Ελληνικά')               -> ['Ελληνικά']
+#   words('Привет мир')             -> ['Привет','мир']
+#   words('hello 👍 world')          -> ['hello','👍','world']
+#   words("don't")                  -> ["don't"]
+#   words("fred's house")           -> ["fred's",'house']
+#   words('don’t')  (U+2019 apos)   -> ['don’t']
+#   words('  --hello--world--  ')   -> ['hello','world']
+#   words('hello world!!!')         -> ['hello','world']
+#   words('snake_case_words')       -> ['snake','case','words']
+#   words('kebab-case-words')       -> ['kebab','case','words']
+#   words('version2Point0')         -> ['version','2','Point','0']
+#   words('HELLO WORLD')            -> ['HELLO','WORLD']
+#   words('café42 ☕ Test')          -> ['café','42','☕','Test']
+#   words('I\'ll go')               -> ['I','ll','go']
+#   words('🇺🇸')                     -> ['🇺🇸']
+#   words('école')  (combining)     -> ['école']
+#   words('fred, barney, & pebbles', /[^, ]+/g)  -> ['fred','barney','&','pebbles']
+#   words('fred, barney, & pebbles', '[^, ]+')   -> ['fred']          (string pattern: first match only)
+#   words('2024-01-02', '(\d+)-(\d+)')           -> ['2024-01','2024','01']  (capture groups)
+#   words('key=val', /(\w+)=(\w+)/)              -> ['key=val','key','val']
+#   words('a=1 b=2', /(\w)=(\d)/g)               -> ['a=1','b=2']      (global: groups dropped)
+#   words('abc', /[0-9]+/g)                      -> []                 (no match -> || [])
+#   words('abc', '[0-9]+')                       -> []
+#   words('', /x/g)                              -> []
+
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic pure function; the oracle records {args -> result-array} (and {__throw} for any
+# throwing input, though no codec-faithful input in genInputs throws).
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the full pipeline B0..B5 above;
+#   - the three regexes reAsciiWord, reHasUnicodeWord, reUnicodeWord (verbatim / recomposed);
+#   - the ascii-vs-unicode dispatch and the `|| []` null guard;
+#   - the pattern-override branch delegating to native String.prototype.match.
+# CARRIED DATA: NONE. The regexes are small literals fully reproduced in this SIR (not a large opaque
+#   table) — no carried.json. The verbatim compiled reUnicodeWord.source is pinned below for diffing.
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because not codec-round-trippable, but a blind
+#   emitter implementing full toString stays faithful):
+#   - arg0 being null/undefined (-> '' -> []), a number/array/boolean/-0/Symbol (toString coercion, B0).
+#     genInputs always passes a STRING as arg0.
+#   - guard (3rd arg) being truthy (forces no-pattern path, B0a). genInputs emits no truthy guard.
+#   - pattern being a non-string, non-RegExp value (number/boolean/null). Behavior is documented in B2;
+#     genInputs emits pattern ONLY as a string or a RegExp (both codec-round-trip).
+# OUT-OF-CONTRACT (side APIs / mutators): NONE — pure function, no I/O, no global mutation.
+
+# ============================================================================
+PROVENANCE lodash.words@4.2.0  (lodash Custom Build, modularized export of _.words)
+#   repo: lodash/lodash   license: MIT
+#   source file: node_modules/lodash.words/index.js  (single self-contained file; module.exports = words)
+#   based on lodash core; reAsciiWord / reHasUnicodeWord / reUnicodeWord are lodash's stock word regexes.
+
+# ============================================================================
+# RE-UNICODE  (verbatim compiled reUnicodeWord.source — exact ground truth, flag 'g'; 1908 chars).
+# A blind emitter that recomposes from the named pieces in B5 should produce a RegExp whose .source
+# equals EXACTLY this string. Pinned here so the recomposition can be diffed byte-for-byte.
+# >>>BEGIN reUnicodeWord.source
+# [A-Z\xc0-\xd6\xd8-\xde]?[a-z\xdf-\xf6\xf8-\xff]+(?:['’](?:d|ll|m|re|s|t|ve))?(?=[\xac\xb1\xd7\xf7\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf\u2000-\u206f \t\x0b\f\xa0\ufeff\n\r\u2028\u2029\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000]|[A-Z\xc0-\xd6\xd8-\xde]|$)|(?:[A-Z\xc0-\xd6\xd8-\xde]|[^\ud800-\udfff\xac\xb1\xd7\xf7\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf\u2000-\u206f \t\x0b\f\xa0\ufeff\n\r\u2028\u2029\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\d+\u2700-\u27bfa-z\xdf-\xf6\xf8-\xffA-Z\xc0-\xd6\xd8-\xde])+(?:['’](?:D|LL|M|RE|S|T|VE))?(?=[\xac\xb1\xd7\xf7\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf\u2000-\u206f \t\x0b\f\xa0\ufeff\n\r\u2028\u2029\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000]|[A-Z\xc0-\xd6\xd8-\xde](?:[a-z\xdf-\xf6\xf8-\xff]|[^\ud800-\udfff\xac\xb1\xd7\xf7\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf\u2000-\u206f \t\x0b\f\xa0\ufeff\n\r\u2028\u2029\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\d+\u2700-\u27bfa-z\xdf-\xf6\xf8-\xffA-Z\xc0-\xd6\xd8-\xde])|$)|[A-Z\xc0-\xd6\xd8-\xde]?(?:[a-z\xdf-\xf6\xf8-\xff]|[^\ud800-\udfff\xac\xb1\xd7\xf7\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf\u2000-\u206f \t\x0b\f\xa0\ufeff\n\r\u2028\u2029\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\d+\u2700-\u27bfa-z\xdf-\xf6\xf8-\xffA-Z\xc0-\xd6\xd8-\xde])+(?:['’](?:d|ll|m|re|s|t|ve))?|[A-Z\xc0-\xd6\xd8-\xde]+(?:['’](?:D|LL|M|RE|S|T|VE))?|\d+|(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff])[\ufe0e\ufe0f]?(?:[\u0300-\u036f\ufe20-\ufe23\u20d0-\u20f0]|\ud83c[\udffb-\udfff])?(?:\u200d(?:[^\ud800-\udfff]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff])[\ufe0e\ufe0f]?(?:[\u0300-\u036f\ufe20-\ufe23\u20d0-\u20f0]|\ud83c[\udffb-\udfff])?)*
+# >>>END reUnicodeWord.source
+#
+# RE-ASCII (verbatim):  /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+# RE-HASUNICODE (verbatim):  /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/

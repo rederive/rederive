@@ -1,0 +1,78 @@
+UNIT parse_sig
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/sir/canon.mjs parseSig — the strict recursive-descent SIG reader that shares parseType's
+  grammar (the header comment above reader); reproduce it exactly
+ORACLE-CLASS deterministic
+SIG parse_sig(s: text) -> json
+ENVELOPE s is any well-formed text. Text outside the grammar throws, and that throw is IN scope as an observation (R1, R2,
+  R5, R6, R7, R8); the throw message ("bad SIG: …" with a position) is not graded.
+DEPENDS-ON none
+DESCRIPTION Read one SIG line into a map with three entries: name (text), args (a list of argument maps, in order) and result
+  (a type tree). An argument map has name (text), type (a type tree) and, for a rest parameter only, rest = true. A type
+  tree is a map whose entry k names its kind: k = a SCALAR name alone, or k = "union" with alts (a list of trees), "tuple"
+  with items (a list of trees), "list" with item (a tree), "map" with key and val (trees), "record" with fields (a list of
+  two-element lists [field name, tree]). No other entries appear.
+BEHAVIOR
+R1 s must be, as a whole, one SIG of the SIG grammar below; anything else -> throws. The tokens are IDENT and the literals
+  ( ) [ ] , : | -> and ... (each literal exactly as spelled: "- >" and ". .." are not tokens). WHITESPACE is optional
+  before, between and after any tokens — so "list [text]", "... xs", "f (a :text)->text" and a SIG broken over lines are
+  all accepted — and it is required only where two IDENTs meet, because an IDENT is read longest first ("pubfn" is one
+  IDENT). No other character is ignored: there is no comment form, so a "#" anywhere throws.
+R2 PREFIX is the IDENT token sequence pub fn, or export default function, any WHITESPACE between its words. It is read as a
+  prefix only when another IDENT (the function name) follows it; it occurs at most once. Otherwise no prefix is read and the
+  first IDENT is the function name: "pub(fn: text) -> text" is a function named pub, "export(default: text) -> text" one
+  named export, "pub fn fn(a: text) -> text" one named fn; "pub fn(a: text) -> text", "pub fn" and "pub fn pub fn f() ->
+  none" throw
+PINNED grammar SIG = [PREFIX] IDENT "(" [PARAM ("," PARAM)*] ")" ("->" | ":") TYPE ; PARAM = ["..."] IDENT ":" TYPE CITED canon.mjs header comment (sig, param) — no trailing or empty PARAM, so "f(a: text,)" and "f(,)" throw
+PINNED grammar TYPE = ALT ("|" ALT)* ; ALT = SCALAR | "tuple" "[" TYPE ("," TYPE)* "]" | "list" "[" TYPE "]" | "map" "[" TYPE "," TYPE "]" | "record" "[" IDENT ":" TYPE ("," IDENT ":" TYPE)* "]" CITED canon.mjs header comment (type, alt) — every bracket form needs at least one part and list / map exactly one / two
+PINNED grammar IDENT = an ASCII letter or underscore, then any run of ASCII letters, digits and underscores, read longest first CITED canon.mjs ident — "2f" and "fé" throw; keywords are not reserved, so pub, fn and text are ordinary identifiers where an IDENT is expected
+R3 The name entry is the function IDENT. Each PARAM becomes an argument map in order; a leading "..." marks it a rest
+  parameter and adds rest = true.
+R4 TYPE gives a union tree (alts in order) when it has two or more ALTs, else the single ALT's tree. The members of a
+  union are never unions themselves, and a nested TYPE inside brackets is its own tree. A SCALAR ALT gives k = that name;
+  the tuple form gives items, list item, map key and val, record fields as [IDENT, tree] pairs, all in order.
+R5 Unreachable alternatives -> throws: within one TYPE (at any nesting level), an ALT that an EARLIER ALT of the same TYPE
+  covers (TABLE COVERS). A later ALT never covers an earlier one, so "text | json" is legal while "json | text" throws; and
+  spacing never matters. COVERS is structural: "list[json] | list[text]", "tuple[json, text] | tuple[text, text]",
+  "map[json, json] | map[text, text]", "list[text | none] | list[text]" and "record[a: text] | record[a: text, b: none]"
+  throw, while "list[text] | list[text | none]", "tuple[json, json] | tuple[text]", "record[a: text, b: none] |
+  record[a: text]", "list[text] | tuple[text]" and "json | map[json, text]" are legal. CITED canon.mjs typeKey, inJson,
+  covers (FINDINGS #65 #74 #79)
+TABLE COVERS — A covers B (A, B type trees) exactly when at least one row holds; nothing else covers (a list never covers a
+  tuple, a map never a record, and only json or a union holding json covers json); used by R5
+  SAME     A and B are the same type up to order: the same kind and, recursively, the same members, where the alts of a union
+           and the fields of a record (a field = its name, compared exactly, and its tree) compare as SETS, while tuple
+           items, the list item and the map key and val compare in order
+  JSON     A is the scalar json and B is JSON-SHAPED (TABLE JSON_SHAPED)
+  LIST     both are lists and A's item covers B's item
+  TUPLE    both are tuples with the same number of items and each A item covers the B item at the same position
+  MAP      both are maps, A's key covers B's key and A's val covers B's val
+  RECORD   both are records and every field of A has a field of the same name in B whose tree A's field tree covers (B may
+           have more fields than A)
+  A-UNION  A is a union and some alt of A covers B
+  B-UNION  B is a union and A covers every alt of B
+TABLE JSON_SHAPED — a type tree B -> whether json covers it; used by COVERS
+  none, bool, f64, text, json -> yes
+  i64, u64, bytes             -> no
+  list[X]                     -> yes exactly when X is json-shaped
+  map[K, V]                   -> yes exactly when K is the scalar text itself (not json, not a union) and V is json-shaped
+  tuple, record               -> yes exactly when every item (every field's tree) is json-shaped
+  a union                     -> yes exactly when every alt is json-shaped
+R6 Uniqueness -> throws: two PARAMs with the same IDENT, or two fields of one record with the same IDENT (compared exactly,
+  so a and A differ).
+R7 A rest parameter anywhere but the last PARAM -> throws (two rest parameters included).
+R8 Nesting cap -> throws: a composite ALT (tuple list map record) nested inside more than 15 enclosing composite ALTs. A
+  composite at the top of a PARAM's TYPE or the result TYPE has depth 1, one inside its brackets depth 2, and so on; depth
+  16 is accepted, 17 throws. Unions add no depth, and siblings do not add up: each PARAM and the result start again at 0.
+PINNED constant MAX-DEPTH = 16 CITED canon.mjs MAX_DEPTH (FINDINGS #78) — the deepest accepted composite nesting
+PINNED charset WHITESPACE = space, tab, carriage return, line feed (hexadecimal 20 09 0D 0A) CITED canon.mjs reader ws — nothing else: vertical tab, form feed, no-break space, zero width no-break space, next line and the line separator all throw
+PINNED names SCALAR = text bytes bool none i64 u64 f64 json CITED canon.mjs TYPES, the closed type set; case-sensitive
+INVARIANT every accepted s is ASCII; name is an IDENT; argument names are distinct; at most one argument carries rest and it
+  is the last; every list tree has an item, every map tree a key and a val; a union has at least two alts, none covered (R5)
+  by an earlier one; no tree nests composites deeper than MAX-DEPTH.
+ORACLE value -> oracles/parse_sig.json  CANONICAL-SHA256 ab2348b66cc3ca41f40bb5fc7ab9fd049458eb867fffb3eb0394280b7bf36d5c
+SCOPE IN: R1–R8 over every well-formed text. OUT: non-text input (not representable under the SIG).
+PROVENANCE rederive@bb8ded84fa50 (selfhost pinned authority, round 5), cli/sir/canon.mjs: parseSig, reader (sig, prefix,
+  type, alt, ident, ws, MAX_DEPTH), typeKey, sameType, inJson, covers, TYPES. Round 5 re-cut after FINDINGS #74 #78 #79:
+  coverage is structural (TABLE COVERS), json covers tuple and record of json-shaped parts, and the nesting cap is 16.

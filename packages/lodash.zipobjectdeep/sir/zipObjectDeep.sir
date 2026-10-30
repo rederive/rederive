@@ -1,0 +1,330 @@
+UNIT zipObjectDeep
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG zipObjectDeep(props = [], values = []) -> object
+    # Default export of the npm module. Blind re-emitter MUST `export default <fn>`.
+    # No options, no seams (no clock/RNG/env/io/net). Pure, read-only, deterministic.
+DEPENDS-ON none   # zero npm deps; self-contained lodash micro-build. No carried-data table.
+
+# =============================================================================
+# OVERVIEW
+# =============================================================================
+# Builds a NEW plain object by zipping a list of property PATHS (props) with a
+# list of VALUES, where each prop is a deep path that may create nested
+# objects/arrays. Equivalent to: start with result = {}; for each i in
+# 0..props.length-1, deep-set result at path props[i] to values[i] (or
+# `undefined` when i >= values.length). Last write wins on overlapping paths.
+#
+# The two divergence-prone seams are (A) the path-PARSING grammar
+# (string -> key array) and (B) the container-creation rule (array-vs-object)
+# during the deep walk. Both are specified exhaustively below.
+
+# =============================================================================
+# BEHAVIOR  (ordered pipeline)
+# =============================================================================
+
+# ---- NODE 0: entry / nullish argument coalescing --------------------------
+# zipObjectDeep(props, values) computes baseZipObject(props || [], values || [], baseSet).
+# The `|| []` means: any FALSY props (undefined, null, false, 0, '', NaN) becomes [];
+# likewise for values. In practice only undefined/null are exercised here.
+#   props  := (props  is falsy) ? [] : props
+#   values := (values is falsy) ? [] : values
+# props and values are then treated as arrays and indexed by .length.
+# (No type check: a non-array truthy props would read .length/index off it, but
+#  genInputs only ever emits arrays or null/undefined for these two args.)
+
+# ---- NODE 1: baseZipObject (the zip loop) ---------------------------------
+# result := {}                               # a fresh plain object, ALWAYS {}
+# length := props.length
+# valsLength := values.length
+# for index from 0 to length-1 (inclusive), in ascending order:
+#     value := (index < valsLength) ? values[index] : undefined     # <-- props>values => undefined leaf
+#     baseSet(result, props[index], value)    # deep-assign; mutates result in place
+# return result
+# NOTES:
+#   - Iteration is strictly ascending by index => later props overwrite earlier
+#     (LAST-WINS) on any shared path/prefix collision.
+#   - If values is LONGER than props, the surplus values are ignored.
+#   - If props is EMPTY (length 0), the loop body never runs => result is {} (empty object).
+
+# ---- NODE 2: baseSet(object, path, value) ---------------------------------
+# Deep-assigns `value` into `object` at `path` (a string or key-array), creating
+# intermediate containers. Here object is always the in-progress result, path is
+# props[index], value is the zipped value.
+#
+# 2a. if object is not an Object (per isObject below) -> return object unchanged.
+#     result is always {} so this never short-circuits in this unit.
+# 2b. path := castPath(path, object)            # see NODE 3 -> a KEY ARRAY
+# 2c. Walk:
+#     index := -1; length := path.length; lastIndex := length - 1; nested := object
+#     while (nested != null AND ++index < length):
+#         key := toKey(path[index])             # see NODE 6
+#         newValue := value
+#         # PROTOTYPE-POLLUTION GUARD (applies to EVERY key in the walk, not just last):
+#         if (key === '__proto__' OR key === 'constructor' OR key === 'prototype'):
+#             return object       # ABORT the entire baseSet immediately; assign nothing more.
+#                                 # Any containers created for EARLIER keys in this path remain.
+#         if (index != lastIndex):              # intermediate key -> ensure a container exists
+#             objValue := nested[key]
+#             newValue := undefined             # (customizer is never passed here, so always undefined)
+#             if (newValue === undefined):
+#                 newValue := isObject(objValue)
+#                     ? objValue                                  # PRESERVE existing object/array
+#                     : (isIndex(path[index + 1]) ? [] : {})      # CREATE new container; see CONTAINER RULE
+#         assignValue(nested, key, newValue)    # see NODE 5
+#         nested := nested[key]                 # descend
+#     return object
+#
+# CONTAINER RULE (array-vs-object) -- THE central seam:
+#   When creating a NEW intermediate container at position `index`, the choice
+#   depends ONLY on the NEXT key (the raw, pre-toKey element path[index+1]):
+#       isIndex(path[index+1]) == true  ->  []   (array)
+#       isIndex(path[index+1]) == false ->  {}   (object)
+#   This is independent of how the next key was WRITTEN: a dotted segment 'a.0'
+#   parses to key '0', which isIndex-true, so 'a' becomes an ARRAY. Likewise
+#   'a[00]' parses to key '00', which isIndex-FALSE (see isIndex), so 'a'
+#   becomes an OBJECT.
+#   If an intermediate value ALREADY EXISTS and is an Object (isObject true,
+#   i.e. typeof 'object' or 'function' and non-null -- includes arrays), it is
+#   PRESERVED and descended into (NOT replaced), regardless of array/object kind.
+#   If an existing intermediate value is a NON-object (scalar/null/undefined), it
+#   is OVERWRITTEN by a fresh [] or {} per the rule. Example: paths ['a','a.b']
+#   sets a=1, then on 'a.b' the existing a=1 is not an object -> replaced by {} ->
+#   {a:{b:...}}.
+#   The TOP-LEVEL result is always {} (NODE 1); the last key of a path is always a
+#   plain assignment into its parent container, never a container-creation, so a
+#   single-segment path like ['1'] yields {'1':v} (object key), not an array.
+
+# ---- NODE 3: castPath(value, object) --------------------------------------
+# Converts the prop into a KEY ARRAY:
+#   if isArray(value):  return value                 # an array prop is used AS-IS (each element is a key)
+#   if isKey(value, object): return [value]          # single literal key, NO parsing  (see NODE 4)
+#   else: return stringToPath(toString(value))       # parse the string into a path   (see NODE 7, 8)
+# Here `object` is the in-progress result. Because result starts as {} and we
+# build keys into it, the `value in Object(object)` clause of isKey (NODE 4) is
+# effectively never satisfied on a fresh empty container for the values genInputs
+# emits, so isKey reduces to its grammar tests below.
+
+# ---- NODE 4: isKey(value, object) -----------------------------------------
+# Decides "single literal key" (true) vs "parse as deep path" (false).
+#   if isArray(value): return false
+#   type := typeof value
+#   if (type=='number' OR type=='symbol' OR type=='boolean' OR value==null OR isSymbol(value)):
+#         return true                     # numbers/booleans/null/symbols are single keys
+#   return reIsPlainProp.test(value)      # /^\w*$/      (only [A-Za-z0-9_]*, incl. empty string)
+#       OR !reIsDeepProp.test(value)      # has NO '.' and NO complete '[...]' group
+#       OR (object != null AND value in Object(object))   # value is already a key on object
+# CONSEQUENCES (for STRING props, object empty):
+#   - A string matching /^\w*$/ (word chars only, incl. '') => single key, no parse.
+#       'a', '_x', '123abc', '', 'a1' => single literal key.
+#   - A string with NO deep marker (no '.' and no balanced '[...]') => single key.
+#       'a-b', 'a b', 'a[' (unbalanced), 'a]' => single literal key.
+#   - A string WITH a deep marker ('.' anywhere, or a complete '[...]') => parsed.
+#       'a.b', 'a[0]', 'a.0', '1.5', 'a[]' => stringToPath.
+#   reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/
+#       matches if there is a literal '.' OR a bracket group '[...]' whose contents
+#       are either non-bracket chars OR a quoted (single/double) string.
+#   reIsPlainProp = /^\w*$/
+
+# ---- NODE 5: assignValue(object, key, value) ------------------------------
+# Assigns value to object[key] only when needed (SameValueZero short-circuit):
+#   objValue := object[key]
+#   if NOT( hasOwnProperty(object,key) AND eq(objValue, value) )
+#      OR ( value === undefined AND NOT(key in object) ):
+#         baseAssignValue(object, key, value)
+# eq(a,b) := (a === b) OR (a !== a AND b !== b)        # SameValueZero (NaN equals NaN)
+# baseAssignValue(object,key,value):
+#   if (key == '__proto__' AND defineProperty exists):
+#       Object.defineProperty(object, key, {configurable:true, enumerable:true, value, writable:true})
+#   else:
+#       object[key] = value
+# NET EFFECT for this unit: every leaf and every freshly-created container gets
+# written. The eq short-circuit can skip a redundant rewrite when the same value
+# is assigned to an already-present key (no observable difference). The
+# `value===undefined && !(key in object)` clause guarantees an UNDEFINED LEAF for
+# a brand-new key IS materialized (the key exists with value undefined). NOTE the
+# __proto__ branch of baseAssignValue is UNREACHABLE in baseSet because the
+# guard in NODE 2 already returns on key==='__proto__'.
+
+# ---- NODE 6: toKey(value) -------------------------------------------------
+# Normalizes a path element to a string/symbol key:
+#   if (typeof value=='string' OR isSymbol(value)): return value
+#   result := value + ''                          # coerce to string
+#   return (result == '0' AND (1/value) == -Infinity) ? '-0' : result
+# i.e. numeric -0 becomes the string '-0'; everything else is its ''+ coercion.
+# For parsed string paths every element is already a string, so toKey is identity.
+
+# ---- NODE 7: isIndex(value, length=MAX_SAFE_INTEGER) ----------------------
+# Decides whether a key denotes an ARRAY index (governs container creation, NODE 2).
+#   MAX_SAFE_INTEGER = 9007199254740991
+#   type := typeof value;  length := MAX_SAFE_INTEGER  (length arg never passed here)
+#   return !!length
+#       AND ( type=='number' OR (type!='symbol' AND reIsUint.test(value)) )
+#       AND ( value > -1 AND value % 1 == 0 AND value < length )
+#   reIsUint = /^(?:0|[1-9]\d*)$/      # '0' or a non-zero-leading run of digits
+# For PARSED keys (always strings) the deciding test is:
+#   reIsUint.test(value) AND Number(value) is an integer in [0, MAX_SAFE_INTEGER).
+# CONSEQUENCES on string keys:
+#   '0','1','2','9999' => index TRUE  -> array container
+#   '00','01','-0','-1','1.5','9999999999999999'(>=MAX_SAFE_INTEGER) => index FALSE -> object
+#   '' (empty key) => index FALSE -> object
+#   Coercion note: for a string like '5', value%1==0 and value<length use numeric
+#   coercion of the string; reIsUint already guarantees a clean unsigned integer
+#   form, and the >=MAX_SAFE_INTEGER cut makes huge numeric strings non-indices.
+
+# ---- NODE 8: stringToPath(string) -----------------------------------------
+# Parses a string into a key array. (Internally memoized with a 500-entry cap;
+# memoization is a pure cache and has NO observable effect -- ignore it.)
+#   result := []
+#   if string.charCodeAt(0) === 46 (a leading '.'): result.push('')   # leading dot -> empty first key
+#   string.replace(rePropName, function(match, number, quote, subString) {
+#       result.push( quote ? subString.replace(reEscapeChar, '$1')
+#                          : (number || match) )
+#   })
+#   return result
+# rePropName (global):
+#   /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g
+#   Three alternatives, tried left-to-right per match position:
+#     (1) [^.[\]]+            one-or-more chars that are NOT '.', '[' or ']'  -> a plain segment
+#                             (captured in `match`; `number`/`quote` undefined => push match)
+#     (2) \[ ( number | quoted ) \]    a bracket group:
+#           number group = (-?\d+(?:\.\d+)?)   captured as `number`; pushed via (number || match).
+#                          (since a non-empty number string is truthy, `number` is pushed)
+#           quoted group = (["'])((?:(?!\2)[^\\]|\\.)*?)\2  a '...' or "..." string;
+#                          `quote` = the delimiter, `subString` = inner text; pushed with
+#                          reEscapeChar applied: /\\(\\)?/g replace '$1' -> a backslash before
+#                          any char is removed, a doubled backslash collapses to one.
+#     (3) (?=(?:\.|\[\])(?:\.|\[\]|$))   a zero-width lookahead at a '.' or '[]' boundary that
+#                          is followed by another '.'/'[]'/end -> contributes an EMPTY '' segment
+#                          (match is '', number/quote undefined => push '').
+#   reEscapeChar = /\\(\\)?/g
+# WORKED EXAMPLES (verified against the real package):
+#   'a.b[0].c'            -> ['a','b','0','c']
+#   'a.0'                 -> ['a','0']
+#   'a[0]'                -> ['a','0']
+#   'a[00]'               -> ['a','00']         # number group matches '00'
+#   'a[-1]'               -> ['a','-1']
+#   'a[1.5]'              -> ['a','1.5']
+#   'a[9999999999999999]' -> ['a','9999999999999999']
+#   '.a'                  -> ['','a']           # leading-dot push
+#   'a.'                  -> ['a','']
+#   'a..b'                -> ['a','','b']
+#   'a[]'                 -> ['a','']            # empty bracket -> empty segment via lookahead
+#   '["a.b"]'             -> ['a.b']            # quoted key keeps the dot literal
+#   "['a.b']"             -> ['a.b']
+#   'a\\.b'  (i.e. a backslash then .b)  -> ['a\\','b']   # backslash is LITERAL outside quotes;
+#                                            the '.' still splits. First seg captured by alt (1).
+#   "['a\\.b']" (quoted, backslash-dot)  -> ['a.b']       # inside quotes, \. -> .
+#   "['a\\\\b']" (quoted, double backslash) -> ['a\\b']   # \\ -> \
+#   '__proto__.x'         -> ['__proto__','x']
+#   'x.y[0].z'            -> ['x','y','0','z']
+
+# ---- NODE 9: support predicates (exact) -----------------------------------
+# isArray(v)  := Array.isArray(v)
+# isObject(v) := v != null AND (typeof v == 'object' OR typeof v == 'function')
+#                # true for arrays, plain objects, functions, RegExp, Date, etc.; false for
+#                # null/undefined/primitives.
+# isObjectLike(v) := v != null AND typeof v == 'object'
+# isSymbol(v) := typeof v == 'symbol' OR (isObjectLike(v) AND tag(v) == '[object Symbol]')
+# toString(v) := v == null ? '' : baseToString(v)
+#   baseToString(v): if string -> v; if array -> arrayMap(baseToString)+'' (comma-join);
+#                    if symbol -> symbol's toString (or ''); else (v+''), with -0 -> '-0'.
+# These only matter when castPath receives a non-array, non-string prop (e.g. a
+# number/boolean prop) which goes through isKey-true -> [value], then toKey
+# stringifies it.
+
+# =============================================================================
+# WORKED END-TO-END EXAMPLES  (all verified against lodash.zipobjectdeep@4.18.0)
+# =============================================================================
+#   zipObjectDeep(['a.b[0]'], [1])                 -> { a: { b: [1] } }
+#   zipObjectDeep(['a.b','a.c'], [1,2])            -> { a: { b:1, c:2 } }
+#   zipObjectDeep(['a.b[0].c','a.b[1].d'], [1,2])  -> { a: { b: [ {c:1}, {d:2} ] } }
+#   zipObjectDeep(['a','b'], [1,2])                -> { a:1, b:2 }
+#   zipObjectDeep(['a','b'], [1])                  -> { a:1, b:undefined }   # props>values: b present, undefined
+#   zipObjectDeep(['a'], [1,2])                    -> { a:1 }                # surplus value ignored
+#   zipObjectDeep([], [])                          -> {}
+#   zipObjectDeep()                                -> {}                     # nullish args -> []
+#   zipObjectDeep(null, null)                      -> {}
+#   zipObjectDeep(['a.b','a.b'], [1,2])            -> { a: { b:2 } }         # last-wins
+#   zipObjectDeep(['a[0]','a[1]'], [1,2])          -> { a: [1,2] }
+#   zipObjectDeep(['a.0','a.1'], [1,2])            -> { a: [1,2] }           # dotted index still array
+#   zipObjectDeep(['a[00]'], [5])                  -> { a: { '00': 5 } }     # '00' not a uint index
+#   zipObjectDeep(['a[-1]'], [5])                  -> { a: { '-1': 5 } }
+#   zipObjectDeep(['a[1.5]'], [5])                 -> { a: { '1.5': 5 } }
+#   zipObjectDeep(['a[2]'], [5])                   -> { a: [<2 empty>,5] }   # sparse; JSON: {"a":[null,null,5]}
+#   zipObjectDeep(['1.5'], [9])                    -> { '1':[<5 empty>,9] }  # '1.5' parses to ['1','5'] (deep)
+#   zipObjectDeep(['1'], [9])                      -> { '1':9 }              # plain word -> single key (object)
+#   zipObjectDeep([5], [9])                        -> { '5':9 }              # numeric prop -> single key
+#   zipObjectDeep([true], [9])                     -> { 'true':9 }
+#   zipObjectDeep(['a','a.b'], [1,2])              -> { a:{b:2} }            # scalar a overwritten by container
+#   zipObjectDeep(['a.b','a'], [1,2])              -> { a:2 }                # container a overwritten by scalar
+#   zipObjectDeep(['a.constructor.x'], [1])        -> { a:{} }               # guard aborts at 'constructor';
+#                                                                            # the 'a' container already created
+#   zipObjectDeep(['__proto__.x'], [1])            -> {}                     # guard aborts at first key
+
+# =============================================================================
+# ORACLE
+# =============================================================================
+# value -> oracle.json
+# The oracle compares the returned object by deep structural value. The frozen
+# codec is JSON-shaped: round-trips JSON primitives, arrays, plain objects,
+# RegExp, Set, Map, Uint8Array/Buffer, bigint. KEY SUBTLETY: a leaf that is set
+# to `undefined` (props>values, or an explicit `undefined` value) creates the key
+# with value undefined; under JSON.stringify an object-valued `undefined` is
+# DROPPED and an array-hole serializes as `null`. The harness applies the SAME
+# codec to both the real and the re-emitted output, so this is consistent on both
+# sides -- the re-emitter must still MATERIALIZE the key (do not omit it).
+# Determinism: pure function of (props, values); no seam.
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): all of NODE 0..9 above -- the zip loop,
+#   castPath/isKey/stringToPath grammar, isIndex bounds, baseSet walk + container
+#   rule + preservation rule, assignValue/eq short-circuit, toKey, the
+#   __proto__/constructor/prototype guard, nullish-arg coalescing, props>values
+#   undefined leaf, last-wins.
+# CARRIED DATA: NONE. There is no large literal table. The only constants are the
+#   four regexes (rePropName, reIsDeepProp, reIsPlainProp, reIsUint, reEscapeChar)
+#   and MAX_SAFE_INTEGER, all transcribed in full in BEHAVIOR. No carried.json.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; documented for the
+#   blind re-emitter but not graded, because they are not codec-faithful or are
+#   side-effecting / environment-coupled):
+#   - FUNCTION values or function PROPS: isObject-true, would be preserved/placed
+#     by reference; not JSON-codec-faithful. Reconstruct per spec; not generated.
+#   - SYMBOL keys/props: isKey-true single key; not codec-faithful.
+#   - NaN / +-Infinity / -0 LEAF VALUES: not JSON-codec-faithful (NaN/Inf -> null,
+#     -0 -> 0). The eq() NaN-equals-NaN branch and toKey -0 handling are specified
+#     above but not generated.
+#   - boxed primitives (new Number/String/Boolean) as values: identity-bearing,
+#     not codec-faithful.
+#   - PROTOTYPE-POLLUTION paths ('__proto__.x', 'a.__proto__.x', 'constructor...',
+#     'prototype...'): these ARE codec-faithful strings and ARE exercised (they
+#     hit the guard and return harmlessly) -- they are in-envelope inputs that
+#     demonstrate the guard, NOT actual pollution. genInputs DOES emit a curated
+#     set of them; the observable result (no pollution, partial containers) is
+#     fully specified in NODE 2 and the worked examples.
+#   - There are NO stateful mutators or side APIs; the function only mutates the
+#     fresh local `result` it returns.
+
+# =============================================================================
+# SELF-CONSISTENCY CROSS-CHECK
+# =============================================================================
+# Every value class genInputs can emit has its behavior defined above:
+#   simple word keys (NODE 4 plain), dotted paths (NODE 8), bracket-index paths
+#   (NODE 7/8), mixed paths, multiple props into same parent (NODE 1 + preserve
+#   rule), props>values undefined leaf (NODE 1/5), empty props (NODE 1), numeric/
+#   boolean/null props (NODE 4/6), array-element props (NODE 3 isArray branch),
+#   '00'/'-1'/'1.5'/huge-index object-fallbacks (NODE 7), dot-index arrays
+#   (NODE 7/8), last-wins dup paths (NODE 1), null/undefined args (NODE 0),
+#   quoted keys + escapes (NODE 8), unbalanced-bracket single keys (NODE 4),
+#   leading/trailing/double dots (NODE 8), guard paths (NODE 2). No emitted value
+#   relies on an undefined/un-given table. Conversely no documented in-scope
+#   value class is left ungenerated.
+
+# =============================================================================
+PROVENANCE lodash.zipobjectdeep@4.18.0
+  repo: https://github.com/lodash/lodash  (modularized custom build)
+  license: MIT (OpenJS Foundation; based on Underscore.js 1.8.3)
+  source file: node_modules/lodash.zipobjectdeep/index.js  (single bundled CJS file)
+  module.exports = zipObjectDeep (default export)

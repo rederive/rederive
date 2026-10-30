@@ -1,0 +1,17 @@
+UNIT carried_canonical
+LANG ts
+PRIMARY-SHA256 f0f8bfd7fcf65ee10da915c5044801760095bf39afc82f9b18fe04a03e3cf1a3
+SIG export default function carried_canonical(table: { [key: string]: Json }): string
+ABI TypeScript compiles to the js runtime and is driven exactly as js. The artifact declares
+  `type Json = null | boolean | number | string | Json[] | { [key: string]: Json }`; map = that index-signature object
+  (an own "__proto__" key is an ordinary own property); none = null; text = string; f64 = number; list = Array. Every
+  throw (R6) is an Error. STRICT: the artifact type-checks under `strict: true` with no `any`, no non-null assertions
+  (`!`), no `@ts-ignore` and no `@ts-expect-error`. It is an ES module default-exporting the function and imports nothing.
+ENVELOPE as the primary: the js widening (non-map tables, undefined, holes, host objects) is not typed here and stays OUT.
+MECHANISM (restated from js; language files are self-contained) a recursive writer over Json, never JSON.stringify on a
+  container and never a rebuilt object (own-key enumeration hoists array-index keys and would undo R2). Scalars:
+  JSON.stringify for string/boolean/null; a number throws unless Number.isFinite(x) && !Object.is(x, -0), else
+  JSON.stringify(x). Arrays in order. Maps: Object.keys(x).sort() with the default comparator (UTF-16 code units, R2).
+  Narrow with typeof, Array.isArray and null checks; no casts.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/sir/v05.mjs `canonical` and `plainMap`. Language file re-cut 2026-10-26 with the primary.

@@ -1,0 +1,33 @@
+UNIT legacy_grade
+LANG ts
+PRIMARY-SHA256 3f9fa3daa308bb4b158db46e732a824e15811cd3e469aa3651e989e8ae6c997a
+SIG export default function legacy_grade(gots: readonly unknown[], vectors: readonly { readonly name: string; readonly expected?: unknown }[]): { pass: number; total: number; full: boolean; miss: string[] }
+ABI TypeScript compiles to the js runtime and is driven exactly as js, with the same value mapping: json none = null, bool =
+  boolean, a number = number (-0, NaN, ±Infinity included), text = string, list = array, map = a plain object; host slice:
+  undefined, bigint, RegExp, Number / String / Boolean wrapper objects, Set, Map, Uint8Array (buffer-flavoured = Buffer),
+  sparse arrays. Every input value is typed unknown and narrowed with typeof, instanceof, Array.isArray, === null and
+  Object.hasOwn — never a cast to any. The result is a fresh { pass, total, full, miss }. STRICT: the artifact type-checks
+  under strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. A throw (R1) is a
+  thrown Error; the message is not graded. ES module default export; imports nothing (Buffer is the Node global; the checker runs
+  with --types node, so never redeclare it).
+ENVELOPE WIDENING as js: the HOST SLICE of the primary's ENVELOPE and OUT-OF-DOMAIN 1–3 (gots null, vectors null, a null
+  vector, a vector without expected) — the runtime receives them whatever the static types say.
+MECHANISM (restated from js — language files are self-contained) R4 = JSON.stringify(CANON(got)) ===
+  JSON.stringify(CANON(REVIVE(expected))); JSON.stringify's own-key walk IS the primary's KEY ORDER. Maps are built as
+  Record<string, unknown> with Object.defineProperty over Object.keys(src) (an own "__proto__" stays a key). CANON row
+  order: undefined; bigint; Object.is(v, -0); non-finite number; RegExp (source / flags getters); Number / String / Boolean
+  wrapper (k = constructor.name, payload valueOf()); Set; Map; Uint8Array (bytes Array.from, buf Buffer.isBuffer; before the
+  Array test); Array (hole = !(i in v)); a non-null object via Object.keys, skipping function values, wrapped when
+  Object.hasOwn finds __t, __throw or __threw on the original; anything else unchanged.
+MECHANISM (restated from js) THROWN = a non-null non-Array object with Object.hasOwn(x, '__throw'). REVIVE reads __t by
+  property access on any non-null non-Array object, so a host collection in expected copies Object.keys (R6). Rows: new RegExp(source, flags)
+  with the raw values (an undefined source / flags means absent — never String() them first); BigInt(t.v) for R11 (narrow
+  to string | number | bigint | boolean and throw a TypeError for anything else, as BigInt does); an exact membership test
+  then Number for num; new Number / String / Boolean of the revived payload for boxed (ToNumber / ToString / ToBoolean);
+  new Set / new Map over (x || []) for set and map, throwing a TypeError when a truthy x is not an Array; Buffer.from /
+  Uint8Array.from for u8; new Array(length) then a for-of over (t.entries || []) for sparse (R13: a text entries iterates
+  its characters); the obj refusal for a null / non-object / Array t.v.
+DEPENDS-ON none
+PINNED grammar REGEX = the ECMAScript RegExp constructor of the host (Node 24: flags d g i m s u v y, u and v exclusive; source getter = EscapeRegExpPattern) CITED R10 — pattern validity and the normalized source ride on it
+PROVENANCE rederive@978444f3baf3 cli/verdict.mts (grade, vectorPass, threw, eq, enc, revive). Language file cut 2026-10-27
+  with the primary, before any blind re-emission.

@@ -1,0 +1,224 @@
+UNIT flatten
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG flatten(target: any, opts?: { delimiter?: string, maxDepth?: number, safe?: any, transformKey?: function, object?: any, ...other }) -> object
+DEPENDS-ON none   # zero runtime dependencies; only Node built-ins (Object.keys, Object.prototype.toString, Array.isArray)
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# flatten takes a (typically nested) object `target` and produces a NEW single-
+# level object whose keys are the delimiter-joined paths to each leaf value of
+# `target`. It is READ-ONLY: `target` is never mutated (verified). It is fully
+# deterministic given (target, opts) — there is NO ambient seam (no clock, RNG,
+# env, fs, net). No injection point is required.
+#
+# `flatten` is the package's `module.exports`. (`flatten.flatten` and
+# `flatten.unflatten` are properties attached to the function object; they are
+# NOT part of THIS unit's behavior and are out of scope. We reconstruct ONLY the
+# `flatten` function itself.)
+#
+# EMISSION CONTRACT (for the blind re-emitter):
+#   The re-emitted module's DEFAULT EXPORT is the flatten function:
+#     export default function flatten(target, opts) { ... }
+#   Reconstruct ONLY the BEHAVIOR section below. Do not attach .flatten/.unflatten.
+
+# ============================================================================
+# OPTION RESOLUTION (exact, order matters)
+# ============================================================================
+# opts := opts || {}                       # null/undefined/falsy opts -> {}
+# delimiter := opts.delimiter || '.'        # NOTE: || means EMPTY STRING '' and any
+#                                           #   other falsy delimiter FALL BACK to '.'.
+#                                           #   Only a truthy string is used verbatim;
+#                                           #   multi-char delimiters are used as-is.
+# maxDepth  := opts.maxDepth                # used raw (may be undefined / 0 / negative)
+# transformKey := opts.transformKey || keyIdentity   # keyIdentity(k) => k
+#                                           #   transformKey is a FUNCTION option -> OUT OF SCOPE
+#                                           #   (see SCOPE). For all in-scope inputs the generator
+#                                           #   NEVER supplies transformKey, so transformKey === identity.
+# output := {}                              # fresh result object, returned at the end
+#
+# NOTE: opts.object is read ONLY by unflatten, NEVER by flatten. Passing
+#   {object:true} to flatten has NO EFFECT (verified: flatten({a:[1,2]},{object:true})
+#   == flatten({a:[1,2]}) == {"a.0":1,"a.1":2}). It is accepted but ignored.
+#   Any other unknown opts keys are likewise ignored by flatten.
+
+# ============================================================================
+# BEHAVIOR  (the recursive `step` walk; pipeline / BRANCH nodes — exact)
+# ============================================================================
+#
+# Entry:  step(target)        # called with prev=undefined, currentDepth=undefined
+# Return: output
+#
+# --- step(object, prev, currentDepth) ---
+# node-A  currentDepth := currentDepth || 1       # undefined/0 -> 1 (first call: 1)
+#
+# node-B  FOR EACH key IN Object.keys(object), IN Object.keys ORDER:
+#         (Object.keys order = ascending integer-index keys first in numeric order,
+#          then string keys in insertion order. This matters for arrays-as-objects
+#          and for numeric-string keys. For ordinary string-keyed objects it is
+#          insertion order. The OUTPUT object is built by assignment in this order;
+#          on key collision LAST ASSIGNMENT WINS.)
+#
+#   For each key:
+#     value    := object[key]
+#     isarray  := opts.safe && Array.isArray(value)
+#                 # truthy ONLY when opts.safe is truthy AND value is a real Array.
+#                 # opts.safe is used as a plain truthiness test (1 truthy, 0 falsy, etc.).
+#     type     := Object.prototype.toString.call(value)   # e.g. '[object Object]', '[object Array]', '[object Null]', '[object Number]', '[object Date]'
+#     isbuffer := isBuffer(value)
+#                 # isBuffer(v) := v && v.constructor && typeof v.constructor.isBuffer==='function'
+#                 #                 && v.constructor.isBuffer(v)
+#                 # true only for Node Buffers (Buffer.isBuffer(v)). For all JSON-data
+#                 # values this is false. (Buffers are OUT OF SCOPE for the generator.)
+#     isobject := (type === '[object Object]') || (type === '[object Array]')
+#                 # true for plain objects AND arrays; FALSE for null, numbers, strings,
+#                 # booleans, Date, RegExp, etc. (those become leaves).
+#
+#     newKey := prev ? (prev + delimiter + transformKey(key)) : transformKey(key)
+#               # transformKey === identity for all in-scope inputs, so newKey is:
+#               #   prev ? (prev + delimiter + key) : key
+#               # IMPORTANT: `prev ?` is a TRUTHINESS test. When prev is the EMPTY
+#               #   STRING '' (which arises from a top-level key ''), it is FALSY,
+#               #   so newKey = key with NO prefix and NO delimiter. Examples (verified):
+#               #     flatten({'': {'': 1}})  => {'': 1}        # both prefixes '' falsy
+#               #     flatten({'': {x: 1}})   => {x: 1}         # inner key un-prefixed
+#               #     flatten({a: {'': 1}})   => {'a.': 1}      # prev 'a' truthy -> 'a' + '.' + ''
+#
+#     BRANCH (the recursion gate) — recurse IFF ALL of:
+#         (1) !isarray            # not an array-being-protected-by-safe
+#         (2) !isbuffer           # not a Node Buffer
+#         (3) isobject            # is a plain object OR array
+#         (4) Object.keys(value).length   # is NON-EMPTY (empty {} / [] do NOT recurse)
+#         (5) (!opts.maxDepth || currentDepth < maxDepth)
+#             # depth gate. NOTE the guard is `!opts.maxDepth`, NOT `maxDepth===undefined`:
+#             #   - maxDepth undefined / 0 / NaN / '' (any FALSY) => `!opts.maxDepth` true
+#             #       => gate (5) PASSES unconditionally => maxDepth has NO effect (unlimited).
+#             #       (verified: maxDepth:0 behaves identically to no maxDepth.)
+#             #   - maxDepth truthy (e.g. positive int, or negative like -1) => gate (5) is
+#             #       `currentDepth < maxDepth`. Recurse only while currentDepth < maxDepth.
+#             #       maxDepth:-1 => currentDepth(1) < -1 is false => stop immediately
+#             #       (verified: flatten({a:{b:1}},{maxDepth:-1}) => {a:{b:1}}).
+#         THEN: return step(value, newKey, currentDepth + 1)   # recurse one level deeper
+#         ELSE: output[newKey] := value                        # write leaf (the value object/array/primitive AS-IS, by reference)
+#
+# --- end step ---
+#
+# DEPTH SEMANTICS (verified on {a:{b:{c:1}}}, a 3-level chain):
+#   no maxDepth / 0 / undefined : {'a.b.c': 1}      (full flatten)
+#   maxDepth 1 : {'a': {b:{c:1}}}                   (stops at depth 1; 'a' value left whole)
+#   maxDepth 2 : {'a.b': {c:1}}                     (stops at depth 2)
+#   maxDepth 3 : {'a.b.c': 1}                        (full)
+#   maxDepth 4+: {'a.b.c': 1}                        (full)
+#   maxDepth -1: {'a': {b:{c:1}}}                     (-1 truthy; 1 < -1 false; stops)
+#
+# ARRAY SEMANTICS:
+#   default (safe falsy): arrays are treated like objects and recursed by INDEX KEY.
+#     flatten({a:{b:[1,2,3]}})          => {'a.b.0':1,'a.b.1':2,'a.b.2':3}
+#     flatten({a:[[1,2],[3,4]]})         => {'a.0.0':1,'a.0.1':2,'a.1.0':3,'a.1.1':4}
+#     flatten({a:[{x:1},{y:2}]})         => {'a.0.x':1,'a.1.y':2}
+#     flatten({a:[{x:{y:1}}]})           => {'a.0.x.y':1}
+#   safe:true (truthy): an array VALUE is treated as a LEAF (preserved by reference),
+#     NOT flattened by index. Non-array nested OBJECTS still recurse normally.
+#     flatten({a:{b:[1,2,3]}}, {safe:true})        => {'a.b':[1,2,3]}
+#     flatten({a:{b:{c:1}}},  {safe:true})         => {'a.b.c':1}        (objects still recurse)
+#     flatten({a:[{x:1},{y:2}]}, {safe:true})       => {'a':[{x:1},{y:2}]} (array kept whole)
+#     flatten({a:{b:[1,2], c:{d:3}}}, {safe:true})  => {'a.b':[1,2],'a.c.d':3}
+#   IMPORTANT — safe does NOT protect the TOP-LEVEL target if it IS an array.
+#     `step(target)` iterates Object.keys(target) directly without the isarray
+#     guard (the guard only applies to nested VALUES encountered during the walk).
+#     flatten([1,2,3])              => {'0':1,'1':2,'2':3}
+#     flatten([1,2,3], {safe:true}) => {'0':1,'1':2,'2':3}   (same; safe does NOT preserve the top array)
+#
+# EMPTY / DEGENERATE LEAVES (gate (4): zero-length objects/arrays do NOT recurse):
+#   flatten({a:{}, b:1})  => {'a':{}, 'b':1}          (empty object kept as leaf)
+#   flatten({a:[], b:1})  => {'a':[], 'b':1}          (empty array kept as leaf)
+#   flatten({})           => {}
+#   flatten([])           => {}
+#
+# PRIMITIVE LEAVES (non-object, non-array values are leaves, written as-is):
+#   flatten({a:1, b:'x', c:true, d:null}) => {'a':1,'b':'x','c':true,'d':null}
+#   flatten({a:{b:null}})                  => {'a.b':null}   (null is a leaf; toString '[object Null]', not isobject)
+#
+# PRIMITIVE / NON-OBJECT TOP-LEVEL TARGETS (Object.keys is taken on the target):
+#   flatten(5)        => {}        (Object.keys(5) is [])
+#   flatten(true)     => {}        (Object.keys(true) is [])
+#   flatten('hello')  => {'0':'h','1':'e','2':'l','3':'l','4':'o'}
+#                        (String wrapper has index own-keys '0'..'n-1'; each char is a
+#                         primitive leaf -> index keys map to single-char strings.)
+#   These are IN SCOPE for number/boolean/string primitives (codec-faithful).
+#
+# THROW PATHS (codec-faithful inputs that throw — gradable as {__throw}):
+#   flatten(null)      THROWS TypeError 'Cannot convert undefined or null to object'
+#   flatten(undefined) THROWS TypeError 'Cannot convert undefined or null to object'
+#     (Object.keys(target) with target null/undefined throws at node-B of the first step.)
+#   NOTE: `undefined` is NOT codec-faithful as a STANDALONE arg in this harness's
+#     terms, but a top-level `null` target IS codec-faithful (JSON null). The
+#     generator emits the `null` throw case; it does NOT emit a standalone
+#     `undefined` target. Both throw identically; only `null` is generated.
+#
+# DELIMITER DETAILS (verified):
+#   default '.'                          flatten({a:{b:{c:1}}}) => {'a.b.c':1}
+#   {delimiter:'/'}                       => {'a/b/c':1}
+#   {delimiter:'::'} (multi-char)         flatten({a:{b:1}}) => {'a::b':1}
+#   {delimiter:''}  (empty -> falls back) flatten({a:{b:1}}) => {'a.b':1}  ('' is falsy -> '.')
+#   Keys that ALREADY contain the delimiter are NOT escaped; they are concatenated
+#   verbatim, which can collide:
+#     flatten({'a.b':{c:1}})              => {'a.b.c':1}
+#     flatten({'a.b':{c:1}}, {delimiter:'/'}) => {'a.b/c':1}
+#     flatten({a:{b:1}, 'a.b':2})          => {'a.b':2}   (recursed 'a.b'=1 then top 'a.b'=2; last wins)
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure value oracle. expected = the returned flat object (or {__throw: <TypeError message>}
+# for the null/undefined-target throw path). Compared by deep value equality of the
+# returned plain object (key set + per-key value equality). Result is a plain object of
+# JSON-faithful values for all in-scope inputs.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly — all of BEHAVIOR above):
+#   - delimiter join (default '.', custom, multi-char, empty-falls-back-to-'.')
+#   - recursive depth walk over plain objects and arrays
+#   - maxDepth gate with the `!opts.maxDepth` falsy guard quirk (0/undefined/NaN => unlimited;
+#     truthy incl. negative => currentDepth < maxDepth)
+#   - safe truthiness: array VALUES preserved as leaves (top-level array target NOT protected)
+#   - empty {} / [] preserved as leaves (zero-length => no recursion)
+#   - primitive leaves written as-is; null leaf
+#   - primitive / string / boolean / number top-level targets (Object.keys semantics)
+#   - null/undefined target throw path
+#   - opts.object accepted but IGNORED by flatten (no-op)
+#   - key collision: last-assignment-wins in Object.keys order
+#   - empty-string prefix truthiness quirk ('' prev => un-prefixed)
+#   - READ-ONLY: target never mutated
+#
+# CARRIED DATA: NONE. There are no literal tables / constants. No carried.json.
+#
+# OUT-OF-CONTRACT / DOCUMENTED-OUT (the generator MUST NOT produce these; a blind
+# re-emitter still reconstructs the code path from this spec, but no expecteds are
+# graded for them because the inputs are not data-serializable / not codec-faithful):
+#   - opts.transformKey : it is a FUNCTION. Functions are not JSON-serializable and do
+#       not survive the input codec round-trip. OUT. (When absent, transformKey === identity,
+#       which is what every in-scope input exercises.)
+#   - FUNCTION values anywhere in target : not serializable. OUT.
+#   - SYMBOL keys or Symbol values : Symbols are not enumerable by Object.keys (symbol KEYS
+#       are silently skipped) and not serializable. OUT — not generated.
+#   - Node Buffers / typed arrays as values : the isBuffer branch is real (a Buffer value is
+#       kept as a leaf, never index-flattened), but Buffers are outside the plain-JSON scope
+#       of this generator. Documented here for the blind re-emitter; NOT generated.
+#   - undefined as a STANDALONE top-level target / as an object value : `undefined` does not
+#       round-trip through the input codec. The equivalent throw is exercised via top-level
+#       `null` (which IS codec-faithful). undefined object VALUES are not generated.
+#   - NaN / +-Infinity leaf values : not codec-faithful. NOT generated. (Behaviorally they
+#       would be leaves, but the stored expected would be corrupted by the codec.)
+#
+# These are accepted/handled by flatten; they are merely outside the generated input
+# envelope to keep every emitted input codec-faithful and every expected reproducible.
+
+# ============================================================================
+PROVENANCE flat@5.0.2 (BSD-3-Clause) — repo git://github.com/hughsk/flat.git ,
+  homepage https://github.com/hughsk/flat , source file index.js
+  (module.exports = flatten ; the `flatten` function, lines 16-52).

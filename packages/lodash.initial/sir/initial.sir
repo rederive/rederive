@@ -1,0 +1,177 @@
+UNIT initial
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG initial(array) -> Array            # default export: module.exports = initial
+
+DEPENDS-ON none                        # self-contained; bundles a private baseSlice helper, zero external deps
+
+# ---------------------------------------------------------------------------
+# SUMMARY
+# Gets all but the LAST element of `array`. Returns a NEW, DENSE array.
+# Conceptually slice(0, -1) — but via lodash's private baseSlice, which has
+# observable quirks that differ from native Array.prototype.slice (see BEHAVIOR).
+# Pure: never mutates the input. Result is ALWAYS a freshly-allocated Array
+# (Array.isArray(result) === true in every case, including all degenerate inputs).
+# ---------------------------------------------------------------------------
+
+BEHAVIOR
+  # ===== NODE 0: outer guard (function initial) =====
+  # Pseudocode of the real source:
+  #     length = array ? array.length : 0
+  #     return length ? baseSlice(array, 0, -1) : []
+  #
+  # 0a. Coerce a "length":
+  #       - if `array` is FALSY (null, undefined, 0, "", false, NaN, -0)  -> length = 0
+  #         (the `array ? array.length : 0` ternary; note a falsy non-nullish
+  #          PRIMITIVE like 0/""/false also takes the else branch and yields length 0)
+  #       - else                                                          -> length = array.length
+  #         (READS the `.length` PROPERTY of whatever object/value is passed.
+  #          NO type check that it is a real Array. Strings, `arguments`,
+  #          plain objects with a `length` property are all accepted = array-like
+  #          coercion. A value with NO `.length` property reads `undefined`.)
+  #
+  # 0b. Truthiness gate on that length:
+  #       - if `length` is FALSY (0, undefined, NaN, "", null, -0, false)  -> RETURN []  (a NEW empty array)
+  #       - else                                                           -> RETURN baseSlice(array, 0, -1)
+  #     NOTE the gate is plain JS truthiness, applied to the RAW `.length` value
+  #     (it is NOT numerically normalized here). e.g. length === undefined (no
+  #     `.length` prop) is falsy -> []. length === "0" (string) is TRUTHY -> falls through
+  #     to baseSlice (but baseSlice then degrades it, see below).
+  #
+  # ===== NODE 1: baseSlice(array, start=0, end=-1) =====
+  # This is ONLY reached when NODE-0 length was truthy. Pseudocode of the real source,
+  # with `start` HARD-WIRED to 0 and `end` HARD-WIRED to -1 by the caller:
+  #     index  = -1
+  #     length = array.length            # re-read; SAME value object as NODE 0
+  #     # --- start normalization (start === 0, so this whole block is inert) ---
+  #     if (start < 0) { start = (-start > length) ? 0 : (length + start) }   # 0 < 0 is false -> skipped
+  #     # --- end normalization (end === -1) ---
+  #     end = (end > length) ? length : end          # (-1 > length)? almost always false -> end stays -1
+  #     if (end < 0) { end = end + length }          # (-1 < 0) true -> end = (-1) + length    <-- KEY LINE
+  #     # --- compute result length ---
+  #     length = (start > end) ? 0 : ((end - start) >>> 0)   # start=0 -> 0 > end ? 0 : (end >>> 0)
+  #     start  = start >>> 0                          # 0 >>> 0 = 0
+  #     # --- dense copy ---
+  #     result = Array(length)                        # NEW array of computed length
+  #     while (++index < length) { result[index] = array[index + start] }   # index+start === index+0
+  #     return result
+  #
+  # KEY ARITHMETIC (for a NUMERIC length === n, n a positive integer, the normal case):
+  #     end = -1 + n  =  n - 1
+  #     result length = (n - 1) >>> 0  =  n - 1     (for n >= 1)
+  #     => copies array[0..n-2] into a fresh dense Array of size n-1.  This is "all but the last".
+  #
+  # ---------------------------------------------------------------------------
+  # OBSERVABLE BEHAVIORS / BRANCHES (each independently REQUIRED and VERIFIED vs 4.1.1):
+  #
+  # B1. EMPTY ARRAY        initial([])          -> []           (length 0 -> falsy -> NODE-0 [] branch)
+  # B2. SINGLE ELEMENT     initial([x])         -> []           (length 1 truthy -> baseSlice: end=-1+1=0,
+  #                                                              result length=(0)>>>0=0 -> empty Array)
+  # B3. MULTI ELEMENT      initial([1,2,3])     -> [1,2]        (new array, elements 0..length-2, by copy)
+  #                        initial([1,2,3,4,5]) -> [1,2,3,4]
+  # B4. NULL / UNDEFINED   initial(null)        -> []           (falsy `array` -> NODE-0 length 0 -> [])
+  #                        initial(undefined)   -> []
+  # B5. NO-MUTATION        the input array is returned UNCHANGED and is a DISTINCT object from the
+  #                        result (result !== input). Always a brand-new Array.
+  #
+  # B6. DENSIFICATION OF HOLES  *** QUIRK — differs from native slice ***
+  #        Sparse input holes within the copied range become OWN, ENUMERABLE indices
+  #        holding `undefined` in the OUTPUT (because the copy loop unconditionally does
+  #        `result[index] = array[index]`, which ASSIGNS even when `array[index]` is a hole).
+  #        e.g. initial([1, <hole>, 3, 4]) -> a 3-length array whose keys are exactly
+  #             "0","1","2" with values 1, undefined, 3  (index "1" IS present: (1 in result) === true).
+  #        Native Array.prototype.slice would PRESERVE the hole (1 not in result); baseSlice does NOT.
+  #        Likewise a trailing length-extension hole: a=[1,2,3]; a.length=5  -> initial(a) yields
+  #             length 4 with keys "0".."3" (the last of which, index 3, is present with value undefined).
+  #
+  # B7. ELEMENT PASS-THROUGH (value/identity preserved, NEVER inspected/cloned):
+  #        Elements are copied by simple assignment. The function NEVER branches on element
+  #        type or value, so it is element-value-agnostic. Numbers (incl. -0, NaN, +-Infinity),
+  #        strings, booleans, null, undefined, bigint, objects, nested arrays, RegExp, Set,
+  #        Map, Uint8Array/Buffer, Date, etc. are all carried through with identity intact.
+  #        -0 stays -0 (Object.is(out[0], -0) === true); NaN stays NaN; +-Infinity preserved.
+  #        (JSON serialization of the result is lossy for these — undefined/NaN/+-Inf -> null,
+  #         -0 -> 0 — but that is the SERIALIZER, not this unit. The unit preserves identity.)
+  #
+  # B8. ARRAY-LIKE COERCION (objects with a `.length`, and strings):  *** coerces, does NOT reject ***
+  #        initial("abc")               -> ["a","b"]      (string: length 3 -> copies chars 0,1)
+  #        initial("")                  -> []             (length 0 -> falsy -> [])
+  #        initial("a")                 -> []             (length 1 -> baseSlice result length 0)
+  #        initial({length:3,0:'a',1:'b',2:'c'}) -> ["a","b"]
+  #        initial({length:1,0:'x'})    -> []             (length 1 -> [])
+  #        initial({length:0})          -> []
+  #        initial({})                  -> []             (no `.length` prop -> length===undefined -> falsy -> [])
+  #        initial(arguments-object 1,2,3) -> [1,2]
+  #        Missing index props on an array-like are read as `undefined` and ASSIGNED into the
+  #        dense result: initial({length:3, 0:'a'}) -> length-2 array, keys "0","1", values 'a', undefined
+  #        ((1 in result) === true).
+  #
+  # B9. NON-ARRAY-LIKE PRIMITIVES (numbers, booleans) -> []:
+  #        initial(5)    -> []   (5.length === undefined -> NODE-0 length undefined -> falsy -> [])
+  #        initial(true) -> []   (true.length === undefined -> falsy -> [])
+  #        (also: initial(0), initial(""), initial(false), initial(NaN) all -> [] via the
+  #         falsy-`array` NODE-0 branch.)
+  #
+  # B10. FRACTIONAL `.length` (uint32 floor via >>>0):  *** QUIRK ***
+  #        A numeric fractional `.length === n` produces result length = (n-1) >>> 0 = floor(n-1)
+  #        for n >= 1 (the >>> 0 uint32 cast truncates toward zero for the in-range non-negative
+  #        values reached here). Worked examples (VERIFIED):
+  #            {length:2.9, 0:'a',1:'b',2:'c'}        -> ["a"]        (end=-1+2.9=1.9; (1.9)>>>0=1)
+  #            {length:3.9, 0:'a',1:'b',2:'c',3:'d'}  -> ["a","b"]    ((2.9)>>>0=2)
+  #            {length:0.5, 0:'a'}                    -> []           (0.5 truthy -> baseSlice; end=-1+0.5=-0.5;
+  #                                                                    start(0) > end(-0.5) -> result length 0)
+  #            {length:1.5, 0:'a',1:'b'}              -> []           (end=-1+1.5=0.5; start(0)>0.5? no;
+  #                                                                    (0.5)>>>0=0 -> [])
+  #
+  # B11. NON-NUMERIC TRUTHY `.length` (string / boolean / etc.):  *** QUIRK — yields [] ***
+  #        If `.length` is a TRUTHY but NON-NUMBER value, NODE-0's truthiness gate passes it to
+  #        baseSlice, but baseSlice's `end = end + length` performs STRING/BOOLEAN coercion that
+  #        corrupts the math, and the `start > end` guard then yields result length 0. VERIFIED:
+  #            {length:'3', 0:'a',1:'b',2:'c'}  -> []
+  #              (trace: end=-1; (end > '3')? (-1 > 3) false -> end stays -1; end<0 -> end = -1 + '3'
+  #               = the STRING "-13"; length = (start > end)? (0 > "-13") -> (0 > -13) true -> 0 -> [])
+  #            {length:'5', ...}                -> []   (same string-concat corruption)
+  #            {length:true, 0:'a'}             -> []
+  #              (trace: (end=-1 > true)? (-1 > 1) false; end<0 -> end = -1 + true = 0;
+  #               length = (0 > 0)? false -> (0 - 0) >>> 0 = 0 -> [])
+  #        NEGATIVE / NaN numeric length also yield []:
+  #            {length:-1, 0:'a'}  -> []   (-1 truthy -> baseSlice; end=-1; (-1 > -1)? false; end<0 ->
+  #                                          end = -1 + -1 = -2; (0 > -2) true -> 0 -> [])
+  #            {length:NaN}        -> []   (NaN is FALSY -> NODE-0 [] branch directly)
+  #
+  # B12. RESULT IS ALWAYS A NEW DENSE Array. Array.isArray(initial(<anything>)) === true for ALL inputs,
+  #      including every degenerate/coerced case above. There is no throw path for in-envelope inputs:
+  #      every reachable codec-faithful input returns an Array (no exceptions).
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    The entire unit — the NODE-0 outer guard + the bundled baseSlice arithmetic
+    (with start=0, end=-1 wired by the caller), including ALL quirks B1..B12:
+    hole densification, array-like coercion, fractional uint32-floor length, and the
+    string/boolean-`.length` string-concatenation degradation to []. No external state.
+
+  CARRIED DATA: none. (No literal tables; nothing to attest.)
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because the
+  factory codec cannot round-trip them as elements — a blind re-emitter still reconstructs
+  behavior from B7's "element-value-agnostic pass-through" rule):
+    - FUNCTION elements and SYMBOL elements: carried through by identity exactly like any
+      other element (B7), but they do not survive JSON.stringify(encode(args)), so the
+      generator does not emit them.
+    - BOXED primitives as elements (new Number/String/Boolean): pass through by identity
+      (B7) but are not codec-faithful -> not emitted.
+    - Passing a literal Symbol/function/boxed value AS the top-level `array` argument:
+      a function/Symbol/boxed object has no numeric `.length` that is a positive number,
+      so it returns [] (Symbol throws on property access? no — Symbol has no .length ->
+      undefined -> []); not exercised by genInputs (not codec-faithful as top-level arg).
+    - Extremely large array-like `.length` (e.g. 1e6) allocates an Array of that size;
+      behaviorally well-defined (returns length-1 dense array) but excluded from genInputs
+      to avoid pathological memory/time.
+
+PROVENANCE
+  package: lodash.initial@4.1.1  (npm)
+  repo:    lodash/lodash  (Custom Build: `lodash modularize exports="npm" -o ./`)
+  license: MIT (jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+  source:  index.js  (functions baseSlice + initial; module.exports = initial)

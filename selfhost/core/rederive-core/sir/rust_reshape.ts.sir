@@ -1,0 +1,23 @@
+UNIT rust_reshape
+LANG ts
+PRIMARY-SHA256 eef740648c2929d614081cce771da2f804adfd9fbd02865789bb357ff84dec6c
+SIG export default function reshape(v: Json, t: Json): Json
+ABI TypeScript compiles to the js runtime and is driven exactly as js: reshape(v, t) with both arguments decoded from the
+  vector. Declare in the artifact
+  type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json }
+  (the abstract json; no undefined anywhere). none = null; bool = boolean; number = number (finite, never -0 inside the
+  envelope); text = string; list = an array (results are built mutable; a Json[] is assignable to readonly Json[]); map =
+  a plain object. A member read on a map yields Json | undefined: undefined is exactly "absent" and reads as null — narrow
+  with === null / === undefined, typeof and Array.isArray, never a cast to any. STRICT: the artifact type-checks under
+  strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. A throw (R8) is a thrown
+  Error; the message is not graded. ES module default export; imports nothing; never writes into v or t.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM (restated from js — language files are self-contained) "a map" = a non-null object that is not an Array;
+  "k is exactly the text X" = a strict === comparison with the string X. R3 examines every alts element, so a null
+  anywhere throws. A record's result (R4) and a map's result (R7) are built with Object.fromEntries or
+  Object.defineProperty, never plain assignment o[name] = value (assignment to __proto__ sets the prototype and the
+  entry silently disappears). R7's keys are Object.keys(v). Duplicate record names: the later entry's value wins. A field
+  entry is read positionally; a non-list entry throws (R4) by an explicit Array.isArray test.
+DEPENDS-ON none
+PROVENANCE rederive@bb8ded84fa50 cli/lang/rust.mjs reshape (lines 335–343). Language file re-cut 2026-10-27 with the primary
+  (round 5), before any blind re-emission.

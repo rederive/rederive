@@ -1,0 +1,33 @@
+UNIT f64_canonical_bits
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b15b56613f9d cli/sir/canon.mjs — encode(f64fromBits(raw), f64).bits, the sir-canonical-v1 NaN rule applied to a raw IEEE-754 binary64 bit pattern
+ORACLE-CLASS deterministic
+SIG f64_canonical_bits(raw: text) -> text
+ENVELOPE any text. In scope: exactly 16 characters, each one of 0-9 a-f (lowercase ASCII hex), read big-endian as the 64 bits
+  of an IEEE-754 binary64 value. Every other text throws (R1): empty, shorter or longer, uppercase or mixed case, any sign,
+  prefix, separator, whitespace (including a trailing line feed) or non-ASCII digit.
+DEPENDS-ON none
+DESCRIPTION The canonical bit pattern of the binary64 value whose raw bits are given: the same 16 lowercase hex digits, except
+  that every NaN (either sign, any payload, quiet or signalling) becomes the one canonical quiet NaN. This is the f64 equality
+  key of sir-canonical-v1: after it, f64 equality is bit equality, NaN equals NaN, -0 differs from +0, and the infinities are
+  distinct.
+BEHAVIOR
+R1 If raw is not exactly 16 characters each drawn from 0123456789abcdef -> throws. Nothing is trimmed, case-folded, or prefixed
+  away; the check is over the whole text, so a trailing line feed after 16 valid digits throws.
+R2 Read raw as an unsigned 64-bit integer, most significant digit first. Bit 63 is the sign, bits 62..52 the exponent, bits
+  51..0 the fraction.
+R3 The value is a NaN exactly when the exponent bits are all ones and the fraction is not zero. A NaN -> the text QNAN, whatever
+  its sign bit, its quiet bit (bit 51), or its other payload bits.
+R4 Every other pattern -> raw itself, unchanged. This covers +0 and -0 (distinct), +Infinity and -Infinity (exponent all ones,
+  fraction zero: NOT a NaN), subnormals, and normals: reading a non-NaN pattern as binary64 and writing it back is the identity.
+PINNED text QNAN = "7ff8000000000000" CITED R3 — sign 0, exponent all ones, only the quiet bit set; the sir-canonical-v1 NaN
+  (canon.mjs line 3 and QNAN line 8)
+INVARIANT the result is always 16 lowercase hex digits; the result is either raw or QNAN; applying the unit to its own result
+  returns the result.
+ORACLE value -> oracles/f64_canonical_bits.json  CANONICAL-SHA256 54b806de34211cec500e02ff127f77985b57951f4451bfceb36d04a813a73d98
+SCOPE in-contract: the 16-hex validation (R1) and the NaN canonicalization (R3, R4). The thrown message is a display hint and
+  not graded: only that R1 throws is part of the contract. Out of contract: the encoder's display field (the shortest decimal
+  rendering of the value), which encode also returns but this unit does not expose.
+PROVENANCE rederive@b15b56613f9d cli/sir/canon.mjs (f64fromBits line 12, f64bits line 9, encode case f64 line 108), driven by
+  selfhost/seams/f64_canonical_bits.mjs; companion to f64_bits (selfhost FINDINGS #1).

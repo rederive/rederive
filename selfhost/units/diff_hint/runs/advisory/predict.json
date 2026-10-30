@@ -1,0 +1,122 @@
+{
+ "status": "ok",
+ "unit": "diff_hint",
+ "primary": "selfhost/units/diff_hint/sir/diff_hint.sir",
+ "primarySha256": "8c4ea17adec916be5a17851d606e9d142c774e15b6227b8475bf382147117599",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Each text is split into lines on U+000A (LINE FEED) only. Every other character, U+000D, U+2028, U+2029 and U+FEFF included, is ordinary line content. A text with k line feeds has k + 1 lines; the empty text is one empty line, and a text ending in a line feed ends with an empty line.",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R2",
+   "text": "Lines are visited at the same index from index 0 up to the larger line count; the FIRST index where the two sides disagree decides, with i its 0-based index. They disagree when one side has no line at i (R3) or both have one and the two lines are different sequences of code points (R4).",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R3",
+   "text": "MISSING LINE. When existing has no line i -> \"line \" + decimal(i + 1) + \": existing has no line \" + decimal(i + 1) + \", profile has \" + WINDOW(the profile line, 0). Symmetrically, when profile has no line i -> \"line \" + decimal(i + 1) + \": profile has no line \" + decimal(i + 1) + \", existing has \" + WINDOW(the existing line, 0). Since each side has at least one line, i >= 1 here. A trailing line feed on one side only is reported this way (the present line is empty).",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "R4",
+   "text": "DIFFERING LINES. c = the length of the longest common prefix of the two lines in code points (0-based; c never exceeds the shorter line's length). Result -> \"line \" + decimal(i + 1) + \", col \" + decimal(c + 1) + \": existing \" + WINDOW(the existing line, c) + \" vs profile \" + WINDOW(the profile line, c).",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "R5",
+   "text": "EQUAL. When no index disagrees (the texts are identical) -> the text \"binary difference (the texts decode to the same UTF-8)\". CITED FIDELITY package",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "R6",
+   "text": "WINDOW(s, c) for a line s of L code points = QUOTE, then ELLIPSIS when c > 0, then ESCAPE of each code point of s at positions c up to but excluding min(c + WIDTH, L), in order, then ELLIPSIS when c + WIDTH < L, then QUOTE. When c = L the middle is empty: the shorter side of a prefix pair renders as QUOTE ELLIPSIS QUOTE when c > 0. The two ELLIPSIS marks are added, never escaped; WIDTH counts source code points, not the escaped length.",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "R7",
+   "text": "ESCAPE maps one code point to text by the first row of TABLE ESCAPE that applies. Escapes are per code point and context-free; hex digits are lowercase; the four-digit and braced forms are chosen by the row. The window is a supplementary character's whole encoding or none of it (positions are code points), but a cut may fall inside a grapheme: between regional indicators, before a combining mark, a variation selector or a zero width joiner. CITED FIDELITY package",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE ESCAPE row 1",
+   "text": "U+0022 QUOTATION MARK                      -> backslash, then U+0022",
+   "ambiguity": 0.06
+  },
+  {
+   "id": "TABLE ESCAPE row 2",
+   "text": "U+005C REVERSE SOLIDUS                     -> two backslashes",
+   "ambiguity": 0.08
+  },
+  {
+   "id": "TABLE ESCAPE row 3",
+   "text": "U+0008                                     -> backslash, \"b\"",
+   "ambiguity": 0.07
+  },
+  {
+   "id": "TABLE ESCAPE row 4",
+   "text": "U+0009                                     -> backslash, \"t\"",
+   "ambiguity": 0.06
+  },
+  {
+   "id": "TABLE ESCAPE row 5",
+   "text": "U+000C                                     -> backslash, \"f\"",
+   "ambiguity": 0.05
+  },
+  {
+   "id": "TABLE ESCAPE row 6",
+   "text": "U+000D                                     -> backslash, \"r\"",
+   "ambiguity": 0.07
+  },
+  {
+   "id": "TABLE ESCAPE row 7",
+   "text": "any other code point U+0000 through U+001F -> backslash, \"u\", four lowercase hex digits of the code point",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE ESCAPE row 8",
+   "text": "a code point in INVISIBLE at or below U+FFFF -> backslash, \"u\", four lowercase hex digits of the code point",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE ESCAPE row 9",
+   "text": "a code point in INVISIBLE above U+FFFF     -> backslash, \"u\", \"{\", the lowercase hex digits of the code point with no",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE ESCAPE row 10",
+   "text": "leading zero (five here), \"}\"",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE ESCAPE row 11",
+   "text": "anything else                              -> the code point itself, unchanged",
+   "ambiguity": 0.11
+  }
+ ],
+ "ranked": [
+  "TABLE ESCAPE row 9",
+  "TABLE ESCAPE row 10",
+  "R7",
+  "TABLE ESCAPE row 8",
+  "R4",
+  "TABLE ESCAPE row 7",
+  "R3",
+  "R1",
+  "R2",
+  "R6",
+  "TABLE ESCAPE row 11",
+  "R5",
+  "TABLE ESCAPE row 2",
+  "TABLE ESCAPE row 3",
+  "TABLE ESCAPE row 6",
+  "TABLE ESCAPE row 1",
+  "TABLE ESCAPE row 4",
+  "TABLE ESCAPE row 5"
+ ],
+ "at": "2026-10-28T03:04:36Z"
+}

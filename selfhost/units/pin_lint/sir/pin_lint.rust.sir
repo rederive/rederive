@@ -1,0 +1,18 @@
+UNIT pin_lint
+LANG rust
+PRIMARY-SHA256 71b5c53b93026436f6ad4f4694173c0bedc8007608077a347838df9dd49e5e92
+SIG pub fn pin_lint(text: &str) -> (Vec<(i64, String, String)>, i64)
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn pin_lint) with no dependencies — no
+  main, no I/O, no unsafe. The verifier generates its own harness crate from the abstract SIG. A record crosses as a
+  tuple in DECLARED field order: the result is (hits, pins) and each hit is (line, what, text). text = &str in, String
+  out (UTF-8); i64 = i64.
+MECHANISM lines (R1): split by hand at a carriage return (consuming a following line feed) and at a line feed; never
+  str::lines, which keeps a lone carriage return inside its line. SP is exactly ' ' and '\t': never char::is_whitespace,
+  trim(), trim_start() or trim_end(). The cut (R7) is text.chars().take(96): a char is the primary's character, so
+  well-formed input always cuts cleanly. The escape of R4 skips one char. Slice only at char boundaries (char_indices),
+  never at a byte offset computed from a character count. No regex crate is needed. VISIBLE (R6) tests each char's
+  code point against the primary's INVISIBLE range list as written, never char::is_whitespace (it takes U+0085 and misses
+  U+FEFF) or any Unicode-category table.
+ENVELOPE as the primary.
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs pinLint over cli/sir/sir-parse.mjs. Language file re-cut 2026-10-27 with the primary; round 5b delta.

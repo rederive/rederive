@@ -1,0 +1,260 @@
+# ============================================================================
+# SIR — fresh (jshttp/fresh)
+# ============================================================================
+
+UNIT fresh
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure: no clock, no RNG, no I/O, no network, no env. Behavior is a total
+# function of the two header objects passed in. The ONLY ambient dependency is
+# the host JS engine's `Date.parse`, which is itself a pure function of its
+# string argument (it parses; it does NOT read the wall clock). So there is NO
+# SEAM to inject: the unit is deterministic above and below `Date.parse`. To
+# keep independent re-emitters convergent, the generator restricts date inputs
+# to GMT-anchored RFC 1123 / RFC 850 / ISO-8601 forms and clearly-unparseable
+# strings (see SCOPE > OUT-OF-ENVELOPE re: locale-ambiguous date strings).
+#
+# READ-ONLY-SIDE-EFFECT addendum: N/A. The unit performs no reads of any
+# ambient source and no writes; it only reads its own two object arguments.
+
+SIG  fresh(reqHeaders: object, resHeaders: object) -> boolean
+     # reqHeaders, resHeaders are plain objects mapping lowercased HTTP header
+     # names to their string values. The unit only ever consults these keys:
+     #   reqHeaders['if-modified-since']
+     #   reqHeaders['if-none-match']
+     #   reqHeaders['cache-control']
+     #   resHeaders['etag']
+     #   resHeaders['last-modified']
+     # All other keys are ignored. Header VALUES are treated as strings
+     # (string operations: ===, regexp .test, .charCodeAt, .substring, '+').
+
+DEPENDS-ON  none
+     # Internal helpers parseHttpDate and parseTokenList are defined inline and
+     # described fully below; they are NOT external dependencies.
+
+EXPORT-SHAPE  default
+     # In the source this is CommonJS `module.exports = fresh`. The unit IS the
+     # whole public surface of the module. A blind re-emitter targeting an ES
+     # module MUST do:  export default fresh
+     # i.e. the function itself is the default export (no named wrapper, no
+     # object). It is invoked as a 2-argument function returning a boolean.
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — encode EXACTLY; order and short-circuits matter)
+# ----------------------------------------------------------------------------
+# Let:
+#   modifiedSince = reqHeaders['if-modified-since']
+#   noneMatch     = reqHeaders['if-none-match']
+#
+# NODE 1 — Unconditional request (early return false)
+#   If BOTH modifiedSince and noneMatch are FALSY (undefined / missing / null /
+#   '' empty string / 0 / false), return false immediately.
+#   "Falsy" is JS truthiness: the empty string '' counts as ABSENT here.
+#   This is the only place the two fields are tested for mere presence.
+#
+# NODE 2 — Cache-Control: no-cache (early return false)
+#   cacheControl = reqHeaders['cache-control']
+#   If cacheControl is TRUTHY AND it matches the no-cache directive regexp,
+#   return false (force stale, end-to-end reload semantics).
+#   The regexp (EXACT, anchored to comma/string boundaries, lazy whitespace):
+#       /(?:^|,)\s*?no-cache\s*?(?:,|$)/
+#   Semantics of this regexp:
+#     - "no-cache" must be a standalone directive: preceded by start-of-string
+#       or a comma, and followed by a comma or end-of-string.
+#     - Between the boundary and the token, and between the token and the next
+#       boundary, only ASCII whitespace (\s) is allowed (lazy, zero-or-more).
+#     - It is CASE-SENSITIVE and must be lowercase "no-cache".
+#     - It does NOT match substrings like "no-cacheX" or "xno-cache" (those
+#       lack a directive boundary). "no-store" does not match.
+#     - It DOES match: "no-cache" ; "public, no-cache" ; "no-cache, public" ;
+#       " no-cache " (leading/trailing whitespace ok via \s*?) ;
+#       "max-age=0, no-cache".
+#     - It does NOT match "max-age=0" alone, "no-store" alone, "private".
+#   NOTE: \s includes space AND tab AND newline AND other Unicode whitespace
+#   that JS \s matches. Use the regexp verbatim; do not paraphrase it.
+#
+# NODE 3 — If-None-Match (ETag) check
+#   This node runs ONLY when (noneMatch is truthy AND noneMatch !== '*').
+#   - If noneMatch === '*' : the ETag check is SKIPPED ENTIRELY (it is treated
+#     as a wildcard that matches any/no etag — the resHeaders.etag is NOT even
+#     inspected). Proceed to NODE 4.
+#   - If noneMatch is falsy (only possible when modifiedSince is truthy and we
+#     passed NODE 1): the ETag check is SKIPPED. Proceed to NODE 4.
+#   Otherwise (truthy and not '*') perform matching:
+#     etag = resHeaders['etag']
+#     a) If etag is FALSY (missing / '' / undefined), return false (stale).
+#     b) etagStale = true
+#        matches = parseTokenList(noneMatch)   # see TOKENIZER below
+#        For each token `match` in `matches`, in order:
+#          if ( match === etag
+#               OR match === 'W/' + etag         # token is the weak form of etag
+#               OR 'W/' + match === etag ) {     # etag is the weak form of token
+#             etagStale = false; BREAK
+#          }
+#        i.e. a token matches the etag if ANY of three EXACT-STRING equalities
+#        holds. This is NOT a normalize-then-compare: there is NO general "strip
+#        W/ from both sides". The ONLY weak-prefix accommodation is the literal
+#        string-prepend 'W/' on exactly one side. Consequences (encode these):
+#          - token '"foo"'    , etag '"foo"'    -> match (case 1)
+#          - token '"foo"'    , etag 'W/"foo"'  -> match (case 3: 'W/'+token === etag)
+#          - token 'W/"foo"'  , etag '"foo"'    -> match (case 2: token === 'W/'+etag)
+#          - token 'W/"foo"'  , etag 'W/"foo"'  -> match (case 1, identical)
+#          - token 'W/"foo"'  , etag 'W/"bar"'  -> NO match
+#          - token 'WW/"foo"' , etag 'W/"foo"'  -> NO match (only a single 'W/' is considered)
+#          - token '"foo"'    , etag 'WW/"foo"' -> NO match
+#        ETag comparison is fully CASE-SENSITIVE and byte-exact on the quotes,
+#        the W/ prefix casing (must be uppercase 'W', slash), and contents.
+#     c) After the loop, if etagStale is still true, return false (stale).
+#        Otherwise fall through to NODE 4.
+#
+# NODE 4 — If-Modified-Since (date) check
+#   This node runs ONLY when modifiedSince is truthy.
+#   lastModified = resHeaders['last-modified']
+#   modifiedStale =  (lastModified is FALSY)
+#                 OR NOT ( parseHttpDate(lastModified) <= parseHttpDate(modifiedSince) )
+#   If modifiedStale is true, return false (stale).
+#   Else fall through.
+#   Freshness rule: the response is fresh w.r.t. dates iff a last-modified value
+#   is present AND its parsed timestamp is <= the parsed if-modified-since
+#   timestamp (resource not changed since the client's copy). EQUAL timestamps
+#   are FRESH (<= is inclusive). If EITHER date fails to parse, parseHttpDate
+#   yields NaN, and any comparison with NaN is false, so NOT(false)=true =>
+#   modifiedStale=true => stale (return false). Missing last-modified => stale.
+#
+# NODE 5 — Default
+#   If none of the above returned false, return true.
+#
+# COMBINATION / PRECEDENCE RULE (CRITICAL):
+#   The three checks (no-cache, if-none-match, if-modified-since) are combined
+#   as a LOGICAL AND via sequential short-circuit returns: ANY failing check
+#   returns false; true is returned only if every applicable check passes.
+#   Specifically when BOTH if-none-match and if-modified-since are present:
+#     result = (etag check passes) AND (date check passes).
+#     - etag matches but date is stale  -> false
+#     - etag mismatches                 -> false (date check never reached)
+#     - etag matches AND date fresh     -> true
+#     - if-none-match === '*' AND date fresh -> true (etag node skipped, date governs)
+#     - if-none-match === '*' AND date stale -> false
+#   When only ONE conditional header is present, that single check governs
+#   (the absent check's node is skipped). no-cache (NODE 2) overrides BOTH
+#   (returns false before either check, even if the etag would have matched).
+#
+# ----------------------------------------------------------------------------
+# HELPER — parseHttpDate(date) -> number
+# ----------------------------------------------------------------------------
+#   timestamp = date && Date.parse(date)
+#   return (typeof timestamp === 'number') ? timestamp : NaN
+#   Notes:
+#     - Uses the host engine's Date.parse. For unparseable strings Date.parse
+#       returns NaN, whose typeof is 'number', so parseHttpDate returns NaN
+#       (the ternary's NaN branch is effectively unreachable in stock V8; the
+#       `date && ...` guard means a falsy `date` short-circuits to the falsy
+#       value, but NODE 4 only calls this with truthy strings).
+#     - It does NOT read the current time. Identical input string -> identical
+#       output under a fixed engine. Treat Date.parse as a pure collaborator
+#       supplied by the host runtime (same engine on re-emitter and oracle).
+#
+# ----------------------------------------------------------------------------
+# HELPER — parseTokenList(str) -> string[]   (the If-None-Match list splitter)
+# ----------------------------------------------------------------------------
+#   Splits a header value into comma-separated tokens, trimming ONLY leading
+#   ASCII spaces (0x20) and dropping trailing spaces before a comma/end. It is
+#   a single forward scan with two indices start,end over str (i = 0..len-1):
+#     - char 0x20 (SPACE): if (start === end) { start = end = i+1 }   # leading-space skip
+#       (a space is "leading" only while no non-space char has been seen since
+#        the last comma; once a non-space char advanced `end`, a space does NOT
+#        advance `end`, so trailing spaces are excluded from the token, but
+#        an INTERNAL space followed by more non-space chars IS retained because
+#        the later non-space char advances `end` past the space.)
+#     - char 0x2c (COMMA ','): push str.substring(start,end); start = end = i+1
+#     - any other char: end = i+1
+#   After the loop: push str.substring(start,end)   # final token (always pushed)
+#   ONLY the space character 0x20 is special — TAB (0x09) and other whitespace
+#   are ordinary chars and are NOT trimmed. Worked examples (verbatim outputs):
+#     '"foo"'           -> ['"foo"']
+#     '"foo" '          -> ['"foo"']          # trailing space dropped
+#     '  "foo"'         -> ['"foo"']          # leading spaces dropped
+#     '"a", "b", "foo"' -> ['"a"','"b"','"foo"']
+#     '"a",   "foo"'    -> ['"a"','"foo"']    # multiple post-comma spaces dropped
+#     '"a" "b"'         -> ['"a" "b"']        # internal space RETAINED (single token)
+#     ' '               -> ['']               # one empty token
+#     ','               -> ['','']            # two empty tokens
+#     '"foo",'          -> ['"foo"','']       # trailing empty token
+#     '\t"foo"'         -> ['\t"foo"']        # tab kept verbatim (not trimmed)
+#   The empty/whitespace tokens generally fail to match a real quoted etag, so
+#   they produce a stale (false) result unless the etag itself is that string.
+
+# ----------------------------------------------------------------------------
+# EDGE CASES (all VERIFIED against fresh@0.5.2)
+# ----------------------------------------------------------------------------
+#   fresh({}, {})                                              -> false   (NODE 1)
+#   fresh({'cache-control':'no-cache'}, {'etag':'"x"'})        -> false   (NODE 1: no conditional headers; cache-control alone is NOT a conditional header, so the unconditional early-return fires first)
+#   fresh({'if-none-match':'*'}, {'etag':'"x"'})               -> true
+#   fresh({'if-none-match':'*'}, {})                           -> true    (etag not inspected for '*')
+#   fresh({'if-none-match':'*','cache-control':'no-cache'}, {'etag':'"x"'}) -> false (no-cache wins)
+#   fresh({'if-none-match':'"foo"'}, {'etag':'"foo"'})         -> true
+#   fresh({'if-none-match':'"foo"'}, {'etag':'"bar"'})         -> false
+#   fresh({'if-none-match':'"foo"'}, {})                       -> false   (no etag)
+#   fresh({'if-none-match':'"foo"'}, {'etag':''})              -> false   (empty etag falsy)
+#   fresh({'if-none-match':'"foo"'}, {'etag':'W/"foo"'})       -> true    (weak res)
+#   fresh({'if-none-match':'W/"foo"'}, {'etag':'"foo"'})       -> true    (weak req)
+#   fresh({'if-none-match':'W/"foo"'}, {'etag':'W/"foo"'})     -> true
+#   fresh({'if-none-match':'W/"foo"'}, {'etag':'W/"bar"'})     -> false
+#   fresh({'if-none-match':'"a", "b", "foo"'}, {'etag':'"foo"'}) -> true
+#   fresh({'if-none-match':'"a", "b"'}, {'etag':'"foo"'})      -> false
+#   fresh({'if-modified-since':D}, {'last-modified':D})        -> true    (equal, <=)
+#   fresh({'if-modified-since':D}, {'last-modified':OLDER})    -> true
+#   fresh({'if-modified-since':D}, {'last-modified':NEWER})    -> false
+#   fresh({'if-modified-since':D}, {})                         -> false   (no last-modified)
+#   fresh({'if-modified-since':'garbage'}, {'last-modified':D}) -> false  (req date NaN)
+#   fresh({'if-modified-since':D}, {'last-modified':'garbage'}) -> false  (res date NaN)
+#   fresh({'if-none-match':'"foo"','if-modified-since':D}, {'etag':'"foo"','last-modified':OLDER}) -> true   (both pass)
+#   fresh({'if-none-match':'"foo"','if-modified-since':D}, {'etag':'"foo"','last-modified':NEWER}) -> false  (date stale)
+#   fresh({'if-none-match':'"bar"','if-modified-since':D}, {'etag':'"foo"','last-modified':OLDER}) -> false  (etag mismatch short-circuits)
+#   where D='Mon, 01 Jan 2018 00:00:00 GMT', OLDER earlier, NEWER later.
+
+# ----------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Output is a boolean. The harness records {result:true|false} (or {__throw}
+# if a non-codec value triggered a throw — not reachable from in-envelope
+# inputs, which are objects of string/number values; property access on plain
+# objects never throws). No expecteds are hand-authored.
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire NODE 1..5 pipeline, the
+#   no-cache regexp /(?:^|,)\s*?no-cache\s*?(?:,|$)/ VERBATIM, the three-way
+#   exact-string ETag matching (incl. the 'W/'-prepend asymmetry), the
+#   parseTokenList space-only/leading-trim tokenizer, and the inclusive (<=)
+#   NaN-aware date comparison via parseHttpDate. All small constants only; NO
+#   carried-data table. This unit has NO carried data.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT (side APIs / stateful mutators): none. Pure read-only.
+#
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs — a blind re-emitter
+# still reconstructs them from the rules above, but they are not graded because
+# they are non-portable or non-codec):
+#   - Header VALUES that are not strings: e.g. numbers. The source uses string
+#     ops; a numeric `if-none-match` that is not '*' would call
+#     parseTokenList(number).length -> str.length is undefined on a number,
+#     `.charCodeAt` absent -> the scan would behave unexpectedly. Keep header
+#     values as STRINGS. (The codec round-trips numbers, but behavior is
+#     ill-defined / version-fragile, so out of envelope.)
+#   - Function-valued or Symbol-valued headers: not codec-faithful; excluded.
+#   - LOCALE/TIMEZONE-AMBIGUOUS date strings (e.g. asctime 'Mon Jan  1
+#     00:00:00 2018', or bare 'YYYY-MM-DD' without zone): Date.parse may
+#     interpret these in LOCAL time, which differs across engines/hosts and
+#     could make re-emitters diverge on the boundary. genInputs emits ONLY
+#     GMT/UTC-anchored RFC-1123, RFC-850, and ISO-8601-with-Z forms (and
+#     clearly-unparseable 'garbage' strings), all of which Date.parse maps
+#     deterministically and engine-independently.
+
+# ----------------------------------------------------------------------------
+PROVENANCE  fresh@0.5.2
+            repo: jshttp/fresh (https://github.com/jshttp/fresh)
+            license: MIT
+            source file: index.js (entry per package.json "main" default; the
+              package ships only index.js as its code file)

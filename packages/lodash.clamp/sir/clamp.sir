@@ -1,0 +1,230 @@
+UNIT clamp
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG clamp(number, lower, upper) -> number          # default export; ES module: `export default clamp`
+DEPENDS-ON none                                    # fully self-contained; zero runtime dependencies
+
+# =====================================================================================
+# OVERVIEW
+# =====================================================================================
+# Clamps `number` within the inclusive [lower, upper] bounds. Every argument is first
+# coerced to a number via lodash `toNumber` (defined below, inlined verbatim — NOT the
+# host's Number()). Bounds that coerce to NaN are replaced by 0. The clamping itself is
+# `baseClamp`, which short-circuits a NaN number through unchanged.
+#
+# This is a PURE value function: no I/O, no clock, no RNG, no global state, no side
+# effects. ORACLE-CLASS deterministic (no seam). Re-emit as an ES module default export.
+#
+# IMPORTANT EXACTNESS NOTES the blind re-emitter MUST honor:
+#   - `-0` (negative zero) is a distinct output and must be preserved bit-exactly where
+#     the algorithm yields it (see BRANCH B5 and the toNumber -0 rule).
+#   - NaN propagation and the bound-NaN->0 substitution are load-bearing.
+#   - Arity detection is on the VALUE `upper === undefined`, NOT on arguments.length.
+#   - toNumber's hex/binary/octal/bad-hex string rules are exact; reproduce the regexes
+#     and the parseInt-of-slice(2) logic verbatim.
+
+# =====================================================================================
+# BEHAVIOR — top-level clamp(number, lower, upper)
+# =====================================================================================
+# Executed strictly in this order:
+#
+# BRANCH A — arity normalization (2-arg vs 3-arg detection):
+#   A1. IF upper === undefined:          # tested against the VALUE undefined, not arg count
+#         upper = lower                  # the 2nd positional becomes the upper bound
+#         lower = undefined              # there is no lower bound in the 2-arg form
+#       (So `clamp(n, x)` means "clamp n to a maximum of x, no minimum".
+#        Passing an explicit `undefined` as the 3rd arg ALSO triggers this swap:
+#        `clamp(n, lower, undefined)` === `clamp(n, lower)` — upper becomes `lower`,
+#        lower becomes undefined. Confirmed: clamp(5,0,undefined) => 0.)
+#
+# BRANCH B — bound coercion (each bound, independently):
+#   B1. IF upper !== undefined:
+#         upper = toNumber(upper)
+#         upper = (upper === upper) ? upper : 0      # NaN -> 0  (x===x is false only for NaN)
+#   B2. IF lower !== undefined:
+#         lower = toNumber(lower)
+#         lower = (lower === lower) ? lower : 0      # NaN -> 0
+#       (Note: when A1 fired, lower is `undefined` here and is left as undefined — there
+#        is then NO lower clamp applied in baseClamp.)
+#
+# BRANCH C — clamp:
+#   C1. return baseClamp(toNumber(number), lower, upper)
+#       The number arg is coerced by toNumber with NO NaN->0 substitution: a NaN number
+#       stays NaN and (per baseClamp B5 below) passes straight through.
+
+# =====================================================================================
+# baseClamp(number, lower, upper)  — inlined private helper
+# =====================================================================================
+# B5. IF number === number:                          # i.e. number is NOT NaN
+#       IF upper !== undefined:
+#         number = (number <= upper) ? number : upper
+#       IF lower !== undefined:
+#         number = (number >= lower) ? number : lower
+#     return number
+#
+#   Consequences (all VERIFIED against the real package):
+#   - NaN number: the `number === number` guard is false → both clamps skipped →
+#     returns NaN verbatim regardless of bounds.  clamp(NaN,-100,100) => NaN.
+#   - The upper clamp runs BEFORE the lower clamp. When lower > upper the lower clamp
+#     wins (it runs last): clamp(5,10,2) => 10, clamp(15,10,2) => 10, clamp(0,10,2) => 10.
+#   - `-0` survives: -0 <= upper keeps -0; -0 >= lower keeps -0 (since -0 === 0 in <=,>=).
+#     clamp(-0,-5,5) => -0 ; clamp(-0,-Infinity,Infinity) => -0.
+#   - `<=` / `>=` are the exact comparison operators; do not substitute Math.min/Math.max
+#     (they would mishandle -0 vs 0 and the NaN short-circuit).
+#   - Inclusive bounds: a value exactly equal to a bound is unchanged
+#     (number<=upper true → number; number>=lower true → number). clamp(3,3,3) on the
+#     boundary: clamp(5,3,3) => 3, clamp(1,3,3) => 3.
+
+# =====================================================================================
+# toNumber(value)  — inlined private helper (lodash 4.x toNumber, VERBATIM semantics)
+# =====================================================================================
+# Constants/regexes (reproduce exactly):
+#   NAN        = 0/0                                  # the NaN value
+#   reTrim     = /^\s+|\s+$/g                         # strip leading+trailing whitespace
+#   reIsBadHex = /^[-+]0x[0-9a-f]+$/i                 # signed hex literal -> NaN
+#   reIsBinary = /^0b[01]+$/i                         # binary literal
+#   reIsOctal  = /^0o[0-7]+$/i                        # octal literal
+#   symbolTag  = '[object Symbol]'
+#   objectToString = Object.prototype.toString
+#   freeParseInt = parseInt
+#
+# isObject(value):    type = typeof value; return !!value && (type=='object' || type=='function')
+# isObjectLike(value): return !!value && typeof value == 'object'
+# isSymbol(value):    return typeof value=='symbol' ||
+#                            (isObjectLike(value) && objectToString.call(value) == '[object Symbol]')
+#
+# toNumber(value):
+#   T1. IF typeof value == 'number':  return value             # numbers (incl -0, NaN, ±Inf) pass through
+#   T2. IF isSymbol(value):           return NAN               # Symbol primitive or Symbol object -> NaN
+#   T3. IF isObject(value):                                    # objects/arrays/functions/boxed
+#         other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#         value = isObject(other) ? (other + '') : other       # if valueOf still object -> String(other)
+#   T4. IF typeof value != 'string':
+#         return (value === 0) ? value : (+value)              # preserves -0; unary plus otherwise
+#         #  +value here may THROW for bigint (see OUT-OF-ENVELOPE).
+#   T5. value = value.replace(reTrim, '')                      # trim leading/trailing whitespace
+#       isBinary = reIsBinary.test(value)
+#       IF (isBinary || reIsOctal.test(value)):
+#         return freeParseInt(value.slice(2), isBinary ? 2 : 8)   # parse "0b101"->5, "0o17"->15
+#       ELSE:
+#         return reIsBadHex.test(value) ? NAN : (+value)       # "-0x1F"->NaN ; "0x1F"->31 via +; ""->0
+
+# -------------------------------------------------------------------------------------
+# toNumber EDGE RESULTS — every one VERIFIED by running the real package.
+# (A self-consistent re-emitter MUST reproduce each of these exactly.)
+# -------------------------------------------------------------------------------------
+#   number passthrough:
+#     42 -> 42 ; 3.5 -> 3.5 ; -7 -> -7 ; -0 -> -0 ; NaN -> NaN ; Infinity -> Infinity
+#   decimal strings (after trim, via unary +):
+#     "42" -> 42 ; "  3.5  " -> 3.5 ; "1e3" -> 1000 ; "-7.25" -> -7.25 ; "+5" -> 5
+#     ".5" -> 0.5 ; "5." -> 5 ; "" -> 0 ; "   " -> 0 ; "abc" -> NaN ; "4two" -> NaN
+#     "Infinity" -> Infinity ; "-Infinity" -> -Infinity
+#   hex strings:
+#     "0x1F" -> 31 ; "0xff" -> 255 ; "0X10" -> 16   (unsigned hex via +)
+#     "-0x1F" -> NaN ; "+0x1F" -> NaN               (reIsBadHex -> NaN)
+#     "0xG" -> NaN                                   (not bad-hex regex; +"0xG" = NaN)
+#   binary strings (parseInt(slice(2),2)):
+#     "0b101" -> 5 ; "0B101" -> 5 ; "0b1010" -> 10 ; "0b102" -> NaN (fails reIsBinary -> +"0b102"=NaN)
+#   octal strings (parseInt(slice(2),8)):
+#     "0o17" -> 15 ; "0O17" -> 15 ; "0o778" -> NaN  (fails reIsOctal -> +"0o778"=NaN)
+#   whitespace inside trim then hex/binary detect:
+#     "\t10\n" -> 10 ; "  0x1F  " -> 31 ; "  0b101  " -> 5
+#   non-string primitives (T4 branch):
+#     true -> 1 ; false -> 0 ; null -> 0          ( +true=1, +false=0, +null=0; none === 0 pre-coerce )
+#     undefined -> NaN                            ( +undefined = NaN; see OUT-OF-ENVELOPE for arg use )
+#   objects (T3 then re-dispatch):
+#     {} -> NaN          ( valueOf() returns the object -> String({}) = "[object Object]" -> NaN )
+#     {valueOf:()=>7} -> 7
+#     {valueOf:()=>"0x10"} -> 16   ( valueOf returns string "0x10", not object, -> "0x10" -> hex 16 )
+#     new Number(0) -> 0 ; new Number(5) -> 5   ( boxed Number valueOf -> primitive )
+#     [] -> 0            ( Array valueOf -> array -> String([]) = "" -> +"" = 0 )
+#     [5] -> 5           ( String([5]) = "5" -> 5 )
+#     [-0] -> 0          ( String([-0]) = "0" -> 0 ; NOTE: NOT -0, the toString drops the sign )
+#     [1,2] -> NaN       ( String([1,2]) = "1,2" -> NaN )
+#     /re/ (RegExp) -> NaN                        ( String(/re/) = "/re/" -> NaN )
+#     Map (any) -> NaN   ( String = "[object Map]" -> NaN )
+#     Set (any) -> NaN   ( String = "[object Set]" -> NaN )
+#     Uint8Array([3]) -> 3 ; Uint8Array([3,4]) -> NaN  ( "3" -> 3 ; "3,4" -> NaN )
+#     Buffer.from([5]) -> NaN  ( toString yields a raw control char -> NaN )
+
+# =====================================================================================
+# WORKED clamp() EDGE RESULTS — every one VERIFIED by running the real package.
+# These are the held-out-gradable expecteds the re-emitter must reproduce.
+# =====================================================================================
+#   3-arg in/below/above:
+#     clamp(5,0,10) -> 5 ; clamp(-10,-5,5) -> -5 ; clamp(10,-5,5) -> 5
+#     clamp(3.14159,0,3) -> 3 ; clamp(0.5,0.1,0.9) -> 0.5
+#     clamp(0.1+0.2,0,1) -> 0.30000000000000004 (full float precision, no rounding)
+#   2-arg (2nd = upper, no lower):
+#     clamp(5,8) -> 5 ; clamp(5,3) -> 3 ; clamp(-5,3) -> -5 ; clamp(2.5,3.5) -> 2.5
+#   1-arg / 0-arg:
+#     clamp(5) -> 5 ; clamp(-0) -> -0 ; clamp("-0") -> -0 ; clamp() -> NaN
+#   explicit undefined:
+#     clamp(5,undefined,10) -> 5    (upper=10 != undefined, no swap; lower toNumber(undefined)=NaN->0)
+#     clamp(5,0,undefined) -> 0     (upper===undefined -> swap: upper=0, lower=undefined; 5<=0?5:0=0)
+#     clamp(5,undefined,undefined) -> 5 ; clamp(undefined,0,10) -> NaN
+#   NaN as number (short-circuit, bounds ignored):
+#     clamp(NaN,0,10) -> NaN ; clamp(NaN,5) -> NaN ; clamp(NaN) -> NaN ; clamp(NaN,-100,100) -> NaN
+#   NaN as bound (-> 0 substitution):
+#     clamp(5,NaN,10) -> 5      (lower 0, upper 10; 5 in range)
+#     clamp(-5,NaN,10) -> 0     (lower NaN->0; -5 >= 0? no -> 0)
+#     clamp(5,0,NaN) -> 0       (upper NaN->0; 5 <= 0? no -> 0; then 0 >= 0 -> 0)
+#     clamp(50,0,NaN) -> 0 ; clamp(50,NaN) -> 0 (2-arg upper NaN->0; 50<=0?->0) ; clamp(-50,NaN) -> -50
+#   Symbol as bound (toNumber Symbol = NaN -> 0):
+#     clamp(5,Symbol,10) -> 5 ; clamp(-5,Symbol,10) -> 0 ; clamp(Symbol,0,10) -> NaN (number NaN)
+#   ±Infinity bounds / values:
+#     clamp(5,-Infinity,Infinity) -> 5 ; clamp(Infinity,0,10) -> 10 ; clamp(-Infinity,0,10) -> 0
+#     clamp(5,10,Infinity) -> 10 ; clamp(Infinity,0,Infinity) -> Infinity
+#   lower > upper (lower wins, runs last):
+#     clamp(5,10,2) -> 10 ; clamp(0,10,2) -> 10 ; clamp(15,10,2) -> 10
+#   equal bounds:
+#     clamp(5,3,3) -> 3 ; clamp(1,3,3) -> 3
+#   -0 preservation:
+#     clamp(-0,0,10) -> -0 ; clamp(-0,-5,5) -> -0 ; clamp(0,-0,10) -> 0
+#   string coercion in clamp:
+#     clamp("42",0,100) -> 42 ; clamp("0x1F",0,100) -> 31 ; clamp("  3.5  ",0,10) -> 3.5
+#     clamp("1e3",0,2000) -> 1000 ; clamp("0b101",0,100) -> 5 ; clamp("0o17",0,100) -> 15
+#     clamp("abc",0,10) -> NaN (number coerces to NaN -> baseClamp short-circuit -> NaN)
+#     clamp("",0,10) -> 0 ; clamp("  ",0,10) -> 0 (whitespace -> 0, in range)
+
+# =====================================================================================
+# OUT-OF-ENVELOPE (documented for the re-emitter; NOT emitted by genInputs)
+# =====================================================================================
+#   THROW PATHS (codec-faithful inputs that THROW — gradable as {__throw}, but excluded
+#   from genInputs to keep the curated set clean; behavior is fully specified here):
+#     - bigint in ANY position (number, lower, or upper): toNumber reaches T4 `+value`,
+#       and `+<bigint>` throws TypeError "Cannot convert a BigInt value to a number".
+#       VERIFIED: clamp(10n,0n,5n), clamp(10,0n,5), clamp(10,0,5n), clamp(10n,0,5),
+#       clamp(5n,8) all THROW TypeError. (toNumber does not special-case bigint, so any
+#       bigint that actually reaches a toNumber call throws.)
+#   NON-CODEC-FAITHFUL (do NOT emit; behavior documented for completeness):
+#     - `undefined` passed explicitly as an argument: as `number` -> toNumber(undefined)
+#       = NaN -> result NaN; as `upper` -> triggers BRANCH A swap; as `lower` -> if upper
+#       defined, lower=toNumber(undefined)=NaN->0. The codec does not round-trip a bare
+#       `undefined` as an array element, so genInputs encodes these arities as genuinely
+#       short arg arrays ([n] for 1-arg, [n,u] for 2-arg) instead of explicit undefined.
+#     - Symbol arguments do not survive JSON codec -> documented above, not emitted.
+#     - Functions as args -> isObject true, valueOf returns the function -> String(fn) ->
+#       NaN; not codec-faithful, not emitted.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the full clamp pipeline: BRANCH A arity normalization, BRANCH B bound coercion with
+      NaN->0 substitution, BRANCH C baseClamp.
+    - baseClamp: NaN short-circuit, upper-then-lower order, inclusive <=/>=, -0 preservation.
+    - the inlined toNumber: number passthrough (incl -0/NaN/±Inf), isSymbol->NaN,
+      isObject valueOf/String dispatch, the T4 `value===0?value:+value` (-0 preserve),
+      string trim + binary/octal parseInt(slice(2)) + bad-hex regex -> NaN + unary +.
+    - all five regexes/constants verbatim (reTrim, reIsBadHex, reIsBinary, reIsOctal, symbolTag).
+  CARRIED DATA: none (no large literal tables; nothing to attest).
+  OUT-OF-CONTRACT: none (pure function, no side APIs, no state, no seam).
+
+PROVENANCE
+  package: lodash.clamp@4.0.3   (MIT license)
+  repo:    lodash/lodash  (custom modularized build: `lodash modularize exports="npm" -o ./`)
+  source:  index.js  (module.exports = clamp; inlines baseClamp, toNumber, isObject,
+           isObjectLike, isSymbol and the NAN/reTrim/reIsBadHex/reIsBinary/reIsOctal
+           constants — all read and reproduced above)
+  re-emit: ES module default export — `export default clamp` (NOT module.exports).

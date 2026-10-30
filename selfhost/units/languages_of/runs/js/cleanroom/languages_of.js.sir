@@ -1,0 +1,25 @@
+UNIT languages_of
+LANG js
+PRIMARY-SHA256 05fd6ddaca2f6220ffa46e63262ccd0a720204c407e786983e062989bb37480e
+SIG languages_of(input: unknown): string[]
+NOTE default export
+ABI the driver passes the one argument decoded from the canonical form: none = null, text = string, a number = number, bool =
+  boolean, list = Array, map = a plain object. The result is a fresh Array of strings. A throw (R1–R6) is a thrown Error; the
+  message is not graded. The artifact is an ES module default-exporting the function and imports nothing — REGISTRY is a
+  literal in the module.
+ENVELOPE widening: a text may hold a lone surrogate (vectors in oracles/languages_of.js.json). It is a HIDDEN character (a
+  code unit outside VISIBLE): x.sir followed by one throws (R3a). Inside a segment it is an ordinary character, so x.<lone>.sir
+  claims an id R4 refuses.
+MECHANISM a map = a non-null, non-Array object. R2: only an absent (undefined) sirFiles defaults to []; test Array.isArray and
+  typeof element === 'string'. R5: undefined and null skip. R3: BASE = path.split(/[\\/]/).pop() with /^[ \t]+|[ \t]+$/g
+  replaced by '' — NOT String.prototype.trim, whose set is wider; then HIDDEN-TAIL (throw on a match), then SIR-TAIL (no
+  match: nothing), then BASE.slice(0, -4).split('.'), whose first part, when non-empty, must match UNIT-NAME. R6a: an entry
+  lang or sir present with any non-string value (null included) throws — test v.lang !== undefined, never a truthiness or
+  == null check; a string sir is run through R3 (it may throw) and its BASE must then match SIR-TAIL. R6b: K === 'package'
+  or VARIANT-KEY.test(K), else throw; KEYLANG = K.slice(5) for a lang: key. R7: collect into a Set, then [...set].sort().
+DEPENDS-ON none
+PINNED regex HIDDEN-TAIL = /\.[sS][iI][rR][^\x21-\x7e]+$/ CITED R3(a) — no flags: the class runs over UTF-16 code units, and an astral code point's two surrogates both fall outside it, so it equals the code-point HIDDEN set
+PINNED regex SIR-TAIL = /\.[sS][iI][rR]$/ CITED R3(b) — explicit ASCII classes, never an i flag
+PINNED regex UNIT-NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/ CITED R3(c) — no flags: $ is the end of input only (no final line-feed allowance), so x<LF>.ts.sir throws
+PINNED regex VARIANT-KEY = /^lang:[a-z][a-z0-9]*$/ CITED R6(b) — no flags, ASCII classes; lang:ts<LF> throws
+PROVENANCE rederive@bb8ded84fa50 cli/features.mjs. Language file cut 2026-10-27 (round 5) with the primary, before any blind re-emission.

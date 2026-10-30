@@ -1,0 +1,171 @@
+UNIT zip
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG zip(...arrays) -> Array<Array<any>>
+    # default export of lodash.zip; module.exports = zip.
+    # Blind re-emitter MUST `export default <fn>` where <fn> is a single function taking REST args (...arrays).
+DEPENDS-ON none   # zero runtime deps; all helpers are inlined and reproduced below.
+
+# =====================================================================
+# OVERVIEW
+# zip groups (transposes) the i-th elements of each ARRAY-LIKE-OBJECT argument.
+# It is `baseRest(unzip)`: all positional arguments are collected into a single
+# array `args`, then `unzip(args)` is computed. The result is a NEW Array whose
+# i-th element is a NEW Array holding the i-th element of every KEPT argument,
+# in kept order, with `undefined` filling any kept argument that has no i-th element.
+# Number of result rows = the MAX `.length` over all kept arguments.
+# Number of columns per row = the COUNT of kept arguments (NOT the arg count).
+#
+# Worked example:
+#   zip(['a','b'], [1,2], [true,false]) === [['a',1,true], ['b',2,false]]
+# =====================================================================
+
+BEHAVIOR
+
+  # ---- NODE 0: argument collection (baseRest semantics) ----
+  # zip is variadic. Collect ALL positional arguments, in order, into an array
+  # `args` (args = [...arguments]). args may be empty. Then return unzip(args).
+  # No coercion of the arguments themselves happens at this layer.
+
+  # ---- NODE 1: unzip(args) — empty/degenerate guard ----
+  # Let `array = args`.
+  # If NOT (array AND array.length) -> return [].
+  #   i.e. if args is empty (length 0) -> return [].
+  #   (args is always a real Array here, so the only trigger is length === 0,
+  #    which means zip() with zero arguments.)
+  #   Therefore: zip() -> [].
+
+  # ---- NODE 2: filter args to KEPT groups, computing max length ----
+  # Initialize length := 0.
+  # Walk `array` left-to-right; build `kept` = the subsequence of arguments g for
+  # which isArrayLikeObject(g) is TRUE (predicate defined in NODE 5). For each such
+  # kept g, update length := max(g.length, length).
+  # Arguments for which isArrayLikeObject(g) is FALSE are DROPPED (they do not
+  # appear as columns and do not affect `length`). Kept order is preserved and
+  # COMPACTED (drops do not leave a placeholder column).
+  #
+  # NOTE on degenerate kept groups:
+  #   A kept group with .length === 0 (e.g. [] or {length:0}) is STILL KEPT
+  #   (it is array-like-object) and STILL FORMS A COLUMN; it merely contributes 0
+  #   to the running max. If some OTHER kept group is longer, the empty kept group
+  #   appears in every row as `undefined`.
+  #   Example: zip([1,2], []) -> [[1, undefined], [2, undefined]]
+  #   Example: zip([], [1])   -> [[undefined, 1]]
+
+  # ---- NODE 3: if no kept groups, length stays 0 ----
+  # If after filtering there are no kept groups, OR all kept groups have length 0
+  # AND no group raised `length` above 0, then length === 0 and NODE 4 produces [].
+  #   Example: zip(5) -> [] ; zip(null) -> [] ; zip('abc') -> [] ;
+  #            zip([1,2], {}) keeps NO object (plain {} has no valid .length) ->
+  #            result uses only [1,2] -> [[1],[2]]  (the {} is dropped, [1,2] kept).
+  #            zip([],[]) -> two kept groups both length 0 -> length 0 -> [].
+
+  # ---- NODE 4: build the transpose via baseTimes(length, ...) ----
+  # result := new Array of `length` rows. For row index `i` in 0..length-1:
+  #   row[i] := arrayMap(kept, g -> baseProperty(i)(g))
+  #          := a NEW Array, one entry per KEPT group, where the entry for group g is:
+  #               (g == null) ? undefined : g[i]
+  #             Since every kept g is array-like-object (non-null), this is g[i].
+  #             If i >= g.length (ragged) or i is a hole, g[i] is `undefined`.
+  # IMPORTANT — RAGGED FILL IS A REAL `undefined` VALUE, NOT A HOLE.
+  #   arrayMap pre-sizes result to length and ASSIGNS result[index] = iteratee(...)
+  #   for EVERY index, so each row is a dense array; missing positions hold the
+  #   value `undefined` (the slot exists: hasOwnProperty(i) === true).
+  #   Example: zip([1,2,3],[4,5]) -> [[1,4],[2,5],[3,undefined]]
+  #            (row 2 is [3, undefined], length 2, index 1 present and === undefined.)
+  # Return result.
+
+  # ---- NODE 5: PREDICATE — isArrayLikeObject(value) (EXACT) ----
+  # isArrayLikeObject(value) := isObjectLike(value) AND isArrayLike(value)
+  #
+  #   isObjectLike(value) := (!!value) AND (typeof value === 'object')
+  #       # true only for non-null values whose typeof is exactly 'object':
+  #       # arrays, plain objects, typed arrays / Buffer, RegExp, Date, Set, Map,
+  #       # boxed primitives (new Number/String/Boolean), arguments objects, etc.
+  #       # FALSE for: null, undefined, numbers, primitive strings, booleans,
+  #       #            bigint, symbols, and FUNCTIONS (typeof 'function').
+  #
+  #   isArrayLike(value) := (value != null) AND isLength(value.length) AND (NOT isFunction(value))
+  #       isLength(v.length) := (typeof v.length === 'number')
+  #                              AND (v.length > -1)
+  #                              AND (v.length % 1 === 0)            # integer
+  #                              AND (v.length <= 9007199254740991)  # MAX_SAFE_INTEGER
+  #           # NaN fails (NaN > -1 is false). Infinity fails (Infinity % 1 is NaN != 0,
+  #           # and Infinity <= MAX_SAFE_INTEGER is false). Negative fails. Non-integer
+  #           # fails. A STRING length (e.g. '2') fails (typeof not 'number').
+  #           # length exactly MAX_SAFE_INTEGER+1 (9007199254740992) fails.
+  #       isFunction(value) := let tag = isObject(value) ? Object.prototype.toString.call(value) : '';
+  #                            tag === '[object Function]' OR tag === '[object GeneratorFunction]'
+  #           isObject(value) := (!!value) AND (typeof value === 'object' OR typeof value === 'function')
+  #
+  # NET PREDICATE OUTCOME (the operative summary a re-emitter must reproduce):
+  #   A value g is KEPT  iff  ALL of:
+  #     (a) g is non-null and typeof g === 'object'   # so primitive STRINGS are NOT kept
+  #     (b) g.length is a number that is an integer in [0, 9007199254740991]
+  #     (c) g is not a function   # (already excluded by (a), but per the source's
+  #                                  AND with isArrayLike; immaterial to outcome here)
+  #
+  #   CONSEQUENCES TO REPRODUCE EXACTLY:
+  #     - PRIMITIVE STRINGS are DROPPED. zip('abc') -> []. zip([1,2],'ab') drops 'ab'.
+  #       (This is the isArrayLikeObject vs isArrayLike distinction: lodash.zip uses
+  #        the OBJECT variant, so strings — which are array-like but not object-like —
+  #        are excluded. Do NOT treat strings as columns.)
+  #     - FUNCTIONS are DROPPED.
+  #     - null / undefined are DROPPED.
+  #     - numbers / booleans / bigint / symbols are DROPPED.
+  #     - Plain object {} WITHOUT a valid numeric .length is DROPPED.
+  #     - Set / Map are DROPPED (object-like but have NO .length property -> .length
+  #       is undefined -> isLength(undefined) false).
+  #     - ARRAYS are KEPT. Typed arrays / Buffer / Uint8Array are KEPT (.length valid).
+  #     - ARRAY-LIKE OBJECTS are KEPT: an object with an integer .length in range,
+  #       e.g. {length:2, 0:'x', 1:'y'} -> kept, its column reads g[i] -> 'x','y',
+  #       and g[i]===undefined for i>=length.
+  #     - Objects with .length that is negative, non-integer, NaN, Infinity, a string,
+  #       or > MAX_SAFE_INTEGER are DROPPED.
+
+  # ---- RETURN SHAPE ----
+  # Always returns a NEW real Array (Array.isArray === true). Each row is a NEW real
+  # dense Array (Array.isArray === true). Inner element values are the original
+  # element references (not copied/coerced) or `undefined` for missing positions.
+  # Empty result is `[]`.
+
+# =====================================================================
+# SELF-CONSISTENCY CROSS-CHECK (SIR <-> genInputs)
+# Every value class the generator emits has its behavior pinned above:
+#   - arrays (equal len, ragged, empty, single, single-elem, sparse-holes) -> NODE 2/4
+#   - array-like objects {length,...} (valid + invalid length variants) -> NODE 5
+#   - primitive strings as args -> DROPPED (NODE 5 consequence)
+#   - numbers, booleans, null, undefined, plain {} (no length), Set/Map,
+#     typed arrays -> classified explicitly in NODE 5
+#   - zero args -> NODE 1 -> []
+# The generator deliberately AVOIDS function ELEMENTS and Symbol ELEMENTS (not codec
+# round-trippable). Function/Symbol as top-level ARGS are exercised only where their
+# DROP behavior is the point (functions) — see genInputs notes. -0, NaN, Infinity,
+# undefined, sparse holes ARE codec round-trippable per the factory codec and appear
+# as ELEMENTS to exercise value passthrough.
+# =====================================================================
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - baseRest argument collection (variadic -> args array).
+    - unzip empty guard (zero args -> []).
+    - isArrayLikeObject filter (the EXACT predicate in NODE 5), kept-order compaction.
+    - max-length computation over kept groups.
+    - baseTimes/arrayMap/baseProperty transpose with `undefined` (dense) fill.
+    - Return shape: new dense Arrays, original element references preserved.
+  CARRIED DATA: none.
+  OUT-OF-CONTRACT: none — pure, deterministic, read-only, no seam, no side effects,
+    no ambient reads. ORACLE-CLASS deterministic (value mode).
+  OUT-OF-ENVELOPE (documented, NOT emitted by genInputs as elements):
+    - Function-valued ELEMENTS and Symbol-valued ELEMENTS (not codec round-trippable);
+      behavior is trivial value-passthrough and is fully specified by NODE 4.
+
+PROVENANCE
+  package: lodash.zip@4.2.0  (npm, "The lodash method `_.zip` exported as a module.")
+  repo:    lodash/lodash
+  license: MIT
+  source:  index.js  (module.exports = zip; zip = baseRest(unzip); helpers inlined:
+           unzip, arrayFilter, arrayMap, baseProperty, baseTimes, baseRest, apply,
+           isArrayLikeObject, isArrayLike, isObjectLike, isObject, isFunction, isLength)

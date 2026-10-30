@@ -1,0 +1,151 @@
+UNIT slugify
+KIND FUNCTIONAL
+FIDELITY package
+ORACLE-CLASS deterministic
+SIG  slugify(string: string, options?: string | {
+        replacement?: string,   # default '-'      (spaces -> this char; also: any mapped/source char EQUAL to this becomes ' ')
+        remove?: RegExp|string,  # resolved by TRUTHINESS: (options.remove || DEFAULT) — see step 4b. NOT an undefined-check.
+        lower?: boolean,         # default false
+        strict?: boolean,        # default false    (after mapping, strip /[^A-Za-z0-9\s]/g)
+        locale?: string,         # default '' -> no locale overrides
+        trim?: boolean           # default true     (String.prototype.trim of the slug before space-collapse)
+      }) -> string
+     # If options is a STRING, it is interpreted as { replacement: <string> }.
+DEPENDS-ON ./slugify.data.js   # CARRIED-DATA module exporting { charMap, locales } — see SCOPE / CARRIED.
+  # Otherwise self-contained. No I/O, no clock/RNG/env/fs/net. Pure value->value.
+
+BEHAVIOR
+  1. GUARD: if typeof string !== 'string'  -> throw new Error('slugify: string argument expected').
+     (Applies to number, null, undefined, object, array, boolean — anything non-string. No coercion.)
+  2. NORMALIZE OPTIONS:
+       if typeof options === 'string'  -> options = { replacement: options }
+       else                            -> options = options || {}     (null/undefined/missing -> {})
+  3. RESOLVE locale table:  locale = locales[options.locale] || {}     (unknown/absent code -> empty {};
+       locales imported from ./slugify.data.js)
+  4. RESOLVE replacement:   replacement = (options.replacement === undefined) ? '-' : options.replacement
+  4b. RESOLVE remove — TRUTHINESS, not undefined-check (NORMATIVE; this is divergence class 1):
+       removePattern = options.remove || /[^\w\s$*_+~.()'"!\-:@]+/g
+       # The original uses `||`. EVERY falsy value — undefined, missing, '', 0, null, false, NaN —
+       # falls back to the DEFAULT regex. Do NOT write `options.remove !== undefined ? ... : ...`.
+       # Worked falsy cases (all verified against slugify@1.6.9, identical output):
+       #   slugify('a#b!', { remove: ''    })  -> 'ab!'   # '' is falsy -> DEFAULT regex strips '#', keeps '!'
+       #   slugify('a#b!', { remove: 0     })  -> 'ab!'
+       #   slugify('a#b!', { remove: null  })  -> 'ab!'
+       #   slugify('a#b!', { remove: false })  -> 'ab!'
+       #   slugify('a#b!', { remove: /[#]/g }) -> 'ab!'   # truthy RegExp is used as-is
+       #   slugify('a#b!', { remove: 'x'   })  -> 'a#b!'  # truthy STRING is used as-is (see note below)
+       # TRUTHY STRING semantics: the pattern is passed to String.prototype.replace(pattern, ''), so a
+       # string remove deletes only the FIRST occurrence WITHIN EACH FRAGMENT. Fragments are usually a
+       # single code unit, so in practice each matching char is removed ('axbxa',{remove:'x'} -> 'aba';
+       # 'xaxbx',{remove:'x'} -> 'ab'), but a multi-char mapped fragment loses only its first match.
+  5. RESOLVE trim:          trim        = (options.trim === undefined)        ? true : options.trim
+  6. MAP PHASE  (the core; order is load-bearing):
+       slug = string.normalize()           # NFC (default form), Unicode canonical composition
+                    .split('')             # split into UTF-16 CODE UNITS (a surrogate PAIR splits into 2 lone halves)
+                    .reduce((result, ch) => {
+                        appendChar = locale[ch]                       # 6a precedence: locale overrides first
+                        if appendChar === undefined: appendChar = charMap[ch]   # 6b then global charMap (imported from ./slugify.data.js)
+                        if appendChar === undefined: appendChar = ch            # 6c else the char itself
+                        if appendChar === replacement: appendChar = ' '         # 6d COLLISION: mapped/literal == replacement -> single space
+                        return result + appendChar.replace(removePattern, '')   # removePattern from step 4b
+                        #                ^^^^^^^^^^ CRUCIAL: remove pattern is applied to appendChar ALONE
+                        #                (the just-produced 0..N-char fragment), NOT to the accumulated result.
+                        #                A multi-char mapping like 'AE' is filtered as the unit "AE".
+                      }, '')
+     NOTES on the map phase:
+       - Default ALLOWED set surviving the default remove regex: word chars [A-Za-z0-9_], whitespace \s,
+         and the literals  $ * _ + ~ . ( ) ' " ! - : @  . Everything else in a fragment is stripped.
+       - Step 6d fires for BOTH literal chars and charMap/locale outputs. Example: charMap['–'(en-dash U+2013)]='-';
+         with default replacement '-', '–' -> ' ' (then collapses away), NOT '-'.
+       - charMap may map a source char to '' (e.g. Cyrillic soft sign 'Ь' -> '', 'ь' -> ''), dropping it.
+       - charMap values may contain SPACES (e.g. '₣' -> 'french franc', '₪' -> 'new shequel'); the internal
+         space survives the default remove regex (\s is allowed) and becomes the replacement at step 9:
+         slugify('a₣b') -> 'afrench-francb' (verified).
+       - Lone surrogate halves (from a split emoji) are not in charMap, kept as-is, then stripped by the
+         default remove regex (they are not \w/\s/allowed) -> emoji effectively vanishes.
+  7. STRICT (optional): if options.strict (truthy) -> slug = slug.replace(/[^A-Za-z0-9\s]/g, '')
+       Strips every char that is not ASCII letter/digit/whitespace. Runs BEFORE space-collapse,
+       so a replacement char that is itself "special" (e.g. '.') still gets re-inserted in step 9 and survives.
+  8. TRIM (optional, default ON): if trim -> slug = slug.trim()   (String.prototype.trim: strips leading/trailing \s)
+  9. SPACE-COLLAPSE (always):  slug = slug.replace(/\s+/g, replacement)
+       Every maximal run of \s (JS whitespace: space, \t, \n, \r, \f, \v, NBSP U+00A0, and other Unicode WS)
+       collapses to a SINGLE replacement string. (With trim=false, leading/trailing WS also -> replacement.)
+ 10. LOWER (optional): if options.lower (truthy) -> slug = slug.toLowerCase()   (LAST step; applies to replacement chars too)
+ 11. RETURN slug.
+
+  EDGE / DEGENERATE CASES (all verified against slugify@1.6.9):
+    - ''                                  -> ''
+    - '   ' / '---' (default repl)         -> ''      (all become spaces, trimmed away)
+    - 'a - b'                              -> 'a-b'    ('-'==repl -> space; runs collapse to one '-')
+    - 'x_y' with replacement '_'           -> 'x_y'    ('_'==repl -> space -> '_')
+    - '  pad  ' with trim:false            -> '-pad-'  (no trim; leading/trailing WS -> '-')
+    - '  a#b  ' with {remove:'',trim:false} -> '-ab-'  (falsy remove -> default regex AND trim:false compose)
+    - non-string arg                       -> THROWS Error('slugify: string argument expected')
+    - 'Москва'                             -> 'Moskva'    (Cyrillic via carried charMap)
+    - 'Ελληνικά'                           -> 'Ellhnika'  (Greek via carried charMap)
+    - '100€'                               -> '100euro'
+    - 'Việt Nam' {locale:'vi'}             -> 'Viet-Nam'
+    - 'Đông' {locale:'vi'}                 -> 'Dong'   BUT 'Đông' (no locale) -> 'DJong'
+      (vi overrides Đ->'D'/đ->'d'; global charMap has Đ->'DJ'/đ->'dj' — locale precedence, step 6a)
+
+ORACLE value -> oracle.json
+  # Deterministic value oracle: feed (string, options) arg-arrays, compare exact returned slug string.
+  # The blind re-emitter IMPORTS the full carried charMap/locales from ./slugify.data.js, so the
+  # generator may emit ANY char present in those tables (plus arbitrary ASCII/whitespace/punctuation);
+  # there is no "demonstrated subset" ceiling anymore — the data module IS the authoritative mapping.
+  # SELF-CONSISTENCY: every mapping the generator can exercise is defined by (a) the carried tables,
+  # byte-exact from the original, or (b) the explicit pipeline rules above. Nothing is left to guess.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The guard/throw, option normalization & defaults, the 5-phase pipeline (map -> strict -> trim ->
+      space-collapse -> lower) with its exact ORDER.
+    - Step 4b remove resolution by `||` TRUTHINESS (falsy -> default regex) — normative, see worked cases.
+    - Step 6d replacement-collision rule and the per-fragment application of the remove pattern.
+    - The exact default remove regex /[^\w\s$*_+~.()'"!\-:@]+/g and strict regex /[^A-Za-z0-9\s]/g
+      and space-collapse /\s+/g, all evaluated under JavaScript regex/`\s`/`\w` semantics (NBSP is \s).
+    - String.prototype.normalize() default = NFC, and split('') = UTF-16 code-unit split.
+  CARRIED DATA (v0.3 §18 — extracted BYTE-EXACT by the toolchain; the reconstruction IMPORTS it and
+  MUST NEVER inline, transcribe, or abbreviate the tables — transcription is the exact bug class fixed here):
+    CARRIED charMap FROM node_modules/slugify/slugify.js :: `var charMap = JSON.parse('<single-quoted JSON string>')`
+      (641 entries: {sourceChar -> replacement string}. Latin-1/Latin-Extended accents, Greek, Cyrillic,
+       Armenian, Arabic + Arabic/Persian digits, Georgian, Vietnamese, currency symbols — some with
+       multi-word values containing spaces, e.g. '₣'->'french franc' — punctuation, and symbols
+       ('♥'->'love','∞'->'infinity','™'->'tm','…'->'...','%'->'percent','&'->'and','Ω'->'W','Θ'->'8',
+        'Ь'->''). Values preserve case: 'ä'->'a' vs 'Ä'->'A', 'æ'->'ae' vs 'Æ'->'AE'. Ω->'W' and Θ->'8'
+       are the package's intentional transliterations — do NOT "correct" them. These examples are
+       ILLUSTRATIVE ONLY; the imported table is the sole authority.)
+    CARRIED locales FROM node_modules/slugify/slugify.js :: `var locales = JSON.parse('<single-quoted JSON string>')`
+      (12 locale codes: bg, de, es, fr, pt, uk, vi, da, nb, it, nl, sv — each {char -> override} applied
+       at step 6a BEFORE the global charMap. e.g. de: 'ü'->'ue','%'->'prozent'; vi: 'Đ'->'D','đ'->'d';
+       uk: 'Г'->'H'. A char absent from the selected locale table FALLS THROUGH to global charMap
+       ('café' {locale:'de'} -> 'cafe'). locales['en'] is ABSENT -> {} -> pure global path.)
+    RECONSTRUCTION REQUIREMENT: `const { charMap, locales } = require('./slugify.data.js')` (or the ESM
+      equivalent import from './slugify.data.js'). The data module is produced mechanically by the
+      extractor per carried.json; a hand-typed table — full OR partial — is a verification failure.
+  OUT-OF-CONTRACT (stateful mutator / side API — NOT exercised by the value oracle):
+    - slugify.extend(customMap): Object.assign(charMap, customMap) — PROCESS-GLOBAL mutation of the
+      shared charMap. Persistent across calls, order-dependent, not a pure function. Excluded from the
+      value oracle; would need a stateful/mock harness if covered.
+
+PROVENANCE
+  package: slugify@1.6.9 (npm)
+  repo:    https://github.com/simov/slugify
+  author:  Simeon Velichkov
+  license: MIT
+  source:  node_modules/slugify/slugify.js  (UMD module, 69 lines; single `replace` fn returned as default export;
+           charMap at line 15, locales at line 16, remove-resolution at line 42)
+  verified-against: live slugify@1.6.9 (fresh npm install, probes run 2026-07-02)
+  hardened: 2026-06-23 (round 2): SCOPE charMap subset made a superset of generator-emittable chars.
+  hardened: 2026-07-02 (round 3). Two execution-confirmed divergence classes fixed:
+            (1) remove-option resolution: original is `options.remove || DEFAULT` (TRUTHINESS); the
+                shipped reconstruction used `!== undefined`, so falsy-but-defined remove ('' / 0 /
+                null / false) skipped the default strip ('a#b!',{remove:''} -> 'a#b!' instead of 'ab!').
+                Fix: step 4b pins `||` with the four falsy worked cases as normative, plus truthy-string
+                String.replace semantics.
+            (2) carried-data SUBSET: the shipped reconstruction transcribed ~80 of 641 charMap entries
+                and only the de locale, diverging on 'Москва', 'Ελληνικά', '100€', 'Việt Nam'{locale:'vi'}.
+                Fix: charMap + locales are now CARRIED DATA (v0.3 §18), extracted byte-exact per
+                carried.json into ./slugify.data.js which the reconstruction MUST import — a model
+                never transcribes the table. The old "demonstrated closed subset" contract (which
+                invited transcription) is superseded.

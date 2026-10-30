@@ -1,0 +1,261 @@
+UNIT stringify
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# Pure function. No clock/RNG/env/fs/net seam. Same input -> same output string.
+# The blind re-emitter MUST `export default <fn>` (ESM default export) of a
+# function reconstructed from this spec. The CJS source is `module.exports = fn`.
+# ----------------------------------------------------------------------------
+
+SIG  stringify(data: any, opts?: object | function) -> string | undefined
+#   opts may be omitted, an object, or a FUNCTION (shorthand for { cmp: <fn> }).
+#   Returns a string for every non-undefined `data`; returns JS `undefined`
+#   (NOT the literal string "undefined") only when the TOP-LEVEL node serializes
+#   to nothing (data === undefined, a bare function, a Symbol, or an object whose
+#   .toJSON() returns undefined). See node-0 / TOP-LEVEL UNDEFINED below.
+
+DEPENDS-ON none
+#   Self-contained. Uses host built-ins only: Object.keys, Array.isArray,
+#   Array.prototype.sort (default comparator), JSON.stringify (for STRINGS,
+#   BOOLEANS, and OBJECT KEYS only), isFinite, String coercion ('' + n).
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline; exact + complete; verified vs real 2.1.0)
+# ============================================================================
+#
+# OPTION NORMALIZATION (once, before recursion):
+#   N1. if (!opts) opts = {}                  # undefined / null / 0 / '' / false -> {}
+#   N2. if (typeof opts === 'function') opts = { cmp: opts }   # function shorthand
+#   N3. cycles = (typeof opts.cycles === 'boolean') ? opts.cycles : false
+#         # ONLY a real boolean enables/disables; any other value (e.g. 'yes', 1)
+#         # leaves cycles = false. Verified: stringify(cyclic, {cycles:'yes'}) THROWS.
+#   N4. cmp comparator construction:
+#         if opts.cmp is truthy, build a node-bound comparator factory:
+#           cmp = function(node) {
+#                   return function(a, b) {
+#                     return opts.cmp({key:a, value:node[a]}, {key:b, value:node[b]});
+#                   };
+#                 }
+#         if opts.cmp is falsy (absent), cmp = undefined.
+#         # The user's comparator is called with TWO WRAPPER OBJECTS, each
+#         # { key: <propertyName:string>, value: <node[propertyName]> }.
+#         # `a`/`b` are the raw property-name strings being compared; node is the
+#         # object whose keys are being sorted (so value is the ORIGINAL, un-
+#         # serialized property value). Verified arg shape:
+#         #   cmp({key:'y',value:20}, {key:'x',value:10}) for {x:10,y:20}.
+#   N5. seen = []   # cycle-tracking stack of OBJECTS currently on the recursion
+#                   # path (plain objects only — NOT arrays; see node-5 / ARRAYS).
+#
+# RECURSIVE stringify(node) — applied to `data`, then to children:
+#
+#   node-1  toJSON COERCION (FIRST, on EVERY node, before any type test):
+#       if (node && node.toJSON && typeof node.toJSON === 'function')
+#           node = node.toJSON();
+#       # Truthy node with a callable `toJSON` property => REPLACE node with its
+#       # return value, then continue with the steps below on the NEW node.
+#       # Applies to objects, arrays, AND wrapper-ish values uniformly.
+#       # `node && ...` guards null/undefined/0/''/false (no toJSON lookup).
+#       # A `toJSON` property that is NOT a function (e.g. a number 5) is left as
+#       #   a normal own key (verified: {toJSON:5,a:1} -> {"a":1,"toJSON":5}).
+#       # Date has Date.prototype.toJSON -> ISO string (verified vs JSON.stringify).
+#       # NOTE: only the OUTER node is coerced per call; the coerced result is then
+#       #   re-classified by node-2..node-6 (its own children get their own node-1).
+#
+#   node-2  UNDEFINED -> return undefined  (the JS value, not a string)
+#       if (node === undefined) return undefined;
+#       # Reached when: original undefined; OR a function/symbol (see node-3a);
+#       # OR toJSON() returned undefined. The caller decides what to emit:
+#       #   - inside an OBJECT: the key is OMITTED (node-6 `if (!value) continue`)
+#       #   - inside an ARRAY:  the slot becomes 'null' (node-5 `|| 'null'`)
+#       #   - at TOP LEVEL:     the whole call returns undefined.
+#
+#   node-3  NUMBER:
+#       if (typeof node === 'number')
+#           return isFinite(node) ? ('' + node) : 'null';
+#       # Finite numbers: String() coercion ('' + node), NOT JSON.stringify.
+#       #   For finite doubles these are identical to JSON.stringify, e.g.
+#       #   0 -> "0", -0 -> "0", -7 -> "-7", 3.14 -> "3.14", 1e21 -> "1e+21",
+#       #   1e-7 -> "1e-7", 0.000001 -> "0.000001", 0.0000001 -> "1e-7",
+#       #   5e-324 -> "5e-324", 9007199254740993 -> "9007199254740992"
+#       #   (IEEE-754 rounding; standard ECMAScript Number-to-String).
+#       #   -0 serializes as "0" (both top-level and inside arrays/objects).
+#       # NaN, Infinity, -Infinity (NOT finite) -> the literal token  null
+#       #   (no quotes) at every position (top, array slot, object value).
+#
+#   node-3a NON-OBJECT, NON-NUMBER scalars (string, boolean):
+#       if (typeof node !== 'object') return JSON.stringify(node);
+#       # typeof string  -> JSON.stringify(str):  standard JSON string escaping
+#       #   (double-quoted; escapes " \ and control chars U+0000..U+001F as
+#       #   \" \\ \b \f \n \r \t or \u00XX; '/' is NOT escaped; U+2028/U+2029
+#       #   are NOT escaped; lone surrogates emitted as \udXXX). Verified:
+#       #   'a"b\\c\nd\te' -> "\"a\\\"b\\\\c\\nd\\te\"".
+#       # typeof boolean -> "true" / "false".
+#       # typeof bigint  -> typeof is 'bigint' (not 'object', not 'number'), so it
+#       #   reaches JSON.stringify(bigint) which THROWS
+#       #   TypeError: 'Do not know how to serialize a BigInt'.  (See OUT-OF-ENVELOPE.)
+#       # typeof symbol  -> a Symbol passed as a NODE is caught earlier only if it
+#       #   sneaks past node-1 (Symbol is truthy, has no own toJSON) -> typeof is
+#       #   'symbol' != 'object' -> JSON.stringify(symbol) returns undefined ->
+#       #   the call returns undefined (top-level symbol -> undefined). A Symbol
+#       #   used as an OBJECT KEY is never enumerated by Object.keys (excluded).
+#       # typeof function -> functions are objects? NO: typeof function === 'function'
+#       #   which is != 'object'. JSON.stringify(fn) returns undefined -> call
+#       #   returns undefined (so functions behave exactly like undefined: omitted
+#       #   in objects, 'null' in arrays, undefined at top level). Verified.
+#
+#   ----- from here node is a non-null object (typeof === 'object', not number) -----
+#
+#   node-4  (continued from node-3a) anything else is `typeof object`.
+#
+#   node-5  ARRAY:
+#       if (Array.isArray(node)) {
+#         out = '[';
+#         for (i = 0; i < node.length; i++) {
+#           if (i) out += ',';
+#           out += (stringify(node[i]) || 'null');   # element recursion
+#         }
+#         return out + ']';
+#       }
+#       # Elements emitted IN INDEX ORDER, 0..length-1 (NEVER sorted; cmp is
+#       #   NOT applied to arrays). Verified: [3,1,2] -> "[3,1,2]".
+#       # `|| 'null'` substitution: ANY element whose recursive result is a FALSY
+#       #   JS string becomes the literal token  null. The ONLY falsy result is
+#       #   the empty string '' (from undefined/function/symbol/toJSON-undefined,
+#       #   which return JS undefined -> `undefined || 'null'` -> 'null'). Note
+#       #   '0', 'false', '""', '{}', '[]' are all NON-empty (truthy) strings and
+#       #   are kept verbatim. Verified: [1,undefined,3]->[1,null,3];
+#       #   [1,function,3]->[1,null,3]; [1,null,3]->[1,null,3]; [0,1]->[0,1];
+#       #   [false,1]->[false,1]; ['',1]->["",1]; [NaN,1]->[null,1]; [{},1]->[{},1].
+#       # Empty array -> "[]".
+#       # ARRAYS ARE NOT PUSHED TO `seen`: a self-referential array is NOT caught
+#       #   by the cycle check; it recurses until RangeError "Maximum call stack
+#       #   size exceeded" (even with cycles:true). (See OUT-OF-ENVELOPE; cyclic
+#       #   inputs are not codec-expressible, so never generated.)
+#
+#   node-5b NULL (after the array test, before the object body):
+#       if (node === null) return 'null';
+#       # null reaches here (typeof null === 'object', not an array). -> "null".
+#
+#   node-6  PLAIN OBJECT (non-null, non-array):
+#       # CYCLE CHECK (objects only):
+#       if (seen.indexOf(node) !== -1) {
+#           if (cycles) return JSON.stringify('__cycle__');   # i.e. the string  "__cycle__"
+#           else throw new TypeError('Converting circular structure to JSON');
+#       }
+#       seenIndex = seen.push(node) - 1;        # mark node on path
+#       keys = Object.keys(node).sort(cmp && cmp(node));
+#         # Object.keys(node): OWN ENUMERABLE string keys (inherited & non-
+#         #   enumerable & Symbol keys EXCLUDED). null-prototype objects supported.
+#         # .sort(comparator):
+#         #   - DEFAULT (no opts.cmp): comparator is `undefined` ->
+#         #     Array.prototype.sort default order = keys coerced to strings and
+#         #     compared by UTF-16 CODE UNIT (lexicographic). This is a TOTAL order
+#         #     independent of Object.keys' initial enumeration order. Examples
+#         #     (full order verified):
+#         #       ""  <  "1" < "10" < "2" < "A" < "Z" < "a" < "a1" < "ab" < "b"
+#         #       < "z" < "é"(U+00E9) < "😀"(lead unit U+D83D).
+#         #     i.e. digits/uppercase/lowercase by code point; numeric-looking
+#         #     keys are compared AS STRINGS ("10" < "2"); empty string sorts first.
+#         #   - CUSTOM (opts.cmp present): comparator = cmp(node), which calls
+#         #     opts.cmp({key:a,value:node[a]}, {key:b,value:node[b]}) per N4.
+#       out = '';
+#       for (i = 0; i < keys.length; i++) {
+#           key = keys[i];
+#           value = stringify(node[key]);        # recurse on the property value
+#           if (!value) continue;                # OMIT key if value is falsy str
+#           if (out) out += ',';                 # comma only between emitted pairs
+#           out += JSON.stringify(key) + ':' + value;   # "<key>":<value>
+#       }
+#       seen.splice(seenIndex, 1);               # unmark node (so DAG re-use of
+#                                                #   the SAME object on SIBLING
+#                                                #   paths is allowed, not flagged
+#                                                #   cyclic — verified).
+#       return '{' + out + '}';
+#       # KEY OMISSION: `if (!value) continue` omits a pair iff the value's
+#       #   recursive result is the empty string '' (undefined/function/symbol/
+#       #   toJSON-undefined value). '0','false','""','{}','[]','null' are kept.
+#       #   Verified: {a:1,b:undefined,c:3}->{"a":1,"c":3};
+#       #   {a:1,b:function,c:3}->{"a":1,"c":3}; {a:0}->{"a":0}; {a:''}->{"a":""};
+#       #   {a:false}->{"a":false}; {a:null}->{"a":null}; {a:NaN}->{"a":null};
+#       #   {a:{}}->{"a":{}}; {a:[]}->{"a":[]}.
+#       # KEY QUOTING/ESCAPING: JSON.stringify(key) — standard JSON string escaping
+#       #   of the property name (verified: key 'a"b\\c\nd' -> "a\"b\\c\nd").
+#       # SEPARATORS: NO whitespace anywhere. '{', '}', '[', ']', ':' between key
+#       #   and value, ',' between pairs/elements. Compact form, exactly like
+#       #   JSON.stringify(x) with no spacer.
+#       # Empty object -> "{}". Object with all-omitted keys -> "{}".
+#
+# TOP-LEVEL UNDEFINED (node-0 framing): the outermost call's return is the unit's
+#   return. If `data` (after node-1) is undefined/function/symbol/toJSON-undefined,
+#   the unit returns JS `undefined` (NOT a string). Verified: stringify(undefined)
+#   -> undefined; stringify(function(){}) -> undefined; stringify(Symbol()) ->
+#   undefined; stringify({toJSON:()=>undefined}) -> undefined.
+
+# ============================================================================
+ORACLE value -> oracle.json
+#   Pure return-value oracle. For each generated input tuple, the harness records
+#   the return of stringify(...). When the unit THROWS on a codec-faithful input
+#   (the BigInt path), the harness records the throw ({__throw}) and it is graded.
+#   The result is either a string, JS undefined (top-level empty), or a throw.
+
+# ============================================================================
+SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce EXACTLY — the whole unit is in-contract):
+#   - Option normalization N1..N5 (incl. function-shorthand and the boolean-only
+#     cycles guard).
+#   - The recursive pipeline node-1..node-6 with the EXACT ordering:
+#     toJSON -> undefined -> number -> non-object scalar -> array -> null ->
+#     object(cycle-check, key-sort, key-recursion, omission, splice).
+#   - Default key sort = Array.prototype.sort default (UTF-16 code-unit
+#     lexicographic, total order). Custom sort via opts.cmp({key,value},{key,value}).
+#   - Array order preserved; array `|| 'null'` substitution for empty-string
+#     results; object `if(!value)` omission for empty-string results.
+#   - Number formatting via String() with NaN/Infinity -> "null"; strings/booleans/
+#     keys via JSON.stringify; -0 -> "0".
+#   - Cycle handling for OBJECTS: throw TypeError('Converting circular structure
+#     to JSON') by default; substitute the string "__cycle__" when cycles===true.
+#   - Compact separators, no whitespace.
+#
+# CARRIED DATA: none. No literal tables. (No <unit>.carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for the blind re-emitter, but NOT
+# exercised by genInputs because they are not codec-round-trippable as JSON args,
+# or are inherently un-storable):
+#   - CYCLES: object self-reference -> throws by default / "__cycle__" with
+#     cycles:true; array self-reference -> RangeError (stack overflow), even with
+#     cycles:true. Cyclic graphs cannot be expressed by the JSON-array codec
+#     (no cyclic tag), so the cycle paths are SPEC-ONLY (not generated). The
+#     re-emitter must still implement them per node-5/node-6.
+#   - FUNCTIONS as values/nodes: behave as undefined (omitted in objects, 'null'
+#     in arrays, undefined at top). Functions do not round-trip the codec ->
+#     not generated; documented in node-3a.
+#   - SYMBOLS: as a node -> undefined; as an object key -> excluded by Object.keys.
+#     Not codec-round-trippable -> not generated; documented in node-3a/node-6.
+#   - BIGINT: THROWS TypeError 'Do not know how to serialize a BigInt' at any
+#     position. bigint IS codec-round-trippable, so genInputs DOES exercise it as
+#     a throw-path (recorded {__throw}); the re-emitter reproduces the throw via
+#     JSON.stringify(bigint) semantics (node-3a). [Generated, gradable.]
+#   - Host container types (Set, Map, Uint8Array/Buffer, RegExp, boxed Number/
+#     Boolean/String, Date): treated as plain objects (or via toJSON):
+#       Set/Map -> "{}" (no own enumerable string keys);
+#       Uint8Array -> {"0":..,"1":..} (indexed own keys, numeric-ascending then
+#         sorted lexicographically as strings);
+#       Buffer (Node) -> {"data":[...],"type":"Buffer"} (Buffer has those own
+#         enumerable props via its inspect shape) — HOST/RUNTIME-DEPENDENT, so
+#         NOT generated;
+#       RegExp -> "{}"; boxed Number/Boolean -> "{}"; boxed String -> indexed
+#         chars; Date -> ISO string via toJSON.
+#     Of these the codec round-trips Set/Map/Uint8Array/RegExp; their fjss result
+#     is fully determined by Object.keys+toJSON (in-contract). Buffer and boxed
+#     wrappers are EXCLUDED from genInputs (Buffer is runtime-shape-dependent;
+#     boxed wrappers do not round-trip the codec).
+
+# ============================================================================
+PROVENANCE
+#   package: fast-json-stable-stringify@2.1.0  (CommonJS, main = index.js)
+#   export:  default — module.exports = function (data, opts) { ... }
+#   repo:    https://github.com/epoberezkin/fast-json-stable-stringify
+#   license: MIT (Copyright (c) 2017 Evgeny Poberezkin; (c) 2013 James Halliday)
+#   source:  index.js (59 lines), verified by execution of the real package 2.1.0.

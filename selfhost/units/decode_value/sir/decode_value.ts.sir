@@ -1,0 +1,32 @@
+UNIT decode_value
+LANG ts
+PRIMARY-SHA256 741b65d5c687491faec1852fd5d337c19407512a0f7146fd04f2a2fe7e5a3667
+SIG export default function decode_value(tree: unknown): unknown
+ABI TypeScript compiles to the js runtime; the mapping is js's: none=null; bool=boolean; f64=number (NaN, ±Infinity and
+  -0 are numbers); text=string (UTF-16); list=Array; map=plain object with own string keys. Result additionally: absent
+  value = undefined, big integer = bigint, bytes = a plain Uint8Array (not a Buffer), a utf16 text holds a lone
+  surrogate. A throw node (R13) RETURNS { __threw: msg } — never throw for it: the driver marker-escapes every returned
+  value, so it grades as a map; only a raised Error grades as a throw. STRICT: the artifact must type-check under `strict: true` against this SIG,
+  with no `any`, no non-null assertions (`!`), and no `@ts-ignore` / `@ts-expect-error`. Narrow `unknown` with typeof /
+  Array.isArray and read fields through `Record<string, unknown>`.
+ENVELOPE ts WIDENS the result exactly as js does (the same runtime): bigint, Uint8Array, undefined and non-well-formed
+  strings (R3, R5-R8, R11), plus the R15 probes deeper than the neutral codec carries.
+MECHANISM (restated from js — language files are self-contained) R1: a node is a non-null, non-array object whose t is a
+  string; the tag looked up with Object.hasOwn in an own table; NODE-KEYS checked over Object.keys(node); every rejection
+  throws an Error. R15: the depth is an internal recursion counter (root 0; the default export takes the tree only); depth > 100 throws,
+  checked first at each position.
+MECHANISM R3: well-formed = String.prototype.isWellFormed() (lib es2024); cu 'utf8' requires it true, cu 'utf16' false; R12
+  requires it true of every record name. R6/R7: DECIMAL, then BigInt(v); range and
+  ±2n ** 53n tests on the bigint; Number(n) inside.
+MECHANISM R8: BASE64_CANONICAL, then b = Buffer.from(v.slice(7), 'base64'), padding rule 'base64:' + b.toString('base64')
+  === v, result new Uint8Array(b). R9: typeof v === 'string', HEX16 on a string bits, then DataView.setBigUint64(0,
+  BigInt('0x' + bits)) and getFloat64(0); a NaN only from bits '7ff8000000000000'.
+MECHANISM R11: KEY-ORDER = the relational string comparison (prev < k, UTF-16 code units), never localeCompare. R11/R12:
+  Object.defineProperty on a fresh object (enumerable, writable, configurable), never o[k] = v.
+DEPENDS-ON none
+PINNED regex BASE64_CANONICAL = /^base64:(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/ CITED R8 — the accept-set rides on it; no m flag
+PINNED regex DECIMAL = /^(?:0|-?[1-9][0-9]*)$/ CITED R6 R7 — no "-0"; no m flag
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R9 — no m flag
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs decode (rederive, MIT). Blind ts re-emissions are graded by the
+  verifier-owned driver (tsc --strict --noEmit + the any-ban lint, then the js grading path including the js envelope
+  extension).

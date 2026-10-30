@@ -1,0 +1,74 @@
+UNIT canonical_print
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@20bdd3dd041a cli/sir/sir-parse.mjs — print(parse(text).ast), the parse in its default (legacy) mode; the text every PRIMARY-SHA256 binding hashes
+ORACLE-CLASS deterministic
+SIG canonical_print(text: text) -> text
+ENVELOPE any text (Unicode scalar values; no lone surrogates). The function is total: no text throws, and every malformed
+  document degrades silently by the drops of TABLE LINE-CLASS. Non-text input is OUT.
+DEPENDS-ON none
+DESCRIPTION Re-print a SIR document in its one canonical layout: each directive on its own line at column 0 as its name,
+  its arguments, then its attributes; each continuation on its own line after exactly two spaces; comments, blank lines and
+  lines that belong to no directive dropped; lines joined by LF, and a final LF always.
+BEHAVIOR
+R1 Characters. WS is the charset WS and BREAK the charset BREAK (every BREAK character is also WS). To trim a text is to
+  remove all its leading and trailing WS characters. Indentation is SPACE and TAB only. Everything counts Unicode scalar
+  values; no rule depends on an encoding.
+R2 Lines. The text is split at every LF (no LF: one line; a final LF leaves an empty last line). Each line loses ONE trailing
+  CR when it has one; any other CR stays in the line as an ordinary character (it is WS and BREAK). Lines are classified in
+  order by TABLE LINE-CLASS. The current directive is none until the first directive line.
+R3 Each line splits into INDENT, its maximal leading run of SPACE and TAB (possibly empty), and CONTENT, the rest.
+R4 Trailing comment. CODE is CONTENT cut at the FIRST position p where all hold: the character at p is WS; the character
+  after it is the NUMBER SIGN; the character after that is WS or there is none; no BREAK character lies before p; no BREAK
+  character lies after the NUMBER SIGN. At such a p, CODE = the characters before p with trailing WS removed, and the mark
+  and all after it are dropped. Without such a p, CODE = CONTENT unchanged, trailing WS kept. A NUMBER SIGN glued to the
+  text before it or after it is ordinary text. CITED FIDELITY package — legacy mode drops the comment silently
+R5 Directive line. Of a column-0 CODE: HEAD = its maximal leading run of non-WS characters (empty when CODE is empty or
+  starts with WS); REST = what follows HEAD once the WS run after HEAD is skipped. It is a directive line when HEAD is not
+  empty, HEAD matches the grammar NAME, and REST holds no BREAK character. The directive's name is HEAD without its colon
+  (when it has one); ATTRIBUTES (R8) of REST gives its args and attributes; it is appended and becomes the current
+  directive. The name need not be a known directive: every name prints alike CITED FIDELITY package
+R6 LOOSE line (column 0, not a directive line): with a current directive, CODE is appended to its continuations VERBATIM —
+  not trimmed, no attributes taken out, any BREAK kept; with none, the line is dropped. So a byte order mark, a no-break space
+  or any other non-SPACE non-TAB WS at column 0 makes the line LOOSE (a document whose first line starts with a byte order mark
+  loses that line). CITED FIDELITY package
+R7 Continuation (INDENT not empty, a current directive exists): ATTRIBUTES (R8) of CODE gives a body and attributes. The
+  body is appended to the current directive's continuations (an empty body prints as two spaces alone). The attributes are
+  MERGED into the directive's: a key it already has takes the new value in place (its print position stays, the old value
+  is gone); a new key goes after the existing ones. CITED FIDELITY package
+R8 ATTRIBUTES(s) gives a body and an ordered list of attributes. The keywords are the three upper-case words "CITED",
+  "EARNED" and "ANCHOR". Start with body = s and no attributes, then repeat: find the LEFTMOST position i in body where the
+  character at i is WS, the maximal WS run starting at i is followed directly by a keyword K, and the text A after K splits
+  as W then T, W one or more WS characters and T one or more characters holding no BREAK. If there is none, stop. Else the
+  value is A trimmed (it may be empty); when K is already in this call's list its value becomes the old value, one space,
+  the new value, else K is added at the end; body is cut to the characters before i; repeat. Finally body is trimmed.
+  So the first qualifying keyword swallows the rest of the line, other keywords included; a keyword at the very start of s,
+  glued to a non-WS character, or followed by fewer than two characters, is body text. CITED FIDELITY package
+R9 A BREAK can block a keyword on one pass and free it on a later one (the cut removed the BREAK), so a later keyword can be
+  listed before an earlier one, and a key can collect two values. CITED FIDELITY package
+R10 Print. Each directive, in order, prints one line: its name; then, when args is not empty, one space and args; then for
+  each attribute in order one space, the keyword, one space and the value (an empty value leaves a trailing space). Each of
+  its continuations follows in order on its own line: two spaces, then the continuation. The lines are joined with LF and
+  one final LF is added; with no directive the result is a single LF.
+TABLE LINE-CLASS — first matching row; CONTENT, CODE and INDENT as R3–R4
+  the line is empty after trimming                          | blank: skipped
+  CONTENT starts with the NUMBER SIGN                       | full-line comment: skipped; the current directive is unchanged
+  INDENT empty and a directive line (R5)                    | a new directive (R5)
+  INDENT empty, otherwise                                   | LOOSE (R6)
+  INDENT not empty and no current directive                 | dropped
+  INDENT not empty                                          | continuation (R7)
+PINNED charset WS = hex code points 0009-000D 0020 00A0 1680 2000-200A 2028 2029 202F 205F 3000 FEFF CITED FIDELITY package — the host's whitespace class; 0085 (NEXT LINE) is NOT in it
+PINNED charset BREAK = hex code points 000A 000D 2028 2029 CITED FIDELITY package — LF, CR, LINE SEPARATOR, PARAGRAPH SEPARATOR
+PINNED grammar NAME = one upper-case ASCII letter, then zero or more upper-case ASCII letters, ASCII digits or "-", then at most one ":" CITED FIDELITY package — "UNIT:" names UNIT, "Ab:" and "A::" do not match
+INVARIANT the result ends with LF; cut at every LF, each piece before the final LF starts with an upper-case ASCII letter
+  (a directive) or with two spaces (a continuation), and the first starts with a letter. The result is a single LF exactly
+  when no line is a directive line.
+OUT-OF-DOMAIN no text throws. Malformed SIR degrades silently: lines before the first directive are dropped, a CR-only
+  document is one line that is never a directive line (REST holds a BREAK) and prints as a single LF, an interior BREAK in a
+  column-0 line makes it LOOSE, and the parse's errors and warnings never reach the result.
+ORACLE value -> oracles/canonical_print.json
+SCOPE IN: R1–R10 over any text. OUT: strict mode, the parse's errors, warnings, indents and comment bodies, the directive
+  table's register and kind fields, the hash itself, and lone surrogates.
+PROVENANCE rederive@20bdd3dd041a (MIT), cli/sir/sir-parse.mjs: parse (legacy mode), attrsOf, splitTrailingComment,
+  isDirectiveName, print; seam selfhost/seams/canonical_print.mjs. Cold cut 2026-10-26 into the v0.5 contract register from
+  the pinned authority snapshot.

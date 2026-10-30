@@ -1,0 +1,411 @@
+# ============================================================================
+# SIR — lodash.camelcase  (default export `camelCase`)
+# ============================================================================
+UNIT camelCase
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG camelCase(string = '') -> string          # ONE positional arg; coerced via toString
+DEPENDS-ON none                               # self-contained single-file CJS bundle, zero deps
+ORACLE value -> oracle.json
+
+# The blind re-emitter MUST emit the unit as a SINGLE default-exported function value:
+#     export default function camelCase(string) { ... }
+# (lodash.camelcase is `module.exports = camelCase`; exportName is null / default.)
+
+# ----------------------------------------------------------------------------
+# OVERVIEW
+# ----------------------------------------------------------------------------
+# camelCase is a pure, deterministic string transform. No clock/RNG/io/net seam.
+# It is lodash's `createCompounder`-built function:
+#
+#     camelCase(string) =
+#         arrayReduce(
+#             words( deburr(toString(string)).replace(reApos, '') ),   # WORD LIST
+#             callback,                                                 # per-word fold
+#             ''                                                        # initial accumulator
+#         )
+#
+#     callback(result, word, index):
+#         word = word.toLowerCase()
+#         return result + (index ? capitalize(word) : word)
+#
+#     capitalize(s) = upperFirst( toString(s).toLowerCase() )   # see UPPER-FIRST
+#
+# In words: produce the list of "words", lower-case the WHOLE first word, and
+# for every subsequent word lower-case it then upper-case its first character
+# ("capitalize"), and concatenate. The first word at index 0 is NOT capitalized
+# (its first char stays as produced by .toLowerCase()).
+#
+# NOTE the fold uses index = the WORD's position in the words[] array (0-based),
+# NOT a character index. Digit-only and emoji "words" occupy positions and thus
+# shift the capitalize/not decision of later words (see EDGE: digits, emoji).
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — exact)
+# ----------------------------------------------------------------------------
+
+# NODE 1 — toString coercion  (lodash `toString` / `baseToString`)
+#   Let s := toString(string), where:
+#     - string == null   (i.e. null OR undefined, loose ==)  -> s = ''
+#     - typeof string == 'string'                            -> s = string  (verbatim)
+#     - otherwise s = (string + '') with one special case:
+#         if (string + '') == '0'  AND  (1/string) == -Infinity  -> s = '-0'
+#         (i.e. the number -0 stringifies to '-0', not '0')
+#     - Symbol primitives have their own path (symbolToString); OUT-OF-ENVELOPE
+#       for this generator (Symbols are not codec-faithful and not emitted).
+#   Observed coercions (VERIFIED against real pkg):
+#       camelCase()           -> ''        (undefined)
+#       camelCase(null)       -> ''
+#       camelCase(undefined)  -> ''
+#       camelCase(123)        -> '123'
+#       camelCase(1.5)        -> '15'      (toString '1.5' -> words ['1','5'] -> '1'+'5')
+#       camelCase(-0)         -> '0'       (deburr/words drop the '-'; '-0' -> ['0'])
+#       camelCase(true)       -> 'true'
+#       camelCase([1,2,3])    -> '123'     (Array#toString -> '1,2,3')
+#       camelCase({})         -> 'objectObject'  ('[object Object]' -> ['object','Object'])
+#       camelCase(NaN)        -> 'naN'     ('NaN' -> ['Na','N'] -> 'na'+'N')
+#       camelCase(Infinity)   -> 'infinity'
+#   The generator emits string args (the in-contract envelope) plus the small set
+#   of codec-faithful primitives above to exercise this node. NaN/Infinity/-0/boxed
+#   are NOT codec-round-trippable and are DOCUMENTED here, NOT emitted by genInputs.
+
+# NODE 2 — deburr(s)   (lodash `deburr`)
+#   s := toString(s)                                 # already a string here
+#   if s is falsy ('' )  -> deburr returns s ('') and short-circuits (string && ...).
+#   else  s := s.replace(reLatin, deburrLetter).replace(reComboMark, '')
+#
+#   2a. reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xffĀ-ſ]/g
+#       Matches Latin-1 Supplement letters (U+00C0..U+00FF excluding U+00D7 '×'
+#       and U+00F7 '÷') and ALL of Latin Extended-A (U+0100..U+017F).
+#       Each matched char is replaced by deburrLetter(char) =
+#         deburredLetters[char]  (a plain map; basePropertyOf returns the value).
+#       EVERY char that reLatin can match IS a key of deburredLetters (verified:
+#       the map covers the exact same code points). So no 'undefined' replacement
+#       ever occurs on the reLatin path.
+#
+#       deburredLetters MAP  (EXACT — transcribed from source; IN-CONTRACT LOGIC,
+#       NOT carried data: it is small and reproduced verbatim here):
+#         # Latin-1 Supplement block:
+#         À Á Â Ã Ä Å (C0 C1 C2 C3 C4 C5) -> 'A'
+#         à á â ã ä å (E0 E1 E2 E3 E4 E5) -> 'a'
+#         Ç (C7) -> 'C'        ç (E7) -> 'c'
+#         Ð (D0) -> 'D'        ð (F0) -> 'd'
+#         È É Ê Ë (C8 C9 CA CB) -> 'E'
+#         è é ê ë (E8 E9 EA EB) -> 'e'
+#         Ì Í Î Ï (CC CD CE CF) -> 'I'
+#         ì í î ï (EC ED EE EF) -> 'i'
+#         Ñ (D1) -> 'N'        ñ (F1) -> 'n'
+#         Ò Ó Ô Õ Ö Ø (D2 D3 D4 D5 D6 D8) -> 'O'
+#         ò ó ô õ ö ø (F2 F3 F4 F5 F6 F8) -> 'o'
+#         Ù Ú Û Ü (D9 DA DB DC) -> 'U'
+#         ù ú û ü (F9 FA FB FC) -> 'u'
+#         Ý (DD) -> 'Y'        ý ÿ (FD FF) -> 'y'
+#         Æ (C6) -> 'Ae'       æ (E6) -> 'ae'
+#         Þ (DE) -> 'Th'       þ (FE) -> 'th'
+#         ß (DF) -> 'ss'
+#         # Latin Extended-A block:
+#         Ā Ă Ą (0100 0102 0104) -> 'A'     ā ă ą (0101 0103 0105) -> 'a'
+#         Ć Ĉ Ċ Č (0106 0108 010A 010C) -> 'C'   ć ĉ ċ č (0107 0109 010B 010D) -> 'c'
+#         Ď Đ (010E 0110) -> 'D'           ď đ (010F 0111) -> 'd'
+#         Ē Ĕ Ė Ę Ě (0112 0114 0116 0118 011A) -> 'E'
+#         ē ĕ ė ę ě (0113 0115 0117 0119 011B) -> 'e'
+#         Ĝ Ğ Ġ Ģ (011C 011E 0120 0122) -> 'G'   ĝ ğ ġ ģ (011D 011F 0121 0123) -> 'g'
+#         Ĥ Ħ (0124 0126) -> 'H'           ĥ ħ (0125 0127) -> 'h'
+#         Ĩ Ī Ĭ Į İ (0128 012A 012C 012E 0130) -> 'I'
+#         ĩ ī ĭ į ı (0129 012B 012D 012F 0131) -> 'i'
+#         Ĵ (0134) -> 'J'      ĵ (0135) -> 'j'
+#         Ķ (0136) -> 'K'      ķ ĸ (0137 0138) -> 'k'
+#         Ĺ Ļ Ľ Ŀ Ł (0139 013B 013D 013F 0141) -> 'L'
+#         ĺ ļ ľ ŀ ł (013A 013C 013E 0140 0142) -> 'l'
+#         Ń Ņ Ň Ŋ (0143 0145 0147 014A) -> 'N'   ń ņ ň ŋ (0144 0146 0148 014B) -> 'n'
+#         Ō Ŏ Ő (014C 014E 0150) -> 'O'    ō ŏ ő (014D 014F 0151) -> 'o'
+#         Ŕ Ŗ Ř (0154 0156 0158) -> 'R'    ŕ ŗ ř (0155 0157 0159) -> 'r'
+#         Ś Ŝ Ş Š (015A 015C 015E 0160) -> 'S'   ś ŝ ş š (015B 015D 015F 0161) -> 's'
+#         Ţ Ť Ŧ (0162 0164 0166) -> 'T'    ţ ť ŧ (0163 0165 0167) -> 't'
+#         Ũ Ū Ŭ Ů Ű Ų (0168 016A 016C 016E 0170 0172) -> 'U'
+#         ũ ū ŭ ů ű ų (0169 016B 016D 016F 0171 0173) -> 'u'
+#         Ŵ (0174) -> 'W'      ŵ (0175) -> 'w'
+#         Ŷ (0176) -> 'Y'  ŷ (0177) -> 'y'  Ÿ (0178) -> 'Y'
+#         Ź Ż Ž (0179 017B 017D) -> 'Z'    ź ż ž (017A 017C 017E) -> 'z'
+#         Ĳ (0132) -> 'IJ'     ĳ (0133) -> 'ij'
+#         Œ (0152) -> 'Oe'     œ (0153) -> 'oe'
+#         ŉ (0149) -> "'n"     ſ (017F) -> 'ss'
+#       NOTE: ŉ (U+0149) deburrs to the 2-char string "'n" (apostrophe + n). The
+#       apostrophe it INTRODUCES is later removed by NODE 3. ORDER MATTERS:
+#       deburr runs BEFORE the apostrophe strip, so "ŉ" -> "'n" -> "n".
+#
+#   2b. reComboMark = RegExp(rsCombo, 'g')  where
+#         rsCombo = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+#         rsComboMarksRange   = '̀-ͯ︠-︣'
+#         rsComboSymbolsRange = '⃐-⃰'
+#       i.e. reComboMark = /[̀-ͯ︠-︣⃐-⃰]/g
+#       Every combining diacritical mark (and combining mark for symbols) in those
+#       ranges is REMOVED (replaced with ''). This is the NFD-decomposed path:
+#       'e' + U+0301 -> 'e'; 'a' + U+030A -> 'a'.   (VERIFIED: 'café' NFD -> 'cafe'.)
+#
+#   IMPORTANT — what deburr does NOT touch:
+#     - U+00D7 '×', U+00F7 '÷', U+00B1 '±', U+00AC '¬' are NOT in reLatin and are
+#       NOT diacritics — they survive deburr and act as WORD-BREAK chars in NODE 4
+#       (they're in rsBreakRange / rsMathOpRange). e.g. 'a×b' -> words ['a','b'] -> 'aB'.
+#     - Non-Latin letters (Cyrillic, CJK, Greek, etc.) are NOT deburred; they pass
+#       through and are matched as word characters (rsMisc) in the unicode words path.
+#       e.g. 'снег зимой' -> 'снегЗимой'; '北京 上海' -> '北京上海'.
+
+# NODE 3 — strip apostrophes:  s := s.replace(reApos, '')
+#   reApos = RegExp(rsApos, 'g'),  rsApos = "['’]"
+#   i.e. reApos = /['’]/g  — removes BOTH the ASCII apostrophe U+0027 (')
+#   and the right single quotation mark U+2019 (’). ALL such chars deleted.
+#   CONSEQUENCE: because apostrophes are stripped HERE, BEFORE words(), the
+#   contraction sub-patterns inside the words regex (rsOptLowerContr /
+#   rsOptUpperContr, which match "'s","'ll","'VE" etc.) can NEVER fire in
+#   camelCase — there are no apostrophes left to match. So:
+#       "o'clock" -> "oclock"        "can't" -> "cant"      "I'm" -> "im"
+#       "you'll"  -> "youll"         "they'VE" -> "theyVe"  ("theyVE" -> ['they','VE'])
+#       "o’clock" (curly) -> "oclock"
+#   (These contraction branches in the regex are dead code for THIS unit but are
+#   transcribed in NODE 4 for completeness/fidelity of the regex constant.)
+
+# NODE 4 — words(s)   (lodash `words` with no pattern arg)
+#   words(string) with pattern === undefined:
+#       return hasUnicodeWord(string) ? unicodeWords(string) : asciiWords(string)
+#
+#   4a. FAST-PATH SELECTOR  hasUnicodeWord(string) = reHasUnicodeWord.test(string)
+#       reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#       TRUE (use UNICODE words path) iff the string contains ANY of:
+#         - a lowercase ASCII letter immediately followed by an uppercase ASCII letter (camelHump), OR
+#         - 2+ uppercase ASCII letters followed by a lowercase ASCII letter (ALLCAPS->lower), OR
+#         - an ASCII digit immediately followed by an ASCII letter, OR
+#         - an ASCII letter immediately followed by an ASCII digit, OR
+#         - ANY character that is not [A-Za-z0-9 ] (i.e. any non-(ascii-alnum-or-space):
+#           punctuation, '_' , '-', '.', accents, unicode letters, emoji, etc.)
+#       FALSE (use ASCII words path) otherwise — i.e. only space-separated runs of
+#       same-case-ish ASCII alnum with no humps/digit-letter-adjacency. Examples:
+#         'foo bar baz'  -> ASCII path     'FOO BAR'      -> ASCII path
+#         'Hello'        -> ASCII path     'single'       -> ASCII path
+#         'fooBar'       -> UNICODE path (lo->Up hump)
+#         'foo-bar'      -> UNICODE path ('-' is non-alnum-nonspace)
+#         'foo123bar'    -> UNICODE path (digit-letter adjacency)
+#       Both paths are exercised; they agree on simple cases but the unicode path
+#       is required for humps/digits/punct/unicode.
+#
+#   4b. ASCII WORDS PATH  asciiWords(string) = string.match(reAsciiWord) || []
+#       reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#       Matches maximal runs of chars OUTSIDE these ASCII ranges, i.e. it splits on
+#       the ASCII non-alphanumeric controls/punctuation/space:
+#         excluded: U+0000..U+002F (controls, space, ! " # $ % & ' ( ) * + , - . /),
+#                   U+003A..U+0040 (: ; < = > ? @),
+#                   U+005B..U+0060 ([ \ ] ^ _ `),
+#                   U+007B..U+007F ({ | } ~ DEL)
+#       Kept (word chars): 0-9 A-Z a-z AND every char >= U+0080 (so on the ASCII
+#       path, any high char would be kept — but the ASCII path is only chosen when
+#       hasUnicodeWord is FALSE, which already forbids non-ascii chars except space).
+#       Result: no match -> [] (e.g. '   ' -> []).
+#
+#   4c. UNICODE WORDS PATH  unicodeWords(string) = string.match(reUnicodeWord) || []
+#       reUnicodeWord is the alternation (in order) of these 6 branches, 'g' flag:
+#
+#         (B1) UPPER? LOWER+ OPT-LOWER-CONTR  (?= BREAK | UPPER | $ )
+#         (B2) UPPERMISC+ OPT-UPPER-CONTR     (?= BREAK | UPPER LOWERMISC | $ )
+#         (B3) UPPER? LOWERMISC+ OPT-LOWER-CONTR
+#         (B4) UPPER+ OPT-UPPER-CONTR
+#         (B5) DIGITS                          ( \d+ )
+#         (B6) EMOJI
+#
+#       Component character classes / fragments (EXACT — from source):
+#         rsAstralRange       = '\ud800-\udfff'
+#         rsComboMarksRange   = '̀-ͯ︠-︣'
+#         rsComboSymbolsRange = '⃐-⃰'
+#         rsDingbatRange      = '✀-➿'
+#         rsLowerRange        = 'a-z\xdf-\xf6\xf8-\xff'
+#         rsMathOpRange       = '\xac\xb1\xd7\xf7'
+#         rsNonCharRange      = '\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf'
+#         rsPunctuationRange  = ' -⁯'
+#         rsSpaceRange        = ' \t\x0b\f\xa0﻿\n\r   ᠎             　'
+#         rsUpperRange        = 'A-Z\xc0-\xd6\xd8-\xde'
+#         rsVarRange          = '︎️'
+#         rsBreakRange        = rsMathOpRange + rsNonCharRange + rsPunctuationRange + rsSpaceRange
+#
+#         rsApos    = "['’]"
+#         rsAstral  = '[' + rsAstralRange + ']'
+#         rsBreak   = '[' + rsBreakRange + ']'
+#         rsCombo   = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+#         rsDigits  = '\d+'
+#         rsDingbat = '[' + rsDingbatRange + ']'
+#         rsLower   = '[' + rsLowerRange + ']'
+#         rsMisc    = '[^' + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + ']'
+#                     # = any char that is NOT astral, NOT a break char, NOT a digit,
+#                     #   NOT a dingbat, NOT lower, NOT upper -> i.e. "other letters"
+#                     #   such as CJK, Cyrillic, Greek, '_'? NO — '_' (U+005F) is in
+#                     #   rsNonCharRange (\x5b-\x60) so it's a BREAK, not misc.
+#         rsFitz     = '\ud83c[\udffb-\udfff]'
+#         rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+#         rsNonAstral= '[^' + rsAstralRange + ']'
+#         rsRegional = '(?:\ud83c[\udde6-\uddff]){2}'
+#         rsSurrPair = '[\ud800-\udbff][\udc00-\udfff]'
+#         rsUpper    = '[' + rsUpperRange + ']'
+#         rsZWJ      = '‍'
+#         rsLowerMisc= '(?:' + rsLower + '|' + rsMisc + ')'
+#         rsUpperMisc= '(?:' + rsUpper + '|' + rsMisc + ')'
+#         rsOptLowerContr = "(?:['’](?:d|ll|m|re|s|t|ve))?"   # DEAD CODE here (apos pre-stripped)
+#         rsOptUpperContr = "(?:['’](?:D|LL|M|RE|S|T|VE))?"   # DEAD CODE here
+#         reOptMod   = rsModifier + '?'
+#         rsOptVar   = '[' + rsVarRange + ']?'
+#         rsOptJoin  = '(?:' + rsZWJ + '(?:' + [rsNonAstral,rsRegional,rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+#         rsSeq      = rsOptVar + reOptMod + rsOptJoin
+#         rsEmoji    = '(?:' + [rsDingbat,rsRegional,rsSurrPair].join('|') + ')' + rsSeq
+#
+#       INTUITIVE WORD-SPLIT RULES (these are what a re-emitter must reproduce; the
+#       exact regex above is authoritative, but these summarize the observable splits,
+#       all VERIFIED against the real package by inspecting words(deburr(s).replace(apos,''))):
+#         R1. A run of lowercase(+misc) letters is one word; an optional single
+#             leading uppercase is absorbed into it:  'Foo' -> ['Foo']; 'fooBar' -> ['foo','Bar'].
+#         R2. A camelHump 'xY' splits between x and Y.
+#         R3. An ALLCAPS run is one word UNLESS it is immediately followed by a
+#             lowercase letter, in which case the LAST uppercase letter joins the
+#             following lowercase word:
+#               'FOOBAR'  -> ['FOOBAR']            (foobar)
+#               'FOOBar'  -> ['FOO','Bar']         (fooBar)
+#               'BETAgamma' -> ['BET','Agamma']    (betAgamma)
+#               'XMLHttpRequest' -> ['XML','Http','Request']  (xmlHttpRequest)
+#               'getXMLData' -> ['get','XML','Data']          (getXmlData)
+#               'ABCdef' -> ['AB','Cdef']          (abCdef)
+#               'PDFLoader' -> ['PDF','Loader']    (pdfLoader)
+#               'IOError' -> ['IO','Error']        (ioError)
+#         R4. A maximal run of digits (\d+) is its OWN word, separate from adjacent
+#             letters:
+#               'foo123bar' -> ['foo','123','bar']     (foo123Bar)
+#               'a1b2c3'    -> ['a','1','b','2','c','3'] (a1B2C3)
+#               '2cool4school' -> ['2','cool','4','school'] (2Cool4School)
+#               'HTTP2Server' -> ['HTTP','2','Server']  (http2Server)
+#               'parseHTML5Doc' -> ['parse','HTML','5','Doc'] (parseHtml5Doc)
+#             NOTE \d is ASCII-digit only (no 'u' flag): only U+0030..U+0039.
+#         R5. BREAK chars (rsBreakRange: math ops × ÷ ± ¬, all ASCII punctuation/
+#             control 00-2F/3A-40/5B-60 incl '_' '-' '.', high punctuation, and ALL
+#             the listed whitespace incl NBSP/em-space/etc) are NOT word chars and
+#             separate words:  '--foo-bar--' -> ['foo','bar'];  '__FOO_BAR__' -> ['FOO','BAR'].
+#         R6. "Other" letters (rsMisc: any char that's not astral/break/digit/
+#             dingbat/lower/upper — e.g. CJK, Cyrillic, Greek, accented letters that
+#             survived deburr) act as word chars and group with adjacent lower/misc
+#             via rsLowerMisc/rsUpperMisc. 'снег зимой' -> ['снег','зимой'].
+#         R7. EMOJI (B6): dingbats (U+2700..U+27BF), regional-indicator PAIRS (flags),
+#             surrogate-pair astral chars (e.g. 😀), plus optional variation
+#             selectors / combining modifiers / ZWJ-joined sequences form a SINGLE
+#             emoji "word":  'foo😀bar' -> ['foo','😀','bar'];  flag '🇺🇸' is one word;
+#             dingbat '✂' is one word. The emoji counts as a word position (affects
+#             capitalize of later words):  'foo😀bar' -> 'foo' + '😀'(idx1, capitalize
+#             is no-op on emoji) + 'Bar'(idx2) = 'foo😀Bar'.
+#         R8. No matches -> [] (whitespace-only / empty after stripping).
+#
+#   (Aside — stringToArray/unicodeToArray/asciiToArray and hasUnicode/reUnicode/
+#    reHasUnicode are used by upperFirst's createCaseFirst to split surrogate-aware
+#    when uppercasing the first char; see UPPER-FIRST. They do not change which WORDS
+#    are produced — only how a word's first char is upper-cased.)
+
+# NODE 5 — fold (arrayReduce over words, accumulator '')
+#   For each word w at 0-based array index i:
+#       lw = w.toLowerCase()
+#       if i == 0:  emit lw            (first word: just lower-cased, NOT capitalized)
+#       else:       emit capitalize(w) = upperFirst( w.toLowerCase() )
+#                   = upperFirst(lw)
+#   Concatenate all emitted pieces (left to right) -> result string.
+#   words == []  ->  arrayReduce returns the initial accumulator ''  -> result ''.
+
+# UPPER-FIRST  (lodash `upperFirst` = createCaseFirst('toUpperCase'))
+#   upperFirst(s):
+#     s = toString(s)
+#     if hasUnicode(s):  split s surrogate-aware via stringToArray, take element[0]
+#                        as the first "character" (may be a surrogate pair), uppercase
+#                        it, and join the rest unchanged.
+#       hasUnicode(s) = /[‍\ud800-\udfff̀-ͯ︠-︣⃐-⃰︎️]/.test(s)
+#       stringToArray: if hasUnicode -> s.match(reUnicode)||[]  (surrogate/ZWJ-aware
+#       grapheme-ish split), else s.split('').
+#     else: chr = s.charAt(0); trailing = s.slice(1).
+#     return chr.toUpperCase() + trailing.
+#   For camelCase, the input to upperFirst is already w.toLowerCase(); so this
+#   uppercases the FIRST character (a single BMP char, or a leading surrogate pair /
+#   emoji unit) and leaves the rest lower-cased. For an emoji-only word the first
+#   "char" has no uppercase form, so .toUpperCase() is the emoji unchanged.
+#   capitalize('') -> upperFirst('') : note ''.toString()... chr = ''.charAt(0) = ''
+#   and ''[methodName]() = ''.toUpperCase() = ''  -> capitalize('') = '' (cannot occur
+#   here since words are never empty strings).
+
+# ----------------------------------------------------------------------------
+# VERIFIED EXAMPLES (real lodash.camelcase@4.3.0 — anchor set)
+# ----------------------------------------------------------------------------
+#   ''               -> ''
+#   '   '            -> ''            (whitespace-only)
+#   'Foo Bar'        -> 'fooBar'
+#   '--foo-bar--'    -> 'fooBar'
+#   '__FOO_BAR__'    -> 'fooBar'
+#   'single'         -> 'single'
+#   'HELLO'          -> 'hello'
+#   'fooBar'         -> 'fooBar'
+#   'helloWorld'     -> 'helloWorld'
+#   'Hello World'    -> 'helloWorld'
+#   'FOOBar'         -> 'fooBar'
+#   'FOOBAR'         -> 'foobar'
+#   'FooBar'         -> 'fooBar'
+#   'XMLHttpRequest' -> 'xmlHttpRequest'
+#   'getXMLData'     -> 'getXmlData'
+#   'PDFLoader'      -> 'pdfLoader'
+#   'IOError'        -> 'ioError'
+#   'parseHTML5Doc'  -> 'parseHtml5Doc'
+#   'ABCdef'         -> 'abCdef'
+#   'aB'             -> 'aB'
+#   'foo123bar'      -> 'foo123Bar'
+#   '123foo'         -> '123Foo'
+#   'v1.2.3'         -> 'v123'
+#   'a1b2c3'         -> 'a1B2C3'
+#   '2cool4school'   -> '2Cool4School'
+#   'HTTP2Server'    -> 'http2Server'
+#   'foo 123 bar'    -> 'foo123Bar'
+#   'FOO_BAR'        -> 'fooBar'
+#   "o'clock"        -> 'oclock'
+#   "can't"          -> 'cant'
+#   "I'm"            -> 'im'
+#   "you'll"         -> 'youll'
+#   "they'VE"        -> 'theyVe'
+#   'o’clock'   -> 'oclock'      (curly apostrophe)
+#   'déjà vu'        -> 'dejaVu'
+#   'Crème Brûlée'   -> 'cremeBrulee'
+#   'Æsop'           -> 'aesop'
+#   'Çá'             -> 'ca'
+#   'café' (NFD)     -> 'cafe'        (combining acute removed)
+#   'Łódź'           -> 'lodz'
+#   'Œuvre'          -> 'oeuvre'
+#   'İstanbul'       -> 'istanbul'    (İ U+0130 -> 'I' -> 'i')
+#   'ŉ'              -> 'n'           (U+0149 -> "'n" -> apos stripped -> 'n')
+#   'ſ'              -> 'ss'          (U+017F -> 'ss')
+#   'a×b' 'a÷b' 'a±b'-> 'aB'          (math ops are breaks, not deburred)
+#   'снег зимой'     -> 'снегЗимой'
+#   '北京 上海'       -> '北京上海'
+#   'foo😀bar'       -> 'foo😀Bar'
+#   'hello 😀 world' -> 'hello😀World'
+#   'usa 🇺🇸 flag'  -> 'usa🇺🇸Flag'
+#   'cut ✂ here'     -> 'cut✂Here'
+#   123 -> '123'   1.5 -> '15'   -0 -> '0'   true -> 'true'
+#   [1,2,3] -> '123'   {} -> 'objectObject'   null -> ''   undefined -> ''
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the whole pipeline NODE 1..5 — toString
+#   coercion, deburr (reLatin map + reComboMark removal), apostrophe strip (reApos),
+#   words split (hasUnicodeWord fast-path selector + asciiWords + unicodeWords with
+#   the full 6-branch unicode regex and all character-class constants), and the
+#   fold (lower-first-word / capitalize-rest / join). The deburredLetters map is
+#   reproduced VERBATIM above (small, in-contract — NOT carried data).
+# CARRIED DATA: none. Everything is small inline logic/constants reproduced here.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE: Symbol-primitive coercion path (baseToString's
+#   symbolToString branch) and non-codec-faithful args (NaN, ±Infinity, -0, boxed
+#   primitives) are documented in NODE 1 but NOT emitted by genInputs (they don't
+#   round-trip the JSON codec). A blind re-emitter can still reconstruct them from
+#   the spec; they are simply not graded.
+
+# ----------------------------------------------------------------------------
+# PROVENANCE
+# ----------------------------------------------------------------------------
+# package: lodash.camelcase@4.3.0  (npm), MIT license.
+# repo: lodash/lodash  (custom modularized build: `lodash modularize exports="npm"`).
+# source file: node_modules/lodash.camelcase/index.js  (single self-contained CJS bundle).
+# export: module.exports = camelCase (DEFAULT export; exportName = null).

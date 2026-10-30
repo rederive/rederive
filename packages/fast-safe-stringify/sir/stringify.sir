@@ -1,0 +1,262 @@
+UNIT stringify
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# The DEFAULT export (module.exports) of fast-safe-stringify@2.1.1: the
+# insertion-order, cycle-safe serializer. This is NOT the .stable / .stableStringify
+# variant (which sorts keys) — do not reconstruct the sorted variant.
+
+SIG stringify(obj: any, replacer?: function | array | null | undefined,
+              spacer?: number | string | null | undefined) -> string | undefined
+# NOTE: the real source also accepts a 4th `options` arg (depthLimit/edgesLimit).
+# It is OUT-OF-SCOPE for this unit (see SCOPE). The blind re-emitter implements a
+# 3-arg function. The generator NEVER passes a 4th arg, so the default options
+# (depthLimit = Number.MAX_SAFE_INTEGER, edgesLimit = Number.MAX_SAFE_INTEGER) are
+# always in force and never trigger the '[...]' limit replacement. Treat the unit
+# as 3-arg.
+
+DEPENDS-ON none   # zero runtime dependencies; relies only on the JS engine's JSON.stringify
+
+# =============================================================================
+BEHAVIOR
+# =============================================================================
+#
+# CORE CONTRACT (the whole point of this unit): for any ACYCLIC input that the
+# JS engine's native JSON.stringify can serialize WITHOUT THROWING, this function
+# returns EXACTLY JSON.stringify(obj, replacer, spacer) — byte-for-byte identical.
+# It is a transparent pass-through to JSON.stringify on the success path; the only
+# value-add is cycle handling (out of scope here) and a catch-all on the throw path.
+#
+# The blind re-emitter SHOULD implement this by literally delegating to the host's
+# JSON.stringify with the SAME three arguments, wrapped exactly as nodes B1/B2 below.
+# All JSON.stringify semantics (replacer, spacer, value-omission, number specials,
+# string escaping, toJSON, key ordering, etc.) are inherited verbatim and are NOT
+# re-implemented. The notes B3..B11 below pin down those inherited semantics so the
+# re-emitter can SELF-CHECK its delegation is faithful; they are descriptive of
+# JSON.stringify, not extra logic to add.
+#
+# ----- PIPELINE (ordered) -----
+#
+# B0. Argument intake. Function takes (obj, replacer, spacer). (The real source
+#     normalizes a missing 4th `options` arg to defaultOptions(); since this unit
+#     never receives a 4th arg, that branch always runs and is a no-op for scope.)
+#
+# B1. Cycle/limit analysis pass (decirc).
+#     The real source first walks `obj` with an internal `decirc` routine to detect
+#     circular references and (optionally) depth/edge limits, temporarily mutating
+#     the object graph to splice in sentinel strings. For ACYCLIC input within the
+#     default (effectively-infinite) limits, decirc finds NOTHING to replace: it
+#     performs NO net mutation, leaves its bookkeeping empty, and the object graph
+#     is unchanged on entry to B2. The function is also IDEMPOTENT and leaves the
+#     input object intact after returning (verified: re-stringifying the same object
+#     yields identical output and the object is unmodified). Therefore, FOR THE
+#     IN-SCOPE (ACYCLIC) DOMAIN, the re-emitter MAY OMIT decirc entirely and go
+#     straight to B2 with the original `obj`.
+#     One observable edge survives from B1 even for acyclic input — see B2-THROW-B.
+#
+# B2. Serialize. Compute:
+#         res = JSON.stringify(obj, replacer, spacer)
+#     and return `res`.
+#     - `replacer` and `spacer` are passed THROUGH UNCHANGED to JSON.stringify
+#       (replacerStack is empty in the acyclic/no-getter case, so the source's
+#        replaceGetterValues wrapper is NOT applied; plain replacer is used).
+#     - If JSON.stringify returns `undefined` (e.g. top-level value is undefined, a
+#       function, or a symbol, or the replacer maps the root to undefined), the unit
+#       returns `undefined` (NOT the string "undefined"). VERIFIED.
+#
+# B2-THROW (the ONLY behavioral divergence from raw JSON.stringify in scope):
+#     There are two distinct throw situations, distinguished by WHERE the throw
+#     originates relative to the try/catch that wraps the JSON.stringify call:
+#
+#     B2-THROW-A  (CAUGHT -> sentinel string):
+#       If JSON.stringify(obj, replacer, spacer) itself THROWS, the throw is caught
+#       and the function returns:
+#           JSON.stringify('[unable to serialize, circular reference is too complex to analyze]')
+#       i.e. the EXACT string (INCLUDING the surrounding double-quotes, because the
+#       literal is itself run through JSON.stringify):
+#           "[unable to serialize, circular reference is too complex to analyze]"
+#       There is no replacer/spacer applied to this fallback.
+#       Cases that reach this CAUGHT path (all VERIFIED):
+#         * A BigInt appears ANYWHERE in the serialized graph (top-level, object
+#           property value, array element, or returned by a configurable getter).
+#           Native JSON.stringify throws TypeError "Do not know how to serialize a
+#           BigInt"; this unit swallows it and returns the sentinel string. THIS IS
+#           THE PRIMARY DIVERGENCE FROM JSON.stringify AND IS IN-CONTRACT.
+#         * An object's toJSON() method throws (the throw happens inside
+#           JSON.stringify, so it is caught).
+#         * A configurable getter that returns a non-serializable value (e.g. a
+#           BigInt) — the getter is invoked by JSON.stringify, throw is caught.
+#       The exact returned bytes are independent of WHICH such case occurred.
+#
+#     B2-THROW-B  (NOT caught -> re-thrown, matches JSON.stringify):
+#       If the throw originates in the B1 decirc walk — specifically an ENUMERABLE
+#       throwing GETTER, because decirc reads `val[key]` to recurse BEFORE the
+#       try block — the exception PROPAGATES out of the function unchanged. This
+#       matches what raw JSON.stringify would throw for the same input (VERIFIED:
+#       both throw Error "getter boom" for an enumerable getter that throws).
+#       NOTE: B2-THROW-B is reachable ONLY via getters/property descriptors, which
+#       are NOT expressible through the oracle JSON codec, so the generator does not
+#       exercise it; it is documented for completeness and listed under OUT.
+#       For a re-emitter that simply delegates to JSON.stringify (omitting decirc),
+#       this path is naturally satisfied: JSON.stringify itself throws the same error.
+#       CAUTION for re-emitters that DO implement decirc: a getter-throw must NOT be
+#       caught (it is outside the try); only the JSON.stringify call is wrapped.
+#
+# ----- INHERITED JSON.stringify SEMANTICS (self-check reference; all VERIFIED) -----
+#
+# B3. Value omission / null-ization:
+#     - Object PROPERTY whose value is undefined, a function, or a symbol: the
+#       property is OMITTED.            {a:undefined,b:1} -> {"b":1}
+#     - ARRAY ELEMENT that is undefined, a function, or a symbol: serialized as
+#       null.                            [undefined,1,()=>{}] -> [null,1,null]
+#     - Sparse array holes serialize as null. [1,,3] -> [1,null,3]
+#     - null property/element preserved: {a:null} -> {"a":null}
+#
+# B4. Number specials:
+#     - NaN, Infinity, -Infinity serialize as null (as property value OR array
+#       element OR top-level). {a:NaN} -> {"a":null}; top-level NaN -> "null".
+#     - -0 serializes as 0 (both as value and array element). {a:-0} -> {"a":0}.
+#     - Normal number formatting matches the engine: 1e21 -> 1e+21, 1e-7 -> 1e-7,
+#       1.0 -> 1, 123456789012345680000 -> 123456789012345680000, 0.1 -> 0.1.
+#
+# B5. String escaping (engine-native JSON escaping). Examples VERIFIED:
+#     - " -> \"   ;  \ -> \\
+#     - \b -> \b ; \f -> \f ; \n -> \n ; \r -> \r ; \t -> \t
+#     - Control chars U+0000..U+001F not covered above -> \u00XX (lowercase hex,
+#       4 digits). e.g. U+0001 -> , U+001F -> .
+#     - Printable / non-ASCII Unicode (e.g. é, U+1F600 😀) emitted as the raw
+#       UTF-8 character, NOT escaped. Same escaping applies to OBJECT KEYS.
+#
+# B6. Booleans/null/strings/numbers at top level serialize as their JSON token:
+#     42 -> "42", "hi" -> "\"hi\"", true -> "true", null -> "null".
+#
+# B7. toJSON: if a value (object) has a toJSON() method, JSON.stringify calls it and
+#     serializes the RESULT. Date -> ISO string ("1970-01-01T00:00:00.000Z").
+#     Custom {toJSON(){return {y:1}}} -> {"y":1}. (Native delegation handles this;
+#     the default variant does NOT special-case toJSON in B1.) NOTE: a live toJSON
+#     METHOD is not expressible through the oracle JSON codec (the method is lost on
+#     persistence), so the generator does NOT emit toJSON-bearing objects; this
+#     semantic is inherited verbatim from JSON.stringify and needs no separate logic.
+#
+# B8. Replacer:
+#     - As a FUNCTION fn(key,value): called for the synthetic root key "" first,
+#       then each key in insertion order, with `this` bound to the holder object;
+#       its return value is serialized; returning undefined omits (object) /
+#       null-izes (array). Replacer call key sequence for {a:{b:1}} is ["","a","b"]
+#       (VERIFIED). The function and spacer compose normally.
+#     - As an ARRAY of keys (an allowlist): only those keys (matched as strings)
+#       are included, recursively, preserving the object's own key order (NOT the
+#       array's order). Numeric keys in the array are coerced to strings ([1] keeps
+#       key "1"). Empty array -> "{}" for objects. Array-of-keys replacer applied to
+#       an array-of-objects filters each object's keys. (All VERIFIED.)
+#     - undefined / null replacer: no transformation (plain JSON.stringify).
+#
+# B9. Spacer (indentation):
+#     - number: min(floor(n),10) spaces of indent per level; n<=0 (incl 0) ->
+#       compact (no whitespace). Fractional floored (2.9 -> 2 spaces). n>10 clamps
+#       to 10. (VERIFIED: 12 -> 10 spaces.)
+#     - string: used verbatim as the indent unit, truncated to its first 10
+#       characters if longer. Empty string -> compact. (VERIFIED: "0123456789ABCDEF"
+#       -> "0123456789".)
+#     - array spacer (or any other non-number/non-string): treated as no spacer ->
+#       compact output. (VERIFIED: [1,2] -> compact.)
+#     - undefined / null spacer: compact.
+#
+# B10. Key ordering (insertion-order variant): object keys serialized in JS own-key
+#      enumeration order — array-index-like integer keys first in ascending numeric
+#      order, then string keys in insertion order. {"2","1","10","x"} ->
+#      {"1","2","10","x"} (VERIFIED). This unit does NOT sort keys (that is .stable).
+#
+# B11. Statelessness: the function holds no observable cross-call state for in-scope
+#      inputs (a BigInt call followed by a normal call yields the normal result;
+#      the input object is never left mutated). VERIFIED.
+
+ORACLE value -> oracle.json
+# Deterministic, pure. For each generated [obj, replacer?, spacer?] tuple the oracle
+# records the returned string (or `undefined`, or — for inputs that drive B2-THROW-A,
+# e.g. BigInt — the exact sentinel string "\"[unable to serialize, circular reference
+# is too complex to analyze]\""). No seam: JSON.stringify is a pure host primitive,
+# not an ambient source, so no injection is required.
+
+# =============================================================================
+SCOPE
+# =============================================================================
+#
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - Delegation to JSON.stringify(obj, replacer, spacer) on the acyclic success
+#     path (nodes B1-acyclic-noop, B2). All inherited semantics B3..B11.
+#   - The B2-THROW-A catch behavior: any JSON.stringify throw on an in-scope input
+#     -> return the EXACT string  "[unable to serialize, circular reference is too
+#     complex to analyze]"  (quote-wrapped, via JSON.stringify of the literal).
+#     This is the only divergence from raw JSON.stringify in scope. PRIMARY trigger
+#     in the generated corpus: BigInt anywhere in the graph.
+#   - Returning the host `undefined` (not a string) when JSON.stringify yields
+#     undefined.
+#
+# CARRIED DATA: none. The only embedded literals are two short sentinel STRINGS
+#   ('[Circular]' = CIRCULAR_REPLACE_NODE, '[...]' = LIMIT_REPLACE_NODE) and the
+#   fallback message '[unable to serialize, circular reference is too complex to
+#   analyze]'. '[Circular]' and '[...]' belong to OUT-OF-SCOPE paths (cycles /
+#   limits) and are unreachable here. The fallback message IS reachable (B2-THROW-A)
+#   and its exact text is transcribed inline in BEHAVIOR above — it is a single short
+#   string, not a table, so NO carried.json is needed.
+#
+# OUT-OF-CONTRACT / OUT-OF-SCOPE (documented; NOT generated, NOT graded):
+#   - CIRCULAR REFERENCES -> '[Circular]'. The headline feature of the package, but
+#     the oracle JSON codec has NO cyclic tag, so a cycle cannot be expressed as an
+#     input value. Cannot be round-tripped -> OUT. (Behavior: each back-edge to an
+#     ancestor on the stack is replaced by the string "[Circular]"; the original
+#     graph is restored after serialization.)
+#   - depthLimit / edgesLimit options (the 4th `options` arg) and the '[...]'
+#     LIMIT_REPLACE_NODE sentinel. The unit is treated as 3-arg; default limits are
+#     effectively infinite and never fire. OUT.
+#   - The .stable / .stableStringify (sorted-key) sibling export. OUT — different unit.
+#   - B2-THROW-B (enumerable throwing getter -> re-throw): reachable only via getters
+#     / property descriptors, which the JSON codec cannot express. Documented above;
+#     OUT for generation. A delegating re-emitter satisfies it automatically.
+#   - NON-CODEC-FAITHFUL values (must NOT be emitted by genInputs; behavior still
+#     specified for a blind re-emitter):
+#       * Symbol values: omitted (object prop) / null (array elem) — same as
+#         undefined. Symbols don't round-trip the codec -> OUT for generation.
+#       * Functions-as-data: omitted (object prop) / null (array elem). Functions
+#         don't round-trip the codec -> OUT for generation (behavior identical to
+#         undefined regardless).
+#       * undefined as a VALUE (object prop omitted / array elem -> null): does not
+#         round-trip the codec -> OUT for generation; behavior specified in B3.
+#       * Boxed primitives (new Number/new String/new Boolean): unwrapped to their
+#         primitive by JSON.stringify ({a:new Number(5)} -> {"a":5}). Don't round-trip
+#         the codec -> OUT for generation.
+#       * NaN / +-Infinity / -0 as RAW numbers: do not survive the JSON codec
+#         round-trip, so the generator does NOT emit them. Their behavior is fully
+#         specified in B4 (NaN/+-Infinity -> null; -0 -> 0) so a blind re-emitter
+#         reconstructs it; they are simply not in the corpus.
+#       * Objects with a live toJSON() METHOD: the method does not survive
+#         JSON.stringify(encode(args)) persistence (it is invoked/dropped, leaving a
+#         plain object), so a toJSON-bearing input would poison the stored expected.
+#         NOT emitted. Behavior (B7) is inherited from JSON.stringify and specified.
+#       * Date values: serialize via toJSON to an ISO string (B7) but the codec does
+#         not reconstruct a Date instance -> NOT emitted as data.
+
+PROVENANCE fast-safe-stringify@2.1.1 ; repo github.com/davidmarkclements/fast-safe-stringify ;
+           license MIT ; source file index.js (module.exports = stringify ; the
+           DEFAULT export, lines 1-105 + the JSON.stringify call + catch at 20-46).
+
+# =============================================================================
+RE-EMITTER DIRECTIVE (this unit is the DEFAULT export)
+# =============================================================================
+# The reconstruction module MUST `export default <fn>` where <fn> is the stringify
+# function — the harness imports the DEFAULT export and calls it as fn(obj, replacer,
+# spacer). Simplest faithful reconstruction:
+#
+#   export default function stringify (obj, replacer, spacer) {
+#     try {
+#       return JSON.stringify(obj, replacer, spacer)
+#     } catch (_) {
+#       return JSON.stringify('[unable to serialize, circular reference is too complex to analyze]')
+#     }
+#   }
+#
+# (Cycle handling is omitted because no in-scope input contains a cycle; the catch
+# reproduces B2-THROW-A; an in-decirc getter-throw is naturally re-thrown by
+# JSON.stringify itself, satisfying B2-THROW-B. This is behaviorally equivalent to
+# the original ON THE IN-SCOPE DOMAIN.)

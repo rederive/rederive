@@ -1,0 +1,29 @@
+UNIT get_rgb
+LANG rust
+PRIMARY-SHA256 b0378dc3a8ba5eb040db7f4ad96183c769e6a688cb76770da16da9ab5a6f6d65
+SIG pub fn get_rgb(input: &str) -> Option<[f64; 4]>
+ABI crate shape: the artifact is a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn get_rgb`, the carried table as a
+  module) — no `main`, no I/O, no binary. The verifier supplies its own harness crate (stdin line -> stdout "r,g,b,a" |
+  "null") that depends on the artifact by path; compiling that harness against this SIG is the signature check (§15:
+  adapters belong to the verifier, never the package).
+ABI text=&str (UTF-8; every accepted form is ASCII, so code-unit semantics do not diverge from js inside the
+  envelope); num=f64 (IEEE-754 double, as js); tuple=[f64; 4]; none=None. Alpha byte / 255.0 and p * 255.0 / 100.0
+  are computed in f64 exactly as js computes them.
+MECHANISM "round halves toward +infinity" (R6) is NOT f64::round (which rounds halves AWAY from zero:
+  (-25.5f64).round() = -26, but js Math.round(-25.5) = -25). Implement it as (x + 0.5).floor().
+MECHANISM RE flavor: the NUMERIC pin uses lookahead, which std `regex` does not support — use the fancy-regex
+  crate; case-insensitivity is the (?i) inline flag; "whole text" (R2) = ^ and $; "lowercased" (R8) =
+  str::to_lowercase; word characters (R8) = [A-Za-z0-9_] (ASCII, matching js \w).
+MECHANISM numeric parse (R5, R6) = f64::from_str on the captured text (the pins capture only spellings that
+  parse in both languages: ".5", "1e2", "127.5"); hex byte (R3, R4) = u8::from_str_radix(pair, 16).
+CARRIED colorNames = color_names.rs (pub static COLOR_NAMES: &[(&str, [u8; 3])]; membership (R8) = lookup by the lowercased name)
+DEPENDS-ON none
+PINNED regex HEX6    = (?i)^#([a-f\d]{6})([a-f\d]{2})?$ CITED R3
+PINNED regex ABBR    = (?i)^#([a-f\d]{3,4})$ CITED R4
+PINNED regex NUMERIC = (?i)^rgba?\(\s*([+-]?(?:\d*\.)?\d+(?:e\d+)?)(?=[\s,])\s*(?:,\s*)?([+-]?(?:\d*\.)?\d+(?:e\d+)?)(?=[\s,])\s*(?:,\s*)?([+-]?(?:\d*\.)?\d+(?:e\d+)?)\s*(?:[\s,|/]\s*([+-]?(?:\d*\.)?\d+(?:e\d+)?)(%?)\s*)?\)$ CITED R5 — the (?=[\s,]) lookaheads ARE the "followed by whitespace or comma" rule; EARNED as in the js file
+PINNED regex PERCENT = (?i)^rgba?\(\s*([+-]?[\d.]+)%\s*,?\s*([+-]?[\d.]+)%\s*,?\s*([+-]?[\d.]+)%\s*(?:[\s,|/]\s*([+-]?[\d.]+)(%?)\s*)?\)$ CITED R6
+PINNED regex KEYWORD = ^(\w+)$ CITED R8 — on the lowercased text
+PROVENANCE blind Rust reconstruction: sir-lab/color-string-rederive-rust (one emitter, 5000/5000 equivalent to the verified
+  js), converted 2026-09-22 from the lab's binary shape to a library crate — the stdin/stdout adapter moved OUT of the
+  artifact into the verifier's harness (Lane's catch: "library vs executable"). Earned under v0.5: type-checked
+  (cargo check + harness compile against the SIG), harness-verified (42/42, 21/21), cross-verified (js ≡ rust ≡ ts).

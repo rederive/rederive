@@ -1,0 +1,74 @@
+{
+ "status": "ok",
+ "unit": "adopt_find_duplicate",
+ "primary": "selfhost/units/adopt_find_duplicate/sir/adopt_find_duplicate.sir",
+ "primarySha256": "d92ba17c1f41c9434c07dff6d66f23e4ea1a2fbe39dde677bc2319c24017bc41",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "LINES. A text's lines are the pieces between LF characters (n LFs give n + 1 lines; a final LF gives an empty last line; empty text is one empty line), each with ONE trailing CR removed when it ends in CR. Any other CR stays in the line (\"x\" CR CR LF leaves \"x\" CR).",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R2",
+   "text": "FENCES. A line is a ONE-LINE FENCE when, WHITESPACE-trimmed at both ends, it begins with three backticks, ends with three backticks, is at least 7 UTF-16 units long, and contains no BREAK-CHAR (\"```x```\", \"```````\" and \"``` ```\" are; \"``````\", \"```x``` y\" and \"```x\" U+2028 \"y```\" are not). A line is a FENCE line when, after its leading WHITESPACE, it begins with three backticks or three tildes (longer runs and any following text included) and it is NOT a one-line fence (\"~~~x~~~\" is a fence line). A line's RUN is the whole run of backticks or of tildes that starts right after its leading WHITESPACE, when that run has at least 3 characters (else it has no run). Reading the lines in order, starting outside a fence: outside, a fence line OPENS a fence and is its OPENER (a one-line fence opens nothing); inside, a line CLOSES the fence exactly when it has a run of the opener's run character, at least as long as the opener's run, and nothing but WHITESPACE after the run (CITED FIDELITY package: CommonMark's closing rule; indentation and trailing whitespace are any WHITESPACE). Every other line inside is content, fence lines included (\"```\" inside a \"~~~\" fence, \"```\" inside \"````\", \"```bash\" inside \"```\" close nothing); an unclosed fence runs to the end of the text. The opener, the closer and every line between are never headings.",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R3",
+   "text": "HEADING. Any other line is a heading when it begins with a run of 1 to 6 \"#\" (the run is the whole leading run of \"#\"; seven or more -> not a heading) and the rest T after that run (a) begins with a WHITESPACE character, (b) has at least 2 characters, and (c) every BREAK-CHAR character in T lies inside T's leading WHITESPACE run and is not T's last character. \"#x\", \"# \" and \"####### x\" are not headings; \"#  \" (two spaces) is a heading (with an empty key).",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R4",
+   "text": "HEADING-KEY of a heading's T: (1) if T, after dropping trailing WHITESPACE, ends with \")\", and a \"(\" occurs after the previous \")\" (or the start) and before that final \")\", cut T at the FIRST such \"(\" (the trailing parenthetical and everything after it go); (2) lowercase with the full Unicode lowercase mapping; (3) every maximal run of characters other than ASCII a-z and 0-9 becomes one separator; the key is the remaining runs joined by single spaces, with no leading or trailing space (it may be empty). Step (2) yields ASCII letters only from A-Z, U+212A KELVIN SIGN (-> \"k\") and U+0130 (-> \"i\" then a separator); every other non-ASCII character becomes a separator. (\"Hard rules (a) (b)\" -> \"hard rules a\"; \"Hard rules (a (b)\" -> \"hard rules\"; \"(draft)\" and \"---\" -> \"\").",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "R5",
+   "text": "NORMALIZED line: every maximal run of WHITESPACE becomes one space, then a leading and trailing space are removed. Length is counted in UTF-16 code units (a supplementary-plane character counts 2).",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "R6",
+   "text": "GUARD. If existing (the raw text, before R1) contains a BEGIN-MENTION anywhere — closed or not, inside a fence, a code span or mid-line — the result is none.",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R7",
+   "text": "SECTION BODY. Take the lines of section (R1) joined back with LF. If it contains a BEGIN-MARKER, drop everything up to and including the end of the first one (it may span lines). Then, if what remains contains an END-MARKER, drop the first one and everything after it. Trim WHITESPACE from both ends. Any other HTML comment (even one holding \"-->\") is ordinary text.",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "R8",
+   "text": "SIGNATURE. Over the lines of the section body (split at LF only; R2-R4 apply): KEYS = the SET of the non-empty heading keys; if KEYS is empty -> none. The POOL = the SET of DISTINCT normalized (R5) forms of the body lines that are not blank (empty or all WHITESPACE), not headings, not fence lines (R2's per-line test, whatever the fence state), and whose normalized length exceeds 15. Content lines inside a fence are pool candidates, \"#\" lines inside a fence included; a one-line fence is not a fence line, so it is a candidate too (a closer of 16 or more backticks is one).",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R9",
+   "text": "RUNS. Take the headings of existing (R1-R3) in line order; a heading is MATCHED when its key is non-empty and in KEYS. A run is a maximal sequence of consecutive matched headings in that list (any levels; an unmatched heading, an empty-key heading included, ends it). Its range starts at the line of its first heading and ends (exclusive) at the line of the next heading of existing after the run, else at the line count of existing.",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "R10",
+   "text": "MATCH. A run qualifies when at least 2 POOL entries each equal the normalized form of some line inside its range (any line there: prose, a heading, a fence line, a fenced line). Runs are examined in line order; the first that qualifies is the result (startLine, endLine = its range). No qualifying run -> none.",
+   "ambiguity": 0.31
+  }
+ ],
+ "ranked": [
+  "R4",
+  "R3",
+  "R8",
+  "R2",
+  "R7",
+  "R9",
+  "R10",
+  "R6",
+  "R5",
+  "R1"
+ ],
+ "at": "2026-10-28T02:35:52Z"
+}

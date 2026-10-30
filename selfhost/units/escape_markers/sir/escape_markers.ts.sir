@@ -1,0 +1,46 @@
+UNIT escape_markers
+LANG ts
+PRIMARY-SHA256 28e3854d6f755c399768824b21f7bccc0b159cc34cd1db3d1454a97984e43d76
+SIG export default function escape_markers(value: unknown): unknown
+ABI TypeScript compiles to the js runtime: text=string (UTF-16); f64=number; bool=boolean; none=null; list=Array;
+  map=plain object; the throw (R1) is an Error whose message is exactly "a value nests deeper than 100". STRICT: the
+  artifact must type-check under `strict: true` against this SIG, with no `any`, no non-null assertions (`!`), and no
+  `@ts-ignore` / `@ts-expect-error`. Narrow unknown with Array.isArray / typeof / Object.getPrototypeOf.
+ENVELOPE (restated from js — language files are self-contained) widened to every JS value:
+  a MAP (R4) is a "plain object" ONLY: a non-null, non-array object whose prototype is Object.prototype or null. A
+  null-prototype map's result (the new map) has Object.prototype.
+  a LIST (R3) is any value Array.isArray accepts. A HOLE (an index the array does not own) stays a hole in the result,
+  is never visited and never counts toward R1; an own element holding undefined is kept as undefined. Only indices
+  0..length-1 are copied: other properties of an array are dropped. The result length equals the input length.
+  a JS Map (any value that is instanceof Map, checked after Array.isArray and before the plain-object test) -> a NEW
+  Map (always a plain Map, even for a subclass) holding, in the input's iteration order, one entry per input entry:
+  key = this contract applied to the key at depth+1, value = this contract applied to the value at depth+1 (key first,
+  then value, entry by entry; both count toward R1). A Map is NEVER wrapped in the escape map, whatever its keys: a Map
+  with the key "__t" stays a Map with the key "__t". A plain-object KEY holding a marker key comes back as a new escape
+  map (a different key object); a primitive key is kept. Own properties set on the Map object itself are dropped.
+  every other value is returned AS IS (the same reference, not copied, not descended into): undefined, NaN, -0,
+  ±Infinity, bigint, symbols, functions, boxed primitives, RegExp, Date, Uint8Array, Buffer (stays a Buffer), class
+  instances — so a marker-keyed plain object inside a class instance is NOT escaped.
+  a JS Set (any value that is instanceof Set, checked after the Map test and before the plain-object test) -> a NEW Set
+  (always a plain Set, even for a subclass) holding, in the input's iteration order, this contract applied to each
+  member at depth+1 (members count toward R1, as a Map's entries do). A Set is NEVER wrapped; a plain-object member
+  holding a marker key comes back as a new escape map; own properties set on the Set object itself are dropped. (#153)
+  keys copied (R4) = the map's OWN, ENUMERABLE, string keys, in the order Object.keys gives (integer-like keys
+  ascending first, then insertion order). Symbol keys and non-enumerable keys are dropped. Inherited keys are never
+  copied and never trigger R4.
+  the R4 trigger = Object.hasOwn(map, key) for each marker key — an own NON-enumerable marker key still triggers the
+  escape although the key itself is not copied into "v". Each copied value is read once (a getter runs once).
+  GRADED (narrowed, round 5i): the js extension oracle grades only results the js-native codec can encode, so these
+  pass-through cases are stated above but NOT checked: RegExp, boxed primitives (new Number / String / Boolean), symbols,
+  functions, Date and class instances; and any result node deeper than 100 — the codec counts a hole as a node, so R1's
+  "a hole never counts" is graded only for holes at depth <= 100. Holes, Maps and Sets ARE graded within that bound.
+  The bound applies to the RESULT as graded (#155: the expected is escaped again as the driver escapes a result, and in
+  the result each escape map is one level: {"__t": "obj", "v": m} puts m's values two deeper). So a chain of k nested
+  marker-keyed maps grades only for k <= 50; for 51..100 the function returns (R1 counts input depth) but the result is
+  outside the graded envelope.
+MECHANISM build each result map with Object.defineProperty (enumerable, writable, configurable) so an own "__proto__"
+  key is copied as a key, never as the result's prototype; the escape map is the literal { __t: 'obj', v: result }.
+MECHANISM the depth check (R1) runs on entry to each visited node, before its type is looked at — the leaf counts.
+DEPENDS-ON none
+PROVENANCE rederive@f68cca701417 (Set descent #153) cli/sir/canon.mjs escapeMarkers + plainObj (the codec's ONE plain-object rule, #38);
+  Map descent #81, Set descent #153, MAX_VALUE_DEPTH = 100 #78

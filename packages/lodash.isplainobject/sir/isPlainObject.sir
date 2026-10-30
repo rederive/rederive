@@ -1,0 +1,185 @@
+UNIT isPlainObject
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isPlainObject(value: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; only intrinsics (Object, Function, their prototypes)
+
+# ============================================================================
+# PROVENANCE
+#   lodash.isplainobject@4.0.6  (npm)
+#   repo: lodash/lodash         license: MIT
+#   source file: index.js  (module.exports = isPlainObject)
+#   This is a Custom Build modularized export of lodash _.isPlainObject.
+# ============================================================================
+
+# ============================================================================
+# CONSTANTS (intrinsic-derived, captured ONCE at module load — not carried data)
+#   objectTag        = '[object Object]'
+#   objectProto      = Object.prototype
+#   funcProto        = Function.prototype
+#   funcToString     = Function.prototype.toString
+#   hasOwnProperty   = Object.prototype.hasOwnProperty
+#   objectToString   = Object.prototype.toString
+#   objectCtorString = funcToString.call(Object)
+#                      # the decompiled-source string of the native Object
+#                      # constructor, e.g. "function Object() { [native code] }".
+#                      # Compared by VALUE later, never transcribed: it is whatever
+#                      # the host engine reports for the native Object function.
+#   getPrototype(v)  = Object.getPrototypeOf(v)   # (wrapped via overArg; behavior identical)
+# ============================================================================
+
+BEHAVIOR
+  # isPlainObject(value) returns a boolean. Evaluate the BRANCHES strictly in order;
+  # short-circuit (||) means the first true disqualifier returns false immediately.
+
+  # ----- NODE 1: object-like + tag + host-object GATE (any failure => return false)
+  # The guard is:  if ( !isObjectLike(value)
+  #                     || objectToString.call(value) != '[object Object]'
+  #                     || isHostObject(value) )  return false;
+
+  # 1a. isObjectLike(value):
+  #       isObjectLike(value)  ==  ( !!value && typeof value == 'object' )
+  #     i.e. value is truthy AND `typeof value === "object"`.
+  #     => false for: null (typeof "object" but falsy -> !!null is false),
+  #        undefined, all numbers (incl. NaN, 0, Infinity), strings (incl. ""),
+  #        booleans, bigint, Symbol, and ALL functions (typeof "function").
+  #     => true for: every non-null object reference incl. arrays, Date, RegExp,
+  #        Map, Set, Error, Promise, WeakMap, boxed primitives (new Number/String/
+  #        Boolean), Uint8Array/Buffer, arguments, class instances, {}, etc.
+  #     If isObjectLike is false -> return false.
+
+  # 1b. tag gate:  objectToString.call(value) != '[object Object]'  -> return false.
+  #     objectToString is Object.prototype.toString. The tag is '[object Object]'
+  #     for: plain objects, Object.create(null), Object.create(Object.prototype),
+  #          class instances, namespace-like objects authored as {} with own props,
+  #          arguments object, a generic Error subclass-less Object, etc.
+  #     The tag is NOT '[object Object]' (=> return false) for:
+  #          arrays '[object Array]', Date '[object Date]', RegExp '[object RegExp]',
+  #          Map '[object Map]', Set '[object Set]', WeakMap '[object WeakMap]',
+  #          Error '[object Error]', Promise '[object Promise]',
+  #          Uint8Array '[object Uint8Array]', boxed Number/String/Boolean
+  #          '[object Number]'/'[object String]'/'[object Boolean]',
+  #          Math '[object Math]', JSON '[object JSON]', globalThis '[object global]',
+  #          AND any object carrying a Symbol.toStringTag that overrides the tag
+  #          (e.g. defineProperty(o, Symbol.toStringTag, {value:'Custom'}) ->
+  #          '[object Custom]' -> return false).
+  #     NOTE: arguments objects report '[object Arguments]' (NOT '[object Object]')
+  #           in this engine -> return false. (Confirmed against the live module.)
+
+  # 1c. isHostObject(value)  -> if true, return false.
+  #     isHostObject(value) ==
+  #         result = false
+  #         if (value != null && typeof value.toString != 'function'):
+  #             try { result = !!(value + '') } catch (e) {}   # error swallowed
+  #         return result
+  #     Reachability under codec-faithful inputs: an ordinary object's `toString`
+  #     resolves (through the prototype chain) to a FUNCTION, so `typeof
+  #     value.toString == 'function'` and the branch body is skipped -> returns
+  #     false (NOT a host object). This is true for {}, {a:1}, Object.create(null)
+  #     (whose toString is undefined -> typeof "undefined" != "function" -> ENTERS
+  #     branch; but Object.create(null) is already disqualified? NO -- its tag IS
+  #     '[object Object]'. For Object.create(null), value.toString is undefined,
+  #     so the branch is ENTERED; value + '' attempts ToPrimitive which has no
+  #     toString/valueOf -> throws TypeError -> caught -> result stays false ->
+  #     isHostObject = false). So Object.create(null) survives this gate (correct).
+  #     The ONLY way isHostObject returns true: an object whose OWN/inherited
+  #     `toString` is a NON-function value yet which still coerces to a truthy
+  #     string via valueOf WITHOUT throwing (a genuine legacy IE<9 host artifact).
+  #     Such a value is NOT producible by the oracle codec and is documented
+  #     OUT-OF-ENVELOPE below. For ALL codec-faithful inputs, isHostObject == false.
+
+  # ----- NODE 2: prototype null check
+  #   proto = getPrototype(value)   # == Object.getPrototypeOf(value)
+  #   if (proto === null) return true.
+  #     => Object.create(null) and any object whose IMMEDIATE prototype is null
+  #        return true here, REGARDLESS of own properties.
+  #   IMPORTANT (4.0.6 semantics): this inspects the IMMEDIATE prototype only.
+  #   It does NOT walk to the topmost prototype. (The recursive top-prototype walk
+  #   was introduced in a LATER lodash version; 4.0.6 does a single getPrototypeOf.)
+  #   Consequence: Object.create(Object.create(null)) has a NON-null immediate
+  #   proto whose own `constructor` is absent -> falls through to NODE 3 -> false.
+
+  # ----- NODE 3: constructor identity check (proto !== null)
+  #   Ctor = hasOwnProperty.call(proto, 'constructor') && proto.constructor
+  #     # i.e. proto must have an OWN (not inherited) 'constructor' property;
+  #     # if it does, Ctor = proto.constructor (its value); else Ctor = false.
+  #   return ( typeof Ctor == 'function'
+  #            && Ctor instanceof Ctor
+  #            && funcToString.call(Ctor) == objectCtorString )
+  #
+  #   Plain-object case: value = {} (or new Object()). proto = Object.prototype,
+  #   which HAS an own 'constructor' === Object. typeof Object == 'function' (yes);
+  #   Object instanceof Object (yes); funcToString.call(Object) == objectCtorString
+  #   (yes, same native Object source) -> return true.
+  #
+  #   Object.create(Object.prototype): proto === Object.prototype -> same as above
+  #   -> true.
+  #
+  #   { constructor: <anything> } literal: this is value's OWN property, but
+  #   value's PROTO is still Object.prototype whose own constructor is Object,
+  #   so still -> true. (proto.constructor, not value.constructor, is consulted.)
+  #
+  #   Object.create({ constructor: Object }): proto = {constructor:Object} which
+  #   has OWN 'constructor' === Object -> all three sub-checks pass -> true.
+  #
+  #   Class / function instances: e.g. new Foo(), new (class C{})().
+  #   proto = Foo.prototype; own 'constructor' === Foo; typeof Foo == 'function'
+  #   (yes); Foo instanceof Foo (no -- a normal function is an instance of
+  #   Function, not of itself) -> the && short-circuits -> return false.
+  #   (Also funcToString.call(Foo) != objectCtorString since Foo is user source.)
+  #
+  #   proto.constructor is a NON-function (e.g. 123): typeof Ctor == 'function'
+  #   is false -> return false.
+  #   proto with NO own 'constructor' (e.g. Object.create(Object.create(null)) ->
+  #   immediate proto is the null-proto object, no own constructor) -> Ctor = false
+  #   -> typeof false == 'function' is false -> return false.
+
+  # ----- DECISION SUMMARY (codec-faithful inputs)
+  #   true  iff value is object-like, has tag '[object Object]', is not a host
+  #         object, AND ( its immediate prototype is null
+  #                       OR its immediate prototype has an own 'constructor' that
+  #                          is the native Object constructor function ).
+  #   false otherwise.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The whole NODE 1 / NODE 2 / NODE 3 pipeline above, in order, including
+      short-circuit semantics and the exact constants ('[object Object]', the
+      native-Object-source comparison via funcToString.call(Object)).
+    - isObjectLike, isHostObject, overArg(getPrototypeOf), and the constructor
+      identity triple-check are all in-contract intrinsic logic.
+    DEMONSTRATED in-scope value classes (each verified === real module; mirrored
+    by genInputs):
+      true  -> {}, {a:1}, {constructor:1}, {toString: <callable fn>},
+               new Object(), Object.create(null), Object.create(null)+own prop,
+               Object.create(Object.prototype), Object.freeze({a:1}),
+               Object.seal({a:1}), Object.create({constructor:Object})
+      false -> [], [1,2,3], new Map(), new Set(), new Date(), /re/ (RegExp),
+               new Error('x'), Promise.resolve(), new WeakMap(),
+               new Uint8Array([..]), Buffer.from([..]),
+               class C{} instance, new Foo() (function instance),
+               Object.create({}) (proto has no own constructor),
+               Object.create(Object.create(null)) (immediate proto non-null,
+                 no own constructor),
+               object with Symbol.toStringTag override (tag != '[object Object]'),
+               null, undefined, 42, 0, NaN, Infinity, -Infinity,
+               "foo", "" (strings), true, false, 1n (bigint)
+    NOTE: functions and Symbols are object-disqualified by NODE 1a (typeof
+      'function'/'symbol'), but a LIVE function and a Symbol are NOT oracle-codec
+      faithful, so genInputs does not emit them; their behavior (always false) is
+      documented here for the blind engineer.
+
+  CARRIED DATA: none. The only string constant is '[object Object]' (a literal in
+    BEHAVIOR); objectCtorString is derived at load time from the host's native
+    Object function and is compared by value, never transcribed.
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+    - Live functions / arrow functions: always false (NODE 1a). Not codec-faithful.
+    - Symbol values: always false (NODE 1a, typeof 'symbol'). Not codec-faithful.
+    - boxed primitives new Number/String/Boolean: always false (tag gate), but they
+      do NOT round-trip the oracle codec faithfully, so not emitted.
+    - GENUINE host objects (IE<9 artifact): the only inputs that flip isHostObject
+      to true. Not constructible in a standard engine / not codec-faithful.
+      Behavior: would return false. Unreachable from genInputs by design.

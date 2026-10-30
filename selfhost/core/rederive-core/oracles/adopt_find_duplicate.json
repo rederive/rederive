@@ -1,0 +1,2194 @@
+{
+ "unit": "adopt_find_duplicate",
+ "sig": "adopt_find_duplicate(existing: text, section: text) -> record[heading: text, startLine: i64, endLine: i64] | none",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "# My project\n\nIntro text that is mine alone.\n\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n\n## Later\nmy own later notes here\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "16"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!--\nrederive:begin\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "see `<!-- rederive:begin` in the docs\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n<!--rederive:begin",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!-- rederive:beginning\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "5"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin\n## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n-->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin\n## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n<!-- note -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Intro",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n<!-- rederive:begin -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin\n## Intro\nNever edit files under the protected paths by hand.\nA --> B flows here always\ncargo test --release -p verified-core\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin x<!-->\n## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n## Hard rules\nRun `rdv check units/foo` before every commit.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Intro",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~\n```\n## Mine\n```\n~~~\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## After\nx\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n````md\n```\n## Mine\n```\n````\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## After\nx\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n## Mine\n`````\n## After\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n## Mine\n```bash\n## After\n```\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## End\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~~\n~~~\n## Mine\n~~~~ \t\n## After\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n# c\n\t ```　\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n```x```\n## Mine\n```\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## End\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```markdown\n    ```\n# Hard rules\nexample\n```\n## Mine\nmine\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "11"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n````\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```\n## Mine\nmine\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Deploy the stack with care\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~\n```\n## Deploy the stack with care\n```\n~~~\n## Mine\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n````````````````\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n````````````````\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!--\trederive:begin-->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin_x -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "5"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!-- rederive:end -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "5"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Run `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "## (draft)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## (draft)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n## ---\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nshort\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nRun `rdv check units/foo` before every commit.\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nRun `rdv check units/foo` before every commit.\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nmy own very different words here\n## Elsewhere\nRun `rdv check units/foo` before every commit.\n# Top\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nmine\n## Mine\nx\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## After\nkeep\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "# T\n## Hard rules\nRun `rdv check units/foo` before every commit.\n### Commands\nnode tools/sir-validate.mjs <unitDir> must exit 0\n#### deep\n### sib\n## Mine\nkeep\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "5"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n## Giver only section\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Commands\nNever edit files under the protected paths by hand.\n## After\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Commands\nNever edit files under the protected paths by hand.\n# Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "# Commands",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Mine\nmine\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "# Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "# Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "intro\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\nmy trailing words with no heading\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "### HARD -- Rules!! (v2)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Next\nx\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "# hard rules (draft)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "### HARD -- Rules!! (v2)",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules (a) (b)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules (a)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules (a (b)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules (a (b)",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Keep İt\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## keep i t\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Keep İt",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "####### Hard rules\n#Hard rules\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "####### x\n#nospace\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n#  \nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\n## Hard rules x\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules x\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "```bash\n# install deps\nnpm ci --ignore-scripts now\n```\nRun `rdv check units/foo` before every commit.\n## Other\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Setup\n```bash\n# install deps\nnpm ci --ignore-scripts now\n```\nRun `rdv check units/foo` before every commit.",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```sh\n# Other\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```\n## Mine\nx\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~\n## Mine\n~~~\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n~~~\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n  ~~~x~~~\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n``````\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```````\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```````\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```x``` is inline\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n\t```npm ci --ignore-scripts```  \n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\n```npm ci --ignore-scripts```",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "~~~\n## Mine\n~~~\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "## A\n```javascript lang\n123456789012345\n1234567890123456\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## A\n```javascript lang\n123456789012345\n1234567890123456\n  ```javascript lang",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "## A\n123456789012345😀\nabcdefghijklmn😀\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## A\n123456789012345😀\nabcdefghijklmn😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## A",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\n\tRun `rdv check units/foo` before every commit.  \nnode\t　tools/sir-validate.mjs\t　<unitDir>\t　must\t　exit\t　0﻿\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun`rdvcheckunits/foo`beforeeverycommit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\r\nRun `rdv check units/foo` before every commit.\r\nnode tools/sir-validate.mjs <unitDir> must exit 0\r\n## Tail\r\nmine\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\r\r\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\r\r\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Intro\n<!-- a note -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Intro",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Intro\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Intro\nRun `rdv check units/foo` before every commit.\n<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\n<!-- rederive:end -->\n## Tail\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n<!--   rederive:end\n -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:end -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin -->Run `rdv check units/foo` before every commit.\n## Hard rules\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\n## Hard rules  \t\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "heading",
+      {
+       "t": "text",
+       "v": "## Hard rules",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "startLine",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ],
+     [
+      "endLine",
+      {
+       "t": "i64",
+       "v": "5"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\n\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "#  x\n\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  }
+ ],
+ "canonicalSha256": "a450b3c9595e136f369dd440519b6f47d04360cc340a251d1bc1a6648eda855a"
+}

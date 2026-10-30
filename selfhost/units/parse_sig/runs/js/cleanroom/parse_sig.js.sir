@@ -1,0 +1,28 @@
+UNIT parse_sig
+LANG js
+PRIMARY-SHA256 60b55e0a01fec765e82a808a2ede7490c1e3cf116aa0aa28046eb6dcad91682a
+SIG parse_sig(s: string): { name: string, args: Array<{ name: string, type: object, rest?: true }>, result: object }
+NOTE default export
+ABI text = string; the result is a fresh plain object { name, args, result }; an argument is a plain object { name, type }
+  plus the own property rest: true for a rest parameter only (never rest: false); a type tree is a plain object whose own
+  properties are exactly k and the members the primary's DESCRIPTION names for that kind; record fields are two-element
+  Arrays [name, tree]. Property order is immaterial (the canonical form sorts keys). A throw (R1, R2, R5–R8) is a thrown
+  Error; the message is not graded. The artifact is an ES module default-exporting the function and imports nothing.
+ENVELOPE as the primary; no widening.
+MECHANISM a recursive-descent reader with one cursor over the string (index access; every accepted character is ASCII, so
+  code units and code points agree): skip WHITESPACE before every token, read IDENT longest first by the IDENT pin at the
+  cursor, test literal tokens with startsWith at the cursor. WHITESPACE is the four characters of the primary pin only —
+  NOT the regex class \s and NOT String.prototype.trim, which accept no-break space, zero width no-break space, the line
+  separator, vertical tab and form feed (all in the oracle as throws). PREFIX (R2): remember the cursor, read the prefix
+  words as IDENT tokens, and keep them only when each matches and WHITESPACE then an IDENT start follow; else restore the
+  cursor. Unreachable alternatives (R5): SAME compares an order-free key of each tree (union alts and record "name=key"
+  fields each sorted, then joined inside brackets; tuple, list, map members in order) — NOT JSON.stringify of the tree,
+  which is order-sensitive; JSON is a recursive predicate over TABLE JSON_SHAPED;
+  COVERS is a recursive predicate that holds when ANY row of TABLE COVERS holds (try them all: the LIST, TUPLE, MAP
+  and RECORD rows recurse into COVERS, the union rows recurse both ways); test each later alt against every earlier one.
+  Nesting (R8): one depth counter, incremented on entering a composite and decremented on its closing
+  bracket; recursion stays far under the default stack at 16. After the result TYPE skip WHITESPACE and require the end
+  of the string. No comment stripping.
+DEPENDS-ON none
+PINNED regex IDENT = /^[A-Za-z_][A-Za-z0-9_]*/ CITED primary IDENT — applied to the remainder at the cursor
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs parseSig + reader. Round 5: re-cut after FINDINGS #74 #78 #79.

@@ -1,0 +1,63 @@
+UNIT divergence_of
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs divergenceOf — the per-language divergence verdict the lab writes to runs/<lang>/divergence.json; reproduce the code exactly, accidents included
+ORACLE-CLASS deterministic
+SIG divergence_of(round: i64, artifacts: list[record[artifact: text, control: bool | none, error: text | none, rungs: list[text] | none, typeCheck: record[applicable: bool, ok: bool | none] | none, _misses: list[record[slice: text | none, name: text, args: list[text], expected: text]] | none]]) -> record[round: i64, quorum: text, verdict: text, heldoutDisagree: list[record[name: text, args: list[text], expected: text, failedBy: list[text], passedBy: i64, of: i64]], frozenMissed: list[record[name: text, args: list[text], expected: text, failedBy: list[text], passedBy: i64, of: i64]] | none] | none
+ENVELOPE round is an integer of magnitude at most 2^53 - 1 (the caller's round number; it is never interpreted). artifacts is
+  one language's artifact list for one round, in the caller's order, each artifact a record of the fields in SIG: its name,
+  whether it is the CONTROL (the shipped reconstruction), its build/run error text, its earned rungs (the texts
+  "type-checked", "harness-verified", ... in any order, duplicates allowed), its static type check, and its MISSES (each
+  vector it failed: the slice "frozen" or "heldout", the vector's name, its displayed arguments and its displayed expected
+  value). Any text is allowed anywhere, including a slice outside the two names and a slice of none (read as "heldout",
+  R6). Throws are IN scope as an observation: R5.
+DEPENDS-ON none
+DESCRIPTION One language's divergence verdict for one grading round: the cold quorum over the non-control artifacts that
+  built and ran, and the tally of the vectors they missed — held-out misses (the SIR-ambiguity signal a HARDEN reads) apart
+  from frozen misses (emitter errors). The result is none when nothing was attempted, else a record whose fields are, in
+  this order: round, quorum, verdict, heldoutDisagree, frozenMissed. A tally entry's fields are, in this order: name, args,
+  expected, failedBy, passedBy, of. frozenMissed is none (the key is absent in the package's own output) whenever it would
+  be an empty list; heldoutDisagree is always present, possibly empty.
+BEHAVIOR
+R1 ATTEMPTED = the artifacts whose control is not true (false and none both count as not control), in input order. When
+  ATTEMPTED is empty -> none.
+R2 GRADED = the members of ATTEMPTED whose error is none, in input order. When GRADED is empty -> the record round = the
+  input round, quorum = "0/0", verdict = "no-quorum", heldoutDisagree = an empty list, frozenMissed = none. Nothing else of
+  the artifacts is read in this case: rungs, typeCheck and misses of an errored or control artifact never matter, and never
+  throw.
+R3 Any error text marks the artifact as errored, the EMPTY text included: an artifact with error "" is not GRADED.
+R4 A GRADED artifact VOTES when all three hold: (a) one element of its rungs is exactly the text "harness-verified"
+  (whole-text, case-sensitive equality; other elements, their order and duplicates do not matter); (b) its typeCheck is
+  none, or its applicable is false, or its ok is true — so applicable true with ok false or none does not vote, and
+  applicable false votes whatever ok holds; (c) it has no miss (misses none or an empty list).
+  VOTES = the number of voting artifacts. quorum = the decimal digits of VOTES, then "/", then the decimal digits of the
+  size of GRADED (no sign, no padding). verdict = "quorum" when VOTES is at least 2, else "no-quorum" — a fixed threshold,
+  independent of the size of GRADED (2 of 5 is a quorum).
+R5 When GRADED is non-empty, before any vote or tally, every GRADED artifact is checked: its rungs is none -> throws; one of
+  its misses has a slice that is neither none nor exactly "frozen" or "heldout" (case-sensitive; "", "Frozen" and "held-out"
+  fail; a slice of none passes) -> throws. The message is not graded. Misses of control and errored artifacts are never
+  checked.
+R6 TALLY(S) for a slice name S ("heldout" or "frozen") is a list built by visiting the GRADED artifacts in order and, within
+  each, its misses in order (misses none is an empty list), keeping only the misses whose slice is exactly S, where a slice
+  of none reads as "heldout" — it is tallied, grouped and deduped with the "heldout" misses, never with "frozen".
+R7 TALLY grouping: misses are grouped by name (exact text equality). The FIRST miss seen for a name creates the entry, in
+  first-seen order (never sorted), with that miss's args and expected; a later miss with the same name keeps the entry's
+  args and expected (its own are discarded). Each miss appends its artifact's name to the entry's failedBy, in visit order,
+  UNLESS failedBy already holds that exact text — so failedBy never repeats a name. The test is by artifact name: two
+  GRADED artifacts that carry the same name count once CITED FIDELITY package — the dedupe compares names, not artifacts
+  of = the size of GRADED; passedBy = of minus the length of failedBy.
+R8 Otherwise (GRADED non-empty, no throw) -> the record round = the input round, quorum and verdict from R4, heldoutDisagree
+  = TALLY("heldout"), frozenMissed = TALLY("frozen") when that list is non-empty, else none.
+R9 round is carried to the output unchanged.
+INVARIANT the result is none exactly when every artifact is a control (or there are none); of is the same in every entry and
+  equals the denominator of quorum; VOTES never exceeds the size of GRADED; passedBy is never negative; an artifact that
+  appears in any failedBy did not vote.
+OUT-OF-DOMAIN beyond the SIG shape (not encodable, OUT of the oracle): a non-list artifacts or misses, a missing artifact name,
+  a rungs value that is not a list (the code throws, as R5), a misses element that is not a record (the code throws), and a
+  miss record with NO slice field at all (the code reads it as "heldout", the same as a slice of none: a record that
+  predates the tag) all behave as the host makes them.
+ORACLE value -> oracles/divergence_of.json  CANONICAL-SHA256 658040518ac94040bf1281fe90c0023ebc33ee33c380cf379edaa4894abca25f
+SCOPE IN: R1-R9 over ENVELOPE, including the throws of R5 and the name-keyed dedupe of R7. OUT: the OUT-OF-DOMAIN shapes; the
+  fields of a real artifact record the function never reads (frozen, heldout, exact, counts, narrowed, misses, extension).
+PROVENANCE rederive@6199e2cc8b75 (MIT), cli/sir/v05.mjs: divergenceOf (lines 59-86). Re-cut 2026-10-27 (round 5, FINDINGS #90)
+  from the pinned snapshot only; delta re-cut (round 5b, N1) on 6199e2cc8b75: a slice of none is "heldout", not a throw; the artifact shape is the one the lab's run.mjs builds.

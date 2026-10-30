@@ -1,0 +1,429 @@
+UNIT: hashSync
+  Named export of npm package `bcryptjs` (v2.4.3). Resolution chain:
+  index.js -> require("./dist/bcrypt.js"); the UMD factory returns an object
+  `bcrypt` whose `.hashSync` property is the public method. This SIR specifies
+  `bcrypt.hashSync(s, salt)`.
+
+  HARDEN-MODE NOTE (round 2): Round 1 quorum was 0/3. The EksBlowfish crypto core
+  re-derived correctly (one emission's 22-char salt echo AND 31-char hash body were
+  byte-identical to the real package on normal cases), so steps 4-5 (_crypt / _ekskey
+  / _key / _encipher), the 2^cost loop, the 64-round ECB, and the magic constants are
+  SOUND and UNCHANGED. The three divergence causes, now spelled to be unmissable:
+    GAP 1 — radix64 bit-packing was under-specified (one decode produced 17 bytes).
+            Section RADIX64 below now spells the EXACT streaming c1..c4 shift/mask
+            sequence, the chars<->bytes cadence, the `len` cap (load-bearing), and the
+            `off < slen - 1` boundary that bounds output to 16 bytes.
+    GAP 2 — the NaN-cost edge: NO isNaN / Number.isInteger guard exists. Section
+            ROUNDS-VALIDITY below states this as a hard rule.
+    GAP 3 — output-assembly separators: section OUTPUT-ASSEMBLY below is now literal,
+            every `$` explicit, matching the source push() sequence exactly.
+
+KIND: pure function (deterministic) WHEN `salt` is a precomputed salt STRING.
+  (The same name is non-deterministic only when `salt` is a NUMBER — see SCOPE
+  / out-of-contract — because that branch calls genSaltSync which draws RNG.)
+
+ORACLE-CLASS: deterministic
+  hashSync(data, saltString) is a referentially-transparent, side-effect-free
+  pure function of its two string arguments. Verified empirically:
+  hashSync("password","$2a$04$pbHV1cxrqESYWevhBlKzhe") returns the identical
+  60-char string on repeated calls. No I/O, no global mutation, no clock/RNG
+  dependence on this path. (Date.now() is read inside _crypt only to chunk the
+  SYNC loop for cooperative yielding; it does NOT affect the output bytes — the
+  whole 2^cost loop always runs to completion before encryption.)
+
+SIG:
+  hashSync(s: string, salt?: number | string) -> string
+    - s    : the password / data to hash. MUST be a JS string on the in-contract
+             path (non-string throws). Interpreted as UTF-8 bytes (see BEHAVIOR).
+    - salt : EITHER
+               (a) a precomputed bcrypt salt STRING of the form
+                   "$2<minor>$<cc>$<22-char-radix64>"  (IN CONTRACT, deterministic), OR
+               (b) a NUMBER = cost (log2 rounds); internally salt = genSaltSync(salt)
+                   which draws CSPRNG bytes (OUT OF CONTRACT — nondeterministic), OR
+               (c) omitted => defaults to the NUMBER 10 (=> path (b), OUT OF CONTRACT).
+    - returns: the bcrypt modular-crypt hash string.
+               60 chars when minor letter present ("$2a$","$2b$","$2y$") and cost is
+               a normal 2-digit number.
+               59 chars for the minor-less "$2$..." form (no minor letter emitted,
+               and no NUL appended to the password — see BEHAVIOR/minor).
+               61 chars on the NaN-cost quirk path (cost field prints "NaN" = 3 chars
+               instead of 2 — see ROUNDS-VALIDITY).
+
+DEPENDS-ON (all internal to dist/bcrypt.js — NO external deps; package has zero
+  runtime dependencies; `utfx` is embedded inline, not an npm dep):
+  - stringToBytes(str)            : UTF-16 -> UTF-8 byte array (embedded utfx).
+  - base64_encode(bytes, len)     : bcrypt-radix64 ENCODE (non-standard alphabet).
+  - base64_decode(str, len)       : bcrypt-radix64 DECODE (non-standard alphabet).
+  - _crypt(b, salt, rounds)       : the EksBlowfish core; returns 24 cipher bytes
+                                    (6 words x 4), of which 23 are encoded.
+  - _ekskey(data, key, P, S)      : expensive (salted) key schedule.
+  - _key(key, P, S)               : plain ExpandKey with a zero-data stream.
+  - _encipher(lr, off, P, S)      : 16-round Blowfish block encrypt (unrolled).
+  - _streamtoword(data, offp)     : pull next big-endian 32-bit word, wrapping
+                                    modulo data.length (this IS the truncation/
+                                    cycling mechanism).
+  As reconstruction LEAVES, this whole graph is feasible to treat as named
+  sub-leaves: blowfish_encipher, eksblowfish_setup (ekskey+key), bcrypt_radix64
+  encode/decode, utf8_encode. See FEASIBILITY note at end.
+
+BEHAVIOR (the exact pipeline, top to bottom):
+
+  1. ARGUMENT NORMALISATION (bcrypt.hashSync, L183-191):
+     - if salt === undefined: salt = 10            (NUMBER -> path b, out of contract)
+     - if typeof salt === 'number': salt = genSaltSync(salt)   (RNG, out of contract)
+     - if typeof s !== 'string' OR typeof salt !== 'string':
+         throw Error("Illegal arguments: "+typeof s+", "+typeof salt)
+       (so a NON-STRING `s` with a string salt throws here, deterministically;
+        e.g. number => "Illegal arguments: number, string";
+             null   => "Illegal arguments: object, string".)
+     - else delegate to _hash(s, salt).
+
+  2. SALT PARSING (_hash, L1265-1320):
+     a. Re-check both are strings (else throw "Invalid string / salt: Not a string").
+     b. Require salt.charAt(0)==='$' AND salt.charAt(1)==='2', else
+        throw Error("Invalid salt version: " + salt.substring(0,2)).
+        (empty salt => message "Invalid salt version: ".)
+     c. MINOR / OFFSET:
+        - if salt.charAt(2)==='$':  minor = String.fromCharCode(0) (NUL), offset = 3.
+          => the minor-less "$2$..." form. No NUL appended to password (NUL < 'a'),
+             and NO minor letter emitted in output (59-char result).
+        - else: minor = salt.charAt(2). Require minor ∈ {'a','b','y'} AND
+             salt.charAt(3)==='$', else
+             throw Error("Invalid salt revision: " + salt.substring(2,4)).
+             (e.g. "$2c$" => "Invalid salt revision: c$";
+                   "$2x$" => "Invalid salt revision: x$".)
+          offset = 4.
+        IMPORTANT: 'a','b','y' are TREATED IDENTICALLY by the algorithm. The only
+        observable difference is the literal minor letter echoed into the output
+        prefix. There is NO behavioral $2a-vs-$2b password-length-bug handling in
+        this implementation — all three are >= 'a' so all three append the NUL.
+     d. MISSING-ROUNDS GUARD (L1305): if salt.charAt(offset+2) > '$'  (i.e. the char
+        where the '$' after the 2-digit cost is expected is anything ordinally
+        greater than '$', e.g. a digit '0'-'9' which would mean a 3rd cost digit),
+        throw Error("Missing salt rounds").  (e.g. "$2a$045$..." throws here.)
+        NOTE: comparison is the JS string-ordinal `>` on a single char vs '$'
+        (codepoint 0x24). '$'==='$' is false (not >), so exactly "$" passes.
+
+     e. COST PARSING — read ROUNDS-VALIDITY below; this is GAP 2. The cost is parsed
+        as EXACTLY TWO decimal digits (L1313-1315):
+          r1 = parseInt(salt.substring(offset,   offset+1), 10) * 10
+          r2 = parseInt(salt.substring(offset+1, offset+2), 10)
+          rounds = r1 + r2
+
+     f. SALT BODY: real_salt = salt.substring(offset+3, offset+25)  (UP TO 22 chars).
+        Any characters beyond offset+25 are IGNORED (verified: trailing junk after
+        the 22-char body yields the identical hash). If the body decodes to fewer
+        than 16 bytes (too short, or contains only non-alphabet chars), _crypt
+        throws "Illegal salt length: <n> != 16" (n = actual decoded byte count).
+        Example (verified): salt "$2a$04$pbHV1cxrqE" has a 10-char body that decodes
+        to 7 bytes => throw "Illegal salt length: 7 != 16".
+
+  ===========================================================================
+  ROUNDS-VALIDITY  (GAP 2 — UNMISSABLE RULE; no guard may be added)
+  ===========================================================================
+  HARD RULE: there is NO isNaN check, NO Number.isInteger check, NO "non-digit cost
+  throws" branch ANYWHERE on this path. A blind re-implementation MUST NOT add one.
+  The ONLY validity check on `rounds` is in _crypt (L1174), literally:
+
+        if (rounds < 4 || rounds > 31) throw Error("Illegal number of rounds (4-31): " + rounds)
+
+  Consequences, all of which the re-implementation MUST reproduce:
+    - parseInt of a non-digit char returns NaN (IEEE-754 NaN), e.g. parseInt("x",10)===NaN.
+    - rounds = NaN*10 + NaN = NaN.
+    - The guard `(NaN < 4)` is false AND `(NaN > 31)` is false, so NaN PASSES the
+      guard. It does NOT throw. (Verified: NaN<4 === false, NaN>31 === false.)
+    - Next, _crypt does `rounds = (1 << rounds) >>> 0`. In JS, the shift operand is
+      ToInt32(NaN) === 0, so `1 << NaN === 1 << 0 === 1`, and `1 >>> 0 === 1`. The
+      expensive loop therefore runs EXACTLY ONE iteration. (Verified: (1<<NaN)>>>0 === 1.)
+    - In OUTPUT-ASSEMBLY, `rounds < 10` is `NaN < 10` === false, so NO leading "0"
+      zero-pad is added. Then `rounds.toString()` is `(NaN).toString()` === "NaN",
+      so the cost field prints the literal 3-char string "NaN".
+    - Net: the output prefix is "$2a$NaN$" (8 chars), giving a 61-char total result.
+    VERIFIED ANCHOR:
+      hashSync("a","$2a$xx$pbHV1cxrqESYWevhBlKzhe")
+        => "$2a$NaN$pbHV1cxrqESYWevhBlKzheGrugO56OJumjqdVYWHec8rMFihOwzh6"  (61 chars)
+  Equivalently: a blind engineer who routes "rounds" through real IEEE-754 NaN
+  arithmetic and a ToInt32-truncating shift, with the SINGLE `<4 || >31` guard and
+  NO integer/NaN pre-check, reproduces this without special-casing.
+
+  3. PASSWORD BYTES (_hash, L1317-1320):
+     - if minor >= 'a' (true for a/b/y): s += "\x00"  (append a single NUL byte).
+       For the minor-less form (minor = NUL char, < 'a'): NO NUL appended.
+     - passwordb = stringToBytes(s): UTF-8 encode (utfx UTF16->UTF8). Surrogate
+       pairs are combined into astral code points then UTF-8 encoded (1-4 bytes).
+       (Verified: a 40-char "ä" string — each "ä" U+00E4 encodes to 2 UTF-8 bytes —
+        hashes to a stable, byte-specific result, NOT the same as 40 ASCII chars.)
+     - saltb = base64_decode(real_salt, BCRYPT_SALT_LEN /*=16*/): decode the (up to
+       22) radix64 chars -> AT MOST 16 bytes. See RADIX64 for the exact algorithm.
+
+  ===========================================================================
+  RADIX64  (GAP 1 — EXACT bcrypt non-standard base64 bit-packing)
+  ===========================================================================
+  This is the section round 1 under-specified. A blind engineer MUST reproduce
+  decode(encode(x)) == x on canonical salts, produce EXACTLY 16 bytes from the
+  22-char salt body (NOT 17), 22 chars from 16 salt bytes, and 31 chars from 23
+  hash bytes. The alphabet (BASE64_CODE) and inverse (BASE64_INDEX) are CARRIED
+  DATA, referenced by name (see SCOPE) — do NOT transcribe them. What follows is
+  the BIT-PACKING, which the SIR DOES specify.
+
+  Alphabet semantics (for orientation only — the table itself is carried):
+    BASE64_CODE index 0..63 = "./ABCD...XYZabc...xyz0123456789"
+      '.'=0, '/'=1, 'A'..'Z'=2..27, 'a'..'z'=28..53, '0'..'9'=54..63.
+    This is NOT standard base64: there is no '+' or '=', and '.'/'/' lead.
+    BASE64_INDEX maps an ASCII code -> its 0..63 value, or -1 if not in the alphabet.
+
+  --- ENCODE: base64_encode(b, len)  (L410-438) ---
+  Inputs: b = byte array, len = number of input bytes to consume.
+    GUARD: if (len <= 0 || len > b.length) throw Error("Illegal len: " + len).
+    Output is built char-by-char by a STREAMING loop over input bytes, consuming
+    bytes in groups of UP TO 3, emitting 6-bit radix64 chars. Pseudocode, exact:
+
+      off = 0; out = ""
+      while (off < len):
+          c1 = b[off++] & 0xff
+          out += CODE[(c1 >> 2) & 0x3f]            # first char: top 6 bits of byte0
+          c1  = (c1 & 0x03) << 4                    # carry low 2 bits of byte0, shifted up
+          if (off >= len):                          # only 1 byte left in this group
+              out += CODE[c1 & 0x3f];  break        # second char from carry alone, then DONE
+          c2 = b[off++] & 0xff
+          c1 |= (c2 >> 4) & 0x0f                     # merge top 4 bits of byte1
+          out += CODE[c1 & 0x3f]                     # second char
+          c1  = (c2 & 0x0f) << 2                     # carry low 4 bits of byte1, shifted up
+          if (off >= len):                           # only 2 bytes in this group
+              out += CODE[c1 & 0x3f];  break        # third char from carry alone, then DONE
+          c2 = b[off++] & 0xff
+          c1 |= (c2 >> 6) & 0x03                      # merge top 2 bits of byte2
+          out += CODE[c1 & 0x3f]                      # third char
+          out += CODE[c2 & 0x3f]                      # fourth char: low 6 bits of byte2
+      return out
+
+    chars-per-bytes cadence (VERIFIED against the package):
+        1 byte  -> 2 chars      4 bytes -> 6 chars
+        2 bytes -> 3 chars      5 bytes -> 7 chars
+        3 bytes -> 4 chars      6 bytes -> 8 chars
+       16 bytes -> 22 chars    23 bytes -> 31 chars
+    i.e. full 3-byte groups give 4 chars; a trailing 1-byte remainder gives 2 chars,
+    a trailing 2-byte remainder gives 3 chars. NO '=' padding is ever emitted.
+    KEY USES IN finish():
+      base64_encode(saltb, saltb.length)  -> 22 chars  (saltb.length is 16 here)
+      base64_encode(hashBytes, 23)        -> 31 chars  (23 = C_ORIG.length*4 - 1 = 6*4-1)
+
+  --- DECODE: base64_decode(s, len)  (L447-487) ---
+  Inputs: s = radix64 string, len = MAXIMUM number of output bytes (the cap).
+    GUARD: if (len <= 0) throw Error("Illegal len: " + len).
+    Two LOAD-BEARING stop conditions (the source of the 17-byte bug if omitted):
+      (i)  the outer loop runs WHILE (off < slen - 1 && olen < len). The `slen - 1`
+           means the LAST input char is never consumed as the start of a new group;
+           a lone trailing char produces no further byte. The `olen < len` is the
+           output cap — output NEVER exceeds `len` bytes no matter how long s is.
+      (ii) inside the group, after EACH byte is pushed, `if (++olen >= len || off >= slen) break`
+           checks BOTH the cap and input exhaustion mid-group.
+    A non-alphabet char (BASE64_INDEX == -1) terminates decoding (break), it does
+    not throw. Pseudocode, exact (let IDX(ch) = BASE64_INDEX[charCode] or -1):
+
+      off = 0; slen = s.length; olen = 0; out = []
+      while (off < slen - 1 && olen < len):
+          c1 = IDX(s[off++])
+          c2 = IDX(s[off++])
+          if (c1 == -1 || c2 == -1): break
+          o = ((c1 << 2) >>> 0) | ((c2 & 0x30) >> 4)      # byte0: 6 bits of c1 + top 2 of c2
+          out.push(o & 0xff);  olen++
+          if (olen >= len || off >= slen): break
+          c3 = IDX(s[off++])
+          if (c3 == -1): break
+          o = (((c2 & 0x0f) << 4) >>> 0) | ((c3 & 0x3c) >> 2)   # byte1: low 4 of c2 + 4 of c3
+          out.push(o & 0xff);  olen++
+          if (olen >= len || off >= slen): break
+          c4 = IDX(s[off++])
+          o = (((c3 & 0x03) << 6) >>> 0) | c4              # byte2: low 2 of c3 + 6 of c4
+          out.push(o & 0xff);  olen++
+      return out                                           # length = min(decodable, len)
+
+    chars-per-bytes cadence (VERIFIED against the package, uncapped):
+        2 chars -> 1 byte       6 chars -> 4 bytes
+        3 chars -> 2 bytes      7 chars -> 5 bytes
+        4 chars -> 3 bytes      8 chars -> 6 bytes
+        5 chars -> 3 bytes     21 chars -> 15 bytes
+       11 chars -> 8 bytes     22 chars -> 16 bytes
+    CRITICAL: decode(22-char body, len=16) == EXACTLY 16 bytes. Even UNCAPPED
+    (len very large) a 22-char input yields exactly 16 bytes — the `off < slen - 1`
+    boundary stops the lone 22nd char from producing a 17th byte.
+    THE 17-BYTE BUG (round 1): an emitter that dropped the `olen < len` cap (or fed
+    a 23-char window) decodes 23 chars -> 17 bytes / 24 chars -> 18 bytes. The
+    `len`=16 cap is therefore LOAD-BEARING and MUST be honored. (Verified:
+    decode(23 chars, len=999)=17, decode(23 chars, len=16)=16.)
+
+  --- ROUND-TRIP INVARIANT (a blind engineer's self-check) ---
+    For the canonical salt body "pbHV1cxrqESYWevhBlKzhe" (22 chars):
+      decode(body, 16) -> [173,210,87,221,236,237,176,101,26,98,12,99,14,115,53,142] (16 bytes)
+      encode(those 16 bytes, 16) -> "pbHV1cxrqESYWevhBlKzhe"  (identity, 22 chars)
+    decode(encode(x, x.length), x.length) == x for any byte array x. Verified.
+
+  4. EksBlowfish CORE (_crypt(passwordb, saltb, rounds), L1168-1253) — UNCHANGED,
+     re-derived correctly in round 1. Do not churn.
+     a. Validate ROUNDS via the single guard (see ROUNDS-VALIDITY): if
+        (rounds < 4 || rounds > 31) throw "Illegal number of rounds (4-31): r".
+        NaN passes (does not throw).
+     b. Validate: saltb.length === 16 else throw
+        "Illegal salt length: <saltb.length> != 16".
+     c. rounds = (1 << rounds) >>> 0   (i.e. 2^cost iterations; NaN -> 1).
+     d. P = Int32Array copy of P_ORIG (18 words); S = Int32Array copy of S_ORIG
+        (1024 words = 4 S-boxes x 256). These are the Blowfish init constants =
+        the fractional hex digits of pi. (CARRIED DATA — see SCOPE.)
+     e. _ekskey(saltb, passwordb, P, S):  the salted ExpandKey:
+        - XOR the 18 P entries with successive 32-bit big-endian words of the KEY
+          (password bytes), the key stream cycling modulo its length via
+          _streamtoword's `(offp+1) % data.length`. THIS modulo wrap, combined
+          with consuming only 18 P-words + 512 S-words of key material across the
+          two block streams, is what realises the effective 72-byte key cap: only
+          the first 72 bytes of password are ever reachable before the salt's own
+          16-byte cadence dominates. (Empirically the password is capped at 72
+          bytes: 71-byte vs 72-byte passwords differ, but 72==73==100. VERIFIED:
+          72-char and 73-char all-'x' passwords hash IDENTICALLY.)
+        - then run _encipher on a running (L,R) block, XORing in salt words two at
+          a time, writing results back into P (9 blocks) then S (512 blocks).
+     f. EXPENSIVE LOOP: repeat 2^cost times (NaN-cost => exactly 1 iteration):
+            _key(passwordb, P, S);  _key(saltb, P, S);
+        where _key is the un-salted ExpandKey (XOR key into P, then re-encipher P
+        and S with a running zero-seeded block). (The SYNC path chunks this loop
+        by Date.now() only for yielding; output is identical regardless of timing.)
+     g. ENCRYPT THE MAGIC TEXT: cdata = copy of C_ORIG = the 6 32-bit words of the
+        ASCII string "OrpheanBeholderScryDoub..." (24 bytes; the last byte of the
+        24-byte serialisation is dropped — only 23 are encoded). Run 64 rounds of
+        ECB Blowfish over the 3 (L,R) word-pairs (clen=6, clen>>1=3):
+            for i in 0..63: for j in 0..(clen>>1 - 1): _encipher(cdata, j<<1, P, S)
+        Then serialise ALL 6 words big-endian into 24 bytes (the `ret` array has 24
+        entries). finish() then encodes only the first 23 of those bytes.
+
+  5. _encipher(lr, off, P, S) (L1040-1073): standard 16-round Blowfish on the 64-bit
+     block (lr[off]=L, lr[off+1]=R):
+        L ^= P[0]
+        for 16 rounds (unrolled, alternating L/R):
+            n = ((S[0x000 | (X>>>24)] + S[0x100 | ((X>>16)&0xff)]) ^
+                  S[0x200 | ((X>>8)&0xff)]) + S[0x300 | (X & 0xff)]   # wrapping i32 add
+            other ^= n ^ P[round]
+        finally: lr[off] = R ^ P[BLOWFISH_NUM_ROUNDS + 1 /*=17*/];  lr[off+1] = L
+        (note the L/R swap-back).
+     All arithmetic is 32-bit two's-complement (Int32Array semantics): the `+`
+     is wrapping mod 2^32, `^` is bitwise XOR, `>>>` is logical shift. The
+     S-box index uses `0x000|`, `0x100|`, `0x200|`, `0x300|` to select sbox 0..3.
+
+  ===========================================================================
+  OUTPUT-ASSEMBLY  (GAP 3 — LITERAL separator sequence)
+  ===========================================================================
+  _hash.finish(bytes) (L1328-1340) builds the result by pushing string fragments
+  and joining. The EXACT, separator-literal sequence (every `$` shown) is:
+
+        res = "$2"                              # literal "$2" (NOT "$2$" — minor/'$' follow)
+        if (minor >= 'a'):  res += minor        # the single minor letter 'a'|'b'|'y'
+        res += "$"                              # separator after version+minor
+        if (rounds < 10):   res += "0"          # zero-pad cost to 2 digits (NaN<10 is false: skip)
+        res += String(rounds)                   # "04","05",...  OR literally "NaN"
+        res += "$"                              # separator after cost
+        res += base64_encode(saltb, saltb.length)   # 22 chars: the canonical salt echo
+        res += base64_encode(hashBytes, 23)          # 31 chars: the hash body (23 = 6*4-1)
+
+    Final forms:
+      a/b/y, normal cost:  "$2<minor>$<cc>$<22 salt><31 hash>"  = 60 chars
+      minor-less $2$:      "$2$<cc>$<22 salt><31 hash>"          = 59 chars
+      NaN cost (a/b/y):    "$2<minor>$NaN$<22 salt><31 hash>"    = 61 chars
+    NOTE the emitted salt is the RE-ENCODING of saltb (the decoded 16 bytes), i.e.
+    the canonicalised 22-char radix64; for canonical salts it round-trips identically
+    to the input salt body. It may differ from the input's low-order bits if the
+    input's last radix64 char had spurious low bits, but the OUTPUT is always the
+    re-encoding of the decoded bytes, never a passthrough of the input chars.
+
+ORACLE:
+  - The frozen reference oracle IS the real `bcryptjs@2.4.3` package's
+    `hashSync(data, saltString)` invoked with salt STRINGS only.
+  - Differential check: a blind re-implementation is correct iff, for every
+    [password, saltString] the generator emits (including the documented THROW
+    cases), its result string is byte-identical to the reference's result, AND
+    error cases throw with the identical Error message.
+  - Known-answer anchors (reproducible from the baked salt literals; all VERIFIED
+    by executing the real package while authoring this hardened SIR):
+      hashSync("",        "$2a$04$pbHV1cxrqESYWevhBlKzhe")
+        => "$2a$04$pbHV1cxrqESYWevhBlKzhe9wU7XOb/TY9JmZisj6CFHIgI3OEwWVe"
+      hashSync("password","$2a$04$pbHV1cxrqESYWevhBlKzhe")
+        => "$2a$04$pbHV1cxrqESYWevhBlKzheX/DIAPL0q7Wn5lN2Z.69mjIlGNKdvtK"
+      hashSync("password","$2b$04$pbHV1cxrqESYWevhBlKzhe")
+        => "$2b$04$pbHV1cxrqESYWevhBlKzheX/DIAPL0q7Wn5lN2Z.69mjIlGNKdvtK"
+        (identical body to $2a — only the minor letter differs)
+      hashSync("password","$2$04$pbHV1cxrqESYWevhBlKzhe")   # minor-less, 59 chars
+        => "$2$04$pbHV1cxrqESYWevhBlKzheA7ddemAbqT47u3zaNZ2PPigfg9frWQe"
+  - Held-out anchors that diverged in round 1 (now MUST pass; all VERIFIED):
+      hashSync("x"*72, "$2a$04$pbHV1cxrqESYWevhBlKzhe")
+        => "$2a$04$pbHV1cxrqESYWevhBlKzheSnYFZLZVhcOkraF2QYDgqR1TILtckjO"
+      hashSync("x"*73, "$2a$04$pbHV1cxrqESYWevhBlKzhe")     # 73 == 72 (key cap)
+        => "$2a$04$pbHV1cxrqESYWevhBlKzheSnYFZLZVhcOkraF2QYDgqR1TILtckjO"
+      hashSync("x"*100,"$2a$04$pbHV1cxrqESYWevhBlKzhe")     # 100 == 72 too
+        => "$2a$04$pbHV1cxrqESYWevhBlKzheSnYFZLZVhcOkraF2QYDgqR1TILtckjO"
+      hashSync("ä"*40, "$2a$04$pbHV1cxrqESYWevhBlKzhe")     # UTF-8: each ä -> 2 bytes
+        => "$2a$04$pbHV1cxrqESYWevhBlKzhedigVhK1chgoHm5jlslHwrT.Do8rRCsG"
+      hashSync("a",     "$2a$xx$pbHV1cxrqESYWevhBlKzhe")    # NaN-cost quirk
+        => "$2a$NaN$pbHV1cxrqESYWevhBlKzheGrugO56OJumjqdVYWHec8rMFihOwzh6"
+      hashSync("a",     "$2a$04$pbHV1cxrqE")                # 10-char body -> 7 bytes
+        => THROW Error("Illegal salt length: 7 != 16")
+      hashSync("letmeinaletmeinaletmeinaletmeina","$2b$04$pbHV1cxrqESYWevhBlKzhe")
+        => "$2b$04$pbHV1cxrqESYWevhBlKzhemMctffyZpfsjNeF6VfjXHKeJhok531."
+      hashSync("asecretasecret","$2a$04$pbHV1cxrqESYWevhBlKzhe")
+        => "$2a$04$pbHV1cxrqESYWevhBlKzhes9GY7VAoWcvRqCShKqfAatxyzsa1euy"
+
+SCOPE:
+  IN-CONTRACT (this value oracle covers):
+    - hashSync(stringPassword, validSaltString) -> 60/59-char hash. Deterministic.
+    - All documented THROW cases reachable with a STRING salt argument:
+        non-string password; bad version ($1$, missing $); bad revision ($2c$,$2x$);
+        missing rounds ($2a$045$...); cost out of range ($2a$99$, $2a$03$);
+        too-short / non-decodable salt body ("Illegal salt length").
+    - The NaN-cost quirk ($2a$xx$...) — deterministic, emits "$2a$NaN$..." (61 chars).
+    - UTF-8 / surrogate-pair passwords; empty password; >72-byte truncation.
+    - minor-less $2$ form (59-char output, no NUL appended).
+
+  CARRIED-DATA (constants the reconstruction must embed verbatim; this SIR NAMES
+  them and gives sizes rather than transcribing all values — they are shipped in a
+  separate, byte-exact, authority-attested data module that the re-implementation
+  IMPORTS. The SIR references them BY NAME and MUST NOT transcribe them):
+    - P_ORIG: 18 x uint32  — Blowfish P-array, = frac(pi) hex digits, words 1..18.
+              First word 0x243f6a88. Located dist/bcrypt.js L721-726.
+    - S_ORIG: 1024 x uint32 — four 256-entry Blowfish S-boxes, = subsequent
+              frac(pi) hex digits. First word 0xd1310ba6. Located L733-939.
+    - C_ORIG: 6 x uint32   — the magic plaintext "OrpheanBeholderScryDoub" as
+              big-endian words. L946-949. (24 bytes serialised; 23 encoded.)
+    - BASE64_CODE: the 64-char bcrypt radix64 ENCODE alphabet (string), L381.
+      index 0..63 = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".
+      The SIR's RADIX64 section specifies how to USE it (bit-packing) but does NOT
+      re-transcribe its values beyond this naming reference.
+    - BASE64_INDEX: the inverse table (ASCII code -> 0..63 value or -1), L388-395.
+      Carried; do not transcribe. Used by DECODE as IDX(char).
+    - Constants: BCRYPT_SALT_LEN=16 (L693), BLOWFISH_NUM_ROUNDS=16 (L707),
+                 GENSALT_DEFAULT_LOG2_ROUNDS=10 (L700), MAX_EXECUTION_TIME=100 (L714,
+                 yield-only, output-neutral).
+
+  OUT-OF-CONTRACT (not covered by this deterministic value oracle):
+    - hashSync(data) with salt OMITTED or salt a NUMBER: invokes genSaltSync ->
+      CSPRNG (require("crypto").randomBytes / WebCrypto). NONDETERMINISTIC. The
+      generator MUST NOT emit these; it passes salt STRINGS only.
+    - genSaltSync / genSalt / hash (async) / compare / compareSync / getRounds /
+      getSalt / setRandomFallback / encodeBase64 / decodeBase64 — sibling exports,
+      not this unit.
+    - The async callback/Promise path of hashSync's siblings (hashSync itself is
+      always synchronous; the Date.now()-chunked loop is internal and output-neutral).
+    - Cost values large enough to be computationally infeasible (>= ~15) — valid
+      but excluded for runtime; oracle uses cost 04/05 only.
+
+PROVENANCE:
+  - Package: bcryptjs@2.4.3 (MIT), author Daniel Wirtz. Algorithm: bcrypt /
+    EksBlowfish (Provos & Mazieres, "A Future-Adaptable Password Scheme", 1999),
+    over Blowfish (Schneier, 1993). Public, standard, RFC-less but de-facto canonical.
+  - Source read: <pkgroot>/index.js -> dist/bcrypt.js (the published build; src/
+    is the unbuilt metascript). Line refs above are into dist/bcrypt.js.
+  - HARDEN round 2 verification: every anchor above (normal, minor-less, NaN-cost,
+    UTF-8, >72-byte truncation, Illegal-salt-length throw) AND the radix64 round-trip
+    / chars<->bytes cadence / 16-not-17-byte decode bound / NaN arithmetic facts were
+    re-VERIFIED by executing the real bcryptjs@2.4.3 package (node) while authoring
+    this SIR, not inferred from reading alone. The 8 round-1 held-out disagreements
+    were re-run against the real package and ALL match the divergence.json expected
+    values, confirming the spec (not the oracle) was the round-1 gap.
+  - Baked salt literals in hashSync.inputs.mjs were produced once via the real
+    genSaltSync at authoring time and frozen as constants; genInputs draws NO RNG.

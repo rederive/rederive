@@ -1,0 +1,22 @@
+UNIT fireOrder
+KIND FUNCTIONAL
+FIDELITY spec
+SIG fireOrder(events, clock) -> Promise<Array>
+DESCRIPTION `events` is an array of { value, delay } objects. The unit arms one timer per
+DESCRIPTION event and returns the values in the order their timers FIRE.
+DESCRIPTION Timers are armed through the caller-supplied clock, which offers exactly two calls:
+DESCRIPTION   clock.setTimer(fn, ms) -> handle   run `fn` after `ms` of VIRTUAL time
+DESCRIPTION   clock.clearTimer(handle)           disarm a timer that has not yet fired
+DESCRIPTION The clock owns time and the harness advances it. The unit MUST NOT use setTimeout,
+DESCRIPTION setInterval, Date, performance.now, or any other real-time source, and must not
+DESCRIPTION compute the answer by sorting instead of by arming timers — the firing is the work.
+DESCRIPTION Export the function as the DEFAULT export. No imports of any kind.
+INVARIANT the result holds every event's value, ordered by ascending `delay`.
+INVARIANT TIES: two events with the SAME delay fire in the order they appear in `events`.
+INVARIANT   Arm them in array order and this falls out; deriving order from `delay` alone
+INVARIANT   loses it, and the loss is invisible whenever no two delays happen to be equal.
+INVARIANT every event arms exactly ONE timer, and every armed timer FIRES — the unit clears
+INVARIANT   none of them. A result that is correct with no timer armed is not this unit.
+INVARIANT delays are measured from the moment the unit is called, not from each other.
+INVARIANT the returned promise resolves only after the LAST timer has fired.
+INVARIANT an empty events array returns [] without arming any timer.

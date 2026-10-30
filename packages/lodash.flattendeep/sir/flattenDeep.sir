@@ -1,0 +1,179 @@
+UNIT flattenDeep
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG flattenDeep(array) -> Array          # default export: module.exports = flattenDeep
+
+# RE-EMITTER DIRECTIVE: the harness loads the emitted .mjs and calls its DEFAULT export.
+#   The blind re-emitter MUST `export default <fn>` (a single-arg function `fn(array)`).
+
+DEPENDS-ON none
+  # Self-contained. No external packages. Pure value-in / value-out. No I/O, no clock, no RNG,
+  # no env, no mutation of globals. There is NO seam: ORACLE-CLASS deterministic.
+
+# ============================================================================
+# BEHAVIOR  (exact ordered contract — reproduce precisely)
+# ============================================================================
+#
+# flattenDeep(array) recursively flattens `array` to INFINITE depth, returning a NEW array.
+# It is the lodash `baseFlatten(array, INFINITY)` specialization (depth = Infinity, the default
+# `isFlattenable` predicate, isStrict = false).
+#
+# --- TOP-LEVEL ENTRY (flattenDeep) -----------------------------------------
+#   length := array ? array.length : 0
+#     # `array ? ...` is a TRUTHINESS test on the argument itself, NOT a type check.
+#     #   - null / undefined / 0 / "" / false / NaN  -> falsy -> length forced to 0 -> return []  (a NEW [])
+#     #   - any truthy value with no `.length` (e.g. a number 5, an empty object {}) -> length is
+#     #     `undefined` -> `length ? ...` is falsy -> return [] (a NEW [])
+#     #   - a truthy ARRAY-LIKE (has numeric .length): proceeds to baseFlatten over indices 0..length-1
+#   if length is falsy (0 / undefined / NaN): return []     # always a fresh empty array
+#   else: return baseFlatten(array, INFINITY, isFlattenable, /*isStrict=*/false, /*result=*/[])
+#
+#   NOTE (array-like inputs): because the entry only checks `.length`, NON-array array-likes are
+#   iterated by index too. Verified against real package:
+#       flattenDeep("abc")               -> ["a","b","c"]   # string has .length 3; chars iterated, each non-flattenable -> pushed
+#       flattenDeep({length:2,0:"a",1:"b"}) -> ["a","b"]    # array-like plain object iterated by index
+#       flattenDeep(5)   -> []   flattenDeep({}) -> []      # truthy but no .length
+#   These array-like (non-Array) inputs are SOURCE BEHAVIOR but are EXCLUDED from the held-out
+#   comparison (a string round-trips, but `{length,...}` array-like objects are an edge the codec
+#   handles inconsistently and the operator hint scopes the unit to array inputs). The re-emitter
+#   MUST still implement entry as the `.length` truthiness check above, not `Array.isArray`.
+#
+# --- baseFlatten(array, depth, predicate, isStrict, result) -----------------
+#   index := -1
+#   length := array.length
+#   predicate defaults to isFlattenable; result defaults to a new []
+#   WHILE (++index < length):                 # iterates indices 0..length-1 INCLUSIVE of holes
+#       value := array[index]                 # a HOLE reads as `undefined`
+#       IF depth > 0 AND predicate(value):
+#           IF depth > 1:
+#               # recurse one level deeper into the flattenable value
+#               baseFlatten(value, depth - 1, predicate, isStrict, result)   # mutates `result`
+#           ELSE:                              # depth === 1 (never reached here: depth starts at INFINITY)
+#               arrayPush(result, value)       # append value's elements shallowly
+#       ELSE IF NOT isStrict:                  # isStrict is false for flattenDeep
+#           result[result.length] = value      # APPEND value as a single dense element
+#   RETURN result
+#
+#   Because flattenDeep calls baseFlatten with depth = INFINITY (1/0), `depth > 1` is ALWAYS true
+#   for any flattenable value, so flattening recurses to the bottom of every nested flattenable.
+#   The `depth === 1` / arrayPush branch is structurally present but UNREACHABLE from flattenDeep.
+#
+# --- isFlattenable(value)  (the per-element predicate) ----------------------
+#   return  isArray(value)                                  # Array.isArray(value)
+#        || isArguments(value)                              # a likely `arguments` object (see below)
+#        || !!(spreadableSymbol && value && value[spreadableSymbol])
+#                                                           # value[Symbol.isConcatSpreadable] is truthy
+#   isArguments(value): isArrayLikeObject(value)
+#                       && hasOwnProperty.call(value,'callee')
+#                       && (!propertyIsEnumerable.call(value,'callee')
+#                           || Object.prototype.toString.call(value) === '[object Arguments]')
+#     where isArrayLikeObject(v) = isObjectLike(v) && isArrayLike(v)
+#           isObjectLike(v)      = v != null && typeof v == 'object'
+#           isArrayLike(v)       = v != null && isLength(v.length) && !isFunction(v)
+#           isLength(v)          = typeof v=='number' && v>-1 && v%1==0 && v<=9007199254740991
+#           isFunction(v)        = toStringTag(v) in {'[object Function]','[object GeneratorFunction]'}
+#
+#   CONSEQUENCE for the predicate, verified against the real package:
+#     - true  for: real Arrays, real `arguments` objects, objects with truthy [Symbol.isConcatSpreadable]
+#     - false for: numbers, strings, booleans, null, undefined, bigint, plain objects {},
+#                  RegExp, Set, Map, Uint8Array / Buffer / typed arrays, functions.
+#       (Uint8Array: isArray=false, no own 'callee', no spreadable symbol -> NOT flattenable ->
+#        passes through UNCHANGED as a single element. Confirmed: f([1,[u],2]) yields length-3
+#        result with result[1] === u, the typed array intact.)
+#
+# --- NON-FLATTENABLE ELEMENTS PASS THROUGH UNCHANGED ------------------------
+#   Every element for which isFlattenable is false is appended as a single dense element, by value
+#   (same reference; flattenDeep does NOT clone elements). Verified:
+#       f([1,[2,{a:1}],3])  -> [1,2,{a:1},3]      # the plain object is NOT descended-into
+#       f([[{a:[1]}]])      -> [{a:[1]}]          # an array INSIDE a plain object is NOT flattened
+#       f([1,["ab"],3])     -> [1,"ab",3]         # nested STRING passes through (string not flattenable)
+#       f([0,false,"",null,[0,false,[null]]]) -> [0,false,"",null,0,false,null]   # falsy values preserved
+#       f([true,[false,[true]]]) -> [true,false,true]
+#
+# --- HOLE DENSIFICATION (sparse arrays) -------------------------------------
+#   baseFlatten iterates index 0..length-1; a hole reads as `undefined`. `undefined` is not
+#   flattenable, so it is appended via `result[result.length] = undefined`, producing a DENSE
+#   element. Verified: f([0,,2]) -> a length-3 array with ALL three indices PRESENT (0 in r, 1 in r,
+#   2 in r all true) and r[1] === undefined (a real dense undefined, NOT a hole). i.e. holes are
+#   DENSIFIED into explicit `undefined` slots. (Under JSON.stringify these undefined slots serialize
+#   as `null`, but structurally they are dense `undefined`.) Nested holes flatten the same way:
+#   f([1,[2,,4],5]) -> dense [1,2,undefined,4,5].
+#   The re-emitter MUST densify holes (iterate by length, read array[index] which yields undefined
+#   for a hole, and append it).  See OUT-OF-ENVELOPE note: sparse arrays are NOT emitted by the
+#   held-out generator because a sparse-array INPUT does not survive JSON.stringify (the hole becomes
+#   a literal null on persist); this behavior is DOCUMENTED here for fidelity, not graded.
+#
+# --- INFINITE / DEEP RECURSION ----------------------------------------------
+#   Flattens to the bottom regardless of nesting depth (subject only to JS call-stack limits for
+#   pathological depths — not exercised here). Verified to 8+ levels:
+#       f([1,[2,[3,[4,[5,[6,[7,[8]]]]]]]]) -> [1,2,3,4,5,6,7,8]
+#   Empty nested arrays vanish:
+#       f([[],[[]],[[],[[]]]]) -> []        f([[],[[],[]]]) -> []
+#
+# --- NO MUTATION ------------------------------------------------------------
+#   The input array (and its nested arrays) are NOT mutated. The return is ALWAYS a NEW array,
+#   even when the input is already flat (f([1,2,3]) returns a fresh array !== the input). Verified.
+#
+# --- NUMERIC / SPECIAL VALUE ELEMENTS ---------------------------------------
+#   Non-array numeric elements pass through unchanged by identity: NaN stays NaN, -0 stays -0,
+#   Infinity / -Infinity unchanged, bigints unchanged. (These are codec-OUT for the held-out under
+#   JSON serialization; documented for the re-emitter's fidelity but not emitted by genInputs.)
+#
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+  # Pure deterministic value oracle: for each input tuple [array], expected = flattenDeep(array)
+  # as computed by the REAL package; held-out compares the re-emitter's return against it.
+  # No seam, no scripting, no trace.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - entry truthiness/length gate (null/undefined/falsy/no-length -> new []);
+#   - baseFlatten with depth=INFINITY (recurse all flattenable levels, isStrict=false);
+#   - isFlattenable predicate (Array.isArray || isArguments || Symbol.isConcatSpreadable-truthy);
+#   - non-flattenable elements (incl. plain objects, strings, RegExp, Set, Map, typed arrays,
+#     bigint, booleans, null, numbers) pass through unchanged, by reference, as dense elements;
+#   - hole densification (sparse -> dense undefined);
+#   - NEW array returned, input never mutated.
+#
+# CARRIED DATA: none (no literal tables).
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (real source behavior, EXCLUDED from the held-out comparison
+#   because the values are not JSON / structured-clone round-trippable — but the re-emitter MUST
+#   still implement the predicate & densification so that if such a value ever appears it behaves
+#   identically):
+#     - `arguments` objects as elements (isArguments=true -> ARE flattened). Verified
+#       f([1, args(2,3), 4]) -> [1,2,3,4]. Not emitted by genInputs (live arguments object can't be
+#       persisted as a plain JSON arg).
+#     - objects with truthy [Symbol.isConcatSpreadable] (ARE spread/flattened). Verified
+#       f([1, {0:"x",1:"y",length:2,[Symbol.isConcatSpreadable]:true}, 2]) -> [1,"x","y",2].
+#       Not emitted (Symbol-keyed prop does not survive JSON).
+#     - Function elements (non-flattenable, pass through) — functions don't round-trip; not emitted.
+#     - Symbol elements — don't round-trip; not emitted.
+#     - sparse / hole arrays as INPUT — a hole serializes to `null` under JSON.stringify, so a sparse
+#       input does not round-trip; densification documented above but not emitted from genInputs.
+#     - element-identity NaN / +Infinity / -Infinity / -0 — don't survive JSON; documented, not emitted.
+#     - non-Array array-like inputs ({length,...}) — scoped out per operator hint; entry behavior
+#       (iterate by .length) documented above for fidelity.
+#
+# ============================================================================
+# SELF-CONSISTENCY CROSS-CHECK
+# ============================================================================
+#   Every value genInputs can emit is JSON/structured-clone round-trippable AND its behavior is
+#   defined above:
+#     - JSON primitives (number, string, boolean, null) as elements -> non-flattenable passthrough.
+#     - nested arrays (any depth, incl. empty) -> recursively flattened to infinity.
+#     - plain objects as elements -> non-flattenable passthrough (their inner arrays NOT flattened).
+#     - RegExp / Set / Map / Uint8Array / bigint as elements -> non-flattenable passthrough.
+#     - empty input array []   -> []
+#     - null / undefined input -> []   (undefined arg emitted as the absence-of-arg / null; see gen).
+#   genInputs does NOT emit any value left to an OUT-OF-ENVELOPE table.
+
+PROVENANCE lodash.flattendeep@4.4.0  (lodash Custom Build, modularize exports="npm")
+  repo: lodash/lodash   license: MIT
+  source file: node_modules/lodash.flattendeep/index.js
+  (functions: flattenDeep, baseFlatten, isFlattenable, isArguments, isArray, isArrayLike,
+   isArrayLikeObject, isFunction, isLength, isObject, isObjectLike, arrayPush)

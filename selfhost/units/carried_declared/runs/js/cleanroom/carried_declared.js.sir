@@ -1,0 +1,22 @@
+UNIT carried_declared
+LANG js
+PRIMARY-SHA256 f22b9eea6d3d89d34dd82f453c33f79a5960dfe8f916c84e69e917bf852490cc
+SIG carried_declared(text: string): { name: string, from: string, sha: string | null, shape: string | null, assertions: Array<{ expr: string, equals: unknown }> } | null
+NOTE named export carried_declared; an ES module
+ABI text = string (UTF-16; every rule is over code points); none = null; the record = a plain object with exactly the own keys
+  name, from, sha, shape, assertions (in that order); each assertion = a plain object with own keys expr, equals; json = the
+  value JSON.parse yields (null, boolean, number, string, Array, plain object). A throw is any thrown Error; the message is
+  not graded.
+MECHANISM SP trims are /^[ \t]+|[ \t]+$/g, never trim(). The PINNED charset WS is exactly JS \s; the R11 expr test may be
+  /[^\s\p{Cf}]/u only on a host whose Unicode is 17.0 (Node 24) — otherwise spell CF out. In a regex without the s flag, .
+  matches neither U+2028 nor U+2029: HEAD's SOURCE refuses them, SUBFIELD and AUTHORITY take them ([^]).
+  R11 = JSON.parse on STRING and on E; each numeral (after the strings in E are blanked) gives X = Number(numeral): throw unless Number.isFinite(X), Math.abs(X) <= 2 ** 53, X is nonzero or the
+  numeral's part before e/E has no digit 1-9, and (integer-form only) BigInt(numeral) === BigInt(X).
+DEPENDS-ON none
+PINNED regex LINES = /\r\n|\r|\n/ CITED R1 — the only line breaks
+PINNED regex HEAD = /^([A-Za-z_][A-Za-z0-9_]*)[ \t]+FROM[ \t]+(.+)$/ CITED R6 — on ARGS
+PINNED regex KEYWORD = /^(?:CANONICAL-SHA256|SHAPE|AUTHORITY)(?![A-Z0-9-])/ CITED R7 — on each BODY: a keyword line, else prose
+PINNED regex SUBFIELD = /^(CANONICAL-SHA256|SHAPE|AUTHORITY)(?:[ \t]+([^]*))?$/ CITED R7 — on each keyword line; no match throws; group 2 (or the empty text) is VALUE
+PINNED regex AUTHORITY = /^\{[ \t]*expr:[ \t]*("(?:\\[^]|[^"\\])*")[ \t]*,[ \t]*equals:[ \t]*([^]+?)[ \t]*\}$/ CITED R10 — on VALUE; group 1 is STRING, group 2 is E
+PINNED regex NUMERAL = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g CITED R11 — over E after every JSON string in it is replaced by ""
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs carriedDeclared + cli/sir/sir-parse.mjs, cut by the sighted selfhost decomposer 2026-10-27 (round 5b).

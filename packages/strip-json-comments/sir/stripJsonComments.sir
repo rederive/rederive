@@ -1,0 +1,242 @@
+# SIR — strip-json-comments@3.1.1  (sindresorhus/strip-json-comments, CJS, MIT)
+# Sighted decomposition. Comments use '#' only.
+
+UNIT stripJsonComments
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG default-export: (jsonString: string, options?: { whitespace?: boolean }) -> string
+DEPENDS-ON none   # zero runtime dependencies; pure string transform
+
+# =====================================================================================
+# OVERVIEW
+# =====================================================================================
+# A char-by-char state machine that removes JavaScript-style comments from a JSON-ish
+# string while leaving everything inside string literals intact. Two comment kinds:
+#   - single-line  //  ... terminated by \n (or by \r\n as a pair), or by end-of-input
+#   - multi-line   /* ... */  terminated by the */ marker, or by end-of-input
+# Comment markers that occur INSIDE a (non-escaped) string literal are NOT comments.
+#
+# Replacement policy controlled by options.whitespace:
+#   - whitespace !== false (the DEFAULT, includes undefined/true/0/null-prop/"false"/etc.):
+#       each removed comment span is replaced by a string of EQUAL LENGTH in which every
+#       NON-whitespace character (JS regex \S) is turned into a single ASCII space ' ' and
+#       every whitespace character (JS regex \s: space, \t, \n, \r, \v=U+000B, \f=U+000C,
+#       and the other Unicode \s code points) is KEPT AS-IS. This is offset-preserving:
+#       output length === input length, and newlines inside replaced spans survive.
+#   - whitespace === false (STRICT triple-equals only): each removed comment span is
+#       replaced by the empty string '' (the span is deleted; output is shorter).
+#
+# IMPORTANT VERSION NOTE: version 3.1.1 has NO trailingCommas feature. options.trailingCommas
+# is simply never read; an options object containing it behaves identically to {}. (The
+# trailingCommas option exists only in 4.x and is OUT OF SCOPE here.)
+
+# =====================================================================================
+# EXACT REGEX / CONSTANTS (reproduce verbatim)
+# =====================================================================================
+# stripWithoutWhitespace(...)            => ''                      # used when whitespace === false
+# stripWithWhitespace(string, start, end) => string.slice(start, end).replace(/\S/g, ' ')
+#   - i.e. take the substring [start, end), and globally replace every \S char with ' '.
+#   - \S is the JS "non-whitespace" class. Whitespace (\s) chars are left untouched.
+# Two internal sentinels distinguish comment state (any two distinct non-falsy marker
+# values work for a re-emitter; here named SINGLE and MULTI). insideComment holds one of:
+#   false  (not in a comment)
+#   SINGLE (inside a // line comment)
+#   MULTI  (inside a /* */ block comment)
+#
+# TypeError message (EXACT, uses backticks and typeof):
+#   `Expected argument \`jsonString\` to be a \`string\`, got \`${typeof jsonString}\``
+#   e.g. for 42 -> "Expected argument `jsonString` to be a `string`, got `number`"
+
+# =====================================================================================
+# isEscaped(jsonString, quotePosition) -> boolean   (helper)
+# =====================================================================================
+# Determines whether the char at quotePosition is escaped by counting CONSECUTIVE
+# backslashes immediately preceding it:
+#   index = quotePosition - 1; backslashCount = 0
+#   while jsonString[index] === '\\':  index -= 1; backslashCount += 1
+#   return Boolean(backslashCount % 2)        # ODD count => escaped => true
+# Walking left of index 0 reads undefined (not '\\'), so the loop terminates at start.
+
+# =====================================================================================
+# BEHAVIOR — ordered pipeline
+# =====================================================================================
+# node-1  TYPE GUARD (first statement)
+#   if typeof jsonString !== 'string': throw new TypeError(<message above>)
+#   typeof is used, so: number/boolean/bigint/undefined/symbol/function/object all throw;
+#   null and arrays both report typeof 'object'. (See SCOPE for the options=null caveat.)
+#
+# node-2  OPTION RESOLUTION
+#   options defaults to {} when the 2nd arg is undefined (or omitted).
+#   strip := (options.whitespace === false) ? stripWithoutWhitespace : stripWithWhitespace
+#   Only a STRICT === false selects removal. Any other value (true, undefined, 0, null,
+#   NaN, "false", {}, etc.) selects whitespace-replacement.
+#   NOTE: options is NOT defaulted on null; reading options.whitespace when options is
+#   the value null throws (see SCOPE / out-of-envelope). A non-object primitive options
+#   (e.g. "x", 5, true) is fine: ("x").whitespace is undefined => whitespace mode.
+#
+# node-3  STATE-MACHINE INIT
+#   insideString = false; insideComment = false; offset = 0; result = ''
+#
+# node-4  MAIN LOOP   for i = 0 .. jsonString.length-1   (i may be advanced extra via i++)
+#   currentCharacter = jsonString[i]
+#   nextCharacter    = jsonString[i + 1]      # undefined past the end
+#                                             # so currentCharacter + nextCharacter at the
+#                                             # last index is e.g. "/undefined" (NOT a marker)
+#
+#   node-4a  STRING-BOUNDARY TOGGLE
+#     if (insideComment is falsy) AND currentCharacter === '"':
+#         escaped = isEscaped(jsonString, i)
+#         if (!escaped): insideString = !insideString
+#     # Quotes are ignored while inside a comment. An escaped quote does not toggle.
+#
+#   node-4b  SKIP-WHILE-INSIDE-STRING
+#     if insideString: continue       # emit nothing here; the chars stay via the final
+#                                      # slice(offset) tail copy (offset is not advanced
+#                                      # inside strings). No comment processing in strings.
+#
+#   # The following are an if / else-if CHAIN (first match wins) — order matters:
+#
+#   node-4c  OPEN //   (only when NOT already in a comment)
+#     else-if branch condition: (insideComment falsy) AND (currentCharacter + nextCharacter === '//')
+#         result += jsonString.slice(offset, i)   # flush the verbatim run before the comment
+#         offset = i                               # offset now points at the first '/'
+#         insideComment = SINGLE
+#         i++                                      # consume the 2nd '/'
+#     # NOTE: this branch does NOT 'continue'; control falls to the bottom of the loop body,
+#     # then the for-loop's own i++ runs. Net: i advances by 2 for the '//'. The subsequent
+#     # else-if arms are all guarded by insideComment state and won't fire this iteration.
+#
+#   node-4d  CLOSE single-line on CRLF
+#     else-if: (insideComment === SINGLE) AND (currentCharacter + nextCharacter === '\r\n')
+#         i++                       # consume the '\r' so the loop's i++ lands past '\n'...
+#                                   # (i now indexes the '\n')
+#         insideComment = false
+#         result += strip(jsonString, offset, i)   # replace span [offset, i): i.e. the
+#                                                   # comment text PLUS the '\r' — but NOT '\n'
+#         offset = i                # offset now at '\n'; the '\n' is copied verbatim later
+#         continue
+#     # Effect (whitespace mode): "// c\r\n" -> "<spaces for // c><kept \r>\n"
+#     #        (whitespace:false): "// c\r\n" -> the comment+\r deleted, '\n' kept -> "\n"
+#
+#   node-4e  CLOSE single-line on lone LF
+#     else-if: (insideComment === SINGLE) AND (currentCharacter === '\n')
+#         insideComment = false
+#         result += strip(jsonString, offset, i)   # span [offset, i): comment text, NOT '\n'
+#         offset = i                                 # '\n' copied verbatim later
+#     # No 'continue' and no i++: the '\n' stays at i; the for-loop i++ moves past it next.
+#     # A LONE '\r' (not followed by '\n') is NOT a terminator: it does not match 4d or 4e,
+#     # so the // comment continues through it until a real \n or end-of-input.
+#
+#   node-4f  OPEN /*   (only when NOT already in a comment)
+#     else-if: (insideComment falsy) AND (currentCharacter + nextCharacter === '/*')
+#         result += jsonString.slice(offset, i)    # flush verbatim run before the comment
+#         offset = i                                # offset at the '/'
+#         insideComment = MULTI
+#         i++                                       # consume the '*'
+#         continue
+#
+#   node-4g  CLOSE block on */
+#     else-if: (insideComment === MULTI) AND (currentCharacter + nextCharacter === '*/')
+#         i++                                       # consume the '/'; i now indexes '/'
+#         insideComment = false
+#         result += strip(jsonString, offset, i + 1)  # span [offset, i+1): INCLUSIVE of '/'
+#         offset = i + 1                                # offset just past the '*/'
+#         continue
+#     # Block comments do NOT nest: the FIRST '*/' after a '/*' closes it. A '/*' seen while
+#     # already MULTI does not re-open (node-4f is guarded by insideComment falsy).
+#
+#   # If none of 4c..4g match, nothing happens this iteration (the char is part of either a
+#   # verbatim run accumulating toward the next flush, or the body of an open comment).
+#
+# node-5  FINAL TAIL
+#   return result + (insideComment ? strip(jsonString.slice(offset)) : jsonString.slice(offset))
+#   - If a comment was still open at end-of-input (unterminated // or /*), the remaining
+#     span from offset to end is passed through strip.
+#       * whitespace mode: strip(string) is called with ONE arg => string.slice(undefined,
+#         undefined) === the whole given substring => its \S chars become spaces.
+#       * whitespace:false: '' (deleted).
+#   - Otherwise (not in a comment) the tail jsonString.slice(offset) is copied VERBATIM.
+#     This verbatim tail is also how all string-literal content and all non-comment text
+#     after the last flush reaches the output (offset is only advanced at comment open/close).
+
+# =====================================================================================
+# WORKED EXAMPLES (all VERIFIED against strip-json-comments@3.1.1)
+# =====================================================================================
+# whitespace mode (default), offset-preserving (output length === input length):
+#   "a // c\nb"           -> "a     \nb"          # // c replaced by 4 spaces, \n kept
+#   "a // c\r\nb"         -> "a     \r\nb"         # // c -> spaces, \r kept, \n kept
+#   "a // c\rb"           -> "a     \r "           # lone \r NOT a terminator; whole rest is
+#                                                  #   comment to EOF; \r kept, 'b' -> space
+#   "a // c"              -> "a     "              # unterminated // to EOF
+#   "a /* c */ b"         -> "a         b"         # block -> 6 spaces (/* c */ is 7 chars?
+#                                                  #   "/* c */" = 7 -> 7 spaces; surrounding
+#                                                  #   spaces literal) => "a "+"       "+" b"
+#   "a /* x\ny */ b"      -> "a     \n     b"      # newline inside block survives
+#   "/**/"               -> "    "                # 4 chars -> 4 spaces
+#   "/* */"              -> "     "                # 5 chars -> 5 (middle space kept anyway)
+#   "/* \t */" -> "  \t   "                        # the \t inside is whitespace, kept
+#   "/* /* */ */"        -> "         */"          # no nesting: first */ closes; " */" tail
+#   "//a\n//b\nx"        -> "   \n   \nx"          # two line comments, both newlines kept
+#   "//\r\n"             -> "  \r\n"               # // -> 2 spaces, \r kept, \n kept
+#   "x /"                -> "x /"                  # trailing '/' (next is undefined) no marker
+#   '"a // b"'           -> '"a // b"'             # // inside string: unchanged
+#   '"a /* b */"'        -> '"a /* b */"'          # /* */ inside string: unchanged
+#   '\\" // c'  (one backslash, quote, space, //c) -> '\\"     '
+#         # quote at index 1 is preceded by ONE backslash => odd => escaped => string is NOT
+#         # opened => we are OUTSIDE a string => // c IS a comment => replaced.
+#   '\\\\" // c' (two backslashes, quote, space, //c) -> unchanged
+#         # quote preceded by TWO backslashes => even => NOT escaped => string OPENS => // c
+#         # is inside the string => NOT a comment => verbatim.
+#   '"x"// c'            -> '"x"    '              # comment after a closed string -> spaces
+#   "{\"a\":1}"          -> "{\"a\":1}"            # no comments -> unchanged
+#   ""                   -> ""                     # empty -> empty
+#
+# whitespace:false (removal) examples:
+#   "a // c\nb"          -> "a \nb"                # // c\... deleted, \n kept
+#   "a // c\r\nb"        -> "a \nb"                # // c AND \r deleted (\r in span [offset,i)),
+#                                                  #   \n kept => "a " + "\n" + "b"
+#   "a /* c */ b"        -> "a  b"                 # block fully deleted -> "a " + "" + " b"
+#   "//a\n//b\nx"        -> "\n\nx"  (newlines kept, comment text removed)
+#   "/*\tabc"            -> ""        # unterminated block deleted
+
+# =====================================================================================
+# ORACLE
+# =====================================================================================
+# ORACLE value -> oracle.json
+# Pure deterministic value oracle. For each input tuple [jsonString] or [jsonString, options]
+# the expected is the exact returned string. For non-string jsonString the expected is the
+# THROW record (harness captures e.constructor.name === 'TypeError'); the EXACT message is
+# pinned above for any re-emitter that also checks message text.
+
+# =====================================================================================
+# SCOPE
+# =====================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire state machine above — type guard,
+#   option resolution (strict === false test), isEscaped backslash-parity, string-boundary
+#   toggling, the if/else-if ordering, the open/close i++ and continue interactions, the
+#   exact slice end-offsets per branch (SINGLE-LF uses [offset,i); CRLF uses [offset,i)
+#   after i++ consumed \r; MULTI uses [offset,i+1) after i++ consumed '/'), the \S->space
+#   replacement that preserves \s whitespace, and the final tail (verbatim vs strip).
+#
+# CARRIED DATA: none. (No literal tables; this is a pure algorithm. No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (specified here but NOT emitted by genInputs because not
+#   codec-faithful, or because the throw text is environment-specific):
+#   - options === null  -> the function reads null.whitespace and throws a *different*
+#       TypeError ("Cannot read properties of null (reading 'whitespace')") whose message is
+#       V8-version-specific. Behavior documented; NOT emitted (would couple to V8 text).
+#   - Symbol / function as jsonString -> typeof 'symbol' / 'function' => the documented
+#       TypeError with that typeof in the message; NOT codec-faithful, so NOT emitted, but a
+#       blind re-emitter reconstructs it from node-1 + the message template.
+#   - undefined / NaN / +-Infinity / -0 as jsonString are codec edge values but are all
+#       non-strings -> they take node-1's TypeError path (typeof 'undefined' / 'number').
+#       (undefined as jsonString DOES throw; undefined as the OPTIONS arg is the {} default.)
+#   No stateful mutators, no side effects, no ambient reads (clock/RNG/env/fs/net) — no seam.
+
+# =====================================================================================
+# PROVENANCE
+# =====================================================================================
+# package: strip-json-comments@3.1.1
+# repo:    sindresorhus/strip-json-comments
+# license: MIT (Sindre Sorhus)
+# source:  index.js (module.exports = (jsonString, options = {}) => { ... })

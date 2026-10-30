@@ -1,0 +1,34 @@
+UNIT hash_ok
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/verdict.mts hashOk (with hashHex, the digest it calls) — the code is the truth
+ORACLE-CLASS deterministic
+SIG hash_ok(text: text, want: text | none) -> bool
+ENVELOPE text is well-formed Unicode text (any scalar values, NUL included, any length); want is none or any text.
+  A want that is not a pin (R2) throws; nothing else throws inside this envelope. Lone surrogates, byte input, a
+  missing want and non-text values of either argument are outside the abstract envelope (the js file widens to them).
+DEPENDS-ON none
+DESCRIPTION Does a pinned SHA-256 digest match the text? A pin is exactly 64 lowercase hexadecimal digits. The digest
+  is SHA-256 (FIPS 180-4) over the UTF-8 encoding of the text, rendered as 64 lowercase hexadecimal digits. Only an
+  absent pin (none) means "not pinned", and the answer is then true without looking at the text. Any other want must
+  be a pin or the call throws; for a pin the answer is true exactly when the pin IS the digest rendering.
+BEHAVIOR
+R1 want is none -> true. Checked first: the text is not inspected, so its content never matters on this path.
+R2 want is not a pin -> throws. A pin is text of exactly 64 characters, every one of them in 0-9 or a-f (lowercase
+  ASCII only). So the empty text, any uppercase or mixed-case digit, a leading or trailing space or line break, 63 or
+  65 characters, and any non-ASCII digit all throw. Checked before the text is inspected (R1, R2 hold whatever the text).
+R3 Otherwise compute D = SHA-256 of the UTF-8 bytes of text, written as exactly 64 hexadecimal digits, lowercase,
+  most significant byte first, two digits per byte with a leading zero kept. -> true iff want equals D exactly;
+  any other pin -> false.
+R4 The bytes are UTF-8 and only UTF-8: one to four bytes per scalar value, no byte-order mark added, none stripped (a
+  leading U+FEFF is hashed as its three bytes), no terminator, no Unicode normalization (a composed and a decomposed
+  spelling of the same word are different bytes, different digests). A digest of the UTF-16 code units or of a
+  one-byte-per-character encoding of the same text does not match.
+INVARIANT for every text t: hash_ok(t, none) = true, and hash_ok(t, D(t)) = true where D is R3's rendering; for
+  every pin p other than D(t), hash_ok(t, p) = false.
+ORACLE value -> oracles/hash_ok.json  CANONICAL-SHA256 98ff884cd54881436ae71b5613254a3bceede0ed4ba1a01ad1fd92108038661c
+SCOPE IN: R1–R4 over well-formed text and a text-or-none pin. OUT (js extension only): lone surrogates, byte input,
+  missing or non-text pins, non-text input. OUT entirely: the gate's own pin checks (rdv carried-data pinMatches, v05
+  carried-table check), which inline different variants of this rule and do not call hashOk.
+PROVENANCE rederive@bb8ded84fa50 (authority tree a2593d187a3b…), cli/verdict.mts lines 109–119: hashHex (node:crypto
+  createHash('sha256') digest 'hex') and hashOk; driven through selfhost/seams/hash_ok.mjs as (text, want) -> hashOk(text, want).

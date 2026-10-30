@@ -1,0 +1,198 @@
+UNIT slice
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG slice(array, start, end) -> Array
+    # default export: module.exports = slice
+    # the blind re-emitter MUST `export default <fn>` (harness imports `.default`)
+
+DEPENDS-ON none
+    # zero runtime deps; all helpers (baseSlice, toInteger, toFinite, toNumber,
+    # isIterateeCall, isObject, isObjectLike, isSymbol, isArrayLike, isFunction,
+    # isLength, isIndex, eq) are inlined below — reproduce their semantics in-contract.
+
+# ============================================================================
+# BEHAVIOR — exact ordered pipeline. Reproduce EXACTLY. Edge ordering matters:
+#   guard-check BEFORE start/end defaulting; toInteger BEFORE clamp; densify copy.
+# ============================================================================
+BEHAVIOR
+
+# ---- node S0: length probe + empty short-circuit ----------------------------
+# length = array ? array.length : 0
+#   NOTE: `array ?` is a truthiness test on the array VALUE itself, not null-check.
+#   For any falsy array (null, undefined, 0, "", false, NaN) length = 0.
+#   For a truthy non-array with a numeric `.length` property, that .length is used
+#   (array-like inputs work — e.g. a string, an arguments-like object).
+#   For a truthy object WITHOUT a numeric .length, array.length is undefined.
+# if (!length) return []   # !length is true when length is 0, undefined, NaN, null...
+#   -> Empty/degenerate inputs (null, undefined, [], {a:1} (no length), 0, "", false,
+#      {length:0}) ALL return a fresh [].
+#   length is NOT re-validated for array-like-ness here; whatever `.length` is, if
+#   truthy it proceeds. (isArrayLike is only consulted later inside the guard.)
+
+# ---- node S1: the iteratee-call GUARD (checked BEFORE defaulting) ------------
+# if (end && typeof end != 'number' && isIterateeCall(array, start, end)) {
+#     start = 0; end = length;
+# } else { ... defaulting in S2 ... }
+#
+#   The guard fires ONLY when ALL THREE hold:
+#     (a) end is truthy                  # 0, null, undefined, "", false, NaN -> skip
+#     (b) typeof end != 'number'         # a real number end -> skip
+#     (c) isIterateeCall(array, start, end) === true
+#   When it fires: start := 0, end := length (i.e. produce a full dense copy of array).
+#
+#   isIterateeCall(value=array, index=start, object=end):
+#     1. if (!isObject(object)) return false
+#          isObject(x) := !!x && (typeof x == 'object' || typeof x == 'function')
+#          -> end must be a non-null object or function. (Strings, numbers, bools,
+#             symbols as `end` => isObject false => guard cannot fire.)
+#     2. type := typeof index   # i.e. typeof start
+#        if ( type == 'number'
+#               ? (isArrayLike(object) && isIndex(index, object.length))
+#               : (type == 'string' && index in object) )
+#           then return eq(object[index], value)   # eq(end[start], array)
+#        else return false
+#     - eq(a,b) := a === b || (a !== a && b !== b)   # SameValueZero (NaN equals NaN)
+#     - isArrayLike(v) := v != null && isLength(v.length) && !isFunction(v)
+#     - isLength(v) := typeof v == 'number' && v > -1 && v % 1 == 0 && v <= 9007199254740991
+#     - isFunction(v) := isObject(v) && (objectToString.call(v) is
+#                        '[object Function]' or '[object GeneratorFunction]')
+#     - isIndex(value,length): length = (length == null ? 9007199254740991 : length);
+#         return !!length
+#                && (typeof value == 'number' || reIsUint.test(value))
+#                && (value > -1 && value % 1 == 0 && value < length)
+#         where reIsUint = /^(?:0|[1-9]\d*)$/
+#
+#   Plain reading for the COMMON case the guard catches (a lodash iteratee call):
+#     slice(value, index, collection) where collection[index] === value, index is a
+#     valid array index of collection, collection is array-like -> full dense copy.
+#   For the inputs this generator emits, the guard is exercised explicitly (curated
+#   prefix) AND is otherwise inert (a numeric end always skips the guard).
+
+# ---- node S2: defaulting + integer coercion (the ELSE branch) ---------------
+# else {
+#     start = (start == null) ? 0 : toInteger(start);   # `== null` matches null AND undefined
+#     end   = (end === undefined) ? length : toInteger(end);  # ONLY strict undefined defaults to length
+# }
+#   IMPORTANT asymmetry:
+#     - start: null OR undefined -> 0.   Any other value -> toInteger(start).
+#     - end:   STRICT undefined  -> length.  null -> toInteger(null) = 0 (NOT length).
+#       So slice(a, 1, null) yields [] (end becomes 0), but slice(a, 1, undefined)
+#       yields the tail from index 1.
+
+# ---- helper: toInteger / toFinite / toNumber (reproduce exactly) ------------
+# toInteger(value):
+#     result = toFinite(value)
+#     remainder = result % 1
+#     return (result === result) ? (remainder ? result - remainder : result) : 0
+#   # result - remainder truncates TOWARD ZERO (e.g. 1.9->1, -1.9->-1, 2.999->2).
+#   # if result is NaN (result !== result) -> 0.
+#
+# toFinite(value):
+#     if (!value) return value === 0 ? value : 0   # falsy: 0 and -0 return themselves
+#                                                   #        (NaN/null/undefined/""/false -> 0)
+#     value = toNumber(value)
+#     if (value === Infinity || value === -Infinity) {
+#         sign = value < 0 ? -1 : 1
+#         return sign * 1.7976931348623157e+308        # MAX_INTEGER
+#     }
+#     return value === value ? value : 0               # NaN -> 0
+#
+# toNumber(value):
+#     if (typeof value == 'number') return value
+#     if (isSymbol(value)) return NaN
+#         # isSymbol(v) := typeof v == 'symbol'
+#         #               || (isObjectLike(v) && objectToString.call(v) == '[object Symbol]')
+#         #   isObjectLike(v) := !!v && typeof v == 'object'
+#     if (isObject(value)) {
+#         other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#         value = isObject(other) ? (other + '') : other
+#     }
+#     if (typeof value != 'string') return value === 0 ? value : +value
+#         # this branch coerces booleans (true->1, false->0), null->0, undefined->NaN,
+#         # and the post-valueOf primitive. NOTE: +bigint THROWS (see OUT-OF-ENVELOPE).
+#     value = value.replace(reTrim, '')                # reTrim = /^\s+|\s+$/g  (trim ws)
+#     isBinary = reIsBinary.test(value)               # reIsBinary = /^0b[01]+$/i
+#     return (isBinary || reIsOctal.test(value))      # reIsOctal = /^0o[0-7]+$/i
+#         ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
+#         : (reIsBadHex.test(value) ? NaN : +value)    # reIsBadHex = /^[-+]0x[0-9a-f]+$/i
+#   # String coercion specifics (all verified):
+#   #   "2"->2, "1.9"->1.9, "  3  "->3 (trimmed), ""->0 (after +""), "abc"->NaN->0,
+#   #   "0b11"->3 (binary), "0o7"->7 (octal), "0x10"->16 (+"0x10" via Number),
+#   #   "-0x10"->NaN (bad signed hex) -> toInteger 0.
+
+# ---- node S3: baseSlice(array, start, end) — DENSE copy ---------------------
+# Reproduce exactly (start/end here are the integers from S1/S2):
+#   index = -1
+#   length = array.length          # re-read live length
+#   if (start < 0) start = (-start > length) ? 0 : (length + start)
+#       # negative start wraps; if it wraps past the front, clamp to 0.
+#       # boundary: start = -length -> length+start = 0 (kept, since -start == length, NOT >).
+#       # NOTE: -0 < 0 is FALSE, so start = -0 does NOT enter this branch.
+#   end = (end > length) ? length : end          # clamp end up to length
+#   if (end < 0) end += length                   # negative end wraps from the back
+#       # NOTE: -0 < 0 is FALSE, so end = -0 stays -0 (does not wrap).
+#   length = (start > end) ? 0 : ((end - start) >>> 0)   # result length; >>> 0 -> uint32
+#   start >>>= 0                                  # uint32 coerce start (drops -0 to 0, etc.)
+#   result = Array(length)                        # allocate
+#   while (++index < length) result[index] = array[index + start]
+#       # COPY BY INDEX into a NEW array. HOLES IN THE SOURCE ARE DENSIFIED:
+#       # array[k] on a hole yields undefined, written as an OWN property of result,
+#       # so result has no holes (every 0..length-1 is an own property === undefined).
+#       # This is the lodash invariant vs Array#slice (which preserves holes).
+#   return result
+#
+#   Ordering recap for clamp/wrap (after toInteger in S2):
+#     1. negative start wrap (clamp-to-0 if past front)
+#     2. clamp end DOWN to length (if end > length)
+#     3. negative end wrap (+= length)
+#     4. result length = max(0, end-start) as uint32
+#   Out-of-range examples (verified): slice([1,2,3],10) -> []; slice([1,2,3],0,10) -> [1,2,3];
+#     slice([1,2,3],-100) -> [1,2,3]; slice([1,2,3],0,-100) -> [].
+
+# ---- non-mutation invariant ------------------------------------------------
+# slice NEVER writes to the input array. It only reads array[k] and array.length.
+# The result is ALWAYS a freshly-allocated distinct Array (result !== array), even
+# for a "full copy". Element references are shared (shallow copy: result[i] is the
+# same object reference as array[i+start]). Frozen inputs are handled fine (read-only).
+
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic pure function of (array, start, end). No seam: no clock/RNG/env/io.
+# The oracle records the returned Array. JSON serialization of the result densifies
+# holes to null entries anyway, but the lodash result is already dense (own-undefined),
+# which JSON.stringify renders as null — matching native-vs-lodash divergence is moot
+# under the value codec because both grade on the serialized dense form.
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — guard,
+#   defaulting asymmetry, toInteger/toFinite/toNumber coercion (incl. string
+#   hex/binary/octal/bad-hex/whitespace rules and the exact regexes), negative
+#   wrap, clamp, uint32 coercion, dense baseSlice copy, non-mutation.
+#
+# CARRIED DATA: none. (No literal tables.)
+#
+# OUT-OF-ENVELOPE (documented divergence / non-round-trippable — NOT emitted by
+#   genInputs as ordinary inputs; a blind re-emitter still reconstructs them):
+#   * bigint start or end  -> THROWS TypeError "Cannot convert a BigInt value to a
+#       number" (in toNumber's final `+value` on a non-string non-object). A
+#       codec-faithful bigint arg IS gradable as a throw-path; this generator emits
+#       ONE curated bigint case in the prefix so the harness records {__throw}.
+#   * Symbol start/end -> does NOT throw: toNumber(Symbol) returns NaN -> toInteger 0.
+#       Symbol VALUES do not round-trip through the JSON codec, so Symbol args are
+#       documented here but NOT emitted by genInputs (the equivalent numeric outcome,
+#       start/end = 0, is covered by other inputs).
+#   * Function ELEMENTS / Symbol ELEMENTS inside the array: shallow-copied by
+#       reference; do not round-trip through the codec, so NOT emitted as elements.
+#   * Array-LIKE (non-Array) inputs (plain object with numeric .length, e.g.
+#       {0:'a',1:'b',length:2}) and STRING inputs ("hello") are supported by the
+#       source (length probe + index read) and round-trip via the codec as a plain
+#       object / string. genInputs emits a couple of these as documented coverage.
+#   * undefined / NaN / +/-Infinity / -0 as ARG values: these are EXERCISED.
+#       NaN-> toInteger 0; +Infinity-> MAX_INTEGER (huge, clamps); -Infinity-> -MAX
+#       (huge negative, clamps to 0/empty); -0 start-> kept as -0 then ->0 (full from 0);
+#       -0 end-> stays -0, NOT wrapped (so start>end likely -> []). NOTE: the JSON
+#       value codec must round-trip these (the harness codec does per the contract).
+
+PROVENANCE lodash.slice@4.2.0 (npm), repo lodash/lodash, MIT license,
+    source file: node_modules/lodash.slice/index.js (single bundled module).

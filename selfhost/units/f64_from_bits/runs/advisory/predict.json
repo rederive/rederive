@@ -1,0 +1,26 @@
+{
+ "status": "ok",
+ "unit": "f64_from_bits",
+ "primary": "selfhost/units/f64_from_bits/sir/f64_from_bits.sir",
+ "primarySha256": "280dbe363c44f78c8429c754e288658426d2993eb5e176c5eab0af7485e4f4a4",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "The text must consist of EXACTLY 16 characters, every one of them in HEX16; otherwise -> throws. Nothing is trimmed or normalized first: uppercase digits, fewer or more than 16 digits, any whitespace anywhere (including one final line feed), a prefix, a sign, a separator and non-ASCII digits all throw. The throw's message is not part of the contract. CITED FIDELITY package",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R2",
+   "text": "The result is the binary64 value whose bit pattern is the 64-bit integer the digits denote, reinterpreted without any numeric conversion: 8000000000000000 is negative zero, 7ff0000000000000 and fff0000000000000 are the infinities, and every pattern with all exponent bits set and a non-zero fraction is a NaN.",
+   "ambiguity": 0.47
+  }
+ ],
+ "ranked": [
+  "R2",
+  "R1"
+ ],
+ "at": "2026-10-26T17:26:47Z"
+}

@@ -1,0 +1,166 @@
+UNIT isNumber
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isNumber(value: any) -> boolean
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# OVERVIEW
+# ---------------------------------------------------------------------------
+# isNumber is a pure, total, side-effect-free type predicate. It returns true
+# iff `value` is "classified as a Number" in the lodash-3.x sense: it is either
+# a primitive number, OR it is an object-like value whose internal [[Class]]
+# brand (as exposed by Object.prototype.toString) is exactly "[object Number]"
+# (i.e. a boxed Number object such as `new Number(0)`). For ALL other inputs it
+# returns false. It NEVER throws and NEVER mutates the argument or any state.
+# There is no ambient seam (no clock / RNG / env / io / net) — fully
+# deterministic.
+#
+# IMPORTANT classification notes (these are the contract, not incidental):
+#   - NaN, Infinity, -Infinity are ALL numbers  -> true. (To EXCLUDE these the
+#     real library directs callers to isFinite; isNumber itself does NOT exclude
+#     them.)
+#   - A boxed Number object (`new Number(x)`) is true regardless of its wrapped
+#     value (including new Number(0), whose +valueOf is 0/falsy).
+#   - A numeric STRING ('5') is NOT a number -> false. No coercion/parsing is
+#     performed; the predicate inspects type/brand only, never the textual or
+#     numeric content of the value.
+#   - bigint (e.g. 5n) is NOT a number under this predicate -> false. (typeof
+#     5n === 'bigint', not 'number'; and its brand is not '[object Number]'.)
+#       The original was authored pre-bigint, but its logic gives false here,
+#       which is the observed and contractually-required behavior.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact pipeline — ordered, short-circuit OR)
+# ---------------------------------------------------------------------------
+# Two helper notions, then the predicate. Reproduce EXACTLY.
+#
+# HELPER isObjectLike(value):
+#   return  (value is truthy)  AND  (typeof value == 'object')
+#   # i.e. in JS:  !!value && typeof value == 'object'
+#   # Consequences of this exact form:
+#   #   - null            -> !!null is false                       -> false
+#   #   - undefined       -> !!undefined is false                  -> false
+#   #   - 0 / NaN / '' / false (falsy primitives) -> !!value false -> false
+#   #   - {} , [] , new Number(0), new Date(), /x/, function value -> typeof is
+#   #         'object' (or 'function' for functions) ...
+#   #         NB: typeof function == 'function' (NOT 'object'), so a function is
+#   #         NOT object-like here -> isObjectLike(fn) is false.
+#   #   - any non-null value with typeof 'object' (plain object, array, boxed
+#   #         Number/String/Boolean, Date, RegExp, Map, Set, typed array,
+#   #         Buffer, etc.) -> true.
+#
+# CONSTANT numberTag = "[object Number]"        # exact string, byte-for-byte
+# CONSTANT objectToString = Object.prototype.toString   # the ORIGINAL, unpatched
+#                                                        # Object#toString
+#
+# PREDICATE isNumber(value):
+#   #  NODE 1 (primitive fast-path, short-circuits the OR):
+#   if  typeof value == 'number'  -> return true
+#   #     (covers every number primitive: integers, floats, ±0, NaN,
+#   #      Infinity, -Infinity, Number.MIN_VALUE, Number.MAX_VALUE, etc.)
+#   #
+#   #  NODE 2 (boxed-Number branch — only reached when NODE 1 is false):
+#   if  isObjectLike(value)  AND  objectToString.call(value) == numberTag
+#         -> return true
+#   #     objectToString.call(value) yields the [[Class]]/brand string, e.g.
+#   #     "[object Number]" for new Number(0), "[object Object]" for {},
+#   #     "[object Array]" for [], "[object Date]" for a Date,
+#   #     "[object RegExp]" for /x/, "[object String]" for new String(''),
+#   #     "[object Boolean]" for new Boolean(false), "[object Map]", etc.
+#   #     ONLY "[object Number]" passes this branch.
+#   #
+#   #  NODE 3 (default):
+#   return false
+#
+# OBSERVABLE TRUTH TABLE (decision = NODE that fires; verified against the real
+# package lodash.isnumber@3.0.3). The blind re-emitter MUST reproduce all rows:
+#
+#   value                              typeof        brand               -> result
+#   ---------------------------------  ------------  ------------------  --------
+#   0, 1, -1, 3.14, -2.5              'number'      (n/a, NODE1)        -> true
+#   ±0, 1e308, 5e-324 (MIN_VALUE)     'number'      (NODE1)            -> true
+#   NaN                               'number'      (NODE1)            -> true
+#   Infinity                          'number'      (NODE1)            -> true
+#   -Infinity                         'number'      (NODE1)            -> true
+#   new Number(0)                     'object'      [object Number]    -> true
+#   new Number(5)                     'object'      [object Number]    -> true
+#   '5'  (numeric string)             'string'      ----               -> false
+#   ''   (empty string)               'string'      ----               -> false
+#   'NaN' / 'Infinity' (strings)      'string'      ----               -> false
+#   null                              'object'*     (isObjectLike F)   -> false
+#       (*typeof null=='object' but !!null is false -> not object-like)
+#   undefined                         'undefined'   ----               -> false
+#   true                              'boolean'     ----               -> false
+#   false                             'boolean'     ----               -> false
+#   {} (plain object)                 'object'      [object Object]    -> false
+#   {a:1}                             'object'      [object Object]    -> false
+#   [] (array)                        'object'      [object Array]     -> false
+#   [1,2,3]                           'object'      [object Array]     -> false
+#   5n  (bigint)                      'bigint'      ----               -> false
+#   0n  (bigint)                      'bigint'      ----               -> false
+#   /x/  (RegExp)                     'object'      [object RegExp]    -> false
+#   new Date(0)                       'object'      [object Date]      -> false
+#   new String('5')                   'object'      [object String]    -> false
+#   new Boolean(true)                 'object'      [object Boolean]   -> false
+#   new Map()                         'object'      [object Map]       -> false
+#   new Set()                         'object'      [object Set]       -> false
+#   new Uint8Array(n)                 'object'      [object Uint8Array]-> false
+#   Buffer.from([..])                 'object'      [object Uint8Array]-> false
+#
+# NOTE on Buffer: Node Buffers are Uint8Array subclasses; their brand is
+# "[object Uint8Array]" (not "[object Number]") -> false. Confirmed live.
+
+# ---------------------------------------------------------------------------
+# ERROR / THROW BEHAVIOR
+# ---------------------------------------------------------------------------
+# None. The function performs only typeof checks and a single
+# Object.prototype.toString.call — neither throws for any value. There is no
+# input that causes isNumber to throw. (It also does not read any property of
+# the value other than via toString's internal brand lookup, so no getter on
+# the value is invoked except the engine-internal [[Class]] resolution, which
+# is not user-observable here.) total function.
+
+# ---------------------------------------------------------------------------
+# ORACLE
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Pure value-mode: for each generated [value], the expected is the boolean
+# isNumber(value). No seam, no trace. Deterministic.
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire predicate above — the
+#   typeof=='number' fast path, the isObjectLike && brand=='[object Number]'
+#   branch, the exact numberTag string, and the false default. This is the
+#   whole unit; there is no carried data.
+#
+# CARRIED DATA: none. (No tables; the only literal is the 16-char tag string
+#   "[object Number]", which is reproduced inline in the SIR above, not a
+#   carried table.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs
+#   because the oracle codec cannot round-trip them; a blind re-emitter still
+#   reconstructs the behavior from the rows below):
+#     - Symbol values (typeof 'symbol'): NODE1 false, NODE2 false -> result
+#       false. Not emitted (symbols do not survive JSON encode).
+#     - Live function values (typeof 'function'): isObjectLike is false because
+#       typeof != 'object' -> result false. Not emitted (functions do not
+#       round-trip and bear identity).
+#     - A boxed value with a TAMPERED/spoofed Symbol.toStringTag making
+#       Object.prototype.toString.call(value) return "[object Number]" would
+#       pass NODE2 -> true. This is an adversarial, non-codec-faithful,
+#       identity-bearing object and is out of envelope; not emitted. (Documented
+#       so the contract is complete: the predicate trusts the unpatched
+#       Object#toString brand.)
+
+# ---------------------------------------------------------------------------
+# PROVENANCE
+# ---------------------------------------------------------------------------
+# package: lodash.isnumber@3.0.3
+# repo:    lodash/lodash  (modularized single-method build)
+# license: MIT  (Copyright OpenJS Foundation / Dojo Foundation; see LICENSE)
+# source:  node_modules/lodash.isnumber/index.js  (the entire file is the unit:
+#          isObjectLike helper + numberTag constant + isNumber predicate +
+#          module.exports = isNumber)

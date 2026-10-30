@@ -1,0 +1,303 @@
+UNIT pick
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG pick(object: any, ...paths: (PropertyKey | PropertyKey[])[]) -> object   # default export (module.exports = pick)
+
+DEPENDS-ON none   # zero runtime deps; all helpers (baseRest, baseFlatten, basePick, basePickBy, toKey, isFlattenable) are inlined in the single source file
+
+# ============================================================================
+# IMPORTANT — VERSION SURPRISE (the operator hint describes a DIFFERENT version)
+# ============================================================================
+# The operator HINT describes the MODERN lodash.pick (4.17.x): basePickBy + hasIn +
+# baseGet/baseSet, deep dotted-path support ('a.b'), castPath, stringToPath.
+# THIS package is lodash.pick @ 4.4.0 and DOES NOT HAVE ANY OF THAT.
+# Verified against the real package (require + node -e). Behavioral REALITY:
+#   * NO deep / dotted-path support. 'a.b' is a SINGLE FLAT property key, never
+#     resolved into object.a.b. There is no castPath, stringToPath, baseGet, baseSet.
+#     pick({a:{b:1}}, 'a.b')  ===  {}        (no flat key 'a.b' present)
+#     pick({a:{b:1}, 'a.b':99}, 'a.b') === {'a.b':99}   (flat key matched)
+#   * Membership test is the ECMAScript `key in object` operator (basePick's predicate
+#     is `function(value, key){ return key in object; }`), NOT hasIn(). `in` already
+#     walks the prototype chain, so inherited keys ARE included (same observable
+#     "inherited OK" outcome the hint mentions, but via `in`, not hasIn).
+# The SIR follows REALITY (the 4.4.0 source), NOT the hint.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline — exact + complete; verified by execution)
+# ============================================================================
+# pick is defined as:  pick = baseRest(function(object, props){
+#     return object == null ? {} : basePick(object, arrayMap(baseFlatten(props, 1), toKey));
+# });
+#
+# NODE 1 — VARIADIC REST COLLECTION (baseRest, start = arity-1 = 1)
+#   pick has logical arity 2 (object, props). baseRest binds `object` = arguments[0]
+#   and gathers EVERY remaining argument (index >= 1) into a fresh array `props`.
+#     call pick(object)               -> object=object, props = []
+#     call pick(object, x)            -> object=object, props = [x]
+#     call pick(object, x, y, z)      -> object=object, props = [x, y, z]
+#   NOTE the wrapping: each top-level path ARGUMENT becomes ONE element of props.
+#   So pick(obj, ['a','b']) gives props = [ ['a','b'] ]  (a one-element array whose
+#   sole element is the user's array). This wrapping is undone by NODE 3's depth-1
+#   flatten — see the worked examples.
+#
+# NODE 2 — NULL/UNDEFINED OBJECT GUARD
+#   If `object == null` (loose equality — matches BOTH null AND undefined),
+#   RETURN a brand-new empty plain object {} immediately. props are ignored.
+#     pick(null, 'a')      === {}
+#     pick(undefined, 'a') === {}
+#   (Any other falsy non-nullish object — 0, '', false, NaN — does NOT take this
+#   guard; it proceeds and is boxed in NODE 4. They simply have no matching keys.)
+#
+# NODE 3 — FLATTEN props ONE LEVEL (baseFlatten(props, 1))
+#   Flatten `props` with maximum depth 1, using the default predicate isFlattenable.
+#   isFlattenable(v) is TRUE iff v is:
+#       - a real Array (Array.isArray), OR
+#       - an `arguments` object (lodash isArguments: array-like object with own
+#         non-enumerable 'callee', or [object Arguments] tag), OR
+#       - a value carrying a truthy Symbol.isConcatSpreadable flag.
+#   Algorithm (depth==1): iterate `props` left-to-right. For each element value:
+#       if isFlattenable(value):  spread value's elements (one level) into result
+#                                 (NOT recursive — depth becomes 0 for nested arrays)
+#       else:                     push value itself into result
+#   Net effect combined with NODE 1's wrapping: the user's path arguments are
+#   flattened EXACTLY ONE level relative to the variadic argument list:
+#       pick(o,'a','b')        -> props ['a','b']          -> flat ['a','b']
+#       pick(o,['a','b'])      -> props [['a','b']]         -> flat ['a','b']
+#       pick(o,'a',['b','c'])  -> props ['a',['b','c']]    -> flat ['a','b','c']
+#       pick(o,[['a','b']])    -> props [[['a','b']]]       -> flat [['a','b']]
+#                                 ## inner ['a','b'] stays an ARRAY (only one level
+#                                 ## removed); it is then string-coerced in NODE 4.
+#       pick(o,[],'a')         -> props [[],'a']            -> flat ['a']  (empty spreads to nothing)
+#   IMPORTANT: only ONE level is removed. Deeper nesting survives as nested arrays
+#   and is handed to toKey as-is.
+#
+# NODE 4 — KEY NORMALIZATION (arrayMap(flattened, toKey))
+#   Map every flattened element through toKey to produce the final key list `keys`.
+#
+#   EXACT SOURCE (index.js lines 232-238, copy verbatim — this is THE canonical rule):
+#       function toKey(value) {
+#         if (typeof value == 'string' || isSymbol(value)) {
+#           return value;
+#         }
+#         var result = (value + '');                                # JS string coercion, String(value)
+#         return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
+#       }
+#   where  INFINITY = 1 / 0   (so -INFINITY is the value -Infinity)  and isSymbol is
+#       function isSymbol(value){ return typeof value=='symbol' ||
+#                                  (isObjectLike(value) && Object.prototype.toString.call(value)=='[object Symbol]'); }
+#
+#   ----------------------------------------------------------------------------
+#   ##### THE ZERO RULE — FULLY EXPLICIT (this is the divergence point) #########
+#   ----------------------------------------------------------------------------
+#   The `-0` special case is the ONLY place toKey deviates from plain String(value).
+#   It deviates IFF BOTH of these hold:
+#       (1) result === '0'        ## i.e. the string coercion `value + ''` equals "0"
+#                                 ##   (this is a STRING compare; loose `==` here is
+#                                 ##    identical to `===` because both sides are
+#                                 ##    strings — only the string "0" matches.)
+#       (2) (1 / value) === -Infinity
+#   When BOTH hold -> toKey returns the STRING '-0'.  Otherwise -> returns `result`.
+#
+#   Reduce this to a per-value table (the blind emitter may copy this verbatim):
+#       toKey(value):
+#         if typeof value === 'string'      : return value
+#         if value is a Symbol              : return value           (preserved as a symbol key)
+#         result = value + ''                                        (String(value))
+#         # ----- the zero branch -----
+#         # result === '0' is TRUE only when value + '' === "0", which happens for:
+#         #     the number  +0          (0 + ''   === "0")
+#         #     the number  -0          (-0 + ''  === "0")
+#         #     the bigint  0n          (0n + ''  === "0")           ## SEE THROW NOTE BELOW
+#         #     a 1-elem array [0]      ([0] + '' === "0")
+#         #     a 1-elem array [-0]     ([-0] + ''=== "0")
+#         #   (NOTHING ELSE coerces to "0": '0' is a string and returns early;
+#         #    false->'false', null->'null', [] -> '', etc.)
+#         if result === '0':
+#             return (1 / value === -Infinity) ? '-0' : '0'
+#         return result
+#
+#   Now evaluate (1 / value) for each "0"-coercing value — THIS is what splits +0 from -0:
+#       value = +0   (number)  : 1 / +0    = +Infinity   -> NOT -Infinity -> toKey = '0'
+#       value = -0   (number)  : 1 / -0    = -Infinity   ->     -Infinity -> toKey = '-0'
+#       value = [0]  (array)   : 1 / [0]   = 1/+0 = +Inf -> NOT -Infinity -> toKey = '0'
+#       value = [-0] (array)   : 1 / [-0]  = 1/+0 = +Inf -> NOT -Infinity -> toKey = '0'
+#                                ## CRUCIAL: array->number coercion of [-0] yields +0
+#                                ## (Number([-0]) goes via the array's string form "0"),
+#                                ## so the negative-zero-ness is LOST. A nested [-0]
+#                                ## therefore maps to '0', NOT '-0'. Only the BARE
+#                                ## primitive number -0 (where Object.is(value,-0)) maps to '-0'.
+#       value = 0n   (bigint)  : THROWS (see below) before returning.
+#
+#   ##### GROUND-TRUTH PICK OUTCOMES (verified against real 4.4.0) #####
+#       pick({'0':'pos'},            0)   === {'0':'pos'}      ## +0 path -> key '0'
+#       pick({'0':'pos'},           -0)   === {}               ## -0 path -> key '-0', absent
+#       pick({'-0':'neg'},           0)   === {}               ## +0 path -> key '0', absent
+#       pick({'-0':'neg'},          -0)   === {'-0':'neg'}     ## -0 path -> key '-0', present
+#       pick({'0':'pos','-0':'neg'}, 0)   === {'0':'pos'}      ## +0 picks '0' only
+#       pick({'0':'pos','-0':'neg'},-0)   === {'-0':'neg'}     ## -0 picks '-0' only
+#       pick({'0':'z','-0':'n'},  [[0]])  === {'0':'z'}        ## nested [0]  -> '0'
+#       pick({'0':'z','-0':'n'}, [[-0]])  === {'0':'z'}        ## nested [-0] -> '0' (NOT '-0')
+#
+#   ##### CODEC HAZARD — WHY ROUND 1 DIVERGED (read this) #####
+#   The PRIMITIVE -0 path argument is NOT oracle-codec round-trippable:
+#       JSON.stringify(-0) === '0'   and   JSON.parse('0') === +0   (Object.is is +0, not -0).
+#   So an input tuple [{'-0':'neg'}, -0] is PERSISTED as [{'-0':'neg'}, 0] and, when the
+#   held-out replays the stored args, the path is +0 -> key '0' -> result {}. If the
+#   `expected` was computed from the pre-codec -0, it would be {'-0':'neg'} — but that
+#   expected is UN-REPRODUCIBLE (poisoned). Round 1's v28 was exactly this: stored args
+#   show +0 yet expected showed {'-0':'neg'}; all 3 blind emitters correctly returned {}.
+#   The SIR rule above (toKey(+0)='0') is CORRECT; the held-out vector was corrupt.
+#   RESOLUTION: the primitive -0 path is OUT-OF-ENVELOPE and is NOT emitted by genInputs.
+#   The -0 behavior is fully specified HERE so a blind emitter still reproduces it; the
+#   generator exercises -0 ONLY via the STRING key '-0' (which DOES round-trip) and via
+#   the +0 path (which round-trips), never via a bare numeric -0 path.
+#
+#   ##### BIGINT ZERO THROWS (verified) #####
+#   For a BigInt path value, toKey runs `value + ''` fine ('0' for 0n, '255' for 255n).
+#   * Non-zero bigint (1n, 255n, ...): result !== '0', the `&&` SHORT-CIRCUITS, the
+#     `1 / value` is never evaluated -> returns the decimal string. Verified:
+#         pick({'1':'b'}, 1n)   === {'1':'b'}
+#         pick({'255':'b'}, 255n) === {'255':'b'}
+#   * Bigint 0n (or a nested [0n] that flattens to 0n): result === '0' is TRUE, so the
+#     guard EVALUATES `1 / value` = `1 / 0n`, which MIXES BigInt and Number and THROWS:
+#         TypeError: Cannot mix BigInt and other types, use explicit conversions
+#     So  pick({'0':'b'}, 0n)  THROWS (recorded as {__throw}). This is in-contract,
+#     reproducible behavior — a blind emitter MUST let it throw, not catch/normalize it.
+#
+#   Worked coercions (verified; the full normalization table):
+#       toKey('a')        -> 'a'
+#       toKey(0)          -> '0'          ## +0 (Object.is(value,0))   <-- NOT '-0'
+#       toKey(-0)         -> '-0'         ## -0 (Object.is(value,-0))  <-- the ONLY value that yields '-0'
+#       toKey(5)          -> '5'
+#       toKey(-5)         -> '-5'
+#       toKey(1.5)        -> '1.5'
+#       toKey(-1.5)       -> '-1.5'
+#       toKey(1e21)       -> '1e+21'      ## String(1e21)
+#       toKey(1n)         -> '1'          ## bigint -> decimal string
+#       toKey(255n)       -> '255'
+#       toKey(0n)         -> THROWS TypeError (1/0n mixes types)   ## the bigint-zero edge
+#       toKey(true)       -> 'true'
+#       toKey(false)      -> 'false'
+#       toKey(null)       -> 'null'
+#       toKey(undefined)  -> 'undefined'
+#       toKey(NaN)        -> 'NaN'
+#       toKey(Infinity)   -> 'Infinity'
+#       toKey(-Infinity)  -> '-Infinity'
+#       toKey([])         -> ''           ## empty array coerces to '' (not '0')
+#       toKey([0])        -> '0'          ## one-element [0] coerces to '0'; 1/[0]=+Inf -> '0'
+#       toKey([-0])       -> '0'          ## one-element [-0] coerces to '0'; array loses -0 -> '0'
+#       toKey(['b'])      -> 'b'          ## array string-coerces (join with ',')
+#       toKey(['a','b'])  -> 'a,b'
+#       toKey({})         -> '[object Object]'
+#       toKey(Symbol(s))  -> Symbol(s)    ## preserved as a symbol key
+#
+# NODE 5 — BOX OBJECT (basePick: object = Object(object))
+#   Coerce the source to an object wrapper: Object(object).
+#       - already-objects (plain objects, arrays, Map, Set, functions, etc.) pass through unchanged
+#       - primitives are BOXED: Object('hi') -> String wrapper (indexable: '0','1',...,'length'),
+#         Object(42) -> Number wrapper, Object(true) -> Boolean wrapper (no own enumerable props).
+#   (NODE 2 already excluded null/undefined, so Object() never throws here.)
+#
+# NODE 6 — SELECT + COPY (basePickBy: build result with predicate `key in object`)
+#   result = {}   ## fresh plain object, Object.prototype-prototyped
+#   For each key in `keys` (NODE 4 order, INCLUDING DUPLICATES, left-to-right):
+#       value = object[key]                 ## read with the (boxed) source object
+#       predicate = (key in object)         ## ECMAScript `in`: TRUE if key is an own
+#                                              OR inherited (prototype-chain) property
+#       if predicate is TRUE:  result[key] = value   ## ASSIGNMENT (see __proto__ caveat)
+#       else:                  skip (missing-key omission)
+#   RETURN result.
+#
+#   Membership semantics (`key in object`) — verified:
+#       * OWN property present (even with value === undefined) -> TRUE, key copied.
+#           pick({a:undefined, b:2}, 'a') -> result HAS own key 'a' with value undefined.
+#           ## (NB: JSON.stringify hides it, but Object.keys shows 'a'.)
+#       * INHERITED property present -> TRUE, key copied with the inherited value.
+#           pick({}, 'toString')    -> { toString: <Object.prototype.toString fn> }
+#           pick({}, 'constructor') -> has own key 'constructor' (the inherited Object ctor)
+#           pick(new Map([['a',1]]), 'size') -> { size: 1 }   (inherited getter)
+#       * MISSING (neither own nor inherited) -> FALSE, key OMITTED.
+#           pick({a:1}, ['a','zzz']) -> { a: 1 }
+#       * DUPLICATE keys -> assigned repeatedly (idempotent); result has one entry.
+#           pick({a:1}, ['a','a']) -> { a: 1 }
+#
+# RESULT-KEY ORDER:
+#   Result keys follow the FLATTENED PATH ORDER (NODE 4 order), NOT the source
+#   object's key order. First-occurrence wins for ordering.
+#       pick({a:1,b:2,c:3}, ['c','a']) -> { c:3, a:1 }
+#
+# SHALLOW COPY (NON-MUTATION):
+#   The result is a NEW plain object. Values are copied BY REFERENCE (shallow):
+#   if a picked value is itself an object/array, result shares the SAME reference
+#   as the source (res.x === source.x). The SOURCE object is never mutated, and the
+#   result is independent at the top level (later writes to source do not change result).
+#       const src={a:1}; const r=pick(src,'a'); src.a=100;  -> r still {a:1}, src {a:100}
+#
+# __proto__ CAVEAT (the one key where "in is true" but result lacks the key):
+#   Assignment uses `result[key] = value`. For key '__proto__', `result['__proto__'] = value`
+#   invokes the Object.prototype __proto__ SETTER (it sets the result's prototype),
+#   so NO own '__proto__' key is created on result.
+#       pick({a:1}, '__proto__')  ->  result has NO own '__proto__' key (result === {}),
+#                                      and result's prototype is set to source's prototype
+#                                      (Object.prototype for a plain source, so observably a
+#                                      normal empty object). Predicate WAS true ('__proto__'
+#                                      is inherited), but the copy step creates no own key.
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function of (object, ...paths). No clock/RNG/IO/network seam.
+# Re-emitters export the function as the DEFAULT export (emissions are .mjs loaded
+# via import()): `export default pick`. The oracle compares the RETURNED object
+# (deep value equality, including own keys whose value is undefined, and Symbol keys).
+# Throw paths (e.g. bigint-zero path) are recorded as {__throw} and graded.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire NODE 1..6 pipeline above —
+#   variadic rest collection, null/undefined guard, depth-1 flatten with
+#   isFlattenable, toKey normalization (incl. the EXACT zero rule: +0 -> '0',
+#   -0 -> '-0', [0]/[-0] -> '0', 0n -> THROWS, and Symbol/string preservation),
+#   Object() boxing, `key in object` (own-or-inherited) membership, missing-key
+#   omission, duplicate handling, path-order result keys, shallow copy / non-mutation,
+#   and the __proto__ assignment caveat. NO deep/dotted path resolution (that is a
+#   LATER lodash version, explicitly OUT for 4.4.0).
+#
+# CARRIED DATA: none. (No literal tables. The numeric constants INFINITY = 1/0 and
+#   MAX_SAFE_INTEGER = 9007199254740991 and the Object#toString tag strings are tiny
+#   inline constants used only by isLength/isFlattenable/isSymbol/isArguments helpers,
+#   not a carried table — reproduce inline.)
+#
+# OUT-OF-CONTRACT: none. pick is pure and side-effect-free; it does not mutate input,
+#   read ambient state, or perform IO. No quarantine.
+#
+# OUT-OF-ENVELOPE (documented for the blind emitter; NOT emitted by genInputs because
+#   they are not oracle-codec round-trippable, but the SIR fully specifies them so an
+#   emitter still reconstructs the behavior):
+#     * PRIMITIVE -0 as a PATH argument -> toKey(-0) === '-0' (see the ZERO RULE).
+#       NOT EMITTED: JSON.stringify(-0)==='0' and JSON.parse('0')===+0, so a -0 path
+#       does NOT survive the JSON codec (it becomes +0 -> key '0'). This exact codec
+#       corruption produced the poisoned Round-1 held-out v28. The generator exercises
+#       the '-0' key only via the STRING '-0' (round-trips) and via the +0 path. A
+#       blind emitter still implements the toKey -0 branch from the rule above.
+#     * Symbol path keys -> preserved verbatim by toKey; picked iff `symbol in object`.
+#       (Symbols do not survive JSON.stringify, so the generator avoids them, but the
+#        emitter must implement the toKey Symbol branch.)
+#     * Function/Symbol VALUES in the source -> copied by reference like any value
+#       (not round-trippable through JSON, so not generated).
+#     * `arguments` object as a path argument -> flattenable like an array.
+#     * Source object whose own key value is `undefined` -> own key still present and
+#       copied (the result then carries an undefined-valued own key).
+#   NOTE: the bigint-zero THROW (pick({'0':'b'}, 0n) -> TypeError) IS oracle-codec
+#   round-trippable (bigint round-trips) and IS exercised by genInputs as a graded
+#   {__throw} path. It is IN-ENVELOPE, listed here only to contrast with -0.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+# package: lodash.pick@4.4.0  (license MIT)
+# repo:    lodash/lodash  (Custom Build: `lodash modularize exports="npm" -o ./`)
+# source:  node_modules/lodash.pick/index.js  (single file, deps inlined)
+#          toKey at lines 232-238; isSymbol at 477-480; pick/module.exports at 499-503.

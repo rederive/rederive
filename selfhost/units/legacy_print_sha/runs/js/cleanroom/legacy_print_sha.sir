@@ -1,0 +1,69 @@
+UNIT legacy_print_sha
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@978444f3baf3 cli/sir/legacy-print.mjs legacyPrintSha — the FROZEN pre-2026-10-26 binding hash
+  (sha256 of the round-0 parser's canonical print), reproduced exactly. It is frozen by design: its whitespace,
+  comment and attribute oddities are the contract, never defects to repair.
+ORACLE-CLASS deterministic
+SIG legacy_print_sha(text: text) -> text
+ENVELOPE text only: any length (including empty), any Unicode scalar values, every line-break kind, astral characters.
+  OUT: an unpaired surrogate half (the hash is over UTF-8, which has no encoding for it) and non-text input (the real
+  function throws a type error on its first operation; no vector exercises it).
+DEPENDS-ON none
+DESCRIPTION Read a SIR text the way the round-0 parser did, print the directives it recognized in canonical form
+  (P), and return the lowercase hexadecimal SHA-256 of P. Every character the reading drops (comments, orphan lines,
+  a byte-order-marked first line, overwritten attributes) is invisible to the hash; that is the frozen behavior.
+  A directive has a NAME, ARGS (text), an ordered map ATTRS from keyword to text, and a list of CONTINUATIONS (text).
+  The reading keeps a CURRENT directive, initially none.
+BEHAVIOR
+R1 Result = SHA-256 (FIPS 180-4) of the UTF-8 encoding of P, as 64 lowercase hexadecimal digits.
+R2 Lines. The text is split at every line feed (000A) only; the empty piece after a final line feed is a line like
+  any other. From each line ONE trailing carriage return (000D) is removed, if present; any other carriage return
+  stays in the line as an ordinary character. Lines are read in order; a line made only of WS characters (or empty)
+  is skipped.
+R3 INDENT = the longest prefix of the line made of space (0020) and tab (0009) only; CONTENT = the rest. CONTENT is
+  never empty here (R2).
+R4 Full-line comment: CONTENT begins with NUMBER SIGN (0023) -> the line is dropped; CURRENT is unchanged.
+R5 Trailing comment. In CONTENT, the marker is the NUMBER SIGN at the smallest position k (k >= 1) such that the
+  character at k-1 is WS, the character at k+1 is WS or k is the last position, and CONTENT contains no LT character
+  at any position other than k-1. With a marker, CODE = CONTENT before position k-1 with its trailing WS run removed;
+  without one, CODE = CONTENT unchanged (trailing WS kept). So a NUMBER SIGN glued to text on either side is content,
+  and a line holding an LT anywhere but just before the sign has no trailing comment at all CITED FIDELITY package.
+R6 Column-0 line (INDENT empty). Split CODE into NAME = its longest prefix of non-WS characters and TAIL = what
+  follows NAME with its whole leading WS run removed. The split FAILS when NAME is empty (CODE is empty or begins
+  with WS — a no-break space, a byte-order mark, a vertical tab) or when TAIL contains an LT character. On success:
+  if NAME is an uppercase letter A-Z, then zero or more of A-Z 0-9 "-", then a final ":", the colon is dropped. If NAME
+  is now an uppercase letter A-Z followed by zero or more of A-Z 0-9 "-", the line starts a NEW directive: NAME, and
+  ARGS and ATTRS from R8 applied to TAIL, no continuations; it becomes CURRENT. Known and unknown names alike.
+R7 Any other column-0 line (split failed, or NAME not of that form): if CURRENT exists, CODE is appended VERBATIM to
+  its continuations — no attribute extraction, no trimming; otherwise the line is dropped. A leading byte-order mark
+  therefore drops the first directive line of a file.
+R8 Attribute extraction over a piece S yields (BODY, A). Repeat: find the EARLIEST keyword occurrence K in S — K one of
+  CITED, EARNED, ANCHOR, immediately preceded by a run of one or more WS characters — whose remainder R (everything
+  after K) begins with WS and can be cut into a non-empty all-WS head and a non-empty tail containing no LT. If none
+  exists, stop. Otherwise value = R with leading and trailing WS removed (possibly empty); if A already holds a
+  NON-EMPTY value for K, A[K] = old value, one space, value; otherwise A[K] = value; then S = S cut just before the WS
+  run preceding K. BODY = the final S with leading and trailing WS removed. Consequences the oracle pins: the first
+  qualifying keyword swallows the rest of the line, later keywords included ("x CITED a EARNED b" -> CITED = "a EARNED b");
+  a keyword that begins S, or lacks WS after it, or has only a single WS after it and nothing more, stays in BODY;
+  more than one extraction per piece happens only when an LT blocks an earlier keyword's remainder CITED FIDELITY package.
+R9 Indented line (INDENT not empty): if no CURRENT, the line is dropped. Otherwise apply R8 to CODE: BODY is appended
+  to CURRENT's continuations (even when empty), and each (K, value) of A, in A's order, is stored into CURRENT's ATTRS
+  REPLACING any earlier value for K — an earlier CITED is overwritten, never joined CITED FIDELITY package.
+R10 ATTRS order = the order in which each keyword was FIRST stored into that directive (a replaced key keeps its
+  place); within one R8 run, keywords are stored in extraction order (rightmost occurrence first).
+R11 P. For each directive in reading order: one line = NAME, then (only if ARGS is non-empty) one space and ARGS,
+  then for each ATTRS entry in order one space, the keyword, one space, the value (an empty value leaves a trailing
+  space); then one line per continuation = two spaces and the continuation text. P = all lines, each followed by one
+  line feed. No directive at all -> P is a single line feed.
+PINNED charset WS = the code points 0009 000A 000B 000C 000D 0020 00A0 1680 2000 to 200A 2028 2029 202F 205F 3000 FEFF (hexadecimal, 25 members) CITED ECMA-262 WhiteSpace plus LineTerminator, the set the real code's separator class and trims use; probe: exactly these code points of 0 to 10FFFF match it; NOT the Unicode White_Space property: FEFF is in, 0085 (NEL) is out
+PINNED charset LT = the code points 000A 000D 2028 2029 (hexadecimal) CITED ECMA-262 LineTerminator, the characters the real code's any-character class excludes; probe: exactly these of 0 to 10FFFF fail it
+INVARIANT the result is always 64 characters from 0-9 a-f.
+INVARIANT texts that differ only in full-line comments, blank lines, lines dropped by R7 or R9, one trailing carriage
+  return per line, a trailing-comment tail, or the width of a non-empty INDENT hash equal.
+ORACLE value -> oracles/legacy_print_sha.json  CANONICAL-SHA256 bc0a210f1b5cfd070c710fe9e70a794c326159ae1c8e98bf300eb0a952ddbb4b
+SCOPE IN: R1-R11 over any text in the envelope. OUT: the parse diagnostics (errors, warnings, the indentation census,
+  comment capture), the strict mode, the live parser and its binding (cli/sir/sir-parse.mjs), and non-text input.
+PROVENANCE rederive@978444f3baf3 (MIT), cli/sir/legacy-print.mjs: parse, print and the exported legacyPrintSha — a frozen
+  copy of sir-parse.mjs as of rederive 20bdd3dd041a. Cut cold 2026-10-27 for REDERIVE_SELF_PLAN Tier 3; rules checked
+  against the real function on 1.5M seeded texts with an independent regex-free model (0 mismatches).

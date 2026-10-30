@@ -1,0 +1,212 @@
+{
+ "status": "ok",
+ "unit": "carried_shape_type",
+ "primary": "selfhost/units/carried_shape_type/sir/carried_shape_type.sir",
+ "primarySha256": "ae3eb92884f1cf9748eec04427b895efcd25660f5114e7aa89ba40b83692debe",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "CUT: the segment is the text before the first semicolon of shape (all of shape when it has none); the rest is ignored.",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R2",
+   "text": "NORMALIZE(s): strip every leading and trailing WS character of s. If the stripped text begins with the three characters map, then one or more WS characters, and somewhere after that run the two characters -> occur at least one character past the end of the run, then K = the text from the end of the run up to the FIRST such ->, V = all text after that ->, and NORMALIZE(s) is the text map[ + NORMALIZE(K) + \", \" + NORMALIZE(V) + ]. Otherwise NORMALIZE(s) is the stripped text unchanged. The rewrite recurses into K and V, so a value side map b -> c nests (map a -> map b -> c is map[a, map[b, c]]); a key side can only nest in the bracket spelling, since its first -> always ends K. map is lowercase and the run after it is WS only (a CR or LF there is a separator like a space): map[, mapX, map followed by U+00A0 or U+000B are not the arrow form. When -> directly follows the run, the split still happens (with an empty or arrow-led K) and the result always throws in R5. CITED FIDELITY package — lazy first-arrow split, v05.mjs:399",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "R3",
+   "text": "The splice is textual: K and V are pasted into the bracket spelling unparsed, so a comma or bracket inside them changes the parse (map text, text -> u8 becomes map[text, text, u64] and throws; map text, text] | map[u8 -> text becomes map[text, text] | map[u64, text], a union of two maps). CITED FIDELITY package",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R4",
+   "text": "WIDEN: in the text NORMALIZE(segment), every TYPE-TOKEN equal to u8, u16 or u32 is replaced by u64, and every one equal to i8, i16 or i32 by i64 (lowercase only). A TYPE-TOKEN is an occurrence of one of those six spellings whose left side, after skipping WS, is the start of the text or one of the characters [ , | : and whose right side, after skipping WS, is one of ] , | or the end of the text. Everything else is untouched: a record field name (followed by :) keeps its spelling, so record[u8: u8] has a field named u8 of kind u64; u128, a_u8, u8x and U8 are not widened; a CR or LF in either gap is skipped like a space (list[u8] with an LF before its ] is list[u64]). CITED FIDELITY package — v05.mjs:400 token rule",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R5",
+   "text": "PARSE: the widened text must be exactly one TYPE of GRAMMAR (WS allowed before and after any token and at both ends; a word may not run into the next word). Anything else throws: an unknown word (including every name that R4 did not widen), a missing or extra bracket, comma or colon, an empty list of parts, trailing text, and any other whitespace character (U+00A0, U+000B, U+3000 …) anywhere.",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R6",
+   "text": "ARITY: list takes exactly one type, map exactly two, tuple one or more, record one or more fields; otherwise throw. Record field names within one record are distinct (exact text) or the parse throws.",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R7",
+   "text": "DEPTH: at most 16 composites (tuple, list, map, record) may be open at once; opening the 17th nested composite throws. Unions do not count. An arrow form counts as the map it becomes.",
+   "ambiguity": 0.48
+  },
+  {
+   "id": "R8",
+   "text": "UNREACHABLE ALTERNATIVE: for a union of alternatives A1 … An (in spelling order, n >= 2), the parse throws when some earlier Ai COVERS a later Aj. This check runs on every union, at any depth (a field type, a list item …). TABLE COVERS defines COVERS(a, b) (any row holding suffices) and TABLE JSONABLE defines JSONABLE(t). SAME(a, b) is structural equality in which a union's alternatives compare as a set (order ignored) and a record's fields compare as a set of (name, type) pairs (order ignored); tuple items keep order. Only earlier-covers-later is refused: text | json parses, json | text throws. CITED FIDELITY package — canon.mjs covers() / inJson()",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "R9",
+   "text": "RESULT: the parsed type as the TREE node; a single alternative is its own node, two or more make a union node. Record fields and union alternatives keep spelling order.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE COVERS row 1",
+   "text": "| case | condition |",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE COVERS row 2",
+   "text": "| same | SAME(a, b) |",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE COVERS row 3",
+   "text": "| json | a is json and JSONABLE(b) |",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE COVERS row 4",
+   "text": "| list | a = list[x], b = list[y], COVERS(x, y) |",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE COVERS row 5",
+   "text": "| tuple | a and b tuples of equal length, COVERS(a item i, b item i) for every i |",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE COVERS row 6",
+   "text": "| map | a = map[k1, v1], b = map[k2, v2], COVERS(k1, k2) and COVERS(v1, v2) |",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE COVERS row 7",
+   "text": "| record | a and b records, and every field n: f of a has a field n: g in b (same name) with COVERS(f, g); b may have more fields |",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE COVERS row 8",
+   "text": "| a union | a is a union and some alternative of a COVERS b |",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE COVERS row 9",
+   "text": "| b union | b is a union and a COVERS every alternative of b |",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE JSONABLE row 1",
+   "text": "| t | condition |",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE JSONABLE row 2",
+   "text": "| none bool f64 text json | always |",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE JSONABLE row 3",
+   "text": "| list[x] | JSONABLE(x) |",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE JSONABLE row 4",
+   "text": "| tuple[x1, …] | every item JSONABLE |",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE JSONABLE row 5",
+   "text": "| map[k, x] | k is exactly text and JSONABLE(x) |",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE JSONABLE row 6",
+   "text": "| record[n1: x1, …] | every field type JSONABLE |",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE JSONABLE row 7",
+   "text": "| union | every alternative JSONABLE |",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE JSONABLE row 8",
+   "text": "| bytes i64 u64 | never |",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE TREE row 1",
+   "text": "| type | node |",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE TREE row 2",
+   "text": "| text bytes bool none i64 u64 f64 json | {\"k\": the word} |",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE TREE row 3",
+   "text": "| list[T] | {\"k\": \"list\", \"item\": T} |",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE TREE row 4",
+   "text": "| map[K, V] | {\"k\": \"map\", \"key\": K, \"val\": V} |",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE TREE row 5",
+   "text": "| tuple[T1, …] | {\"k\": \"tuple\", \"items\": [T1, …]} |",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE TREE row 6",
+   "text": "| record[n1: T1, …] | {\"k\": \"record\", \"fields\": [[n1, T1], …]} |",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE TREE row 7",
+   "text": "| A1 pipe A2 pipe … | {\"k\": \"union\", \"alts\": [A1, A2, …]} |",
+   "ambiguity": 0.25
+  }
+ ],
+ "ranked": [
+  "R7",
+  "R5",
+  "R2",
+  "R4",
+  "R8",
+  "TABLE TREE row 1",
+  "R3",
+  "TABLE COVERS row 9",
+  "TABLE JSONABLE row 1",
+  "TABLE TREE row 7",
+  "TABLE COVERS row 7",
+  "R9",
+  "TABLE COVERS row 8",
+  "TABLE JSONABLE row 5",
+  "R6",
+  "TABLE COVERS row 1",
+  "TABLE TREE row 6",
+  "TABLE COVERS row 6",
+  "TABLE COVERS row 2",
+  "TABLE COVERS row 3",
+  "TABLE JSONABLE row 6",
+  "TABLE JSONABLE row 4",
+  "TABLE TREE row 4",
+  "TABLE TREE row 5",
+  "TABLE COVERS row 5",
+  "TABLE JSONABLE row 7",
+  "TABLE TREE row 2",
+  "TABLE JSONABLE row 3",
+  "R1",
+  "TABLE COVERS row 4",
+  "TABLE JSONABLE row 2",
+  "TABLE JSONABLE row 8",
+  "TABLE TREE row 3"
+ ],
+ "at": "2026-10-28T02:53:02Z"
+}

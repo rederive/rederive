@@ -1,0 +1,19 @@
+UNIT diff_hint
+LANG rust
+PRIMARY-SHA256 2d15033b23e06a43fadec022b438345a002fa2db509fb185a9629ad23b37a777
+SIG pub fn diff_hint(existing: &str, profile: &str) -> String
+ABI crate shape: the artifact is a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn diff_hint`), no main, no I/O,
+  no dependencies. The verifier's harness crate depends on it by path and owns all I/O; compiling that harness against
+  this SIG is the signature check. text = &str in, String out (UTF-8). There is no error path: no Result, no Option, no
+  panic on any input.
+MECHANISM the primary's positions are code points, which are exactly Rust chars: split on '\n' (str::split, which like the
+  primary keeps a trailing empty line and never strips '\r'), then per line `chars().collect::<Vec<char>>()`; compare,
+  measure c and slice the window on those vectors. Never byte offsets (str::len, &s[a..b]) and never encode_utf16 counts.
+MECHANISM never str::lines (it drops a trailing '\r' and the final empty line). TABLE ESCAPE is hand-written per char;
+  never format!("{:?}") or char::escape_default / escape_debug (their escapes differ: \u{..} braces, \' and more).
+  The four-digit form is format!("\\u{:04x}", c as u32), the braced form format!("\\u{{{:x}}}", c as u32).
+  INVISIBLE is a hand-written match on char ranges (the primary's list). decimal = format!("{}") of a usize.
+PINNED text ELLIPSIS = '\u{2026}' CITED primary R6
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/lib/profile.mts diffHint (ts); this file states the crate shape, type mapping and
+  mechanism only, no behavior.

@@ -1,0 +1,31 @@
+UNIT cmp_ver
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b15b56613f9d cli/features.mjs cmpVer and isVersion — the spec-version comparison behind rdv's coarse gate
+ORACLE-CLASS deterministic
+SIG cmp_ver(a: text, b: text) -> i64
+ENVELOPE any two well-formed Unicode texts (no lone surrogates). A text that is not a VERSION (PINNED below) throws (R1);
+  every pair of VERSIONs yields -1, 0 or 1. Non-text arguments are out of the envelope (the js file says they throw).
+DEPENDS-ON none
+DESCRIPTION Compare two dotted version texts as sequences of non-negative integers and return the sign of a minus b:
+  -1 when a is older, 0 when equal, 1 when a is newer. rdv refuses a bundle when cmp_ver(specVersion, supported) is 1.
+BEHAVIOR
+R1 VALIDATE — a is checked, then b: if either text is not a VERSION -> throws. The WHOLE text must match, with nothing
+  before or after: no whitespace or line break at either end, no sign, prefix, suffix, exponent, empty segment, leading or
+  trailing full stop, leading zero ("0" alone is the only segment that may start with 0), or non-ASCII digit. The throw
+  message is not graded.
+R2 SEGMENTS — a VERSION is cut at each full stop "." into segments; each segment is a non-negative integer of ANY size,
+  read exactly (no rounding, no width limit: "9007199254740993" is greater than "9007199254740992").
+R3 PAD — when one version has fewer segments, its missing trailing segments count as 0 ("0.5" equals "0.5.0").
+R4 ORDER — walk positions from the first; at the first position whose integers differ the result is -1 if a's is smaller
+  and 1 if larger; if none differs the result is 0.
+R5 The result is always exactly -1, 0 or 1.
+INVARIANT cmp_ver(a, b) = -cmp_ver(b, a) on versions, and cmp_ver(a, a) = 0.
+PINNED grammar VERSION = SEG ( "." SEG )* CITED R1 — SEG = "0" | NZDIGIT DIGIT*; DIGIT = the ten ASCII digits, NZDIGIT = "1".."9"; the grammar covers the whole text
+ORACLE value -> oracles/cmp_ver.json  CANONICAL-SHA256 fa0b26db62debb57c18b54882bb03c800470f0573183e991db0825c03d42cce4
+NOTE 24 frozen + 96 held-out stamped by selfhost/stamp.mjs (seed 1) from the pinned authority: 57 curated (padding, huge segments, one probe per malformed class), then seeded fill, mostly valid.
+SCOPE IN: R1–R5 over any pair of texts. OUT: semver precedence (prerelease, build metadata), a "v" prefix, a decimal
+  reading of a segment ("0.10" is newer than "0.9"), and non-text arguments.
+PROVENANCE rederive@b15b56613f9d (MIT), cli/features.mjs exports cmpVer + isVersion; callers cli/rdv.mts specStatus (the
+  coarse gate) and cli/features.mjs specVersionFor. Cut 2026-10-26 under REDERIVE_SELF_PLAN Tier 1; round 2 re-cut after
+  the round-1 findings were fixed in the kernel.

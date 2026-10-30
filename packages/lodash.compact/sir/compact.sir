@@ -1,0 +1,213 @@
+UNIT compact
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG compact(array) -> Array
+    # `array` is the sole positional argument. Conventionally an Array, but the
+    # implementation is LENGTH-BASED (see BEHAVIOR), so any value is accepted.
+    # No options object. No extra arguments are read (a 2nd+ arg is ignored).
+DEPENDS-ON none
+    # Zero runtime dependencies. No carried data. No imports. Self-contained.
+
+# ============================================================================
+# BEHAVIOR  (exact, complete, ordered — transcribed from the real source and
+#            confirmed by running lodash.compact@3.0.1)
+# ============================================================================
+#
+# Reference implementation (the ENTIRE unit — there are no inlined helpers
+# beyond what is shown; in particular there is NO isArrayLike/Array.isArray
+# guard, the iteration is purely length-and-index based):
+#
+#   function compact(array) {
+#     var index = -1,
+#         length = array ? array.length : 0,    # NODE-1
+#         resIndex = 0,
+#         result = [];
+#     while (++index < length) {                # NODE-2  (pre-increment)
+#       var value = array[index];               # NODE-3  (bracket index read)
+#       if (value) {                            # NODE-4  (JS truthiness)
+#         result[resIndex++] = value;           # NODE-5  (append kept value)
+#       }
+#     }
+#     return result;                            # NODE-6  (always a NEW array)
+#   }
+#
+# ----------------------------------------------------------------------------
+# NODE-1  LENGTH RESOLUTION  (the input-type gate)
+# ----------------------------------------------------------------------------
+#   length = array ? array.length : 0
+#   * The guard `array ?` is a JS-TRUTHINESS test on the ARGUMENT ITSELF.
+#     If `array` is any FALSEY value — null, undefined, false, 0, -0, NaN,
+#     "" (empty string), or the argument is OMITTED (=> undefined) — then
+#     `length` is set to 0 and the while loop never runs => result is [].
+#       compact()            -> []
+#       compact(null)        -> []
+#       compact(undefined)   -> []
+#       compact(false)       -> []
+#       compact(0)           -> []
+#       compact(-0)          -> []
+#       compact(NaN)         -> []
+#       compact("")          -> []
+#   * Otherwise `length = array.length`, i.e. the value's OWN `length`
+#     property is read verbatim (NO coercion to a safe integer, NO
+#     ToLength/ToUint32 clamping — it is used raw in the `< length` compare).
+#       - If the value has NO `length` property, `array.length` is `undefined`,
+#         and `++index < undefined` is `false` on the first iteration
+#         (1 < undefined === false), so the loop never runs => [].
+#           compact(5)         -> []      # numbers (non-zero) are truthy but have no .length
+#           compact(true)      -> []
+#           compact({})        -> []      # plain object, no length
+#           compact({a:1})     -> []
+#       - If the value HAS a `length` property (real Arrays, strings, Buffers,
+#         typed arrays, `arguments` objects, and ANY plain object carrying a
+#         `length` field plus integer-keyed properties), that length governs
+#         iteration. THIS IS ARRAY-LIKE SUPPORT: the unit does NOT require a
+#         real Array.
+#           compact("abc")               -> ["a","b","c"]   # string: indexed chars, all truthy
+#           compact("a0c")               -> ["a","0","c"]   # char "0" is a NON-empty string => truthy => kept
+#           compact({length:3,0:1,1:0,2:2}) -> [1,2]
+#           compact({length:2,0:0,1:5})  -> [5]
+#           (function(){return compact(arguments)})(1,0,2,false,3) -> [1,2,3]
+#           compact(new Uint8Array([0,1,2,0,3])) -> [1,2,3]   (returned as a plain Array)
+#           compact(Buffer.from([0,5,0,7]))      -> [5,7]     (returned as a plain Array)
+#
+# ----------------------------------------------------------------------------
+# NODE-2  LOOP BOUND  (`while (++index < length)`, index starts at -1)
+# ----------------------------------------------------------------------------
+#   * `index` starts at -1 and is PRE-incremented, so the first index read is 0,
+#     and iteration continues while `index < length` (a plain `<` numeric
+#     comparison; `length` participates with whatever type/value it holds).
+#   * Effect on a numeric `length` L: indices 0,1,...,k are read while k < L.
+#     - Integer L >= 0:  reads indices 0 .. L-1 (the usual case).
+#     - L <= 0 / -1 / 0:  loop body never runs => [].
+#     - FRACTIONAL L (e.g. 1.9): reads indices 0..ceil(L)-1, because the read
+#       continues while the integer index is strictly < L:
+#           {length:0.5, 0:5}        -> [5]      # idx 0: 0<0.5 true; idx 1: 1<0.5 stop
+#           {length:1.9, 0:5, 1:6}   -> [5,6]    # idx 0,1 < 1.9; idx 2 stop
+#       (i.e. number of indices read = max(0, ceil(L)) for L>0; precisely:
+#        the largest integer k with k < L, plus one — index runs 0..floor for
+#        non-integers, 0..L-1 for integers.)
+#     - STRING length (e.g. "2"): `index < "2"` coerces "2"->2 numerically:
+#           {length:"2", 0:5, 1:6}   -> [5,6]
+#     - NON-numeric / NaN length: `index < length` is `false` => [].
+#
+# ----------------------------------------------------------------------------
+# NODE-3  ELEMENT READ  (`array[index]`, bracket access)
+# ----------------------------------------------------------------------------
+#   * Each element is read by bracket indexing. For real Arrays with HOLES
+#     (sparse arrays), a hole reads as `undefined` (falsey) and is dropped, but
+#     the hole STILL COUNTS toward `length`:
+#           compact([0,,1])    -> [1]     # length 3; idx0=0 falsey, idx1=hole->undefined falsey, idx2=1 kept
+#           compact([1,,,2])   -> [1,2]   # length 4
+#   * Missing integer keys on a length-bearing plain object read as `undefined`
+#     => falsey => dropped (same as holes).
+#
+# ----------------------------------------------------------------------------
+# NODE-4  THE FALSEY TEST  (`if (value)` — JS truthiness, KEEP truthy)
+# ----------------------------------------------------------------------------
+#   An element is REMOVED iff `Boolean(value) === false`, i.e. it is one of the
+#   JS falsey values. The COMPLETE falsey set (all REMOVED):
+#       false
+#       null
+#       undefined            (incl. holes, missing keys, explicit `undefined`)
+#       0    (number zero)
+#       -0   (negative zero — also falsey, removed)
+#       NaN                  (removed)
+#       ""   (empty string)
+#       0n   (BigInt zero — falsey, REMOVED)
+#   Everything ELSE is TRUTHY and is KEPT, in original order, including:
+#       - any non-zero number (incl. Infinity, -Infinity, negative numbers)
+#       - any non-empty string (incl. "0", "false", " ", "NaN")
+#       - true
+#       - any non-zero BigInt (e.g. 1n, -1n)
+#       - ANY object reference whatsoever: {} , [] (empty array/object included),
+#         nested arrays, RegExp, Set, Map, Date, typed arrays, functions, boxed
+#         primitives — objects are ALWAYS truthy regardless of contents
+#           compact([[], {}, 0, ""])  -> [[], {}]
+#           compact([0n, 1n, new Set([1]), new Map(), /re/, Infinity, -Infinity])
+#               -> [1n, new Set([1]), new Map(), /re/, Infinity, -Infinity]   # 0n dropped
+#   NOTE: There is NO `===`/SameValueZero comparison here. The ONLY test is
+#   `if (value)` truthiness. Do not special-case any value beyond truthiness.
+#
+# ----------------------------------------------------------------------------
+# NODE-5  APPEND  (order-preserving compaction)
+# ----------------------------------------------------------------------------
+#   Kept values are pushed into `result` in iteration order. The RELATIVE ORDER
+#   of kept (truthy) elements is exactly their order in the input. Element
+#   IDENTITY is preserved by reference (the same object reference is copied into
+#   the result; elements are NOT cloned).
+#           compact([3, false, 1, 0, 2, "", 5]) -> [3, 1, 2, 5]
+#
+# ----------------------------------------------------------------------------
+# NODE-6  RETURN  (always a fresh Array; non-mutating)
+# ----------------------------------------------------------------------------
+#   * Returns a NEW, DENSE Array (`result`) every call. Never returns the input.
+#   * The input is NEVER mutated:
+#           let inp=[1,0,2]; let out=compact(inp);
+#           inp === out  -> false ; inp unchanged -> [1,0,2]
+#   * Result is always a plain Array even when the input was a string / typed
+#     array / arguments object (result is built fresh as `[]`).
+#   * No throw paths: the unit never throws for any input. Falsey or
+#     length-less inputs yield [] rather than an error.
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+    # Pure deterministic function of its single argument. The oracle records
+    # { args, expected } where expected is the returned Array (a fresh dense
+    # Array). The harness's structured codec round-trips the in-scope element
+    # types (see SCOPE). No seam: no clock, RNG, env, fs, or net is read.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    * The length-based iteration (NODE-1..NODE-6) including:
+        - the `array ?` truthiness guard that maps all falsey/omitted args to [];
+        - reading `array.length` RAW (no ToLength clamp) and using it in `<`;
+        - pre-increment loop from index 0 while index < length;
+        - bracket-index element reads (holes/missing keys => undefined);
+        - the `if (value)` JS-truthiness keep test (full falsey set incl. -0,
+          NaN, 0n, "");
+        - order preservation; element reference preservation;
+        - returning a NEW dense Array; non-mutation; never throwing.
+  CARRIED DATA:
+    * NONE. This unit has no large literal table. Do NOT write a carried.json.
+  OUT-OF-CONTRACT:
+    * NONE (no stateful mutators, no side-effecting APIs, no ambient reads).
+
+# ----------------------------------------------------------------------------
+# OUT-OF-ENVELOPE element types (defined here for the blind re-emitter, but NOT
+# emitted by the input-generator because the harness codec cannot faithfully
+# round-trip them):
+#   * FUNCTION elements: truthy (kept), preserved by reference — but a function
+#     cannot survive JSON/structured encoding, so genInputs MUST NOT emit them.
+#   * SYMBOL elements: truthy (kept) — but symbols are not codec-round-trippable,
+#     so genInputs MUST NOT emit them.
+#   The behavior is nonetheless fully determined: both are objects-or-truthy and
+#   would be KEPT in order. (Symbols are primitive but truthy; functions are
+#   objects, truthy.)
+# ----------------------------------------------------------------------------
+
+# ============================================================================
+# EMISSION / RE-EMITTER CONTRACT
+# ============================================================================
+# * This unit is the DEFAULT export of an ES module. The re-emitter MUST emit:
+#       export default function compact(array) { ... }
+#   (or `const compact = ...; export default compact;`). The re-built module is
+#   loaded by the harness via dynamic `import()` and the DEFAULT export is the
+#   function under test.
+# * Signature: a single positional parameter `array`. Extra arguments ignored.
+# * Pure ES module: no imports, no top-level side effects, no ambient reads.
+# * The returned value MUST be a freshly-constructed plain Array. The input MUST
+#   NOT be mutated.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+PROVENANCE lodash.compact@3.0.1
+    repo: lodash/lodash (https://lodash.com/)
+    license: MIT
+    source file: index.js (module.exports = compact)  -- "main" defaults to index.js
+    build banner: "lodash 3.0.1 (Custom Build) modularize exports=npm"

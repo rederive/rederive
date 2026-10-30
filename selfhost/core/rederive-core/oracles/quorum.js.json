@@ -1,0 +1,54 @@
+{
+ "unit": "quorum",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v5",
+   "args": [
+    [
+     true,
+     true
+    ],
+    1.5
+   ],
+   "expected": {
+    "__throw": "quorum: need must be an integer >= 1 (got 1.5)"
+   },
+   "outsideEnvelope": "not i64: 1.5 (NaN/Inf/fraction can never occupy an integer slot — envelope violation)"
+  },
+  {
+   "name": "v6",
+   "args": [
+    [
+     true
+    ],
+    0.5
+   ],
+   "expected": {
+    "__throw": "quorum: need must be an integer >= 1 (got 0.5)"
+   },
+   "outsideEnvelope": "not i64: 0.5 (NaN/Inf/fraction can never occupy an integer slot — envelope violation)"
+  },
+  {
+   "name": "v7",
+   "args": [
+    [
+     1,
+     "true",
+     true,
+     {}
+    ],
+    1
+   ],
+   "expected": {
+    "fullCount": 1,
+    "hasQuorum": true,
+    "winnerIdx": 2
+   },
+   "outsideEnvelope": "not bool"
+  }
+ ],
+ "heldout": []
+}

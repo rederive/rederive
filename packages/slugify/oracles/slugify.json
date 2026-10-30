@@ -1,0 +1,603 @@
+{
+  "mode": "vectors",
+  "exportName": "slugify",
+  "unit": "slugify",
+  "vectors": [
+    {
+      "name": "v0",
+      "args": [
+        "some string"
+      ],
+      "expected": "some-string"
+    },
+    {
+      "name": "v1",
+      "args": [
+        "some string",
+        {}
+      ],
+      "expected": "some-string"
+    },
+    {
+      "name": "v2",
+      "args": [
+        "some string",
+        "_"
+      ],
+      "expected": "some_string"
+    },
+    {
+      "name": "v3",
+      "args": [
+        "Hello World"
+      ],
+      "expected": "Hello-World"
+    },
+    {
+      "name": "v4",
+      "args": [
+        "keep CASE"
+      ],
+      "expected": "keep-CASE"
+    },
+    {
+      "name": "v5",
+      "args": [
+        "MixedCASE",
+        {
+          "lower": true
+        }
+      ],
+      "expected": "mixedcase"
+    },
+    {
+      "name": "v6",
+      "args": [
+        "Hello World",
+        {
+          "lower": true
+        }
+      ],
+      "expected": "hello-world"
+    },
+    {
+      "name": "v7",
+      "args": [
+        "  leading and trailing  "
+      ],
+      "expected": "leading-and-trailing"
+    },
+    {
+      "name": "v8",
+      "args": [
+        "  pad  ",
+        {
+          "trim": false
+        }
+      ],
+      "expected": "-pad-"
+    },
+    {
+      "name": "v9",
+      "args": [
+        "a b c",
+        {
+          "replacement": "."
+        }
+      ],
+      "expected": "a.b.c"
+    },
+    {
+      "name": "v10",
+      "args": [
+        "a b c",
+        {
+          "replacement": "@"
+        }
+      ],
+      "expected": "a@b@c"
+    },
+    {
+      "name": "v11",
+      "args": [
+        "x y",
+        {
+          "replacement": "_"
+        }
+      ],
+      "expected": "x_y"
+    },
+    {
+      "name": "v12",
+      "args": [
+        "a@b:c",
+        {
+          "remove": {
+            "__t": "regex",
+            "source": "[@:]",
+            "flags": "g"
+          }
+        }
+      ],
+      "expected": "abc"
+    },
+    {
+      "name": "v13",
+      "args": [
+        "a.b.c",
+        {
+          "remove": "."
+        }
+      ],
+      "expected": "abc"
+    },
+    {
+      "name": "v14",
+      "args": [
+        "Baz naïve",
+        {
+          "remove": {}
+        }
+      ],
+      "expected": "Baz-naive"
+    },
+    {
+      "name": "v15",
+      "args": [
+        "foo.bar (baz)!"
+      ],
+      "expected": "foo.bar-(baz)!"
+    },
+    {
+      "name": "v16",
+      "args": [
+        "foo.bar (baz)!",
+        {
+          "strict": true
+        }
+      ],
+      "expected": "foobar-baz"
+    },
+    {
+      "name": "v17",
+      "args": [
+        "foo.bar (baz)!",
+        {
+          "strict": true,
+          "lower": true
+        }
+      ],
+      "expected": "foobar-baz"
+    },
+    {
+      "name": "v18",
+      "args": [
+        "a.b c",
+        {
+          "strict": true,
+          "replacement": "."
+        }
+      ],
+      "expected": "a.b.c"
+    },
+    {
+      "name": "v19",
+      "args": [
+        "keep ~ + . ( ) ' \" ! - : @ punct"
+      ],
+      "expected": "keep-~-+-.-(-)-'-\"-!-:-@-punct"
+    }
+  ],
+  "heldout": [
+    {
+      "name": "v20",
+      "args": [
+        "under_score here"
+      ],
+      "expected": "under_score-here"
+    },
+    {
+      "name": "v21",
+      "args": [
+        "1 2 3"
+      ],
+      "expected": "1-2-3"
+    },
+    {
+      "name": "v22",
+      "args": [
+        "price: $5 @home"
+      ],
+      "expected": "price:-dollar5-@home"
+    },
+    {
+      "name": "v23",
+      "args": [
+        "en–dash here"
+      ],
+      "expected": "en-dash-here"
+    },
+    {
+      "name": "v24",
+      "args": [
+        "a - b"
+      ],
+      "expected": "a-b"
+    },
+    {
+      "name": "v25",
+      "args": [
+        "x_y",
+        {
+          "replacement": "_"
+        }
+      ],
+      "expected": "x_y"
+    },
+    {
+      "name": "v26",
+      "args": [
+        "Æsop"
+      ],
+      "expected": "AEsop"
+    },
+    {
+      "name": "v27",
+      "args": [
+        "Æsop",
+        {
+          "remove": {
+            "__t": "regex",
+            "source": "E",
+            "flags": "g"
+          }
+        }
+      ],
+      "expected": "Asop"
+    },
+    {
+      "name": "v28",
+      "args": [
+        "soft Ь sign"
+      ],
+      "expected": "soft-sign"
+    },
+    {
+      "name": "v29",
+      "args": [
+        "Voilà çà"
+      ],
+      "expected": "Voila-ca"
+    },
+    {
+      "name": "v30",
+      "args": [
+        "cámara máquina"
+      ],
+      "expected": "camara-maquina"
+    },
+    {
+      "name": "v31",
+      "args": [
+        "âpre pâté"
+      ],
+      "expected": "apre-pate"
+    },
+    {
+      "name": "v32",
+      "args": [
+        "São Paulo"
+      ],
+      "expected": "Sao-Paulo"
+    },
+    {
+      "name": "v33",
+      "args": [
+        "Ärger Mädchen"
+      ],
+      "expected": "Arger-Madchen"
+    },
+    {
+      "name": "v34",
+      "args": [
+        "Åland håll"
+      ],
+      "expected": "Aland-hall"
+    },
+    {
+      "name": "v35",
+      "args": [
+        "curaçao æsir"
+      ],
+      "expected": "curacao-aesir"
+    },
+    {
+      "name": "v36",
+      "args": [
+        "ÀÁÂ ÃÄÅ Æ"
+      ],
+      "expected": "AAA-AAA-AE"
+    },
+    {
+      "name": "v37",
+      "args": [
+        "façade Niçoise"
+      ],
+      "expected": "facade-Nicoise"
+    },
+    {
+      "name": "v38",
+      "args": [
+        "Ça Çedille"
+      ],
+      "expected": "Ca-Cedille"
+    },
+    {
+      "name": "v39",
+      "args": [
+        "Crème Brûlée"
+      ],
+      "expected": "Creme-Brulee"
+    },
+    {
+      "name": "ext20",
+      "args": [
+        42
+      ],
+      "expected": {
+        "__throw": "slugify: string argument expected"
+      }
+    },
+    {
+      "name": "ext21",
+      "args": [
+        null
+      ],
+      "expected": {
+        "__throw": "slugify: string argument expected"
+      }
+    },
+    {
+      "name": "ext22",
+      "args": [
+        {
+          "__t": "undef"
+        }
+      ],
+      "expected": {
+        "__throw": "slugify: string argument expected"
+      }
+    },
+    {
+      "name": "ext23",
+      "args": [
+        ""
+      ],
+      "expected": ""
+    },
+    {
+      "name": "ext24",
+      "args": [
+        "   "
+      ],
+      "expected": ""
+    },
+    {
+      "name": "ext25",
+      "args": [
+        "---"
+      ],
+      "expected": ""
+    },
+    {
+      "name": "ext26",
+      "args": [
+        "a#b!",
+        {
+          "remove": ""
+        }
+      ],
+      "expected": "ab!"
+    },
+    {
+      "name": "ext27",
+      "args": [
+        "a#b c",
+        {
+          "remove": 0
+        }
+      ],
+      "expected": "ab-c"
+    },
+    {
+      "name": "ext28",
+      "args": [
+        "x#y z",
+        {
+          "remove": null
+        }
+      ],
+      "expected": "xy-z"
+    },
+    {
+      "name": "ext29",
+      "args": [
+        "p#q r",
+        {
+          "remove": false
+        }
+      ],
+      "expected": "pq-r"
+    },
+    {
+      "name": "ext30",
+      "args": [
+        "Crème Brûlée!",
+        {
+          "strict": true
+        }
+      ],
+      "expected": "Creme-Brulee"
+    },
+    {
+      "name": "ext31",
+      "args": [
+        "Crème Brûlée",
+        {
+          "lower": true
+        }
+      ],
+      "expected": "creme-brulee"
+    },
+    {
+      "name": "ext32",
+      "args": [
+        "ÀÖÜ ßig!",
+        {
+          "strict": true,
+          "lower": true
+        }
+      ],
+      "expected": "aou-ssig"
+    },
+    {
+      "name": "ext33",
+      "args": [
+        "Æsop (fable)",
+        {
+          "strict": true,
+          "replacement": "."
+        }
+      ],
+      "expected": "AEsop.fable"
+    },
+    {
+      "name": "ext34",
+      "args": [
+        "50% off & more"
+      ],
+      "expected": "50percent-off-and-more"
+    },
+    {
+      "name": "ext35",
+      "args": [
+        "I ♥ ∞ ™"
+      ],
+      "expected": "I-love-infinity-tm"
+    },
+    {
+      "name": "ext36",
+      "args": [
+        "a < b > c | d"
+      ],
+      "expected": "a-less-b-greater-c-or-d"
+    },
+    {
+      "name": "ext37",
+      "args": [
+        "wait…done ∑"
+      ],
+      "expected": "wait...done-sum"
+    },
+    {
+      "name": "ext38",
+      "args": [
+        "ΩΘ αβ Α Σ"
+      ],
+      "expected": "W8-ab-A-S"
+    },
+    {
+      "name": "ext39",
+      "args": [
+        "а б в Ь"
+      ],
+      "expected": "a-b-v"
+    },
+    {
+      "name": "ext40",
+      "args": [
+        "Straße groß"
+      ],
+      "expected": "Strasse-gross"
+    },
+    {
+      "name": "ext41",
+      "args": [
+        "Ärger über Größe",
+        {
+          "locale": "de"
+        }
+      ],
+      "expected": "AErger-ueber-Groesse"
+    },
+    {
+      "name": "ext42",
+      "args": [
+        "5% & mehr",
+        {
+          "locale": "de"
+        }
+      ],
+      "expected": "5prozent-und-mehr"
+    },
+    {
+      "name": "ext43",
+      "args": [
+        "café naïve",
+        {
+          "locale": "de"
+        }
+      ],
+      "expected": "cafe-naive"
+    },
+    {
+      "name": "ext44",
+      "args": [
+        "I ♥ ∑ ∞",
+        {
+          "locale": "de",
+          "lower": true
+        }
+      ],
+      "expected": "i-liebe-summe-unendlich"
+    },
+    {
+      "name": "ext45",
+      "args": [
+        "Москва"
+      ],
+      "expected": "Moskva"
+    },
+    {
+      "name": "ext46",
+      "args": [
+        "Ελληνικά"
+      ],
+      "expected": "Ellhnika"
+    },
+    {
+      "name": "ext47",
+      "args": [
+        "100€"
+      ],
+      "expected": "100euro"
+    },
+    {
+      "name": "ext48",
+      "args": [
+        "Việt Nam",
+        {
+          "locale": "vi"
+        }
+      ],
+      "expected": "Viet-Nam"
+    },
+    {
+      "name": "ext49",
+      "args": [
+        "hello 😀 world"
+      ],
+      "expected": "hello-world"
+    }
+  ]
+}

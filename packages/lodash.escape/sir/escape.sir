@@ -1,0 +1,195 @@
+UNIT escape
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG escape(string?: any) -> string
+# Single default-exported function. module.exports = escape.
+# A blind re-emitter MUST emit this as the .mjs DEFAULT export:  export default escape
+# (importKind 'default'; there is exactly one exported function, no named exports).
+
+DEPENDS-ON none
+# Zero runtime dependencies. Self-contained. No I/O, no clock, no RNG, no env, no fs/net.
+# Pure: deterministic function of its single argument. No injection seam. N/A for seams.
+
+# ============================================================================
+# BEHAVIOR  (exact pipeline — reproduce verbatim)
+# ============================================================================
+# escape performs TWO steps in order:  (1) coerce arg to a string via a lodash
+# toString;  (2) conditionally HTML-escape SIX characters.
+#
+# --- CONSTANTS (small, in-contract — transcribe literally, this is NOT carried data) ---
+#
+#   reUnescapedHtml    : a GLOBAL regex matching the char class [&<>"'`]
+#                        i.e. RegExp source = [&<>"'`], flags = "g".
+#                        (Used in step 2's String.prototype.replace.)
+#   reHasUnescapedHtml : a NON-global regex built from reUnescapedHtml.source
+#                        i.e. RegExp source = [&<>"'`], flags = "" (NO g flag).
+#                        (Used in the step-2 fast-path test; being non-global it is
+#                         STATELESS — no lastIndex carryover between calls.)
+#   htmlEscapes (the escape map — EXACTLY these six entries, no more, no fewer):
+#       '&'  -> '&amp;'
+#       '<'  -> '&lt;'
+#       '>'  -> '&gt;'
+#       '"'  -> '&quot;'
+#       "'"  -> '&#39;'     # single quote (apostrophe) -> &#39;  (numeric, NOT &apos;)
+#       '`'  -> '&#96;'     # BACKTICK IS ESCAPED in 4.0.1 -> &#96; (numeric)
+#   INFINITY : the value (1 / 0) == +Infinity  (used in the -0 detection below).
+#
+# Note on which chars are NOT escaped: only the six above are. The "/" (slash),
+# "=" (equals), and all other characters (incl. unicode) pass through unchanged.
+#
+# ---------------------------------------------------------------------------
+# STEP 1 — COERCE: string = toString(arg)
+# ---------------------------------------------------------------------------
+# toString(value):
+#   if value is null OR undefined            -> return ''            (the empty string)
+#   else                                     -> return baseToString(value)
+#
+# baseToString(value):
+#   NODE B1  if typeof value === 'string'    -> return value         (identity; fast exit;
+#                                               this includes boxed-String UNBOXING? NO:
+#                                               a primitive string returns as-is; a boxed
+#                                               String object is NOT typeof 'string', so it
+#                                               falls through to NODE B3 and is coerced via
+#                                               (value + '') which yields its primitive value.)
+#   NODE B2  else if isSymbol(value)         -> return Symbol.prototype.toString.call(value)
+#                                               (e.g. Symbol('<x>') -> "Symbol(<x>)"; this
+#                                               string then enters step 2 and CAN be escaped).
+#                                               # Symbols are documented OUT-OF-ENVELOPE for the
+#                                               # generator (not codec-round-trippable) — but the
+#                                               # rule is specified so a blind re-emitter can
+#                                               # reconstruct it. See SCOPE.
+#   NODE B3  else:
+#               result = (value + '')         # JS string coercion of a non-string, non-symbol.
+#                                             #   numbers -> their decimal string ("42","3.14",
+#                                             #     "NaN","Infinity","-Infinity"); note 0 -> "0".
+#                                             #   booleans -> "true"/"false".
+#                                             #   arrays   -> Array.prototype.toString = join(",")
+#                                             #     with null/undefined elements becoming "".
+#                                             #   plain objects -> "[object Object]".
+#                                             #   objects with custom toString -> that result.
+#                                             #   bigint n -> its decimal digits, e.g. 1n -> "1".
+#               # -0 special case:
+#               if (result === '0') AND ((1 / value) === -INFINITY)  -> return '-0'
+#               else                                                 -> return result
+#               # Rationale: only the NUMBER -0 satisfies both (its (v+'') is "0" and 1/-0 is
+#               #   -Infinity), so escape(-0) -> "-0" while escape(0) -> "0".
+#               #
+#               # *** THROW PATH (must reproduce exactly) ***
+#               # When value is a BIGINT equal to 0n: (value + '') === "0", so result === '0'
+#               #   is TRUE, and JS then evaluates (1 / value) === -INFINITY. (1 / 0n) attempts
+#               #   Number / BigInt, which JS forbids -> it THROWS a TypeError:
+#               #     "Cannot mix BigInt and other types, use explicit conversions".
+#               #   Therefore escape(0n) THROWS TypeError (recorded as {__throw}).
+#               #   Any OTHER bigint (1n, -1n, 10n, 99...n) has result !== '0', so the
+#               #   (1/value) branch is short-circuited and it returns its digit string normally.
+#               #   (Edge: only 0n triggers this; there is no negative bigint zero.)
+#
+# ---------------------------------------------------------------------------
+# STEP 2 — ESCAPE (conditional, with fast-path):
+# ---------------------------------------------------------------------------
+#   given the coerced `string` from step 1:
+#   return  (string AND reHasUnescapedHtml.test(string))
+#             ? string.replace(reUnescapedHtml, escapeHtmlChar)
+#             : string
+#
+#   Decoded:
+#     NODE S1  if string is the empty string ''  -> the `string &&` short-circuits to ''
+#                                                   (falsy); RETURN '' WITHOUT testing the regex.
+#     NODE S2  else if reHasUnescapedHtml.test(string) is FALSE (no &,<,>,",',` present)
+#                                                -> RETURN string UNCHANGED (fast path).
+#     NODE S3  else (string non-empty AND contains >=1 escapable char)
+#                                                -> RETURN string.replace(reUnescapedHtml,
+#                                                     escapeHtmlChar), i.e. replace EVERY
+#                                                     occurrence of each of the six chars with
+#                                                     its htmlEscapes entry, leaving all other
+#                                                     chars (unicode, slash, etc.) intact.
+#   escapeHtmlChar(chr) = htmlEscapes[chr]   (a basePropertyOf lookup; chr is always one of the
+#                          six matched chars, so the lookup always hits — never undefined here).
+#
+# ---------------------------------------------------------------------------
+# WORKED EXAMPLES (every claim below was produced by running the real package):
+# ---------------------------------------------------------------------------
+#   escape('&')                         -> '&amp;'
+#   escape('<')                         -> '&lt;'
+#   escape('>')                         -> '&gt;'
+#   escape('"')                         -> '&quot;'
+#   escape("'")                         -> '&#39;'
+#   escape('`')                         -> '&#96;'
+#   escape('&<>"\'`')                   -> '&amp;&lt;&gt;&quot;&#39;&#96;'
+#   escape('fred, barney, & pebbles')   -> 'fred, barney, &amp; pebbles'
+#   escape('/')                         -> '/'           (slash NOT escaped)
+#   escape('=')                         -> '='           (equals NOT escaped)
+#   escape('hello world')               -> 'hello world' (fast path, unchanged)
+#   escape('café — naïve ☃ 漢字')        -> 'café — naïve ☃ 漢字' (unicode unchanged)
+#   escape('')                          -> ''            (S1 short-circuit)
+#   escape(undefined) / escape()        -> ''            (toString null/undefined -> '')
+#   escape(null)                        -> ''
+#   escape(42)                          -> '42'
+#   escape(3.14)                        -> '3.14'
+#   escape(0)                           -> '0'
+#   escape(-0)                          -> '-0'
+#   escape(NaN)                         -> 'NaN'
+#   escape(Infinity)                    -> 'Infinity'
+#   escape(-Infinity)                   -> '-Infinity'
+#   escape(true)                        -> 'true'
+#   escape(false)                       -> 'false'
+#   escape([1,2,3])                     -> '1,2,3'
+#   escape(['<','&'])                   -> '&lt;,&amp;'
+#   escape([null, undefined])           -> ','           (nullish elems -> '' in join)
+#   escape([1,'<b>',3])                 -> '1,&lt;b&gt;,3'
+#   escape({})                          -> '[object Object]'
+#   escape(1n)                          -> '1'
+#   escape(-1n)                         -> '-1'
+#   escape(99999999999999999999n)       -> '99999999999999999999'
+#   escape(0n)                          -> THROW TypeError (Cannot mix BigInt and other types)
+#   escape(new Uint8Array([60,62]))     -> '60,62'       (typed array join -> "60,62"; the
+#                                                          DIGITS, not the chars '<' '>')
+#   escape(Buffer.from('<x>'))          -> '&lt;x&gt;'    (Buffer.toString() decodes to '<x>')
+#   escape(new Set([1,2]))              -> '[object Set]' (Set has no custom toString -> object)
+#   escape(new Map([[1,2]]))            -> '[object Map]'
+#   escape(/a<b/g)                      -> '/a&lt;b/g'    (RegExp.toString() = '/a<b/g')
+#   escape('0')  (a real string)        -> '0'           (B1 returns the string; -0 path NOT hit)
+#   escape('-0') (a real string)        -> '-0'
+#
+# IDEMPOTENCE NOTE (informative, not a rule): escape is NOT idempotent — escape('&') is '&amp;'
+#   and escape('&amp;') is '&amp;amp;' because the '&' in '&amp;' is re-escaped.
+
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic value oracle. For each input tuple [arg], expected = escape(arg).
+# Throw-reaching inputs (e.g. [0n]) are recorded as {__throw} (TypeError).
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire unit. The six-entry htmlEscapes map,
+#   the two regexes ([&<>"'`] global + non-global), the toString/baseToString coercion
+#   (null/undefined->''; string identity; symbol via Symbol.prototype.toString; else (v+'')
+#   with the -0 special case and its bigint-0n TypeError), and the empty/no-match fast-path.
+#   All constants are SMALL and transcribed literally above — there is NO carried-data table,
+#   so NO escape.carried.json is produced.
+#
+# OUT-OF-ENVELOPE (specified here so a blind engineer reconstructs the rule, but NOT emitted by
+#   genInputs because the values do not survive the JSON/encode codec round-trip):
+#     * Symbols (typeof 'symbol'): coerced via Symbol.prototype.toString -> "Symbol(desc)";
+#       the resulting string IS then escaped (e.g. Symbol('<x>') -> "Symbol(&lt;x&gt;)").
+#     * Functions: coerced via (fn + '') to their source text, then escaped; not round-trippable.
+#     * Boxed primitives whose identity matters (new String / new Number): a boxed String is NOT
+#       typeof 'string' so it goes through (v+'') and yields its primitive (new String('<x>')
+#       -> '&lt;x&gt;'); not emitted by the generator (boxed values don't round-trip).
+#   These are documentation-only; the generator does not produce them.
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): NONE. escape mutates nothing and exposes
+#   no auxiliary API; the inner helpers (toString/baseToString/isSymbol/escapeHtmlChar/
+#   basePropertyOf) are private and not exported.
+#
+# CARRIED DATA: NONE.
+
+# ============================================================================
+PROVENANCE
+# package: lodash.escape@4.0.1  (npm)
+# repo:    lodash/lodash  (custom modularized build: `lodash modularize exports="npm" -o ./`)
+# license: MIT (Copyright jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+# source:  node_modules/lodash.escape/index.js  (module.exports = escape; lines 207-214 define
+#          escape; lines 17-28 define the regexes + htmlEscapes; lines 86-171 define the
+#          baseToString/toString coercion chain.)
+# verification: all BEHAVIOR claims above were produced by executing the installed 4.0.1 package.

@@ -1,0 +1,21 @@
+UNIT quorum
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b15b56613f9d cli/verdict.mts quorum — the quorum decision over graded re-derivations; reproduce it exactly
+ORACLE-CLASS deterministic
+SIG quorum(fulls: list[bool], need: i64) -> record[fullCount: i64, hasQuorum: bool, winnerIdx: i64]
+ENVELOPE fulls is a list of bool of any length, including empty (entry i says whether emission i graded full). need is any
+  integer with magnitude at most 2^53 - 1; need <= 0 is in scope and throws (R1).
+DEPENDS-ON none
+DESCRIPTION Decide whether enough re-derivations graded full to form a quorum, and which one wins. The result has three
+  fields in this order: fullCount, hasQuorum, winnerIdx.
+BEHAVIOR
+R1 need < 1 -> throws, whatever fulls holds. The message is not graded.
+R2 fullCount = the number of true entries in fulls.
+R3 hasQuorum is true iff fullCount >= need. need greater than the length of fulls never yields a quorum.
+R4 When hasQuorum is true, winnerIdx = the zero-based position of the FIRST true entry in fulls; otherwise winnerIdx = -1.
+ORACLE value -> oracles/quorum.json  CANONICAL-SHA256 497abb171100936f9f9f0597d39116ab850ddb178b2248087d4a3be5c2dc645d
+SCOPE in-contract: R1-R4, the whole function. The package's default need of 2 when need is omitted is OUT (the SIG always
+  passes need). A non-integer need and non-bool entries are js-only (see the js file).
+PROVENANCE rederive@b15b56613f9d cli/verdict.mts export quorum (graded: { full: boolean }[], need = 2); the seam
+  selfhost/seams/quorum.mjs maps each entry b of fulls to the record { full: b }.

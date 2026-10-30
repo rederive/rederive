@@ -1,0 +1,160 @@
+UNIT concat
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG concat(array, ...values) -> Array        # default export; module.exports = concat
+DEPENDS-ON none                              # self-contained; all helpers are inlined in the source file
+
+# ---------------------------------------------------------------------------
+# SUMMARY
+# Creates a NEW array that concatenates `array` (or, if `array` is not an Array,
+# the single-element wrapper [array]) with each of `values`. A value that is
+# "flattenable" (see FLATTENABLE below) is spread ONE level (its elements are
+# appended individually); any other value is appended as a single element.
+# Inputs are NEVER mutated. The result is always a brand-new dense Array.
+# The first positional arg is `array`; everything after it is a `values` element.
+# ---------------------------------------------------------------------------
+
+BEHAVIOR
+
+# --- NODE 0: zero-argument fast path ---
+# concat() with NO arguments at all returns a fresh empty array [].
+# (Source: `return length ? ... : []` where length === 0.)
+BRANCH arguments.length === 0:
+    RETURN []
+
+# --- NODE 1: build the `values` list ---
+# `array` = arguments[0]. The remaining arguments[1..length-1] become the
+# `values` list (in original order). With one argument total, `values` is empty.
+# (The source builds this with an index-shuffle loop; the OBSERVABLE result is
+#  exactly: values = arguments.slice(1), iterated by its .length.)
+LET array  = arguments[0]
+LET values = [ arguments[1], arguments[2], ..., arguments[length-1] ]   # may be empty
+
+# --- NODE 2: seed the result from `array` (one-level copy, with wrapping) ---
+# If `array` is a true Array (Array.isArray === true): result starts as a SHALLOW
+#   COPY of array's elements (indices 0..array.length-1). Holes are materialized
+#   as `undefined` (the result is dense). Non-index/own properties are NOT copied.
+# Else (`array` is anything else — number, string, null, undefined, plain object,
+#   typed array, arguments object, Set, Map, Buffer, RegExp, bigint, etc.):
+#   result starts as the single-element array [array] (the value wrapped, as-is,
+#   by reference/identity — no coercion). NOTE: null and undefined are wrapped too,
+#   so concat(undefined) -> [undefined] (element 0 is the value undefined, NOT null).
+BRANCH Array.isArray(array):
+    result = shallow-copy of array (dense; holes -> undefined; length = array.length)
+ELSE:
+    result = [ array ]
+
+# --- NODE 3: append each value, spreading flattenables ONE level ---
+# Iterate `values` in order (by .length). For each `value`:
+FOR EACH value IN values (index 0..values.length-1):
+    BRANCH FLATTENABLE(value):
+        # spread exactly ONE level: append value's elements value[0..value.length-1]
+        # individually (read by index; holes -> undefined). Nested arrays/objects
+        # inside `value` are appended AS-IS and are NOT recursively flattened.
+        APPEND each element of value to result
+    ELSE:
+        # append the value itself as a single element (by identity, no coercion).
+        APPEND value to result
+RETURN result
+
+# --- FLATTENABLE(value) predicate (governs one-level spread) ---
+# A value is flattenable IFF AT LEAST ONE of:
+#   (a) Array.isArray(value) === true                          # true Arrays
+#   (b) value is an "arguments" object                         # see IS-ARGUMENTS
+#   (c) Symbol.isConcatSpreadable exists AND value is truthy
+#         AND value[Symbol.isConcatSpreadable] is truthy       # explicit opt-in
+# Otherwise NOT flattenable.
+# CONSEQUENCES (verified against the real package):
+#   - Plain objects, strings, numbers, booleans, null, undefined, bigint:
+#       NOT flattenable -> appended as-is.
+#   - Typed arrays (Uint8Array), Buffer, Set, Map, RegExp, Date:
+#       NOT flattenable (none are concat-spreadable by default) -> appended as-is.
+#   - A plain array-LIKE object ({0:..,1:..,length:N}) WITHOUT the spreadable
+#       symbol: NOT flattenable -> appended as-is (the WHOLE object, one element).
+#   - An array-like object WITH value[Symbol.isConcatSpreadable]===true:
+#       flattenable -> its [0..length-1] indices are spread.
+#   - A native `arguments` object: flattenable -> spread.
+
+# --- IS-ARGUMENTS(value) (lodash's loose detection) ---
+# value is an arguments object IFF:
+#   isObjectLike(value)                                  # value && typeof==='object'
+#   AND isArrayLike(value)                               # value!=null && isLength(value.length) && !isFunction(value)
+#   AND hasOwnProperty.call(value,'callee')
+#   AND ( !propertyIsEnumerable.call(value,'callee')
+#         OR Object.prototype.toString.call(value)==='[object Arguments]' )
+# isLength(n): typeof n==='number' && n>-1 && n%1===0 && n<=9007199254740991 (MAX_SAFE_INTEGER).
+# In practice this matches native `arguments` objects. (genInputs does NOT emit
+# arguments objects — they are not codec-round-trippable; documented OUT below.)
+
+# ---------------------------------------------------------------------------
+# WORKED EXAMPLES (all verified by executing lodash.concat@4.5.0):
+#   concat()                          -> []
+#   concat([1,2,3])                   -> [1,2,3]                (copy, no values)
+#   concat(5)                         -> [5]                    (wrap non-array)
+#   concat(null)                      -> [null]                 (wrap; element IS null)
+#   concat(undefined)                 -> [undefined]            (wrap; element IS undefined)
+#   concat([])                        -> []
+#   concat([1],2,[3,4])               -> [1,2,3,4]
+#   concat(1,2)                       -> [1,2]                  (wrap first, push 2)
+#   concat([1],[[2]])                 -> [1,[2]]                (one level only)
+#   concat([1],2,[3],[[4]])           -> [1,2,3,[4]]
+#   concat([1],[2,[3,[4]]])           -> [1,2,[3,[4]]]          (inner arrays preserved)
+#   concat([1],null,undefined)        -> [1,null,undefined]     (pushed as-is)
+#   concat([1],[null,undefined])      -> [1,null,undefined]     (spread, preserved)
+#   concat([1],[],[2])                -> [1,2]                  (empty value spreads to nothing)
+#   concat([1],{a:1})                 -> [1,{a:1}]              (plain object as-is)
+#   concat([0], new Set([2,3]))       -> [0, Set{2,3}]          (Set as-is)
+#   concat([0], new Uint8Array([1,2]))-> [0, Uint8Array[1,2]]   (typed array as-is)
+#   concat(new Uint8Array([1,2]))     -> [Uint8Array[1,2]]      (wrapped: isArray false)
+#   concat([0], Infinity, -Infinity)  -> [0, Infinity, -Infinity]
+#   concat([0], -0)                   -> [0, -0]                (Object.is preserves -0)
+#   concat([1], NaN)                  -> [1, NaN]               (NaN preserved)
+#   concat([1n], 2n)                  -> [1n, 2n]               (bigint preserved)
+#   concat([1,<hole>,3])              -> [1, undefined, 3]      (hole materialized, dense, len 3)
+#   concat([0],[1,<hole>,3])          -> [0, 1, undefined, 3]   (hole in spread value -> undefined)
+#   concat([1],[[]])                  -> [1, []]                (nested empty array preserved)
+# ---------------------------------------------------------------------------
+
+# NON-MUTATION GUARANTEE (verified): neither `array` nor any spread `value`
+# array is modified. The returned array is a fresh object distinct from `array`
+# (concat([1,2], ...) !== the input [1,2]).
+
+ERROR / THROW BEHAVIOR
+# concat does not throw for any of the codec-faithful inputs in scope. There is
+# no validation, no option object, no callback. (A getter on .length that throws,
+# or an exotic proxy, could throw — but those are out of the codec envelope and
+# are not generated.)
+
+ORACLE value -> oracle.json
+# Deterministic pure function. The expected output is the returned array, compared
+# by deep structural equality with -0/NaN/bigint/undefined-element identity honored
+# by the harness codec. No seam: no clock, RNG, env, fs, or net is read.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the whole pipeline above —
+#   - first-arg Array-vs-wrap decision (Array.isArray)
+#   - shallow dense copy of the first arg when it is an Array (holes -> undefined)
+#   - per-value one-level spread governed by FLATTENABLE (isArray OR isArguments OR
+#     Symbol.isConcatSpreadable-tagged)
+#   - identity/no-coercion appends of non-flattenable values (incl. null/undefined,
+#     -0, NaN, bigint, objects, Set/Map/typed-arrays/RegExp/Date)
+#   - fresh-array / no-mutation guarantee
+#   - zero-args -> [] fast path
+# CARRIED DATA: none. concat depends on no literal tables.
+# OUT-OF-CONTRACT: none (pure function, no side effects, no external state).
+# OUT-OF-ENVELOPE (documented, NOT generated by genInputs because they are not
+#   oracle-codec-faithful, yet their behavior IS specified here so a blind
+#   re-emitter can reconstruct it):
+#     - native `arguments` objects (as array or as a value): FLATTENABLE via
+#       IS-ARGUMENTS -> spread one level. Not JSON/codec round-trippable.
+#     - objects carrying Symbol.isConcatSpreadable: FLATTENABLE -> spread its
+#       [0..length-1]. Symbol-keyed props do not survive the codec.
+#     - function elements / Symbol primitive elements: appended as-is (functions
+#       are NOT flattenable: isFunction -> isArrayLike false), but neither survives
+#       JSON.stringify(encode(args)), so they are not generated.
+
+PROVENANCE lodash.concat@4.5.0, repo lodash/lodash (modularized build), MIT license,
+           source file index.js (function `concat`, lines ~151-163; helpers
+           arrayPush, baseFlatten, copyArray, isFlattenable, isArguments, isArray,
+           isArrayLike, isArrayLikeObject, isFunction, isLength, isObject,
+           isObjectLike all inlined in the same file).

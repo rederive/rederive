@@ -1,0 +1,162 @@
+UNIT merge
+KIND STATE
+ORACLE-CLASS deterministic
+SIG merge(a, b) -> a            # default export: module.exports = function(a, b){...}; called as merge(a, b)
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# WHAT IT IS
+# ---------------------------------------------------------------------------
+# A 7-line mutating shallow-merge. It copies every ENUMERABLE key reachable by
+# a JavaScript `for...in` loop over `b` (own + inherited) onto `a` by simple
+# assignment `a[key] = b[key]`, then returns `a` (the SAME reference, now
+# mutated). It is NOT a deep merge and NOT a clone: object/array/Set/Map/etc.
+# values are copied BY REFERENCE.
+#
+# This is a STATE / MUTATING unit. The observable contract is the RETURNED
+# value, which IS the (mutated) first argument `a`. There is no separate
+# return graph: `merge(a,b) === a` whenever `a` is an object.
+
+BEHAVIOR
+  # ---- exact pipeline (mirrors the source one-for-one) ----
+  # source:
+  #   function(a, b){
+  #     if (a && b) {
+  #       for (var key in b) {
+  #         a[key] = b[key];
+  #       }
+  #     }
+  #     return a;
+  #   }
+
+  NODE guard:
+    # The guard is `if (a && b)` -- a TRUTHINESS test on BOTH operands, NOT a
+    # nullish (== null) test. The copy loop runs ONLY when a AND b are both
+    # truthy. Any falsy value short-circuits the loop:
+    #   falsy values that skip the loop: null, undefined, 0, -0, "" (empty
+    #   string), false, NaN, 0n (bigint zero).
+    # If EITHER a or b is falsy -> skip the loop, fall straight to `return a`.
+    BRANCH (a is falsy)  -> goto ret      # `a` returned unchanged, AS-IS
+                                          #   (e.g. merge(null,{x:1}) -> null;
+                                          #         merge(undefined,..) -> undefined;
+                                          #         merge(0,..) -> 0; merge("",..) -> "";
+                                          #         merge(false,..) -> false; merge(NaN,..) -> NaN)
+    BRANCH (b is falsy)  -> goto ret      # `a` returned unchanged (no keys copied)
+                                          #   (e.g. merge({x:1}, null/undefined/0/false/"") -> {x:1})
+    BRANCH (a truthy AND b truthy) -> goto copy
+
+  NODE copy:
+    # for (var key in b) { a[key] = b[key]; }
+    #
+    # ENUMERATION SET = `for...in` over b. This enumerates:
+    #   - b's OWN enumerable string-keyed properties, AND
+    #   - b's INHERITED enumerable string-keyed properties (walking the
+    #     prototype chain).
+    #   - NON-enumerable own properties are SKIPPED.
+    #   - Symbol keys are NEVER visited by for...in (skipped).
+    #   When b is a primitive-coerced truthy value the for...in iterates the
+    #   keys of its wrapper/own-enumerables:
+    #     - b a non-empty STRING (e.g. "ab"): enumerates index keys "0".."n-1"
+    #       -> copies a["0"]="a", a["1"]="b", ... (string chars).
+    #     - b an ARRAY (e.g. [10,20]): enumerates index keys "0".."n-1" PLUS
+    #       any extra own enumerable named keys -> a["0"]=10, a["1"]=20, ...
+    #
+    # ENUMERATION ORDER (the order keys are visited / assigned) follows the
+    # JS for...in ordering of b:
+    #   1. integer-index keys (canonical array indices) in ASCENDING numeric
+    #      order, THEN
+    #   2. remaining string keys in property-insertion order,
+    #   then inherited keys after own keys (own enumerated before inherited).
+    #   This ordering only matters insofar as it sets the insertion order of
+    #   keys that are NEW to `a`.
+    #
+    # ASSIGNMENT = plain `a[key] = b[key]`:
+    #   - OVERWRITE: if `a` already has `key`, it is overwritten -> B WINS on
+    #     overlap. The overwritten key KEEPS its existing position in a's key
+    #     order (assignment to an existing key does not move it).
+    #   - NEW key: created on `a` (appended per JS key-order rules: integer
+    #     keys sort ascending; new string keys append in insertion order).
+    #   - VALUE COPY IS SHALLOW & BY REFERENCE: a[key] receives the exact same
+    #     reference held by b[key]. A nested object/array/Set/Map/Uint8Array/
+    #     Buffer/RegExp value is shared: (returned-a)[key] === b[key] (===).
+    #   - A b value of `undefined` STILL assigns: `a[key] = undefined` creates/
+    #     overwrites the key with value undefined (the key remains `in a`).
+    #   - a's keys NOT present in b's enumeration set are left UNTOUCHED.
+    #   When b's enumeration set is EMPTY (e.g. b === {}): no assignments, `a`
+    #   unchanged.
+    #   When a is itself a primitive-but-truthy value (e.g. a === 5, a a
+    #   non-empty string): in non-strict (sloppy) module scope `a[key]=...`
+    #   on a primitive silently no-ops, and the primitive `a` is returned
+    #   unchanged. (Documented; not exercised by genInputs -- primitives like
+    #   number/string for `a` are OUT-OF-ENVELOPE for the observable diff.)
+    -> goto ret
+
+  NODE ret:
+    # `return a;`  -- ALWAYS returns the first argument reference (mutated or
+    # not). merge(a,b) === a for any object a. For falsy a, returns that falsy
+    # value verbatim.
+    RETURN a
+
+# ---------------------------------------------------------------------------
+# WORKED EXAMPLES (verified against utils-merge@1.0.1)
+# ---------------------------------------------------------------------------
+#   merge({foo:"bar", keep:1, ov:"A"}, {bar:"baz", ov:"B"})
+#       -> {foo:"bar", keep:1, ov:"B", bar:"baz"}   (b wins on ov; keep kept; bar appended)
+#   merge({x:1}, {})                 -> {x:1}        (same ref)
+#   merge(null, {x:1})               -> null
+#   merge(undefined, {x:1})          -> undefined
+#   merge({x:1}, null)               -> {x:1}        (same ref)
+#   merge({x:1}, undefined)          -> {x:1}
+#   merge({}, {x:{deep:1}})          -> {x:<ref>}    where returned.x === b.x (by reference)
+#   merge(0, {x:1})                  -> 0
+#   merge("", {x:1})                 -> ""
+#   merge(false, {x:1})              -> false
+#   merge(NaN, {x:1})                -> NaN
+#   merge({y:1}, 0)                  -> {y:1}
+#   merge({y:1}, false)              -> {y:1}
+#   merge({y:1}, "")                 -> {y:1}
+#   merge({y:1}, "ab")               -> {"0":"a","1":"b", y:1}   (string index keys; ints sort first)
+#   merge({y:1}, [10,20])            -> {"0":10,"1":20, y:1}     (array index keys)
+#   merge([1,2], {"2":3, foo:"bar"}) -> array [1,2,3] with .foo==="bar"
+#   merge({x:1}, {x:undefined})      -> {}  i.e. key x present with value undefined ("x" in result)
+#   merge({z:1,"5":"a5"}, {"3":"b3", y:2, z:99}) -> keys order ["3","5","z","y"], {3:"b3",5:"a5",z:99,y:2}
+
+ORACLE value -> oracle.json
+  # The harness calls merge(...args) and records the RETURNED value. Because
+  # merge returns `a` itself (the mutated destination), the returned graph IS
+  # the full observable -- no extra "inspect a separately" step is needed.
+  # The codec serializes the returned object; deterministic JS key-ordering
+  # makes the serialization stable. By-reference sharing (returned.x === b.x)
+  # is NOT separately observable through value-codec serialization -- it
+  # surfaces only as identical serialized content, which is what gets graded.
+  # That is acceptable: the SIR documents the by-ref semantic; a blind
+  # re-emitter who does `a[key]=b[key]` reproduces both the value AND the
+  # (unobserved-by-codec) reference identity for free.
+
+SCOPE
+  IN-CONTRACT (reproduce exactly):
+    - the `if (a && b)` truthiness guard (both operands), short-circuit -> return a.
+    - the `for (var key in b) a[key] = b[key]` enumerate-and-assign loop,
+      including for...in ordering, overwrite (b wins), shallow by-reference
+      copy, undefined-value assignment, and untouched a-keys.
+    - returning `a` (the same reference) in all cases.
+  CARRIED-DATA: none.
+  OUT-OF-CONTRACT / DOCUMENT-AS-OUT (NOT emitted by genInputs; codec cannot
+  faithfully round-trip them or they are non-observable):
+    - function values as b[key]  (not JSON/codec round-trippable; behavior =
+      copied by reference like any value, but not gradable via value codec).
+    - Symbol keys on b           (for...in never visits Symbols; not codec-able).
+    - b sourcing keys via a CUSTOM prototype (inherited enumerable keys ARE
+      copied -- verified: merge({}, Object.create({inherited:"P"},...) copies
+      "inherited") -- but the codec cannot construct/carry a custom-proto
+      object, so it is documented here and excluded from genInputs.
+    - primitive (number/string/boolean) `a` that is TRUTHY (e.g. a===5):
+      `a[key]=...` silently no-ops in sloppy mode; returned === the primitive.
+      Documented; not emitted (the value codec/observable would just echo the
+      primitive, low signal).
+
+PROVENANCE
+  utils-merge@1.0.1
+  repo: git://github.com/jaredhanson/utils-merge  (author: Jared Hanson)
+  license: MIT
+  source file: index.js  (lines 16-23: exports = module.exports = function(a,b){ if (a && b) { for (var key in b) { a[key] = b[key]; } } return a; })

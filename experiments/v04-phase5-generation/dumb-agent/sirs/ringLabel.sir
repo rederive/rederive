@@ -1,0 +1,15 @@
+UNIT ringLabel
+KIND FUNCTIONAL
+FIDELITY spec
+SIG ringLabel(items: array, gate) -> Promise<array>
+DESCRIPTION Takes an array of items and produces an array of formatted strings, one per item. Each actor (indexed 0 to n-1) produces exactly one string: the string "<index>:<item>" for its own position in the input array.
+DESCRIPTION The token circulates: actor 0 takes the token first, formats its item as a string, and passes the token to actor 1. Actor i (for 0 < i < n-1) receives the token from actor i-1, formats its item as a string, and passes to actor i+1. Actor n-1 receives the token, formats its item as a string, and releases the token.
+DESCRIPTION The unit computes the string formatting itself (concatenating index and item with a colon separator). The gate provides only mutual exclusion: the token is held in gate.token, and the unit calls gate.token.take(who) to acquire it, gate.token.pass(from, to) to transfer it, and gate.token.release(who) to release it.
+DESCRIPTION The output array preserves input order: output[i] is the formatted string for items[i], for all i in [0, n-1].
+DESCRIPTION If the input array is empty, the unit returns an empty array without acquiring or releasing the token.
+RING Token circulates 0 → 1 → 2 → ... → (n-1) → release. Each actor in index order takes the token, performs its formatting work, and passes to the next actor. The final actor releases the token.
+INVARIANT At most one actor holds the token at any instant. No two actors may call gate.token.take or gate.token.pass concurrently (mutual exclusion enforced by the gate).
+INVARIANT The token is taken exactly n times (once per actor i=0..n-1) and released exactly once by actor n-1. No token is lost or duplicated.
+INVARIANT The returned array contains exactly n strings, in index order. For each i in [0, n-1], output[i] == "<i>:<items[i]>" (the string representation of the item at position i, prefixed by the index and a colon).
+INVARIANT Actors acquire the token in strict index order: actor i+1 may not call gate.token.take until actor i has called gate.token.pass(i, i+1).
+INVARIANT When items is empty, the unit returns an empty array without invoking gate.token.

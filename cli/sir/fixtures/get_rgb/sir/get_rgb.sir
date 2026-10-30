@@ -1,0 +1,62 @@
+UNIT get_rgb
+KIND FUNCTIONAL
+FIDELITY spec
+ANCHOR index.corrected.js — color-string@2.1.4 cs.get.rgb with ONE deliberate correction (R7)
+ORACLE-CLASS deterministic
+SIG get_rgb(input: text) -> tuple[f64, f64, f64, f64] | none
+ENVELOPE text only. Accepted forms: hex (#rgb, #rgba, #rrggbb, #rrggbbaa; case-insensitive); rgb()/rgba() with
+  three numeric channels and an optional alpha; rgb()/rgba() with three percent channels and an optional alpha;
+  the literal "transparent"; a named color from the carried table. Anything else -> none. Non-text input is out
+  of the envelope.
+DEPENDS-ON none
+CARRIED colorNames FROM color-name (npm) — the CSS Color Module Level 4 §6.1 named-color table, extracted byte-exact by the toolchain
+  SHAPE map text -> tuple[u8, u8, u8]; 148 entries; keys are lowercase names; "transparent" is NOT a key (R8 handles it)
+  CANONICAL-SHA256 678d5ab9a75b5a1af87bf3d5108e951a98f3800b5ecf1d6123b0e7345a882d55
+  AUTHORITY { expr: "count", equals: 148 }
+  AUTHORITY { expr: "rebeccapurple", equals: [102, 51, 153] }
+  AUTHORITY { expr: "aliceblue", equals: [240, 248, 255] }
+  AUTHORITY { expr: "papayawhip", equals: [255, 239, 213] }
+  AUTHORITY { expr: "grey", equals: [128, 128, 128] }
+  AUTHORITY { expr: "gray", equals: [128, 128, 128] }
+DESCRIPTION Parse a CSS-style color string into [r, g, b, a] — channels in [0, 255], alpha in [0, 1] (default 1)
+  — or none when the text is not one of the accepted forms.
+BEHAVIOR
+R1 Empty text -> none.
+R2 Forms are tried in this order and the FIRST that accepts wins: HEX6, ABBR, NUMERIC, PERCENT, KEYWORD.
+  If none accepts -> none. A form must account for the WHOLE text: any leading or trailing character
+  outside the form means that form does not accept (" rgb(...)", "x red", "rgb(255,0,0)x" -> none).
+R3 HEX6 — "#" then six hex digits, optionally followed by two more hex digits (alpha); case-insensitive.
+  Each pair of hex digits is one channel byte. Alpha, when present, is its byte divided by 255.
+R4 ABBR — "#" then three or four hex digits; case-insensitive. Each digit is DOUBLED to make the byte
+  ("a" -> "aa" -> 170). A fourth digit is alpha, doubled the same way, divided by 255.
+R5 NUMERIC — "rgb(" or "rgba(", three numbers, an optional alpha, ")". A number is: an optional sign,
+  optionally digits then ".", then one or more digits, then an optional unsigned exponent
+  ("255", "0.5", ".5", "1e2", "127.5"). Channels are separated by a comma and/or whitespace. The first
+  two channels must each be immediately followed by whitespace or a comma — so a percent sign there, or a
+  missing third channel, means this form does not accept. The alpha is introduced by exactly one of:
+  whitespace, comma, "|", "/", and may carry a trailing "%". Channel values are taken as-is, NOT rounded.
+  Alpha without "%" is taken as-is. Alpha with "%" is its value multiplied by 0.01 as a double, NOT divided
+  by 100 (57% -> 0.5700000000000001). CITED ANCHOR index.corrected.js
+R6 PERCENT — "rgb(" or "rgba(", three values each a signed run of digits and dots immediately followed
+  by "%", separated by an optional comma and whitespace, an optional alpha (same separator and "%" rule as
+  R5), ")". Each channel = round(p * 255 / 100), rounding halves toward +infinity.
+R7 R6 is the ONE deliberate divergence from the package (spec-fidelity). The package computes CITED ANCHOR index.corrected.js
+  round(p * 2.55); because 2.55 is not exactly representable as a double, p = 50 and p = 90 land just below
+  the true half-integer and yield 127 and 229. This contract yields 128 and 230. In the integer-percent
+  domain these are the only two values that differ.
+R8 KEYWORD — the text, lowercased, is a single run of word characters (letters, digits, underscore).
+  "transparent" -> [0, 0, 0, 0] immediately, unclamped. Otherwise, if the lowercased word is a key of
+  colorNames -> [r, g, b, 1] from the table immediately, unclamped. Otherwise -> none.
+R9 Results of R3–R6 are clamped: channels to [0, 255], alpha to [0, 1]. A form that carries no alpha yields
+  alpha 1. Results of R8 are never clamped (they are in range by construction).
+  Every zero in any result is +0, never -0: a channel or alpha that is negative zero after R3–R6 (a "-0" spelling,
+  or a negative percent that rounds to zero) leaves the clamp as +0. R8's values are already +0. EARNED round-1 heldout v7
+INVARIANT the three channels of any non-none result lie in [0, 255] and the alpha in [0, 1].
+INVARIANT alpha bytes divide by 255 exactly as doubles (136/255 = 0.5333333333333333); the oracle carries the exact values.
+ORACLE value -> oracles/get_rgb.json  CANONICAL-SHA256 8cb08617d0c1420e939ac829ca74fd6ae64e3dd3aad23b4c4b5b26e1149ff77b
+NOTE 42 frozen + 21 held-out, captured once from index.corrected.js, never regenerated; re-ENCODED 2026-09-22 as sir-canonical-v1 (same vectors, lossless)
+SCOPE IN: R1–R9 over the accepted forms. OUT: hsl()/hwb() parsing, the cs.get dispatcher, the cs.to.* serializers,
+  non-text inputs, and (deliberately) the package's float-imprecise percent rounding.
+PROVENANCE color-string@2.1.4 (Qix-/color-string, MIT), function cs.get.rgb; spec anchor index.corrected.js; carried
+  table from color-name (npm). Re-cut 2026-09-22 into the v0.5 contract register from the transcription-register
+  SIR at sir-lab/color-string-rederive/sir/get_rgb.sir (155 lines of STEP/BRANCH narration -> R1–R9).

@@ -1,0 +1,356 @@
+# =====================================================================
+# SIR — splitString  (split-string@6.1.0, default export)
+# =====================================================================
+UNIT splitString
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG splitString(input: string, options?: object) -> Array<string>
+    # NOTE: the real export is (input, options?, fn?). The 3rd `fn` arg and
+    # any function-valued option are OUT OF CONTRACT (non-round-trippable) —
+    # see SCOPE. The in-contract surface is splitString(input, options?) with
+    # options a PLAIN-DATA object only.
+DEPENDS-ON none   # zero runtime deps; pure, self-contained tokenizer
+
+# ---------------------------------------------------------------------
+# OVERVIEW
+# ---------------------------------------------------------------------
+# A single-pass, character-by-character tokenizer that splits `input` on a
+# 1-character separator (default '.'), honoring backslash escaping and
+# (optionally) quote regions and bracket nesting. Returns a NEW array of
+# string segments. PURE: never mutates `input` or `options`. Verified: the
+# input string is unchanged and the return is always a fresh Array.
+#
+# The iteration is over UTF-16 CODE UNITS (string[i]). All char comparisons
+# are single-code-unit comparisons. (Consequence: a separator/quote/bracket
+# whose value is a multi-code-unit string — e.g. '::' or an astral emoji —
+# can NEVER match a single scanned code unit, so it never fires. A multi-unit
+# char that appears in `input` is reassembled because each of its code units
+# is appended verbatim.)
+
+# ---------------------------------------------------------------------
+# PRECONDITION / THROW
+# ---------------------------------------------------------------------
+# If typeof input !== 'string'  ->  throw TypeError('expected a string')
+#   (covers: number, null, undefined, no-arg, boolean, plain object, array,
+#    and a boxed `new String(...)` whose typeof is 'object'.)
+#   Recorded as {__throw} with name 'TypeError', message 'expected a string'.
+
+# ---------------------------------------------------------------------
+# OPTION RESOLUTION  (read EXACTLY these keys; all others are ignored)
+# ---------------------------------------------------------------------
+# options defaults to {} when omitted.
+#
+#   separator := options.separator || '.'
+#       # `||` fallback: any FALSY value (undefined, '', 0, false, null, NaN)
+#       #  -> '.'. A multi-char string is taken verbatim but can never match
+#       #  a single code unit (so it behaves as "no separator ever matches").
+#
+#   quotes := options.quotes || []
+#       if options.quotes === true   -> quotes := ['"', "'", '`']   # exactly these three
+#       # quotes is used ONLY via quotes.includes(value). Therefore:
+#       #   - Array  -> membership test (normal case).
+#       #   - String -> String.prototype.includes: a single-char or multi-char
+#       #     string acts as a SET of its characters (e.g. '"' enables ", and
+#       #     `"'` enables both " and '). IN CONTRACT (round-trippable).
+#       #   - Any value lacking .includes (e.g. number) -> throws
+#       #     TypeError("quotes.includes is not a function") on the FIRST
+#       #     scanned char. Recorded as {__throw}. (Edge; documented, not
+#       #     emitted from genInputs except as a deliberate throw probe? -> NO,
+#       #     a number option is round-trippable but its throw is gradable; we
+#       #     DO include one such probe.)
+#
+#   openers := options.brackets || {}
+#       if options.brackets === true -> openers := { '[':']', '(':')', '{':'}', '<':'>' }
+#       # else openers is whatever options.brackets is (object expected). A
+#       # STRING value indexes by char-key (openers[value]) -> undefined, so no
+#       # bracket fires (acts as "no brackets"); invert() iterates its numeric
+#       # indices harmlessly. IN CONTRACT.
+#   closers := invert(openers)
+#       # invert: for each key k of openers, closers[openers[k]] = k.
+#       # (If openers is a string, Object.keys are '0','1',... mapping char->index-string.)
+#
+#   keep := options.keep || (value => value !== '\\')
+#       # keep is a FUNCTION -> OUT OF CONTRACT. The DEFAULT keep is the
+#       # canonical behavior the in-contract surface uses: drop a value that
+#       # is exactly the single backslash '\\', keep everything else.
+#       # (A non-function truthy options.keep throws TypeError("keep is not a
+#       #  function"); documented OUT, never emitted.)
+#
+#   strict := options.strict === true   # strict boolean; only relevant to unclosed brackets
+
+# ---------------------------------------------------------------------
+# AST / STATE MODEL
+# ---------------------------------------------------------------------
+# A stack of NODES. The bottom node is the ROOT (type 'root'). A bracket
+# opener pushes a child node (type 'bracket'). Each node has a `stash`:
+# an array of string SEGMENTS. The "current block" is stack top.
+#
+#   root.stash starts as ['']  (one empty segment).
+#   The final return value is root.stash (after any unclosed brackets are
+#   flattened back into it — see FLATTEN).
+#
+# APPEND(value):  # append a (possibly multi-char) value onto the LAST segment
+#   of the current block's stash, gated by keep:
+#     if value is truthy AND keep(value, state) !== false:
+#        block.stash[block.stash.length-1] += value
+#   (Default keep: value !== '\\'. So a lone '\\' is dropped; '\\\\' (two
+#    backslashes) and '\\'+nextChar pairs and all other strings are kept.)
+#   NOTE: append on a FALSY value (only the empty string '') is a no-op.
+
+# ---------------------------------------------------------------------
+# MAIN SCAN  (i from 0..len-1; loop runs while i < len-1, advancing i via next())
+# ---------------------------------------------------------------------
+# Each iteration reads value = string[++i], sets state.index = i, sets the
+# current block = stack top, then dispatches in THIS EXACT PRECEDENCE ORDER:
+#
+# (1) ESCAPE — if value === '\\':
+#       if string[i+1] === '\\':
+#           APPEND('\\' + next())          # consume the second backslash too;
+#                                          # value is '\\\\' (two backslashes) -> kept
+#       else:
+#           APPEND('\\')                   # lone backslash -> default keep DROPS it
+#           APPEND(next())                 # the following char -> appended verbatim
+#                                          #   (this is how an escaped separator/quote/
+#                                          #    bracket is neutralized: the special char
+#                                          #    becomes ordinary appended text)
+#       continue.
+#     # Consequences (default keep):
+#     #   'a\\.b'   -> ['a.b']   (escaped '.' becomes literal, '\\' dropped)
+#     #   'a\\xb'   -> ['axb']   ('\\' dropped, 'x' kept)
+#     #   'a\\\\.b' -> ['a\\\\','b']  (two backslashes kept, '.' then splits)
+#     #   'a\\'     -> ['a']     (trailing lone backslash dropped; no next char appended
+#     #                           because the loop ended — but actually next() reads ''
+#     #                           past end -> append('') no-op; net: '\\' dropped)
+#
+# (2) QUOTE — else if quotes.includes(value):
+#       pos := i+1
+#       idx := closeIndex(value, pos)      # index of the NEXT same quote char at/after pos,
+#                                          # SKIPPING any occurrence immediately preceded by
+#                                          # a backslash (closeIndex recurses past escaped ones)
+#       if idx > -1:                       # closing quote found
+#           APPEND(value)                  # opening quote (kept by default keep)
+#           APPEND(string.slice(pos, idx)) # the raw inner text VERBATIM — separators,
+#                                          # brackets, anything inside are NOT processed
+#           APPEND(string[idx])            # closing quote
+#           i := idx                       # jump cursor to the closing quote
+#       else:                              # no closing quote
+#           APPEND(value)                  # just the opening quote, treated as a normal char
+#       continue.
+#     # closeIndex(v, start): idx = string.indexOf(v, start); while idx>-1 AND
+#     #   string[idx-1] === '\\': idx = closeIndex(v, idx+1). i.e. a quote char
+#     #   preceded by a backslash is NOT a valid closer.
+#     # Examples (quotes:['"']):
+#     #   'a."b.c.d".e'      -> ['a','"b.c.d"','e']
+#     #   'a."b\\".c".d'     -> ['a','"b\\".c"','d']  (escaped inner " skipped as closer)
+#     #   'a.b."c.d.e'       -> ['a','b','"c','d','e'] (unclosed: '"' appended as normal,
+#     #                          then '.' splitting resumes normally)
+#
+# (3) OPEN BRACKET — else if options.brackets !== false AND openers[value] is truthy:
+#       push a new node:
+#         node.type   = 'bracket'
+#         node.nodes  = []
+#         node.stash  = (keep(value) !== false) ? [value] : ['']   # opener kept by default
+#         node.parent = current block
+#       append node to current block's .nodes, push node onto stack.
+#       continue.   # subsequent chars accumulate into this node until a matching closer
+#
+# (4) CLOSE BRACKET — else if options.brackets !== false AND closers[value] is truthy:
+#       if stack has only the root (length 1):     # closer with no open bracket
+#           APPEND(value)                          # treat closer as a normal char
+#           continue.
+#       else:
+#           APPEND(value)                          # append closer onto the bracket node's stash
+#           node := stack.pop()                    # pop the bracket node
+#           recompute current block = new stack top
+#           APPEND(node.stash.join(''))            # the WHOLE bracket text (opener..closer,
+#                                                  #  with inner separators already appended
+#                                                  #  as literals) becomes ONE token appended
+#                                                  #  onto the parent's last segment
+#           continue.
+#     # Because separators inside a bracket are appended (not split — see (5)), a
+#     # matched bracket collapses to a single un-split token:
+#     #   'a.{b.c.d}'  (brackets:true) -> ['a','{b.c.d}']
+#     #   '{a.b}c.d'   (brackets:true) -> ['{a.b}c','d']
+#     #   nested: 'a.{b.{c.d}.e}.f' -> ['a','{b.{c.d}.e}','f']
+#
+# (5) SEPARATOR — else if value === separator AND current block.type === 'root':
+#       # (The fn-callback branch here is OUT OF CONTRACT and never taken in the
+#       #  in-contract surface; with no fn, a separator at root ALWAYS splits.)
+#       PUSH a new empty segment '' onto root.stash.    # i.e. start a new token
+#       continue.
+#     # Separators are split ONLY when the current block is the ROOT. A separator
+#     # scanned while inside a bracket node (block.type==='bracket') falls through
+#     # to (6) and is APPENDED as a literal. (Quote interiors never reach here —
+#     # they were consumed wholesale in (2).)
+#
+# (6) DEFAULT — APPEND(value)   # ordinary character appended onto current segment.
+
+# ---------------------------------------------------------------------
+# FLATTEN unclosed brackets  (after the scan)
+# ---------------------------------------------------------------------
+# node := stack.pop()
+# while node !== root:
+#   if strict === true:
+#       column := i - node.stash.length + 1      # i is the final index = input.length-1;
+#                                                 # for an unclosed bracket node.stash is a
+#                                                 # length-1 array, so column === input.length-1
+#       throw SyntaxError(`Unmatched: "${node.stash[0]}", at column ${column}`)
+#       # node.stash[0] = the innermost unclosed bracket's accumulated text
+#       #   (opener + everything appended inside it, separators included as literals).
+#       # The INNERMOST unclosed bracket throws first (it is on top of the stack).
+#       # Recorded as {__throw} name 'SyntaxError' with this EXACT message.
+#       # Examples:
+#       #   '{abc'       (brackets:true,strict) -> 'Unmatched: "{abc", at column 3'
+#       #   '{a.b.c'                            -> 'Unmatched: "{a.b.c", at column 5'
+#       #   'x.{ab'                            -> 'Unmatched: "{ab", at column 4'
+#       #   '{a{b{c'                           -> 'Unmatched: "{c", at column 5' (innermost)
+#   else (non-strict):
+#       value := node.parent.stash.pop() + node.stash.join('.')   # NOTE: literal '.', NOT separator
+#       node.parent.stash = node.parent.stash.concat(value.split('.'))  # re-split on literal '.'
+#       node := stack.pop()
+# return root.stash   # (root === final node)
+#
+# FLATTEN semantics (non-strict): an UNCLOSED bracket is undone — its opener and
+# inner text are merged back onto the parent. The merge concatenates the parent's
+# last segment with the inner stash joined by literal '.', then RE-SPLITS on literal
+# '.'. This means:
+#   - With the DEFAULT '.' separator, the inner content's '.'-separated pieces are
+#     restored as separate tokens, as if the bracket were never special:
+#       'a.{b.c.d'  (brackets:true) -> ['a','{b','c','d']
+#   - With a NON-'.' separator, the join/split-on-'.' does NOT use the custom
+#     separator, so inner pieces split on '.' but the custom separator stays literal:
+#       'a,{b,c,d'  (brackets:true,sep:',') -> ['a','{b,c,d']   (no '.' to split on)
+#       'a,{b.c.d'  (brackets:true,sep:',') -> ['a','{b','c','d'] ('.' present -> split)
+#   - The opener '{' is part of the prefix prepended to the first restored piece.
+#   - The parent's previous trailing segment is prefixed onto the first inner piece
+#     (e.g. 'hello{world.foo' brackets:true -> ['hello{world','foo']).
+
+# ---------------------------------------------------------------------
+# OPTION INTERACTIONS / PRECEDENCE NOTES (verified)
+# ---------------------------------------------------------------------
+# * Dispatch order is fixed: ESCAPE > QUOTE > OPEN-BRACKET > CLOSE-BRACKET >
+#   SEPARATOR > DEFAULT. So if a char is simultaneously e.g. a quote AND the
+#   separator, QUOTE wins ('a"b.c"d' sep:'"' quotes:['"'] -> ['a"b.c"d']).
+#   If a char is an opener AND the separator, OPEN-BRACKET wins
+#   ('a{b{c' sep:'{' brackets:true -> ['a{b{c'] : both '{' open, unclosed,
+#    flattened, no split).
+#   If a char is a CLOSER AND the separator, CLOSE-BRACKET wins; at stack root a
+#   stray closer is appended ('a}b}c' sep:'}' brackets:{'{':'}'} -> ['a}b}c']).
+# * options.brackets === false fully disables both bracket branches (openers stays
+#   {} regardless, AND the guard short-circuits). '{.}' brackets:false -> ['{','}'].
+# * quotes interiors are NEVER bracket/separator processed (sliced raw).
+#   'a."{b.c}".d' brackets:true quotes:['"'] -> ['a','"{b.c}"','d'].
+# * brackets and quotes can both be active; inside a bracket a quote region is still
+#   honored: '{a."b.c".d}' brackets:true quotes:['"'] -> ['{a."b.c".d}'].
+# * Empty-string input '' -> [''] (root stash never gets a char appended or split;
+#   loop body never runs because len-1 == -1).
+# * Single char 'a' -> ['a']. Loop runs 0 times (i goes from -1, condition i<0 false),
+#   but the final char IS appended? NO — verify: for 'a', length 1, condition
+#   i < 0 is false at start, loop body never executes, root.stash stays [''].
+#   YET observed output is ['a']. Reconciliation: next() is `string[++i]`, and the
+#   loop reads the char at the START of the body with i pre-incremented; the guard is
+#   `i < string.length - 1`. For 'a' (len 1) guard is i < 0; with i=-1 the body DOES
+#   run once (since -1 < 0), reads string[0]='a', appends it; then i=0, guard 0<0
+#   false, stops. RESULT ['a']. (The blind re-emitter must use the SAME loop guard
+#   `i < length-1` with pre-increment read, so the LAST code unit is read in the
+#   final iteration.) Confirmed by running: 'a'->['a'], ''->[''], 'ab'->['ab'].
+
+# ---------------------------------------------------------------------
+# CANONICAL DEMONSTRATED CASES (all verified against the real package)
+# ---------------------------------------------------------------------
+#   split('a.b.c')                                  -> ['a','b','c']
+#   split('')                                       -> ['']
+#   split('a')                                      -> ['a']
+#   split('.a.b')                                   -> ['','a','b']
+#   split('a.b.')                                   -> ['a','b','']
+#   split('a..b')                                   -> ['a','','b']
+#   split('...')                                    -> ['','','','']
+#   split('.')                                      -> ['','']
+#   split('a.b.c\\.d')                              -> ['a','b','c.d']
+#   split('a.b\\c')                                 -> ['a','bc']
+#   split('a\\\\.b')                                -> ['a\\\\','b']
+#   split('a\\')                                    -> ['a']
+#   split('a.b,c', {separator:','})                 -> ['a.b','c']
+#   split('a.b,c', {sep:','})                       -> ['a','b,c']   # sep IGNORED
+#   split('a.b.c', {separator:''})                  -> ['a','b','c']  # '' falls back to '.'
+#   split('a::b::c', {separator:'::'})              -> ['a::b::c']    # multi-char never matches
+#   split('a.b."c.d.e".h', {quotes:['"']})          -> ['a','b','"c.d.e"','h']
+#   split('a.b."c.d.e".h', {quotes:true})           -> ['a','b','"c.d.e"','h']
+#   split("a.b.'c.d'.e", {quotes:["'"]})            -> ['a','b',"'c.d'",'e']
+#   split('a.b.\\"c.d."e.f.g".h.i', {quotes:['"']}) -> ['a','b','"c','d','"e.f.g"','h','i']
+#   split('a."b.c.d".e')                            -> ['a','"b','c','d"','e']  # no quotes opt
+#   split('a."b\\".c".d', {quotes:['"']})           -> ['a','"b\\".c"','d']
+#   split('a.b."c.d.e', {quotes:['"']})             -> ['a','b','"c','d','e']  # unclosed
+#   split('a.{b.c}.{d.e}')                          -> ['a','{b','c}','{d','e}']  # no brackets opt
+#   split('a.{b.c}.{d.e}', {brackets:true})         -> ['a','{b.c}','{d.e}']
+#   split('a.{b.{c.d}.e}.f', {brackets:true})       -> ['a','{b.{c.d}.e}','f']
+#   split('a.{b.c}.[d.e].f', {brackets:{'{':'}'}})  -> ['a','{b.c}','[d','e]','f']
+#   split('«a.b».⟨c.d⟩.[e.f]', {brackets:{'«':'»','⟨':'⟩'}}) -> ['«a.b»','⟨c.d⟩','[e','f]']
+#   split('a.[b.c].d', {brackets:false})            -> ['a','[b','c]','d']
+#   split('a.b}.c', {brackets:true})                -> ['a','b}','c']  # stray closer appended
+#   split('a.{b.c', {brackets:true})                -> ['a','{b','c']  # unclosed flatten
+#   split('a.{b.c', {brackets:true,strict:true})    -> THROW SyntaxError 'Unmatched: "{b.c", at column 5'
+#   split('a.{b.{c', {brackets:true,strict:true})   -> THROW SyntaxError 'Unmatched: "{c", at column 6'
+#   split('a.{b.c}.d', {brackets:true,strict:true}) -> ['a','{b.c}','d']  # matched, no throw
+#   split('a,{b,c', {brackets:true,separator:','})  -> ['a','{b,c']
+#   split('a,{b.c', {brackets:true,separator:','})  -> ['a','{b','c']
+#   split('{}', {brackets:true})                    -> ['{}']
+#   split('a.{}.b', {brackets:true})                -> ['a','{}','b']
+#   split('a.b', {quotes:'"'})                      -> ['a','b']   # string quotes OK (no " present)
+#   split('a."b.c".d', {quotes:'"'})                -> ['a','"b.c"','d']  # string acts as char-set
+#   split('a.b', {quotes:5})                        -> THROW TypeError 'quotes.includes is not a function'
+#   split('a.{b.c}.d', {brackets:'{}'})             -> ['a','{b','c}','d']  # string brackets => no-op
+#   split('a.😀.b')                                 -> ['a','😀','b']  # astral char reassembled
+#   split(123)                                      -> THROW TypeError 'expected a string'
+#   split(null)                                     -> THROW TypeError 'expected a string'
+#   split('a.b\\.c', {keepEscaping:true})           -> ['a','b.c']  # keepEscaping IGNORED
+#   split('a."b.c".d', {keepQuotes:true,quotes:['"']}) -> ['a','"b.c"','d']  # keepQuotes IGNORED
+
+ORACLE value -> oracle.json
+    # Each input tuple [input] or [input, options] is called as
+    # splitString(...tuple); the result Array (or {__throw:{name,message}}) is
+    # the expected. Deterministic; no seam.
+
+# ---------------------------------------------------------------------
+SCOPE
+# IN CONTRACT (reproduce exactly):
+#   - splitString(input, options?) with input:string and options a PLAIN-DATA
+#     object. The full tokenizer state machine above, including:
+#       * default '.' separator; custom options.separator (string, single-code-unit
+#         to be meaningful; multi-char / falsy handled per OPTION RESOLUTION).
+#       * backslash escaping (single + double backslash; escaped special chars).
+#       * options.quotes as Array<string>, the boolean `true` (=> ['"',"'",'`']),
+#         or a STRING (char-set via .includes). closeIndex escaped-quote skipping.
+#       * options.brackets as Object map, the boolean `true` (=> [](){}<> set),
+#         `false` (disable), or a STRING (no-op). nesting + flatten of unclosed.
+#       * options.strict (boolean) -> SyntaxError on unclosed bracket, exact msg.
+#       * empty / single-char / leading / trailing / consecutive separators.
+#       * IGNORED legacy keys: options.sep, options.keepEscaping, options.keepQuotes,
+#         options.keepDoubleQuotes — read by NO code path; pass them and they have
+#         ZERO effect (the engine uses options.separator, never options.sep, etc.).
+#       * Purity: input + options are not mutated; a fresh Array is returned.
+#   - The non-function-but-non-array option-value throw paths (quotes as a number ->
+#     TypeError) are gradable throws and IN scope (recorded {__throw}).
+#
+# CARRIED DATA: none. No large literal tables; the only constants are the inline
+#   default bracket map {'[':']','(':')','{':'}','<':'>'} and quote triple
+#   ['"',"'",'`'], both transcribed above in full. No carried.json.
+#
+# OUT OF CONTRACT (non-round-trippable; NEVER emitted by genInputs):
+#   - the 3rd positional `fn` callback (a function): controls per-separator split
+#     decisions and receives the live `state`. Non-round-trippable. The value-mode
+#     oracle MUST NOT pass a function. (When omitted, root separators always split.)
+#   - options.keep (a function): the result-retention predicate. Non-round-trippable.
+#     The DEFAULT (value => value !== '\\') is baked into the in-contract behavior.
+#     A non-function options.keep throws TypeError('keep is not a function') — OUT,
+#     not emitted.
+#   - any function-valued option (e.g. a function passed as separator/quotes/brackets):
+#     non-round-trippable -> OUT.
+#   - Symbol-valued anything: non-round-trippable -> OUT.
+#   - Passing options itself as a function: that re-binds it to fn and resets
+#     options:={} (OUT, since a function is involved).
+
+PROVENANCE split-string@6.1.0, repo jonschlinkert/split-string, MIT license,
+    source file index.js (3780 bytes). Verified by executing the installed package at
+    /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-split_string-ifdh4Z/node_modules/split-string
+# =====================================================================

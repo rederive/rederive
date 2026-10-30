@@ -1,0 +1,63 @@
+UNIT rust_reshape
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/lang/rust.mjs reshape(v, t) — the rust driver's positional-to-named result reshaper; reproduce it exactly, accidents included
+ORACLE-CLASS deterministic
+SIG reshape(v: json, t: json) -> json
+ENVELOPE v is any json value whose numbers are finite and not negative zero. t is a TYPE TREE in the shape the SIG type
+  reader yields — a map whose k entry names the kind (union with alts, record with fields, tuple with items, list with
+  item, map with key and val; any other kind carries nothing that is read) — or any malformed json in that position
+  (R2–R7 say what each malformation does). OUT: a record fields entry that is text or a map; when v's length equals the
+  number of field entries, a field entry that is text, an empty list, or a list whose first element is not text; tuple
+  items that is a map. Throws are IN scope as observations (R8); the message is not graded.
+DEPENDS-ON none
+DESCRIPTION The rust harness returns a record-typed result as a positional list (fields in declared order). RESHAPE(v, t)
+  walks v alongside the result type tree t and turns every positional list that sits at a record position, and has
+  exactly as many elements as the record has fields, into a map from field name to value — at any depth through tuples,
+  lists, map values and option unions (X | none). Everything else is returned as it is, so a list of the wrong length
+  stays a list and the caller's encoder refuses it. "Absent" (a tree position with no entry) reads exactly as none
+  throughout. The result is built fresh; v is never modified.
+BEHAVIOR
+R1 v none -> none, whatever t is (t is not inspected). This holds at every depth: a none element, field value, item or
+  map value is returned as none even under a malformed or missing tree.
+R2 Otherwise, when t is none (or absent) -> throws. When t is a bool, number, text or list, or a map whose k is anything
+  other than exactly the text union, record, tuple, list or map (absent, another kind such as json, i64, text, none,
+  bytes, a different spelling or case) -> v unchanged. In particular json positions are never descended into, so a
+  record inside a json value stays positional.
+R3 UNION (k = union): alts that is not a list (absent, none, text, map, number, bool) -> throws. EVERY element of alts is
+  examined: a none element anywhere in alts -> throws. A NONE ALTERNATIVE is an element that is a map whose k is exactly
+  the text none. When alts has exactly two elements and exactly one of them is a none alternative, the result is
+  RESHAPE(v, the other element), in either position. In every other case (zero, one, three or more elements; two none
+  alternatives; two non-none alternatives) -> v unchanged. A followed element that is not a map (a number, text, bool,
+  list) therefore yields v by R2. A union of two non-none alternatives is never followed, so a list v under
+  record-then-list stays a list CITED FIDELITY package — cli/lang/rust.mjs:337
+R4 RECORD (k = record): v not a list -> v unchanged (a map v, even one already keyed by the field names, passes through as
+  it is). v a list: fields none or absent -> throws; fields a number or bool -> v unchanged; fields a list whose length
+  differs from v's -> v unchanged (the entries are not examined, so a malformed entry does not throw). When the lengths
+  are equal: a field entry that is not a list (none, number, bool, map) -> throws; otherwise the result is a map with,
+  for the entry at position i with name N (its first element) and field tree F (its second element, absent reads as
+  none; elements after the second are ignored), N -> RESHAPE(element i of v, F). An empty fields list with an empty v
+  yields the empty map. Two entries with the same name: the later one's value is kept. Field names are ordinary map
+  keys, including the empty text and names such as __proto__ or __t CITED FIDELITY package — cli/lang/rust.mjs:338
+R5 TUPLE (k = tuple): v not a list -> v unchanged. v the empty list -> the empty list (items is not read). v a non-empty
+  list: items none or absent -> throws; items a number, bool or text -> every element unchanged; items a list -> element
+  i becomes RESHAPE(element i, items[i]) when items has a map at position i, and stays unchanged when items has no
+  element there (v is longer) or a non-map element (none, number, text, bool, list). The result has v's length — extra
+  elements are kept, never dropped, and a v shorter than items stays short CITED FIDELITY package — cli/lang/rust.mjs:339
+R6 LIST (k = list): v not a list -> v unchanged. Otherwise every element x becomes RESHAPE(x, item); an absent or none
+  item therefore throws on the first non-none element and is harmless for an empty list or an all-none list.
+R7 MAP (k = map): v not a map (a list, text, number, bool) -> v unchanged. v a map -> a map with exactly v's keys, the
+  value at each key becoming RESHAPE(value, val); the key tree is never read. An absent or none val therefore throws on
+  the first non-none value and is harmless for an empty map or an all-none map. Every key is an ordinary key, including
+  __proto__ CITED FIDELITY package — cli/lang/rust.mjs:341
+R8 A throw anywhere aborts the whole call (no partial result). The throwing positions are exactly: R2 (t none at a
+  non-none v), R3 (alts not a list; a none element in alts), R4 (fields none or absent at a list v; a non-list entry
+  at equal lengths), R5 (items none or absent at a non-empty v), and R6 and R7 through R2.
+INVARIANT RESHAPE never inspects a value's content to choose a path: the path is chosen by the tree, by whether v is
+  none, a list or a map, and by a record list's length. Numbers, text and bools are copied verbatim, never converted.
+ORACLE value -> oracles/rust_reshape.json  CANONICAL-SHA256 d9acec33d0d99d2abaf0e4634aed29daf4bd184870bdaa9676281d342f940a5c
+SCOPE in-contract: R1–R8 over well-formed trees (any tree the SIG type reader yields) and the malformed trees the
+  ENVELOPE admits. Out-of-contract: the caller (batchCaller) and its envelope/escaping of markers; the f64 wire
+  unwrapping done before reshape; integers past 2^53 the caller recovers as big integers (not json).
+PROVENANCE rederive@bb8ded84fa50, cli/lang/rust.mjs lines 335–343, MIT. Re-cut 2026-10-27 (round 5, after FINDINGS #92)
+  by the sighted decomposer, REDERIVE_SELF_PLAN Tier 3; oracle stamped by selfhost/stamp.mjs from the pinned snapshot.

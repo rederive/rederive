@@ -1,0 +1,357 @@
+UNIT isGlob
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isGlob(str: any, options?: { strict?: boolean }) -> boolean
+DEPENDS-ON none   # is-extglob is INLINED below (see EXTGLOB node); the SIR is self-contained, NO require.
+
+# ============================================================================
+# OVERVIEW
+# isGlob returns true iff `str` "looks like" a glob pattern. It is pure: same
+# args -> same boolean, no seam (no clock/RNG/io/net). ORACLE-CLASS deterministic.
+#
+# The published is-glob@4.0.3 require()s is-extglob@2.1.1. This SIR INLINES the
+# full behavior of is-extglob (see node EXTGLOB) so a blind re-emitter produces a
+# standalone isGlob with NO dependency. Everything here is exact, derived from
+# reading both sources AND differential-tested against the real packages
+# (600,000 random comparisons, 0 mismatches across default / {strict:false} /
+# {strict:true}).
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# SHARED CONSTANT (used by EXTGLOB skip-logic? NO — only by STRICT/RELAXED).
+# `chars` maps an OPENING bracket char to its matching CLOSING char.
+#   chars = { '{': '}', '(': ')', '[': ']' }
+# Lookup `chars[c]` returns the closing char for c, or undefined for any other c
+# (including when c is undefined, i.e. reading one past end of string).
+# In JS, indexing a string past its end yields `undefined`; treat out-of-range
+# character reads as the sentinel UNDEF (not equal to any real char).
+# `str.indexOf(needle, from)` returns the 0-based index of the first `needle`
+# at or after `from`, or -1 if none.
+# ----------------------------------------------------------------------------
+
+BEHAVIOR
+
+# === NODE 0: NON-STRING / EMPTY GUARD (the entry guard) ====================
+# BRANCH guard:
+#   if (typeof str !== 'string')  -> return false
+#   if (str === '' )              -> return false   # empty string
+# i.e. return false unless str is a non-empty string.
+# This guard is applied FIRST, before anything else.
+# Concretely, ALL of these return false: numbers (5, NaN), booleans (true/false),
+# null, undefined, arrays ([]), plain objects ({}), and the empty string "".
+# Only a String value of length >= 1 proceeds past NODE 0.
+# (NOTE: is-extglob has the SAME guard internally, but here NODE 0 already
+#  guarantees str is a non-empty string before EXTGLOB runs.)
+
+# === NODE 1: EXTGLOB SHORT-CIRCUIT (inlined is-extglob@2.1.1) ==============
+# If the inlined isExtglob(str) is true, return true IMMEDIATELY (before any
+# strict/relaxed check, regardless of options).
+#
+#   if (EXTGLOB(str) === true) return true
+#
+# --- EXTGLOB(str) : the FULL inlined is-extglob algorithm -------------------
+# is-extglob detects an "extended glob" group: one of the prefix chars
+#   @  ?  !  +  *
+# immediately followed by a parenthesized group `( ... )`, while correctly
+# SKIPPING over backslash-escaped pairs.
+#
+# Exact source (is-extglob@2.1.1 index.js):
+#   function isExtglob(str) {
+#     if (typeof str !== 'string' || str === '') return false;
+#     var match;
+#     while ((match = /(\\).|([@?!+*]\(.*\))/g.exec(str))) {
+#       if (match[2]) return true;
+#       str = str.slice(match.index + match[0].length);
+#     }
+#     return false;
+#   }
+#
+# The regex (re-emit it BYTE-EXACT) is:   /(\\).|([@?!+*]\(.*\))/g
+#   Alternative A = group 1+rest:  (\\).   = a backslash, captured into group1,
+#                                  followed by ANY single char (the `.`, which
+#                                  is NOT captured). Matches an escaped pair.
+#   Alternative B = group 2:       ([@?!+*]\(.*\))  = one of the chars @ ? ! + *,
+#                                  then a literal '(', then `.*` (GREEDY, any
+#                                  chars except newline), then a literal ')'.
+#                                  The whole thing is captured into group 2.
+#   The regex is GLOBAL (/g) but is re-created fresh each `.exec` via the literal,
+#   so lastIndex always starts at 0 for each new `str` slice — there is NO
+#   stateful lastIndex carry; the loop re-slices `str` instead.
+#
+# Loop semantics (re-emit EXACTLY):
+#   - exec finds the LEFTMOST match of (A | B). Regex alternation prefers the
+#     left alternative A at a given start position, but `exec` scans left-to-right
+#     for the earliest START index where EITHER alternative matches.
+#   - If the match captured group 2 (alternative B fired) -> return true.
+#   - Otherwise (alternative A fired: an escaped pair `\X`) -> drop everything up
+#     to and including this match: str = str.slice(match.index + match[0].length),
+#     then loop again on the shortened string.
+#   - When exec returns null (no further match) -> return false.
+#
+#   IMPORTANT subtlety: `.*` is GREEDY and `.` excludes newline. For a string like
+#   "@(a)b@(c)" the single B match spans from the first '@(' to the LAST ')'
+#   (greedy) -> group 2 set -> true. Backslash escapes BEFORE a B-group are
+#   consumed by A first (advancing the slice) so an escaped prefix like "\@(a)"
+#   does NOT match B: the "\@" is eaten by A leaving "(a)", which has no @?!+* prefix
+#   -> EXTGLOB returns false. (isGlob may still return true for "\@(a)" later via
+#    the STRICT pipe/paren rules — see NODE 2.)
+#
+# Worked EXTGLOB examples (all VERIFIED against real is-extglob):
+#   "@(a|b)"   -> B matches "@(a|b)"            -> true
+#   "?(a)"     -> true        "!(a)" -> true    "+(a)" -> true    "*(a)" -> true
+#   "@()"      -> B matches "@()" (`.*` matches empty) -> true
+#   "x@(a)y"   -> B matches "@(a)" starting at index 1 -> true
+#   "foo/@(bar)" -> true
+#   "\@(a|b)"  -> A matches "\@" first; slice -> "(a|b)"; exec finds no A or B
+#                 -> false
+#   "a\@(b)"   -> exec finds A "\@" at index1 (earliest match overall, since B
+#                 needs a prefix char immediately before '(' but here it is '\')
+#                 -> slice -> "(b)" -> no match -> false
+#   "z(a|b)"   -> 'z' is NOT a prefix char -> no B; no '\' -> no A -> false
+#   "(a)"      -> '(' not preceded by prefix char -> false
+#   "\x"       -> A matches "\x"; slice -> "" -> false
+#   "abc"      -> false       "*.js" -> '*' then '.' not '(' -> B needs '(' after
+#                 prefix -> "*.js": does "*\(" appear? no '(' -> false
+# (For "*.js" EXTGLOB is false; isGlob returns true later because STRICT sees '*'.)
+
+# === NODE 2: STRICT vs RELAXED selection ===================================
+# After NODE 1 (extglob was false), choose the residual character-scan check:
+#   check = STRICTCHECK            # the DEFAULT
+#   if (options is truthy AND options.strict === false) check = RELAXEDCHECK
+#   return check(str)
+#
+# options.strict DEFAULT is effectively `true` (any value other than the strict
+# boolean literal `false` keeps STRICTCHECK). RELAXEDCHECK is selected ONLY when
+# `options` is truthy and `options.strict === false` (strict `===` to boolean
+# false). Examples of the selection guard:
+#   options omitted / undefined / null        -> STRICTCHECK (guard `options &&` fails)
+#   options = {}                               -> STRICTCHECK (options.strict undefined !== false)
+#   options = { strict: true }                 -> STRICTCHECK
+#   options = { strict: false }                -> RELAXEDCHECK
+#   options = { strict: 0 }                    -> STRICTCHECK (0 !== false under ===)
+#   options = { strict: "" }                   -> STRICTCHECK
+# (Only the exact boolean `false` flips to relaxed.)
+
+# --- NODE 2a: RELAXEDCHECK(str) -> boolean ---------------------------------
+# Scan left to right; trigger true on ANY un-escaped glob meta char.
+#   if (str[0] === '!') return true            # leading '!' is always a glob
+#   index = 0
+#   while (index < str.length):
+#     if ( /[*?{}()[\]]/.test(str[index]) ) return true
+#       # i.e. the current char is one of:  * ? { } ( ) [ ]   (8 chars)
+#     if (str[index] === '\\'):                # backslash escape handling
+#        open  = str[index+1]                  # char after the backslash (maybe UNDEF)
+#        index += 2                            # consume the backslash AND next char
+#        close = chars[open]                   # '}' for '{', ')' for '(', ']' for '[', else UNDEF
+#        if (close):                           # if open was one of { ( [
+#           n = str.indexOf(close, index)      # find the matching closer at/after index
+#           if (n !== -1): index = n + 1       # JUMP past the matched closer
+#        if (str[index] === '!') return true   # an '!' right after the skipped span -> glob
+#     else:
+#        index += 1
+#   return false
+#
+# RELAXED meaning: a backslash escapes the NEXT char (and, if that next char is an
+# opening bracket, the ENTIRE bracketed span up through its closer is also skipped),
+# so escaped meta chars do NOT count. Any other occurrence of * ? { } ( ) [ ]
+# makes it a glob.
+# RELAXED worked examples (VERIFIED):
+#   "?"      -> '?' matches class       -> true
+#   "[a"     -> '[' matches class       -> true
+#   "{a"     -> '{' matches class       -> true
+#   "(a"     -> '(' matches class       -> true
+#   "abc"    -> no meta                 -> false
+#   "\*"     -> '\' -> skip '*'         -> end -> false
+#   "\*.js"  -> '\' skip '*', then ".js" no meta -> false
+#   "\[ab]"  -> '\' open='[' close=']' indexOf(']',2)=4 -> index=5 -> end -> false
+#   "\{a,b}" -> '\' open='{' close='}' jump past '}' -> false
+#   "\(a|b)" -> '\' open='(' close=')' jump past ')' -> false
+#   "abc\?"  -> "abc" no meta, then '\' skip '?' -> end -> false
+#   "\!"     -> '\' open='!' (not bracket) index+=2 -> str[2]=UNDEF !== '!' -> false
+
+# --- NODE 2b: STRICTCHECK(str) -> boolean ----------------------------------
+# A tighter scan: a meta char only counts when it forms a PLAUSIBLE glob
+# construct (a closed bracket span, a real brace/paren group, a quantifier, a
+# lookaround, an alternation). Re-emit the algorithm EXACTLY; order of the inner
+# IF blocks within one loop iteration MATTERS.
+#
+#   if (str[0] === '!') return true            # leading '!' is always a glob
+#   index = 0
+#   # five "index-of cache" sentinels, all start at -2:
+#   pipeIndex = -2; closeSquareIndex = -2; closeCurlyIndex = -2
+#   closeParenIndex = -2; backSlashIndex = -2
+#   while (index < str.length):
+#
+#     # (S1) star:
+#     if (str[index] === '*') return true
+#
+#     # (S2) quantifier-after-special:
+#     if (str[index+1] === '?' AND /[\].+)]/.test(str[index])) return true
+#         # i.e. when the NEXT char is '?' and the CURRENT char is one of:
+#         #   ]   .   +   )      (the regex class [\].+)] = these four chars)
+#         # so "].?"? note: pattern tests str[index] in { ] . + ) } with str[index+1]==='?'.
+#         #   ".?" -> '.' then '?' -> true ;  "+?" -> true ;  ")?" -> true ;  "]?" -> true
+#         #   "x?" -> 'x' not in set -> not here ;  "[?" / "{?" / "(?" -> not here
+#
+#     # (S3) bracket [...] :  (guarded by closeSquareIndex !== -1)
+#     if (closeSquareIndex !== -1 AND str[index] === '[' AND str[index+1] !== ']'):
+#         if (closeSquareIndex < index):
+#            closeSquareIndex = str.indexOf(']', index)
+#         if (closeSquareIndex > index):
+#            if (backSlashIndex === -1 OR backSlashIndex > closeSquareIndex) return true
+#            backSlashIndex = str.indexOf('\\', index)
+#            if (backSlashIndex === -1 OR backSlashIndex > closeSquareIndex) return true
+#         # meaning: an unescaped '[' that has a matching ']' AFTER it (and no
+#         # backslash before that ']') -> a real char class -> glob.
+#
+#     # (S4) brace {...} :  (guarded by closeCurlyIndex !== -1)
+#     if (closeCurlyIndex !== -1 AND str[index] === '{' AND str[index+1] !== '}'):
+#         closeCurlyIndex = str.indexOf('}', index)
+#         if (closeCurlyIndex > index):
+#            backSlashIndex = str.indexOf('\\', index)
+#            if (backSlashIndex === -1 OR backSlashIndex > closeCurlyIndex) return true
+#
+#     # (S5) lookaround (?: (?! (?= :  (guarded by closeParenIndex !== -1)
+#     if (closeParenIndex !== -1 AND str[index] === '(' AND str[index+1] === '?'
+#         AND /[:!=]/.test(str[index+2]) AND str[index+3] !== ')'):
+#         closeParenIndex = str.indexOf(')', index)
+#         if (closeParenIndex > index):
+#            backSlashIndex = str.indexOf('\\', index)
+#            if (backSlashIndex === -1 OR backSlashIndex > closeParenIndex) return true
+#         # i.e. "(?:" / "(?!" / "(?=" with a ')' later and a non-')' at index+3
+#         #   "(?:a)" -> true ; "(?#a)" -> '#' not in [:!=] -> no ; "(?:)" -> str[3]===')' -> no
+#
+#     # (S6) alternation (a|b) :  (guarded by pipeIndex !== -1)
+#     if (pipeIndex !== -1 AND str[index] === '(' AND str[index+1] !== '|'):
+#         if (pipeIndex < index):
+#            pipeIndex = str.indexOf('|', index)
+#         if (pipeIndex !== -1 AND str[pipeIndex+1] !== ')'):
+#            closeParenIndex = str.indexOf(')', pipeIndex)
+#            if (closeParenIndex > pipeIndex):
+#               backSlashIndex = str.indexOf('\\', pipeIndex)
+#               if (backSlashIndex === -1 OR backSlashIndex > closeParenIndex) return true
+#         # i.e. an unescaped '(' whose body contains a '|' that is not immediately
+#         # followed by ')', with a matching ')' after the '|', and no backslash
+#         # before that ')'  ->  alternation glob.
+#         #   "(a|b)" -> true ; "(|b)" -> str[index+1]==='|' guard fails -> no
+#         #   "(a|)" -> str[pipeIndex+1]===')' -> no ; "(ab)" -> no '|' -> no
+#
+#     # (S7) backslash advance / escaped-bang:
+#     if (str[index] === '\\'):
+#        open  = str[index+1]
+#        index += 2
+#        close = chars[open]               # '}'/')'/']' for '{'/'('/'[', else UNDEF
+#        if (close):
+#           n = str.indexOf(close, index)
+#           if (n !== -1): index = n + 1   # jump past the matched closer
+#        if (str[index] === '!') return true
+#     else:
+#        index += 1
+#   return false
+#
+# CRUCIAL STRICT semantics / re-emit hazards:
+#   * The five sentinels (pipeIndex, closeSquareIndex, closeCurlyIndex,
+#     closeParenIndex, backSlashIndex) are FUNCTION-SCOPED and PERSIST across loop
+#     iterations. They start at -2. They CACHE prior indexOf results so the scan
+#     does not re-search from scratch. Re-emit this caching EXACTLY — naive
+#     re-searching every iteration changes results in edge cases (e.g. the
+#     `closeSquareIndex < index` re-search guard, and the `pipeIndex < index`
+#     re-search guard). A sentinel value of -1 (set when a prior indexOf failed)
+#     DISABLES that block for the rest of the scan (the `!== -1` guards).
+#   * `backSlashIndex` is SHARED across S3/S4/S5/S6/S7 and is reassigned by several
+#     of them; its value at any point is whatever the last writer set. Re-emit the
+#     exact write/read order.
+#   * The IF blocks S1..S7 run IN ORDER within each iteration; a `return true`
+#     short-circuits. S7 (backslash) is the ONLY block that advances `index`
+#     when the current char is '\'; otherwise S7's else does index += 1.
+#   * Reading str[index+1], str[index+2], str[index+3] past end yields UNDEF; UNDEF
+#     compares unequal to any concrete char, and /regex/.test(UNDEF) tests the
+#     literal string "undefined" (so e.g. /[:!=]/.test(undefined) is false).
+#
+# STRICT worked examples (VERIFIED against real is-glob, default options):
+#   "*.js" -> true (S1 at '*')        "**" -> true        "foo/*" -> true
+#   "?"    -> false (S2 needs str[index]∈{].+)} before '?'; '?' at index0 has
+#             str[index+1]=UNDEF; never hits a '*'; loop ends) -> false
+#   ".?"   -> true (S2: '.' then '?')      "+?" -> true     ")?" -> true   "]?" -> true
+#   "x?"   -> false       "??" -> false (str[0]='?' str[1]='?' -> S2 wants str[0]∈{].+)})
+#   "[abc]"-> true (S3: '[' with ']' later, no backslash)
+#   "[!abc]"-> true (str[0]==='!'? no, str[0]='[') -> S3 true
+#   "[ab"  -> false (no ']' -> closeSquareIndex becomes -1 -> disabled)
+#   "[]"   -> false (str[index+1]===']' guard fails) ; "[]]" -> false ; "a[]b" -> false
+#   "x[ab]y"->true   ;  "[a]b" -> true  ;  "a[b]" -> true
+#   "[a\b]"-> false (S3 first iter: '[' , ']' at idx4 > 0; backSlashIndex=-2 (not -1
+#             and not > 4) so first inner-if false; backSlashIndex=indexOf('\',0)=2;
+#             2 !== -1 and 2 > 4? no -> second inner-if false; fall through; the '\'
+#             at idx2 then skips, no ']' reachable as glob) -> false
+#   "{a,b}"-> true (S4)  ;  "{a}" -> true  ;  "{}" -> false (str[index+1]==='}')
+#   "{a\}" -> false      ;  "\{a}" -> false (S7 backslash skips to '}')  ; "x{a}y" -> true
+#   "(?:a)"-> true (S5)  ; "(?!a)" -> true ; "(?=a)" -> true
+#   "(?#a)"-> false ('#' not in [:!=]) ; "(?<a)" -> false ; "(?:)" -> false (str[3]===')')
+#   "(?:"  -> false (str[index+1]==='?' but str[index+2]=UNDEF fails [:!=]; later '(?'.. no ')')
+#   "(a|b)"-> true (S6)  ; "(|b)" -> false ; "(a|)" -> false ; "(a|b" -> false ; "(ab)" -> false
+#   "x(a|b)y" -> true
+#   "abc"  -> false ; "abc.js" -> false ; "foo/bar/baz.js" -> false ; "path/to/file" -> false
+#   "a b c"-> false ; "   " -> false
+#   "\*"   -> false ; "\*.js" -> false ; "abc\?" -> false
+#   "\{x}!"-> true (S7: '\' open='{' close='}' jump past '}' at idx3 -> index=4 -> str[4]='!' -> true)
+#   "\(x)!"-> true ; "\[x]!" -> true ; "\x!" -> true (open='x' not bracket; index=2; str[2]='!')
+#   "\!"   -> false (open='!' not bracket; index+=2 -> str[2]=UNDEF !== '!')
+#   "!"    -> true (leading '!') ; "!a" -> true ; "!abc" -> true ; "!(a)" -> true
+#   "a!b"  -> false
+#   "\@(a|b)" -> true (S7: '\' open='@' index=2; then at index2 '(' S6: str[3]?='a' not '|';
+#                pipeIndex=indexOf('|',2)=4; str[5]?='b' !==')'; closeParenIndex=indexOf(')',4)=6
+#                >4; backSlashIndex=indexOf('\',4)=-1 -> true)
+#   "a\@(b)"  -> false (extglob false; STRICT: 'a' idx0; idx1 '\' open='@' index=3;
+#                idx3 '(' S6 str[4]='b' not '|'; pipeIndex=indexOf('|',3)=-1 -> guard
+#                pipeIndex!==-1 fails; no other rule; ends) -> false
+#   "z(a|b)"  -> true (S6 fires regardless of 'z')
+#   "abc\" / "\" / "a\\b" -> false
+
+# ============================================================================
+ORACLE value -> oracle.json
+# The oracle records, for each generated input tuple, the boolean (or {__throw}
+# if a throw ever occurs — none do for in-envelope inputs) returned by the REAL
+# is-glob@4.0.3. Pure & deterministic: no seam, value mode.
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the whole of NODE 0..2 above — the
+#   non-string/empty guard, the inlined is-extglob detector (NODE 1, regex
+#   /(\\).|([@?!+*]\(.*\))/g + slice loop), the strict/relaxed selection on
+#   options.strict===false, and the two character-scan algorithms STRICTCHECK and
+#   RELAXEDCHECK with the `chars` map { '{':'}', '(':')', '[':']' }. There are NO
+#   large literal tables: the only constants are the `chars` map (3 entries) and
+#   the four inline regexes:
+#       /(\\).|([@?!+*]\(.*\))/g   (is-extglob)
+#       /[\].+)]/                  (STRICT S2)
+#       /[:!=]/                    (STRICT S5)
+#       /[*?{}()[\]]/              (RELAXED meta-class)
+#   All four MUST be re-emitted byte-exact.
+#
+# CARRIED DATA: none. (No published-authority table; pure logic. No carried.json.)
+#
+# OUT-OF-CONTRACT: none. No side effects, no statefulness, no external API.
+#
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because the JSON+codec
+#   round-trip cannot reproduce them, OR because their behavior is fully fixed by
+#   NODE 0 anyway):
+#   - `undefined` as the `str` arg: returns false (NODE 0). genInputs DOES emit it
+#     where the codec can carry it as a top-level arg, but NOT inside arrays.
+#   - NaN / Infinity as `str`: non-string -> false (NODE 0). Not emitted (NaN/Inf
+#     do not JSON-round-trip).
+#   - Function / Symbol as `str`: non-string -> false (NODE 0). NOT EMITTED — a
+#     function or Symbol cannot survive JSON.stringify(encode(args)); a blind
+#     re-emitter still derives `false` from NODE 0's typeof guard.
+#   - Boxed `new String("...")`: typeof is 'object' -> false (NODE 0). Not emitted
+#     (boxed primitives do not round-trip). Behavior fully specified by NODE 0.
+#   - options as a non-object truthy (e.g. options = 5): `options && options.strict`
+#     -> 5.strict is undefined !== false -> STRICTCHECK. Not emitted; specified above.
+
+PROVENANCE
+# is-glob@4.0.3  — repo https://github.com/micromatch/is-glob  — MIT License
+#   source file: node_modules/is-glob/index.js
+# INLINED dependency: is-extglob@2.1.1 — repo https://github.com/jonschlinkert/is-extglob
+#   — MIT License — source file: node_modules/is-extglob/index.js
+# Behavior verified by executing both real packages from the rdv temp install and
+# differential-testing a standalone inlined re-implementation: 600,000 random
+# string comparisons across default / {strict:false} / {strict:true}, 0 mismatches.

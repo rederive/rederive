@@ -1,0 +1,28 @@
+§22 liveness — the two ways a ring can break
+
+  sound ring
+    events            ["held(0)","passed(0->1)","passed(1->2)","released(2)"]
+    mutual exclusion  held (max 1 holder)
+    token returned    yes
+    verdict           LIVE
+    output            {"ok":[1,2,3]}
+
+  token LOST
+    events            ["held(0)","passed(0->1)","passed(1->2)"]
+    mutual exclusion  held (max 1 holder)
+    token returned    NO — still held by [2]
+    verdict           NOT LIVE
+    output            {"ok":[1,2,3]}
+
+    ^ note: the output above is CORRECT. Only the token channel sees the fault.
+
+  token DUPLICATED
+    events            ["held(0)","held(1)","held(2)","released(0)","released(1)","released(2)"]
+    mutual exclusion  VIOLATED — 3 simultaneous holders
+    token returned    yes
+    verdict           NOT LIVE
+    output            {"ok":[1,2,3]}
+
+    ^ note: the output above is CORRECT. Only the token channel sees the fault.
+
+PHASE 4b (§22 liveness): PASS — loss and duplication both caught, on units whose output looks right.

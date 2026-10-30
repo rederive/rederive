@@ -1,0 +1,110 @@
+UNIT isUndefined
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isUndefined(value: any) -> boolean
+DEPENDS-ON none
+
+BEHAVIOR
+# The unit is a single-expression pure predicate. The ACTUAL source (verified
+# byte-for-byte below in PROVENANCE) is:
+#
+#     function isUndefined(value) {
+#       return value === undefined;
+#     }
+#
+# So the contract is EXACTLY the JS strict-equality test `value === undefined`.
+#
+# NODE-1 (the only node): return TRUE iff `value` is strictly identical to the
+#   primitive `undefined`; otherwise return FALSE. There are no branches, no
+#   options, no error paths, no early returns.
+#
+# IMPLEMENTATION NOTE (typeof vs ===): the HINT asked to confirm whether the
+#   source uses `typeof value == 'undefined'` or `value === undefined`. The
+#   source uses `value === undefined` (strict ===). The two forms are
+#   BEHAVIORALLY EQUIVALENT for ALL real JavaScript values that can be passed
+#   as an argument:
+#     - The only value `=== undefined` is the canonical `undefined` primitive
+#       (including `void 0`, and the implicit value of a missing argument).
+#     - `typeof x == 'undefined'` is true for exactly the same value set, since
+#       `typeof` yields the string "undefined" only for the `undefined` value
+#       (the historical document.all quirk and the "typeof on an undeclared
+#       identifier" case do NOT apply here: the function receives an already-
+#       evaluated argument binding, never an undeclared reference). A blind
+#       re-emitter MAY use either form; both produce identical oracle results.
+#
+# TRUE case (the ONLY one): value is `undefined`.
+#   - undefined          -> true
+#   - void 0             -> true   (void 0 IS the undefined primitive)
+#   - calling with no argument (isUndefined()) -> true (param binds undefined)
+#
+# FALSE cases (everything else). Demonstrated, self-consistent with genInputs:
+#   - null               -> false   # DISCRIMINATING: a buggy `value == null`
+#                                    #   impl would WRONGLY return true here.
+#                                    #   The correct impl returns FALSE.
+#   - 0                  -> false
+#   - -0                 -> false
+#   - 1, -1, 42, 3.14    -> false   # any number
+#   - NaN                -> false
+#   - Infinity           -> false
+#   - -Infinity          -> false
+#   - "" (empty string)  -> false
+#   - "undefined" (the literal string) -> false   # string, not the primitive
+#   - "abc", "0"         -> false
+#   - false              -> false   # DISCRIMINATING vs a truthiness-based bug
+#   - true               -> false
+#   - 0n (and any bigint)-> false
+#   - {} (plain object)  -> false
+#   - [] (array)         -> false
+#   - /x/ (RegExp)       -> false
+#   - new Set()          -> false
+#   - new Map()          -> false
+#   - new Uint8Array(n)  -> false
+#   - Buffer.from(...)   -> false
+#   - new Number(0)      -> false   # boxed Number object, not undefined
+#   - new String("")     -> false   # boxed String object
+#   - new Boolean(false) -> false   # boxed Boolean object
+#
+# No mutation, no observation of ambient state (no clock/RNG/env/io/net).
+# Idempotent and referentially transparent. NO SEAM.
+
+ORACLE value -> oracle.json
+# Value-mode: oracle records {args: [value], expected: <boolean>}. The harness
+# calls the real package with the (codec-decoded) single argument and stores
+# the boolean result. No injected collaborators.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   The single strict-equality predicate `value === undefined`. Returns a
+#   boolean. The entire behavior above is in-contract and fully specified;
+#   there is NO carried data (no tables, no constants) and NO out-of-contract
+#   stateful/side-effecting behavior.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because the persistence
+#   codec — JSON.stringify(encode(args)) — cannot faithfully round-trip them;
+#   their stored arg would be corrupted, poisoning the held-out expected):
+#   - FUNCTIONS (e.g. `function(){}`, `()=>{}`): isUndefined returns FALSE.
+#       Verified against the real package. Not codec-round-trippable.
+#   - SYMBOLS (e.g. `Symbol("s")`): isUndefined returns FALSE. Verified.
+#       Not codec-round-trippable.
+#   A blind re-emitter still reconstructs correct behavior for these from the
+#   single-expression contract above (they are simply `!== undefined`).
+#
+#   NOTE on undefined-as-arg: `undefined` IS round-trippable by the factory
+#   codec (it is explicitly in the supported set per the task addendum), so the
+#   TRUE case undefined -> true IS emitted by genInputs and IS gradable. NaN,
+#   ±Infinity, -0, and boxed Number/String/Boolean are likewise in the
+#   addendum's round-trip set and ARE emitted.
+
+PROVENANCE
+# package: lodash.isundefined@3.0.1  (MIT license)
+# repo:    lodash/lodash  (Custom Build: `lodash modern modularize exports="npm" -o ./`)
+# source:  node_modules/lodash.isundefined/index.js
+# export:  default export -> `module.exports = isUndefined`
+#          => the blind re-emitter MUST emit `export default <fn>` (ESM default).
+# verified source body (index.js lines 26-30, byte-exact):
+#     function isUndefined(value) {
+#       return value === undefined;
+#     }
+#     module.exports = isUndefined;

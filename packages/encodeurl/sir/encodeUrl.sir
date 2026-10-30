@@ -1,0 +1,285 @@
+# =============================================================================
+# SIR — encodeUrl  (npm: encodeurl@1.0.2, default CommonJS export)
+# Language-neutral intermediate representation. Comments use '#' ONLY.
+# =============================================================================
+
+UNIT encodeUrl
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure string->string transform. No seam: no clock/RNG/env/fs/net read. No mutation.
+# Deterministic given the single arg. NOTE: the README claims "does not throw", but
+# the unit DOES throw a URIError on one precise, deterministic input family (a run of
+# >=2 consecutive SAME-DIRECTION lone surrogates) — see BEHAVIOR node B1-THROW. That
+# throw is reproducible byte-for-byte from the verbatim regexps below, so it is a
+# DETERMINISTIC, GRADABLE outcome (the harness records it as {__throw}), not a seam.
+
+SIG  encodeUrl(url) -> string
+# Single positional argument `url` of ANY type. Coerced via String(url) (node B0).
+# Returns a String (or throws URIError on the B1-THROW family). The blind re-emitter
+# MUST `export default` a single function named encodeUrl; input tuples are
+# single-argument: each tuple is [url].
+
+DEPENDS-ON none
+# Zero package dependencies. Relies ONLY on host-language intrinsics:
+#   - String(x)        : ECMAScript ToString coercion
+#   - String.replace   : global-regex replace with (a) a string-with-$N backref
+#                        replacement and (b) a function replacement. CRITICAL: the
+#                        global (/g) replace semantics — single left-to-right scan,
+#                        each match advances past the WHOLE matched substring
+#                        (including captured neighbor chars) — is load-bearing for
+#                        the surrogate pass (see B1 / B1-THROW).
+#   - encodeURI(s)     : ECMAScript intrinsic (used as the replace callback). THROWS
+#                        URIError on a lone surrogate.
+# A faithful re-emission in another language MUST reproduce: (1) encodeURI's exact
+# preserved set + UTF-8 percent-encoding (node B3 + spec below), AND (2) the global
+# single-pass regex-replace consumption semantics that produce the B1-THROW family.
+
+# =============================================================================
+# EXACT SOURCE CONSTANTS — transcribed verbatim from index.js (read, not inferred)
+# =============================================================================
+#
+# (R1) ENCODE_CHARS_REGEXP   (the "encode these runs" matcher; global /g):
+#   /(?:[^\x21\x25\x26-\x3B\x3D\x3F-\x5B\x5D\x5F\x61-\x7A\x7E]|%(?:[^0-9A-Fa-f]|[0-9A-Fa-f][^0-9A-Fa-f]|$))+/g
+#
+# (R2) UNMATCHED_SURROGATE_PAIR_REGEXP  (the surrogate-repair matcher; global /g):
+#   /(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]|[\uD800-\uDBFF]([^\uDC00-\uDFFF]|$)/g
+#
+# (R3) UNMATCHED_SURROGATE_PAIR_REPLACE (the surrogate-repair replacement string):
+#   '$1�$2'
+#   (the U+FFFD REPLACEMENT CHARACTER between the two captured groups; $2 may be empty)
+#
+# These three are the load-bearing constants. Reproduce them byte-exact.
+
+# =============================================================================
+# BEHAVIOR — ordered pipeline. The whole function is exactly:
+#   String(url)
+#     .replace(UNMATCHED_SURROGATE_PAIR_REGEXP, UNMATCHED_SURROGATE_PAIR_REPLACE)  # PASS 1
+#     .replace(ENCODE_CHARS_REGEXP, encodeURI)                                     # PASS 2
+# ORDER IS MANDATORY: surrogate repair (PASS 1) happens BEFORE the encode (PASS 2).
+# =============================================================================
+
+# ---- B0  COERCE -------------------------------------------------------------
+# s := String(url)   # ECMAScript ToString.
+#   number  -> decimal string  (42 -> "42"; 3.14 -> "3.14"; -0 -> "0";
+#                               NaN -> "NaN"; Infinity -> "Infinity")
+#   bigint  -> decimal string  (10n -> "10")
+#   true/false -> "true"/"false"
+#   null    -> "null"
+#   undefined -> "undefined"
+#   string  -> itself
+#   array   -> elements join(",")   ([1,2,3] -> "1,2,3"; [] -> "")
+#   object  -> its toString()       ({toString(){return "x y"}} -> "x y";
+#                                     plain {} -> "[object Object]")
+# NOTE for the codec: undefined / NaN / Infinity / -0 / boxed values are NOT JSON-
+# codec round-trippable as ARGUMENTS, so the generator does NOT emit them (see SCOPE
+# / OUT-OF-ENVELOPE). Their B0 mapping is documented here so a blind re-emitter can
+# reconstruct them, but they are NOT graded inputs. (A bare Symbol/function would
+# actually throw in B0 via ToString — also OOE.)
+
+# ---- B1  SURROGATE REPAIR (PASS 1) -----------------------------------------
+# s := s.replace(R2, R3)
+# A SINGLE global left-to-right scan that replaces unpaired UTF-16 surrogate code
+# units with U+FFFD (REPLACEMENT CHAR), preserving the one adjacent non-surrogate
+# code unit captured by the regex. R2 has TWO alternatives (tried in order; the
+# global scan resumes AFTER the entire matched substring each time):
+#   ALT-A:  (^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]
+#           a LOW surrogate (DC00..DFFF) NOT preceded by a HIGH surrogate
+#           (preceded by start-of-string OR a non-high code unit). The PRECEDING
+#           unit is CONSUMED into the match as $1 (or "" at start). $2 unset -> "".
+#           Replacement: $1 + U+FFFD            (the lone low becomes U+FFFD)
+#   ALT-B:  [\uD800-\uDBFF]([^\uDC00-\uDFFF]|$)
+#           a HIGH surrogate (D800..DBFF) NOT followed by a LOW surrogate
+#           (followed by a non-low code unit OR end-of-string). The FOLLOWING unit
+#           is CONSUMED into the match as $2 (or "" at end). $1 unset -> "".
+#           Replacement: U+FFFD + $2            (the lone high becomes U+FFFD)
+# A WELL-FORMED pair (high immediately followed by low, e.g. an emoji) matches
+# NEITHER alternative and is left intact (it is encoded as UTF-8 in B2).
+# Verified ground truth (code units shown in hex):
+#   "a"+D800+"b"      -> "a"+FFFD+"b"        # lone high, mid     (ALT-B, $2="b")
+#   "a"+DC00+"b"      -> "a"+FFFD+"b"        # lone low, mid      (ALT-A, $1="a")
+#   "a"+D800          -> "a"+FFFD            # lone high at end   (ALT-B, $2="")
+#   DC00+"b"          -> FFFD+"b"            # lone low at start  (ALT-A, $1="")
+#   D800              -> FFFD               # single lone high
+#   DC00              -> FFFD               # single lone low
+#   D800+"a"          -> FFFD+"a"            # lone high then ascii
+#   "a"+DC00+D800+"b" -> "a"+FFFD+FFFD+"b"  # low-then-high: $1="a" consumes DC00->FFFD,
+#                                           #   then D800 matches ALT-B, $2="b" -> two FFFD
+#   "a"+1F600+"b"     -> "a"+1F600+"b"      # valid pair preserved (-> encoded in B2)
+
+# ---- B1-THROW  THE CONSECUTIVE-SAME-SURROGATE THROW FAMILY (CRITICAL) -------
+# Because B1 is a SINGLE global pass that CONSUMES the captured neighbor, a run of
+# TWO-OR-MORE consecutive SAME-DIRECTION surrogates leaves the SECOND one UNREPAIRED:
+#   - "D800 D800": ALT-B matches the first D800 with $2 = the second D800 (a high is a
+#     valid "[^low]" follower). The match consumes BOTH units -> replacement
+#     "FFFD"+D800. The global scan resumes PAST the second D800, so it is never
+#     re-examined and SURVIVES as a lone surrogate. encodeURI in B2 then THROWS
+#     "URIError: URI malformed".
+#   - Symmetric for "DC00 DC00" (two lows): ALT-A matches the second low with $1 = the
+#     first low (a low is a valid "[^high]" preceder)... actually first low at start
+#     matches ALT-A ($1=""), consuming only itself? VERIFIED: "DC00 DC00" THROWS too.
+#     (Generalize via the PREDICATE below rather than per-alt reasoning.)
+# EXACT PREDICATE (use THIS to decide throw-vs-string — verified equivalent to the
+# real package over the surrogate matrix): compute t := s.replace(R2,R3) [the B1
+# output]; if t STILL contains any unpaired surrogate (a high not immediately
+# followed by a low, or a lone low), then encodeUrl(s) THROWS URIError("URI
+# malformed"); otherwise it returns encodeURI applied per B2.
+# Verified ground truth:
+#   D800+D800        -> THROW   # afterB1 = FFFD D800   (lone D800 survives)
+#   D800+DBFF        -> THROW   # afterB1 = FFFD DBFF
+#   DC00+DC00        -> THROW   # afterB1 = FFFD DC00
+#   DFFF+DC00        -> THROW
+#   D800+D800+D800   -> THROW   # afterB1 = FFFD D800 FFFD
+#   "a"+D800+D800+"a"-> THROW   # afterB1 = 61 FFFD D800 61
+#   D800+D800+DC00   -> NO THROW -> "%EF%BF%BD%F0%90%80%80"
+#                                # first D800 lone (followed by D800) -> FFFD; then
+#                                # D800+DC00 is a valid pair -> encoded
+#   DC00+D800        -> NO THROW -> "%EF%BF%BD%EF%BF%BD"  (low-then-high, both repaired)
+# The harness records the throw as {__throw}; a blind re-emitter that reproduces R2/R3
+# verbatim + standard global-replace semantics reproduces the throw deterministically.
+
+# ---- B2  ENCODE NON-URL RUNS (PASS 2) --------------------------------------
+# s := s.replace(R1, encodeURI)
+# R1 (global) matches MAXIMAL RUNS (one-or-more via the trailing '+') of code points
+# that are EITHER:
+#   (a) NOT in the "kept" character class
+#         [^\x21\x25\x26-\x3B\x3D\x3F-\x5B\x5D\x5F\x61-\x7A\x7E]
+#       i.e. any char outside the kept set, INCLUDING all non-ASCII / >0x7F, OR
+#   (b) a '%' that begins an INVALID escape, per  %(?:[^0-9A-Fa-f]|[0-9A-Fa-f][^0-9A-Fa-f]|$):
+#         - '%' followed by a non-hex char                  (e.g. "%g", "%%", "%G")
+#         - '%' followed by a hex char then a non-hex char   (e.g. "%2x", "%1G")
+#         - '%' at end-of-string                             (a trailing bare "%")
+#       NOTE the THIRD alt is exactly `$` (EOL): a '%' that ends the string
+#       (no following char) is invalid -> matched -> encoded.
+# Each matched RUN is passed to encodeURI, which produces the run's replacement.
+#
+# THE KEPT (class-preserved) ASCII SET — the chars in the negated class that are
+# therefore NOT matched by branch (a). Verified by exhaustive 0x00..0x7F scan:
+#   \x21       !
+#   \x25       %        (literal; '%' is removed from branch-(a) so the seq rule (b) governs it)
+#   \x26-\x3B  & ' ( ) * + , - . /  0 1 2 3 4 5 6 7 8 9  : ;
+#   \x3D       =
+#   \x3F-\x5B  ? @  A B C D E F G H I J K L M N O P Q R S T U V W X Y Z  [
+#   \x5D       ]
+#   \x5F       _
+#   \x61-\x7A  a b c d e f g h i j k l m n o p q r s t u v w x y z
+#   \x7E       ~
+# So the class KEEPS:  ! % & ' ( ) * + , - . / 0-9 : ; = ? @ A-Z [ ] _ a-z ~
+# Notably ABSENT from the kept class (=> branch (a) MATCHES them): space, ", #, $,
+# <, >, \, ^, `, |, and all control chars, and everything >= 0x80.
+#
+# ---- CRITICAL SUBTLETY: encodeURI is the actual encoder, not the regex --------
+# A matched run is handed to encodeURI, whose OWN preserved set differs slightly.
+# Two ASCII chars are MATCHED by R1 (not in the kept class) yet LEFT UNCHANGED by
+# encodeURI, so they pass through as identity in the final output:
+#     0x23  '#'   -> encodeURI("#") === "#"
+#     0x24  '$'   -> encodeURI("$") === "$"
+# Therefore the EFFECTIVE preserved-as-identity ASCII set =
+#     kept-class set  UNION  { '#', '$' }
+#   = ! # $ % & ' ( ) * + , - . / 0-9 : ; = ? @ A-Z [ ] _ a-z ~
+# (plus the per-sequence handling of '%': a VALID %XX escape is preserved; an
+#  INVALID one is encoded — see RUN examples). Everything else encodeURI encodes.
+#
+# encodeURI's exact behavior (the host intrinsic the blind re-emitter must match):
+#   - LEAVES UNCHANGED the 82 ASCII chars:
+#       A-Z a-z 0-9  - _ . ! ~ * ' ( )   (the 71 "unescaped")
+#       ; , / ? : @ & = + $ #            (the 11 "reserved" incl. '#')
+#   - PERCENT-ENCODES everything else as its UTF-8 bytes, UPPERCASE hex:
+#       space -> %20 ; '"' -> %22 ; '<' -> %3C ; '>' -> %3E ; '{' -> %7B ;
+#       '}' -> %7D ; '^' -> %5E ; '`' -> %60 ; '|' -> %7C ; '\' -> %5C ;
+#       control chars -> %00..%1F / %7F ; etc.
+#     ('[' 0x5B and ']' 0x5D ARE in R1's kept class so R1 never matches them ->
+#      encodeUrl preserves '[' and ']'; this is the documented IPv6-hostname carve-out.)
+#   - For NON-ASCII code points: encodeURI emits the UTF-8 byte sequence as %XX%XX...
+#       'é' (U+00E9)        -> %C3%A9
+#       'ü' (U+00FC)        -> %C3%BC
+#       'û' (U+00FB)        -> %C3%BB
+#       'à' (U+00E0)        -> %C3%A0
+#       'ñ' (U+00F1)        -> %C3%B1
+#       '€' (U+20AC)        -> %E2%82%AC
+#       '日' (U+65E5)       -> %E6%97%A5
+#       '本' (U+672C)       -> %E6%9C%AC
+#       '語' (U+8A9E)       -> %E8%AA%9E
+#       '😀' (U+1F600 pair) -> %F0%9F%98%80
+#       U+FFFD (from B1)    -> %EF%BF%BD
+#   - encodeURI uses UPPERCASE hex digits in its OUTPUT (%C3, not %c3). Pre-existing
+#     lowercase hex in a VALID %XX escape (e.g. "%c3") is PRESERVED by R1 (never
+#     matched) and so stays lowercase.
+#
+# RUN-COMBINING NOTE (the '+' quantifier): adjacent matched code points / invalid-%
+# fragments coalesce into ONE run, encoded together in a single encodeURI call.
+# Verified ground truth:
+#   "http://example.com/path"     -> "http://example.com/path"   # identity
+#   "http://example.com/foo bar"  -> "http://example.com/foo%20bar"
+#   "café"                        -> "caf%C3%A9"
+#   "<>\"{}"                      -> "%3C%3E%22%7B%7D"
+#   "a^b`c|d\\e"                  -> "a%5Eb%60c%7Cd%5Ce"
+#   "http://example.com/?a=1&b=2" -> "http://example.com/?a=1&b=2"   # reserved kept
+#   "[2001:db8::1]"               -> "[2001:db8::1]"               # brackets kept
+#   "#$"                          -> "#$"                          # encodeURI-noop
+#   "a#b$c d"                     -> "a#b$c%20d"
+#   "[object Object]"             -> "[object%20Object]"           # from String({})
+#   --- percent-escape boundary cases ---
+#   "%20"   -> "%20"        # valid escape preserved (NO double-encode)
+#   "%2520" -> "%2520"      # %25 valid + "20" -> stays (no double-encode of %25)
+#   "%41"   -> "%41"        # valid escape preserved
+#   "A%41A" -> "A%41A"      # valid escape surrounded
+#   "%c3%a9"-> "%c3%a9"     # lowercase-hex valid escapes preserved
+#   "%2"    -> "%2"         # BOUNDARY: '%'+hex+EOF matches NONE of (b)'s alts -> preserved
+#   "x%2"   -> "x%2"        # trailing "%2" preserved
+#   "%2x"   -> "%252x"      # '%'+hex+non-hex -> encodeURI("%2x")="%252x"
+#   "%2 "   -> "%252%20"    # "%2 " (space=non-hex) matched -> encodeURI("%2 ")="%252%20"
+#   "%"     -> "%25"        # bare '%' at EOL (alt '%$') -> encodeURI("%")="%25"
+#   "a%"    -> "a%25"
+#   "100%"  -> "100%25"
+#   "%foo"  -> "%25foo"     # "%fo" matched ('f'hex,'o'non-hex) -> "%25fo" + "o"
+#   "%G0"   -> "%25G0"      # '%'+non-hex
+#   "%1G"   -> "%251G"      # '%'+hex+non-hex
+#   "%%20"  -> "%25%2520"   # "%%2" run -> encodeURI("%%2")="%25%252" + "0"
+
+# ---- B3  RESULT -------------------------------------------------------------
+# return s   # the doubly-replaced string (or the URIError from B1-THROW propagates).
+
+# NON-THROW NOTE: for all NON-surrogate inputs and all WELL-PAIRED-or-single-lone
+# surrogate inputs, String() is total and encodeURI never sees a malformed sequence,
+# so the function returns a string. The ONLY throw path is the B1-THROW family above.
+
+# =============================================================================
+# ORACLE value -> oracle.json
+#   Deterministic value oracle. The harness calls the REAL encodeurl@1.0.2 on each
+#   generated [url] tuple and records the returned string as `expected` (or {__throw}
+#   for the B1-THROW family). The blind re-emitter's default export is graded against
+#   it (string-equal, or throw-vs-throw).
+# =============================================================================
+
+# =============================================================================
+# SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire B0->B1->B2->B3 pipeline, the
+#     two regexps (R1,R2) verbatim, the replacement string (R3) verbatim, the ORDER
+#     (surrogate-repair before encode), the GLOBAL single-pass replace consumption
+#     semantics (which produce both the FFFD repairs AND the B1-THROW family), and
+#     faithful reproduction of the host String()/encodeURI intrinsic semantics
+#     (preserved set + UTF-8 uppercase-hex percent-encoding + the per-'%' valid/
+#     invalid-escape rule + encodeURI's URIError on a surviving lone surrogate).
+#   CARRIED DATA: none. No embedded literal tables; the only "tables" are the two
+#     regex char classes, transcribed in full above. (No carried.json.)
+#   OUT-OF-CONTRACT: none. Pure function; no side effects, no statefulness, no
+#     ambient reads. (The B1-THROW is in-contract deterministic behavior, NOT a seam.)
+#   OUT-OF-ENVELOPE (documented, NOT generated as inputs — not JSON-codec
+#     round-trippable as args, or non-codec identity):
+#       - undefined / NaN / +-Infinity / -0 as the arg value (B0 mapping documented
+#         above; generator does not emit because the persisted arg-codec corrupts them).
+#       - boxed primitives (new Number/String/Boolean), class instances whose
+#         identity matters.
+#       - Symbol / function arguments (would throw at B0 ToString; un-round-trippable).
+# =============================================================================
+
+# =============================================================================
+# PROVENANCE
+#   package: encodeurl@1.0.2
+#   repo:    pillarjs/encodeurl  (https://github.com/pillarjs/encodeurl)
+#   license: MIT (Copyright (c) 2016 Douglas Christopher Wilson)
+#   source:  node_modules/encodeurl/index.js  (60 lines; the whole module)
+#   verified-against: the installed real package — exhaustive 0x00..0x7F scan +
+#     surrogate matrix (incl. the consecutive-same-surrogate THROW family) +
+#     coercion matrix + percent-sequence boundary cases.
+# =============================================================================

@@ -1,0 +1,256 @@
+UNIT keys
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG keys(object: any) -> Array<string>
+DEPENDS-ON none   # self-contained single file; all helpers inlined below
+
+# ============================================================================
+# OVERVIEW
+# `keys` returns an array of the OWN ENUMERABLE STRING-KEYED property names of
+# `object`. It is the lodash modular export of `_.keys` (lodash 4.2.0). It is
+# PURE and READ-ONLY: it never mutates its argument (VERIFIED: array w/ extra
+# prop and plain object both unchanged after the call).
+#
+# Top-level dispatch (the ONLY line of the public function):
+#     keys(object) = isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object)
+#   (arrayLikeKeys is called with inherited = undefined, i.e. falsy.)
+#
+# There is NO null/undefined guard at the top. null/undefined fall through:
+# isArrayLike(null/undefined) is false (value != null is false), so they go to
+# baseKeys. baseKeys -> isPrototype(null/undefined) is false -> nativeKeys ->
+# Object.keys(Object(null)) wait — see baseKeys node; net effect: null/undefined
+# -> [] (VERIFIED).
+# ============================================================================
+
+BEHAVIOR
+
+# ---------------------------------------------------------------------------
+# NODE predicate: isArrayLike(value)        # selects the branch
+# ---------------------------------------------------------------------------
+# isArrayLike(value) = (value != null) && isLength(value.length) && !isFunction(value)
+#   - value != null      : loose inequality, so EXCLUDES both null AND undefined,
+#                          INCLUDES everything else (0, '', false, NaN, objects...).
+#   - value.length read  : for primitives (number/boolean/bigint/symbol) reading
+#                          .length yields undefined; for strings yields the char
+#                          count; for boxed String yields length; for arrays /
+#                          arguments / typed arrays / Buffer yields the element
+#                          count; for plain objects whatever the own/inherited
+#                          'length' prop is (or undefined).
+#   - isLength(n) = (typeof n == 'number') && n > -1 && n % 1 == 0 && n <= 9007199254740991
+#                   (MAX_SAFE_INTEGER). So length must be a NON-NEGATIVE INTEGER
+#                   number in [0, MAX_SAFE_INTEGER]. Rejects: undefined, NaN,
+#                   negative, fractional (2.5), string "3", Infinity, > MAX_SAFE.
+#   - isFunction(value): true only when Object#toString tag is '[object Function]'
+#                        or '[object GeneratorFunction]' AND value is an object/
+#                        function. Plain callables are excluded from array-like.
+#
+# TRUE  -> arrayLikeKeys(value) branch
+# FALSE -> baseKeys(value) branch
+#
+# Worked predicate outcomes (VERIFIED):
+#   []/array            -> length int  -> ARRAYLIKE
+#   'abc' (string)      -> length 3    -> ARRAYLIKE    (string -> index keys)
+#   '' (empty string)   -> length 0    -> ARRAYLIKE -> []
+#   Uint8Array/Buffer   -> length int  -> ARRAYLIKE
+#   arguments object    -> length int  -> ARRAYLIKE
+#   new String('ab')    -> length 2    -> ARRAYLIKE -> ['0','1']
+#   {length:3,...}      -> length 3    -> ARRAYLIKE
+#   {length:2.5,...}    -> isLength F  -> BASEKEYS
+#   {length:"3",...}    -> isLength F  -> BASEKEYS
+#   {length:-1,...}     -> isLength F  -> BASEKEYS
+#   {length:1e20,...}   -> isLength F  -> BASEKEYS
+#   {length:MAX_SAFE}   -> isLength T  -> ARRAYLIKE
+#   {length:MAX_SAFE+1} -> isLength F  -> BASEKEYS
+#   plain {a:1}         -> length undef-> BASEKEYS
+#   null / undefined    -> value!=null F -> BASEKEYS (then -> [])
+#   42 / true / 5n      -> length undef-> BASEKEYS (-> [])
+#   NaN / Infinity / -0 -> length undef-> BASEKEYS (-> [])
+#   function            -> isFunction T-> BASEKEYS (-> [])
+#   Set / Map / RegExp  -> length undef-> BASEKEYS (-> [])
+#   new Number(0)       -> length undef-> BASEKEYS (-> [])
+#   new Boolean(true)   -> length undef-> BASEKEYS (-> [])
+
+# ---------------------------------------------------------------------------
+# NODE arrayLikeKeys(value)   # the array-like branch (inherited = falsy here)
+# ---------------------------------------------------------------------------
+# Step 1 (DENSE INDEX PREFIX):
+#     result = (isArray(value) || isArguments(value)) ? baseTimes(value.length, String) : []
+#   - isArray    = Array.isArray (true ONLY for real Arrays).
+#   - isArguments(value) = isArrayLikeObject(value)              # object-like AND array-like
+#                          && hasOwnProperty(value,'callee')
+#                          && (!propertyIsEnumerable(value,'callee')
+#                              || Object#toString(value) == '[object Arguments]')
+#     i.e. true for a genuine `arguments` object.
+#   - baseTimes(n, String) = ['0','1',...,String(n-1)]  (DENSE strings 0..n-1),
+#     IGNORING holes. So for arrays and arguments, the index strings 0..length-1
+#     are ALWAYS produced densely even for SPARSE arrays (VERIFIED: [,,3] -> ['0','1','2'];
+#     new Array(5) with one hole -> ['0','1','2','3','4']).
+#   - For STRINGS, typed arrays, Buffers, and array-like plain objects: result = []
+#     (they are neither isArray nor isArguments), so their index keys come ONLY
+#     from the for-in loop in Step 3.
+#
+# Step 2:
+#     length      = result.length              # 0 unless array/arguments
+#     skipIndexes = !!length                    # TRUE iff Step-1 produced a non-empty prefix
+#                                               # (i.e. value is a non-empty array or non-empty arguments)
+#
+# Step 3 (FOR-IN APPEND):
+#     for (key in value):                       # enumerates own + INHERITED enumerable string keys
+#       keep key iff:
+#         (inherited || hasOwnProperty(value, key))            # here inherited is falsy -> require OWN
+#         AND NOT ( skipIndexes && (key == 'length' || isIndex(key, length)) )
+#       if kept: result.push(key)
+#     return result
+#
+#   - hasOwnProperty filter: only OWN enumerable string keys are appended
+#     (inherited keys from a custom prototype are EXCLUDED here, since inherited is falsy).
+#   - The skipIndexes guard (only active for non-empty arrays/arguments) drops:
+#       * the literal key 'length' (so it is never duplicated), and
+#       * any key that isIndex(key, length) — i.e. an index ALREADY covered by the
+#         dense prefix (key is a uint string or number, 0 <= key < length).
+#     => For a real array, the dense prefix already holds '0'..'length-1'; the for-in
+#        would re-encounter those same index keys, and they are skipped to avoid dupes.
+#        Indexes >= length are NOT skipped (isIndex requires value < length): VERIFIED
+#        arguments(len 2) with own key '5' -> ['0','1','5'] ('5' kept because 5 >= 2).
+#        Real arrays cannot have an own index >= length (assignment grows length).
+#   - isIndex(value, length): length defaults to MAX_SAFE if null; returns
+#       !!length && (typeof value=='number' || /^(?:0|[1-9]\d*)$/.test(value))
+#               && (value > -1 && value % 1 == 0 && value < length)
+#     I.e. true iff value is a canonical unsigned-int string (or a number) strictly
+#     less than `length` (and length nonzero).
+#
+# RESULTING ORDER (array-like branch):
+#   For ARRAY / ARGUMENTS:
+#       ['0','1',...,String(length-1)]  (dense, ascending)   # from baseTimes prefix
+#       THEN the remaining own enumerable string keys in for-in order, which is:
+#         integer-index keys >= length in ascending numeric order (rare; only
+#         possible for arguments), then non-index string keys in INSERTION order,
+#         EXCLUDING 'length' and indexes < length.
+#     VERIFIED: [10,20].zoo='z'.apple='a' -> ['0','1','zoo','apple'];
+#               [1,2] + enumerable own 'length2' -> ['0','1','length2'].
+#   For STRING / TYPED-ARRAY / BUFFER / ARRAY-LIKE OBJECT (result started empty):
+#       the keys are produced ENTIRELY by the for-in loop, with NO skipIndexes,
+#       so 'length' (if an own enumerable key, e.g. on a plain {length:n,...}) and
+#       all index keys are KEPT. Order = JS for-in order = integer-like own keys
+#       ASCENDING first, then other string keys in INSERTION order.
+#     VERIFIED:
+#       {length:3, 0:'a',1:'b',2:'c'}          -> ['0','1','2','length']
+#       {length:3, 2:'c',0:'a',1:'b', z:'Z'}   -> ['0','1','2','length','z']  (idx ascending, then z)
+#       {length:2, 0:'a',1:'b', foo:'x'}       -> ['0','1','length','foo']
+#       {length:2, 0:'a',1:'b',2:'c',3:'d'}    -> ['0','1','2','3','length']  (no skip: not array)
+#       'abc' / new String('ab')               -> ['0','1','2'] / ['0','1']   ('length' non-enum on String wrapper)
+#       Uint8Array([5,6,7])                    -> ['0','1','2']  ('length' non-enum on TA)
+#       Uint8Array([9,8,7]) with own .foo      -> ['0','1','2','foo']
+#       Buffer.from([1,2,3])                   -> ['0','1','2']
+#       new Uint8Array(0)                      -> []
+#
+# ---------------------------------------------------------------------------
+# NODE baseKeys(object)   # the non-array-like branch
+# ---------------------------------------------------------------------------
+# Step 1:
+#     if (!isPrototype(object)) return nativeKeys(object)
+#   - nativeKeys = overArg(Object.keys, Object) = function(o){ return Object.keys(Object(o)); }
+#     So it COERCES to object first: Object(null)={}, Object(42)=Number obj, etc.,
+#     then Object.keys. Object.keys returns OWN ENUMERABLE STRING keys.
+#       * null / undefined: Object(null) = {} (and Object(undefined) = {}) -> [].
+#       * primitives 42 / true / 5n / NaN / Infinity / -0: wrapper object has no
+#         own enumerable keys -> [].  (Note: a primitive string would be array-like
+#         and never reach here; a boxed `new Number`/`new Boolean` is object-like
+#         with no enumerable keys -> [].)
+#       * Set / Map / RegExp / plain functions / generic objects: Object.keys of
+#         their OWN ENUMERABLE STRING keys (typically [] for Set/Map/RegExp;
+#         VERIFIED Set->[], Map->[], /abc/g->[]).
+#       * plain object {a:1,b:2}: ['a','b'] in for-in/Object.keys order.
+#       * Object.create(null) {x:1,y:2}: ['x','y'] (no constructor -> isPrototype F).
+#       * NON-ENUMERABLE own props are EXCLUDED (VERIFIED: {visible:1} + non-enum
+#         hidden -> ['visible']).
+#       * SYMBOL keys are EXCLUDED (string keys only; VERIFIED {a:1}+Symbol -> ['a']).
+#       * INHERITED enumerable props are EXCLUDED (VERIFIED: new Foo() where
+#         Foo.prototype.c=3 and this.a/this.b set -> ['a','b'], NOT 'c').
+#
+# Step 2 (the object IS likely a prototype):
+#     result = []
+#     for (key in Object(object)):
+#       if (hasOwnProperty(object, key) && key != 'constructor'):
+#         result.push(key)
+#     return result
+#   - isPrototype(value): Ctor = value && value.constructor;
+#       proto = (typeof Ctor=='function' && Ctor.prototype) || Object.prototype;
+#       return value === proto.
+#     I.e. true when `value` IS the .prototype object of its own constructor (or IS
+#     Object.prototype). In that case Object.keys would also include 'constructor'
+#     in some engines / the for-in differs; lodash hand-rolls the loop and
+#     explicitly DROPS the own key named 'constructor'.
+#   - VERIFIED: Foo.prototype (with Foo.prototype.c=3) -> ['c'] (the inherited/own
+#     'constructor' is dropped). Object.prototype -> [].
+#   - Edge: a plain object that merely has an own enumerable 'constructor' set to a
+#     function does NOT satisfy isPrototype unless value === that fn's .prototype;
+#     {constructor: fn} -> isPrototype false -> nativeKeys -> ['constructor']
+#     (VERIFIED -> ['constructor']).
+#
+# ORDER (baseKeys branch): exactly JS `Object.keys` / for-in order:
+#   integer-like own string keys in ASCENDING numeric order FIRST, then the
+#   remaining string keys in INSERTION order.
+#   VERIFIED: {b:1, 2:'x', a:1, 0:'y', 10:'z'} -> ['0','2','10','b','a'].
+#   VERIFIED: keys(o) === Object.keys(o) for {z:1,'5':2,a:3,'1':4} -> ['1','5','z','a'].
+
+# ============================================================================
+# CONSTANTS (exact, inlined in source — NOT carried data, trivially small)
+# ============================================================================
+#   MAX_SAFE_INTEGER = 9007199254740991
+#   argsTag = '[object Arguments]'
+#   funcTag = '[object Function]'
+#   genTag  = '[object GeneratorFunction]'
+#   reIsUint = /^(?:0|[1-9]\d*)$/        # used by isIndex
+# Built-in references used: Object.prototype.hasOwnProperty, Object.prototype.toString,
+#   Object.prototype.propertyIsEnumerable, Object.keys, Array.isArray.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The two-branch dispatch and every predicate (isArrayLike/isLength/isFunction/
+      isArray/isArguments/isArrayLikeObject/isObjectLike/isObject).
+    - arrayLikeKeys: dense baseTimes prefix for arrays/arguments, skipIndexes guard,
+      isIndex membership test, hasOwnProperty own-key filter, for-in append order.
+    - baseKeys: isPrototype gate, nativeKeys=Object.keys(Object(o)) path, the
+      prototype hand-rolled loop that drops own key 'constructor'.
+    - Exact RETURN ORDER per branch (documented + VERIFIED above).
+    - The codec round-trippable input domain exercised by genInputs (see below).
+  CARRIED DATA: none.
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+  the harness codec cannot faithfully round-trip them — a blind re-emitter still
+  reconstructs behavior from this spec):
+    - FUNCTIONS as the argument (codec drops them): keys(fn) -> [] via isFunction
+      true -> baseKeys -> Object.keys(fn) own enumerable string keys (usually []).
+    - SYMBOL-keyed properties (codec drops Symbol keys): always EXCLUDED from output
+      (string keys only).
+    - PROTOTYPE-INHERITED keys requiring a CUSTOM proto chain (codec cannot rebuild
+      a proto): inherited enumerable props are EXCLUDED in both branches (inherited
+      arg is falsy; baseKeys uses Object.keys). A `new Foo()` instance returns only
+      its OWN keys ['a','b'], never the inherited 'c'.
+    - The literal `arguments` object (codec cannot reconstruct one): treated as
+      array/arguments -> dense index prefix; behaves like an array for indexes and
+      drops 'length'/index-dupes via skipIndexes. (genInputs uses ARRAYS and
+      array-like plain OBJECTS to cover the index-key logic instead.)
+    - Boxed primitives (new Number/String/Boolean), NaN/Infinity/-0 as values: the
+      codec round-trips NaN/Infinity/-0 per the addendum, so genInputs MAY emit them;
+      boxed wrapper objects are NOT round-trippable and are left OUT (documented:
+      new Number/Boolean -> [], new String('ab') -> ['0','1']).
+
+# ============================================================================
+# EMISSION (for the BLIND re-emitter)
+# ============================================================================
+# The unit is the DEFAULT export of the module. The re-emitter MUST expose the
+# function as the module's default export:
+#       export default function keys(object) { ... }
+#   (or `function keys(object){...}; export default keys;`)
+# It takes exactly one positional argument and returns an Array<string>. It is
+# pure and must not mutate the argument. No options, no seam, no I/O, no RNG, no
+# clock — ORACLE-CLASS deterministic, value mode.
+
+PROVENANCE
+  package: lodash.keys@4.2.0  (the lodash modular export of `_.keys`)
+  repo:    lodash/lodash  (Custom Build: `lodash modularize exports="npm" -o ./`)
+  license: MIT (Copyright jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+  source file: node_modules/lodash.keys/index.js  (single self-contained file, all helpers inlined)

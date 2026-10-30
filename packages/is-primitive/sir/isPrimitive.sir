@@ -1,0 +1,123 @@
+UNIT isPrimitive
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isPrimitive(val: any) -> boolean
+DEPENDS-ON none
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (exact, complete — transcribed from the verified source, ordered)
+# ----------------------------------------------------------------------------
+# The unit is a single pure predicate. The SOURCE implements it with this
+# EXACT two-branch structure (do NOT re-derive a different-but-"equivalent"
+# boolean expression that diverges on the exotic typeof cases below):
+#
+#   BRANCH 1:  if (typeof val === 'object')
+#                  return (val === null)        # true ONLY for null; false for every other object
+#   BRANCH 2:  return (typeof val !== 'function')
+#
+# Read as prose:
+#   - Compute t = typeof val   (the JS `typeof` operator).
+#   - If t === 'object': the value is a non-null object reference UNLESS it is
+#     literally `null` (because `typeof null === 'object'` in JS). So return
+#     true iff val === null, else false.
+#   - Otherwise (t is anything except 'object'): return true UNLESS t === 'function'.
+#     I.e. function values are the only non-'object' typeof that is NOT a primitive.
+#
+# Equivalent closed form for the SAME observable result on ALL JS values:
+#     result = (typeof val === 'object') ? (val === null) : (typeof val !== 'function')
+#
+# IMPORTANT NUANCE — why the branch ORDER must be preserved:
+#   The hint's flat form `val == null || (typeof val !== 'object' && typeof val !== 'function')`
+#   yields the SAME result for every value class in this generator's scope, but the
+#   AUTHORITATIVE definition is the branch structure above. The one JS value where a
+#   naive simplification could diverge is the legacy browser `document.all` object,
+#   for which `typeof document.all === 'undefined'` yet it is an object: under the
+#   source's BRANCH structure it falls through to BRANCH 2 and returns true
+#   (typeof is 'undefined', not 'function'). `document.all` is NOT constructible in
+#   Node and is OUT-OF-ENVELOPE here (see SCOPE) — documented for completeness so a
+#   blind re-emitter reproduces the branch logic, not a lookalike.
+#
+# The `typeof` operator's value classification (the full mapping this predicate keys on):
+#   typeof null        === 'object'    -> BRANCH 1 -> val===null -> TRUE
+#   typeof <plain obj> === 'object'    -> BRANCH 1 -> val!==null -> FALSE
+#   typeof <array>     === 'object'    -> BRANCH 1 -> FALSE
+#   typeof <Map/Set/Date/RegExp/Buffer/Uint8Array/boxed-wrapper> === 'object' -> FALSE
+#   typeof undefined   === 'undefined' -> BRANCH 2 -> 'undefined' !== 'function' -> TRUE
+#   typeof <string>    === 'string'    -> BRANCH 2 -> TRUE
+#   typeof <number>    === 'number'    -> BRANCH 2 -> TRUE  (incl. NaN, Infinity, -Infinity, 0, -0)
+#   typeof <boolean>   === 'boolean'   -> BRANCH 2 -> TRUE
+#   typeof <bigint>    === 'bigint'    -> BRANCH 2 -> TRUE
+#   typeof <symbol>    === 'symbol'    -> BRANCH 2 -> TRUE       (see SCOPE: out-of-envelope for the codec)
+#   typeof <function>  === 'function'  -> BRANCH 2 -> 'function' !== 'function' -> FALSE  (out-of-envelope)
+#
+# No exceptions are thrown for any input. No mutation. No side effects.
+# Calling with zero args: `val` is `undefined` -> TRUE (same as passing undefined).
+# `-0` (negative zero): typeof is 'number' -> TRUE (identical to +0).
+# Boxed wrappers new Number(1) / new String("x") / new Boolean(true): typeof is
+#   'object' and they are not null -> FALSE. (Distinct from their primitive forms,
+#   which are TRUE.) This boxed-vs-primitive split is the classic gotcha and is
+#   exercised in the generator's curated prefix.
+
+# ----------------------------------------------------------------------------
+# EXPECTED RESULT TABLE  (self-consistent with genInputs — every value class the
+# generator can emit appears here with its exact boolean)
+# ----------------------------------------------------------------------------
+#   TRUE  (primitive):
+#     null
+#     undefined            (and the zero-arg call)
+#     ""  and any string
+#     0, 1, -1, -0, 3.14, any finite/integer number
+#     NaN
+#     Infinity, -Infinity
+#     true, false
+#     any bigint           (e.g. 0n, 10n, -7n, very-large)
+#   FALSE (non-primitive):
+#     {}  and any plain object
+#     []  and any array (including [] empty)
+#     new Map(), new Set()
+#     new RegExp("..") and /regex/ literal
+#     new Date()  (revived as a non-null plain object via codec; result FALSE either way)
+#     Buffer.from(..), new Uint8Array(..) (any TypedArray / ArrayBuffer view)
+#     new Number(1), new String("x"), new Boolean(true)   (boxed wrappers)
+#   TRUE  (out-of-envelope but defined for the blind re-emitter; NOT codec-faithful,
+#          so NOT emitted by genInputs — see SCOPE):
+#     any Symbol  -> TRUE
+#   FALSE (out-of-envelope; not emitted):
+#     any function (declaration, arrow, class, async, generator) -> FALSE
+
+ORACLE value -> oracle.json
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire predicate. It is the pure
+#   two-branch typeof test described in BEHAVIOR. There is no option, no config,
+#   no carried data, no dependency. The full behavior is defined above for every
+#   value class — a blind re-emitter needs nothing else.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-ENVELOPE (behavior fully DEFINED above, but NOT emitted by genInputs
+#   because the value cannot cross the oracle's JSON+tag codec by value/identity;
+#   a blind re-emitter still reconstructs the result from this spec):
+#   - Symbol values: typeof 'symbol' -> BRANCH 2 -> TRUE. The harness codec has
+#     NO tag for symbols (supported tags: undef/regex/bigint/num/boxed/set/map/u8),
+#     so a Symbol cannot be persisted into the held-out set; emitting one would
+#     poison the held-out. Behavior is nonetheless pinned: ALL symbols -> TRUE.
+#   - Function values: typeof 'function' -> BRANCH 2 -> FALSE. No codec tag for a
+#     live function; not emitted. Behavior pinned: ALL functions -> FALSE.
+#   - `document.all` (legacy browser host object): typeof === 'undefined' though it
+#     is an object; the source returns TRUE for it (BRANCH 2). Not constructible in
+#     Node; never emitted. Documented only to justify the branch order.
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): none — the unit is pure.
+
+# ----------------------------------------------------------------------------
+# PROVENANCE
+# ----------------------------------------------------------------------------
+# is-primitive@3.0.1
+# repo: https://github.com/jonschlinkert/is-primitive (jonschlinkert)
+# license: MIT
+# source file: index.js  (module.exports = function isPrimitive(val){...})
+# verified: ran the real package over all value classes above; outputs match
+#   the EXPECTED RESULT TABLE exactly (2026-06-23).

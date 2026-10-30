@@ -1,0 +1,207 @@
+UNIT lt
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG  lt(value: any, other: any) -> boolean        # DEFAULT export (module.exports = lt)
+DEPENDS-ON none                                   # zero runtime deps; self-contained
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+PROVENANCE
+  package    lodash.lt@3.9.2
+  repo       lodash/lodash  (custom modularized build: `lodash modularize exports="npm" -o ./`)
+  license    MIT
+  sourceFile index.js  (module.exports = lt)
+  exportShape  DEFAULT export — a single function. The blind re-emitter MUST
+               `export default <fn>` (one default-exported function). NOT a named export.
+
+# ============================================================================
+# BEHAVIOR — exact pipeline. `lt = createRelationalOperation(baseLt)` where
+# baseLt(value, other) = (value < other). Reproduce EXACTLY, including the
+# coercion sub-pipeline `toNumber`.
+# ============================================================================
+BEHAVIOR
+
+  # ----- TOP-LEVEL: lt(value, other) -----------------------------------------
+  # NODE L1 (string-pair guard):
+  #   IF NOT ( typeof value === 'string'  AND  typeof other === 'string' ):
+  #       value := toNumber(value)
+  #       other := toNumber(other)
+  #   # i.e. ONLY when BOTH operands are *primitive strings* (typeof==='string')
+  #   # do we SKIP coercion. In every other case, BOTH operands are passed
+  #   # through toNumber(...) first (even if only one is a string).
+  #
+  # NODE L2 (compare):  RETURN  (value < other)
+  #   This is JavaScript's `<` relational operator applied to the (possibly
+  #   coerced) operands. Return value is a STRICT BOOLEAN (true | false).
+  #   The `<` operator already yields a boolean; the function returns it verbatim.
+  #
+  # CONSEQUENCES of L1+L2 that MUST be reproduced:
+  #   * BOTH strings  -> NO coercion -> LEXICOGRAPHIC string `<` (UTF-16 code-unit
+  #     order). e.g. lt("10","9") === true  (because "1" < "9").
+  #   * Otherwise (number-vs-number, mixed, objects, null, undefined, boolean,
+  #     one-string-one-nonstring) -> BOTH operands coerced via toNumber, then
+  #     numeric `<`.
+  #   * Any NaN operand after coercion -> numeric `<` is false (NaN compares
+  #     false to everything). e.g. lt(NaN,1)===false, lt(1,NaN)===false.
+  #   * -0 and 0 coerce to themselves; `-0 < 0` is FALSE and `0 < -0` is FALSE
+  #     (IEEE: -0 and +0 compare equal, so neither is strictly less).
+  #   * +Infinity / -Infinity follow numeric `<` (lt(1,Infinity)===true,
+  #     lt(-Infinity,1)===true, lt(Infinity,1)===false).
+
+  # ----- toNumber(value) — the coercion sub-pipeline -------------------------
+  # Constants used (verbatim):
+  #   NAN        = 0/0                       # the literal NaN
+  #   reTrim     = /^\s+|\s+$/g              # strip leading+trailing whitespace
+  #   reIsBadHex = /^[-+]0x[0-9a-f]+$/i      # signed hex string => bad => NaN
+  #   reIsBinary = /^0b[01]+$/i              # binary literal string
+  #   reIsOctal  = /^0o[0-7]+$/i             # octal literal string
+  #   symbolTag  = '[object Symbol]'
+  #   objectToString = Object.prototype.toString
+  #   freeParseInt = parseInt (the global)
+  #
+  # toNumber(value):
+  #   N1: IF typeof value === 'number'  -> RETURN value (unchanged, incl. -0/NaN/Inf)
+  #   N2: IF isSymbol(value)            -> RETURN NAN
+  #         isSymbol(v) := (typeof v === 'symbol')
+  #                        OR ( isObjectLike(v) AND objectToString.call(v) === '[object Symbol]' )
+  #         isObjectLike(v) := (!!v) AND (typeof v === 'object')
+  #   N3: IF isObject(value)            -> unwrap via valueOf:
+  #         isObject(v) := (!!v) AND (typeof v === 'object' OR typeof v === 'function')
+  #         other := (typeof value.valueOf === 'function') ? value.valueOf() : value
+  #         value := isObject(other) ? (other + '')   # String() concatenation coercion
+  #                                  : other
+  #         # NOTE: for plain objects/arrays/typed-arrays/Buffers/Sets/Maps/RegExp,
+  #         # valueOf() returns the object ITSELF (still an object), so the
+  #         # (other + '') branch runs, producing that object's string form:
+  #         #   []           + '' === ''            -> later +'' === 0
+  #         #   [1,2]        + '' === '1,2'         -> +  === NaN
+  #         #   {}           + '' === '[object Object]' -> NaN
+  #         #   /re/         + '' === '/re/'        -> NaN
+  #         #   new Set([1]) + '' === '[object Set]'-> NaN
+  #         #   new Map()    + '' === '[object Map]'-> NaN
+  #         #   Uint8Array([5])  + '' === '5'       -> 5
+  #         #   Uint8Array([5,6])+ '' === '5,6'     -> NaN
+  #         #   Buffer.from([5]) + '' === ''  -> NaN  (Buffer.toString decodes bytes as UTF-8)
+  #         # For boxed primitives (new Number(3), new String('2')) valueOf()
+  #         # returns the UNBOXED primitive (3, '2'), so `value` becomes that
+  #         # primitive and the (other+'') branch is skipped.
+  #   N4: IF typeof value !== 'string'  ->            # value is now number/boolean/null/undefined/bigint
+  #         RETURN (value === 0) ? value : (+value)
+  #         # `value === 0` short-circuit preserves -0 EXACTLY (since -0 === 0 is
+  #         # true, a -0 reaching here returns -0 rather than +(-0); both are -0
+  #         # anyway, but the branch exists). For null -> +null === 0; for
+  #         # undefined -> +undefined === NaN; for true -> +true === 1; false -> 0.
+  #         # *** BIGINT: a bigint reaching `+value` THROWS TypeError("Cannot
+  #         #     convert a BigInt value to a number"). See THROW PATHS below. ***
+  #   N5: value is a string (typeof === 'string'):
+  #         value := value.replace(reTrim, '')        # trim leading/trailing whitespace
+  #         isBinary := reIsBinary.test(value)        # /^0b[01]+$/i
+  #         IF (isBinary OR reIsOctal.test(value)):    # binary or octal literal
+  #             RETURN freeParseInt( value.slice(2), isBinary ? 2 : 8 )
+  #         ELSE:
+  #             RETURN reIsBadHex.test(value) ? NAN : (+value)
+  #             # reIsBadHex = /^[-+]0x[0-9a-f]+$/i : a SIGNED hex string ("-0x1",
+  #             # "+0xff") => NaN. An UNSIGNED hex string ("0xff") is NOT matched
+  #             # by reIsBadHex, so it falls to `+value` and parses normally
+  #             # (+"0xff" === 255). Empty/whitespace-only string -> "" -> +"" === 0.
+  #             # Non-numeric string ("abc") -> +"abc" === NaN.
+
+# ============================================================================
+# THROW PATHS (deterministic; reached by codec-faithful inputs)
+# ============================================================================
+# * BIGINT operand: if any operand that is NOT skipped by the string-pair guard
+#   reaches toNumber's N4 `+value` as a bigint, JS throws
+#   TypeError: "Cannot convert a BigInt value to a number".
+#   Because the string-pair guard only skips when BOTH are typeof==='string',
+#   ANY pair containing a bigint coerces it and THROWS. Confirmed:
+#     lt(5n, 6)    -> THROW    lt(5, 6n)  -> THROW    lt(5n, 6n) -> THROW
+#     lt(5n, "x")  -> THROW    lt("x", 5n)-> THROW
+#   (A bigint vs bigint still throws: not both strings -> both coerced -> +5n throws.)
+#   The oracle records these as {__throw} (TypeError).
+
+# ============================================================================
+# DEMONSTRATED IN-SCOPE BEHAVIOR (verified by running lodash.lt@3.9.2)
+# Self-consistent with genInputs — every value class below is produced by the
+# curated prefix, and every value the prefix produces is defined above.
+# ============================================================================
+#   lt(1, 3)            => true     # a<b numeric
+#   lt(3, 1)            => false    # a>b numeric
+#   lt(3, 3)            => false    # a===b numeric (NOT strictly less)
+#   lt(NaN, 1)          => false    # NaN operand
+#   lt(1, NaN)          => false
+#   lt(NaN, NaN)        => false
+#   lt(Infinity, 1)     => false
+#   lt(1, Infinity)     => true
+#   lt(-Infinity, 1)    => true
+#   lt(1, -Infinity)    => false
+#   lt(-Infinity, Infinity) => true
+#   lt("a", "b")        => true     # both strings -> lexicographic
+#   lt("b", "a")        => false
+#   lt("a", "a")        => false
+#   lt("abc", "abd")    => true
+#   lt("10", "9")       => true     # BOTH strings -> lex: "1" < "9"
+#   lt("2", 10)         => true     # mixed -> "2"->2, 2<10
+#   lt(10, "2")         => false    # mixed -> "2"->2, 10<2 false
+#   lt("10", 9)         => false    # mixed -> "10"->10, 10<9 false
+#   lt(-5, 5)           => true
+#   lt(-0, 0)           => false    # -0 < 0 is false
+#   lt(0, -0)           => false
+#   lt(undefined, 1)    => false    # +undefined -> NaN -> NaN<1 false
+#   lt(1, undefined)    => false
+#   lt(undefined, undefined) => false
+#   lt(null, 1)         => true     # +null -> 0 -> 0<1 true
+#   lt(1, null)         => false
+#   lt(null, null)      => false    # 0<0 false
+#   lt(true, 2)         => true     # +true -> 1 -> 1<2 true
+#   lt(false, 1)        => true     # +false -> 0 -> 0<1 true
+#   lt(true, false)     => false    # 1<0 false
+#   lt("0b101", 6)      => true     # binary string parse -> 5 < 6
+#   lt("0o17", 16)      => true     # octal string parse -> 15 < 16
+#   lt("0xff", 256)     => true     # unsigned hex -> +"0xff"=255 < 256
+#   lt("-0x1", 5)       => false    # signed hex -> reIsBadHex -> NaN
+#   lt("+0x1", 5)       => false    # signed hex -> NaN
+#   lt("  5  ", 6)      => true     # trim -> "5" -> 5 < 6
+#   lt("", 1)           => true     # +"" -> 0 < 1
+#   lt("   ", 1)        => true     # trim -> "" -> 0 < 1
+#   lt("abc", 1)        => false    # +"abc" -> NaN
+#   lt([5], 6)          => true     # array valueOf->self -> "5" -> 5 < 6
+#   lt([5], [6])        => true     # both coerced: 5 < 6
+#   lt({}, 1)           => false    # "{}"->"[object Object]"-> NaN
+#   lt([], 1)           => true     # ""+'' -> 0 < 1
+#   lt([1,2], 1)        => false    # "1,2" -> NaN
+#   lt(new Set([1]), 1) => false    # "[object Set]" -> NaN
+#   lt(new Map(), 1)    => false    # "[object Map]" -> NaN
+#   lt(new Uint8Array([5]), 6)   => true   # "5" -> 5 < 6
+#   lt(new Uint8Array([5,6]), 6) => false  # "5,6" -> NaN
+#   lt(Buffer.from([5]), 6)      => false  # "" -> NaN
+#   lt(/re/, 1)         => false    # "/re/" -> NaN
+#   lt(5n, 6)           => THROW (TypeError)   # bigint coercion
+#   lt(5, 6n)           => THROW (TypeError)
+#   lt(5n, 6n)          => THROW (TypeError)
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+SCOPE
+  in-contract:
+    - The full lt pipeline (string-pair guard + numeric/lexicographic `<`) AND
+      the toNumber coercion sub-pipeline (symbol->NaN, object/valueOf unwrap,
+      string trim + binary/octal/signed-hex parsing, -0 preservation, +value).
+    - Return is a STRICT BOOLEAN.
+  carried-data: NONE. No literal tables. The only constants are the regexes /
+    NaN literal shown verbatim above; reproduce them inline (not carried data).
+  out-of-contract / OUT-OF-ENVELOPE (do NOT emit from genInputs; codec cannot
+  faithfully round-trip them, so the stored oracle expected would be corrupted):
+    - Symbol operands: NOT JSON/codec round-trippable. Behavior IS defined
+      (isSymbol -> toNumber returns NaN -> comparison false, e.g. lt(Symbol(),1)
+      === false) but a blind re-emitter reconstructs it from this spec; the
+      generator must not produce Symbols.
+    - Function operands: not codec round-trippable. Behavior defined
+      (isObject true -> valueOf returns the function (still object) -> (fn+'')
+      -> the function's source string -> +that -> NaN -> false). Reconstructable
+      from spec; do NOT emit functions.
+    - The unit reads NO ambient source (no clock/RNG/env/fs/net). No SEAM.
+      ORACLE-CLASS deterministic (pure).
+
+ORACLE value -> oracle.json

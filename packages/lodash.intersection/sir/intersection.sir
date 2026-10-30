@@ -1,0 +1,204 @@
+UNIT intersection
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG intersection(...arrays: any[]) -> any[]
+DEPENDS-ON none   # pure; zero runtime deps; no seam (no clock/RNG/env/io/net)
+
+# =====================================================================
+# CONTRACT (lodash _.intersection, custom-build npm module 4.4.0)
+# Default export: module.exports = intersection.  Variadic.
+# Returns a NEW array of the values present in ALL given arguments,
+# compared with SameValueZero, ordered/deduped by the FIRST argument.
+# Only the FIRST arg's array-like-object-ness gates the whole thing;
+# if the first arg is not an array-like OBJECT the result is [].
+# =====================================================================
+
+BEHAVIOR  # ordered pipeline; node numbers are referenced from SCOPE
+
+  # ---- Helper definitions (reproduce EXACTLY) ----------------------
+
+  # H1. SameValueZero equality (the equality used throughout):
+  #     eq(a, b)  ==  (a === b) OR (a !== a AND b !== b)
+  #     i.e. strict === , EXCEPT NaN equals NaN, and +0 === -0 (so
+  #     -0 and +0 are the same key). No type coercion: 1 !== "1".
+
+  # H2. isObjectLike(v)  ==  (v is truthy) AND (typeof v === "object")
+  #     -> true for arrays, plain objects, arguments objects, boxed
+  #        primitives, Date, RegExp, Map, Set, typed arrays, etc.
+  #     -> false for null, undefined, and ALL primitives
+  #        (number, string, boolean, bigint, symbol).
+
+  # H3. isLength(v) == (typeof v === "number") AND v > -1 AND
+  #                    (v % 1 === 0) AND v <= 9007199254740991
+  #     (a valid array-like length: non-negative safe integer).
+
+  # H4. isFunction(v): true iff Object.prototype.toString.call(v) is
+  #     "[object Function]" or "[object GeneratorFunction]".
+
+  # H5. isArrayLike(v) == (v != null) AND isLength(v.length)
+  #                       AND NOT isFunction(v)
+
+  # H6. isArrayLikeObject(v) == isObjectLike(v) AND isArrayLike(v)
+  #     -> TRUE for arrays, arguments objects, typed arrays,
+  #        and plain objects that carry a valid numeric .length
+  #        (e.g. {length:2, 0:'a', 1:'b'}).
+  #     -> FALSE for primitives (incl. primitive strings — a string
+  #        has a .length but is NOT object-like), null, undefined,
+  #        functions, and objects with no/invalid .length.
+
+  # H7. castArrayLikeObject(v) == isArrayLikeObject(v) ? v : []
+  #     NOTE: when v is NOT array-like-object this returns a FRESH []
+  #     (a brand-new array, NOT the same reference as v).
+
+  # H8. arrayIncludes(arr, value): linear scan of arr (treating a
+  #     null/undefined arr as length 0) returning whether `value`
+  #     occurs, by SameValueZero (=== , with NaN-matches-NaN handled
+  #     by a value!==value branch). +0/-0 match each other.
+
+  # ---- Pipeline ----------------------------------------------------
+
+  # N1 (collect args). Gather all call arguments into an ordered list
+  #     `arrays` of length = arguments.length. Zero args => arrays = [].
+  #     (Implementation note: lodash uses baseRest; the observable
+  #      effect is simply "rest-collect every positional argument".)
+
+  # N2 (cast each arg). mapped = arrays.map(castArrayLikeObject)   [H7]
+  #     => each element of `mapped` is either the SAME reference as the
+  #        corresponding arg (if it was array-like-object) or a fresh [].
+
+  # N3 (first-arg gate).
+  #     if (mapped.length > 0) AND (mapped[0] === arrays[0])
+  #          then result = baseIntersection(mapped)   # go to N4
+  #          else return []                            # short-circuit
+  #     Semantics: mapped[0] === arrays[0] is TRUE exactly when the
+  #     first arg WAS array-like-object (H7 returned it unchanged).
+  #     If the first arg was NOT array-like-object, mapped[0] is a fresh
+  #     [] !== arrays[0], so the whole call returns [].
+  #     Corollary: zero args => mapped.length === 0 => return [].
+  #     Corollary: a single array-like-object arg => N4 with that one
+  #     array (produces its deduped, order-preserved values).
+
+  # N4 (baseIntersection over `mapped`). Let arrs = mapped (length >= 1,
+  #     arrs[0] is the first array; every element is an array-like).
+  #     Let:
+  #        length    = arrs[0].length          # iterate over first
+  #        maxLength = MIN over all i of arrs[i].length   # result cap
+  #        result    = []
+  #     (There is no iteratee and no comparator in _.intersection, so
+  #      `computed` == `value` and membership uses SameValueZero [H8].)
+  #
+  #     Iterate index = 0,1,2,... while index < length AND
+  #                                    result.length < maxLength:
+  #        let value = arrs[0][index]    # reading a hole yields undefined
+  #        # ZERO NORMALIZATION (no comparator branch):
+  #        #   value = (value !== 0) ? value : 0
+  #        #   -> if value is +0 or -0, force value = +0 (positive zero).
+  #        #   -> all other values (incl. NaN, which is !== 0) unchanged.
+  #        # DEDUP against already-accepted results:
+  #        if SameValueZero-includes(result, value):  # already taken
+  #             continue                                # skip duplicate
+  #        # MEMBERSHIP in EVERY OTHER array:
+  #        for othIndex = (arrs.length - 1) down to 1:
+  #             if NOT SameValueZero-includes(arrs[othIndex], value):
+  #                  continue outer    # value missing from some array; skip
+  #        # value is in all arrays and not yet seen:
+  #        result.push(value)
+  #     return result
+  #
+  #     NOTE on the zero-normalization vs dedup interaction: because
+  #     value is normalized to +0 BEFORE the dedup check and before the
+  #     push, a first array of [-0, 0] yields a single +0 in result
+  #     (the -0 is normalized to +0, then 0 is a SameValueZero dup).
+  #     The emitted zero is ALWAYS +0, never -0.
+  #
+  #     NOTE on maxLength: the result can never be longer than the
+  #     SHORTEST input array. Once result.length reaches maxLength the
+  #     loop stops even if more of arrs[0] remains. (For genuine set
+  #     intersection this cap is never the binding constraint beyond the
+  #     natural fact that the intersection cannot exceed the smallest
+  #     set, but it is part of the exact contract.)
+
+  # ---- Equality / element semantics summary (SameValueZero) --------
+  #  * NaN is a member: [NaN] intersect [NaN] => [NaN].
+  #  * +0 and -0 are the SAME element; the emitted value is +0.
+  #  * No coercion: 1 and "1" are distinct; true and 1 are distinct.
+  #  * Objects/arrays/functions compared by REFERENCE identity
+  #    (same object in two arrays => kept; structurally-equal but
+  #    distinct references => not kept).
+  #  * undefined is a normal element (incl. sparse-array holes read as
+  #    undefined): [undefined] intersect [undefined] => [undefined].
+  #  * null is a normal element: [null] intersect [null] => [null].
+
+  # ---- Non-array-like ARGUMENTS (not elements) ---------------------
+  #  * FIRST arg not array-like-object (primitive string/number/boolean/
+  #    bigint/symbol, null, undefined, function, plain object w/o valid
+  #    .length) => result []  (gate N3).
+  #  * A LATER arg not array-like-object is cast to a fresh [] (H7), so
+  #    the intersection with [] is EMPTY => result []. (Membership
+  #    against an empty array fails for every value.)
+  #  * An arguments object / typed array / {length:k, 0:..,1:..} IS
+  #    array-like-object and is treated as its indexed elements.
+  #  * A primitive string arg is NOT array-like-object (not object-like)
+  #    => as first arg gives [], as later arg gives [] (cast to []).
+
+  # ---- Purity ------------------------------------------------------
+  #  No mutation of any input. Returns a fresh array. Deterministic;
+  #  no clock/RNG/env/io/network seam.
+
+ORACLE value -> oracle.json
+# Inputs are arg-arrays (each tuple is the full variadic argument list).
+# Expected is the returned array, compared structurally. The harness's
+# codec round-trips the in-scope element/arg kinds (see SCOPE).
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline N1..N4
+  and helpers H1..H8 above. All equality is SameValueZero. There is NO
+  carried-data table for this unit (no S-box / charmap / locale table).
+
+  Demonstrated in-scope value/arg kinds (self-consistent with genInputs):
+    - Element kinds inside in-scope arrays: numbers (incl. NaN,
+      +Infinity, -Infinity, +0, -0, negatives, MAX_SAFE_INTEGER),
+      strings, booleans, null, undefined (and sparse-array holes which
+      read as undefined), bigint, plain objects/arrays compared by
+      reference, RegExp, Set, Map, Uint8Array elements.
+    - Argument kinds (the variadic positions): arrays; array-like
+      objects ({length,0,1,...}); primitive strings/numbers/booleans/
+      bigint; null; undefined; plain non-array-like objects. These
+      exercise the array-like filtering (gate N3 / cast H7).
+    - Cardinalities: zero args, one arg, two+ args; empty arrays;
+      large arrays (>=120 to exercise the equivalent SetCache fast path
+      — behavior is identical to the small path; the SIR specifies the
+      observable result, not the cache mechanism).
+
+  CARRIED DATA: none.
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by
+  genInputs because the oracle codec cannot faithfully persist them):
+    - Function elements: a function as an ELEMENT would be compared by
+      reference identity, but functions do not survive the
+      JSON.stringify(encode(args)) round-trip, so they are excluded from
+      genInputs. (A function as an ARG is non-array-like => [] by N3;
+      still excluded from emission for codec faithfulness.) Documented
+      here so a blind re-emitter still reconstructs the reference-
+      identity rule.
+    - Symbol elements: Symbols are unique and do not round-trip the
+      codec; excluded from genInputs. Reference/identity equality under
+      SameValueZero would apply (a shared Symbol kept, distinct Symbols
+      not), but it is OUT-OF-ENVELOPE for grading.
+    - Boxed primitives as elements (new Number/String/Boolean): they ARE
+      object-like and compared by reference identity, but do not
+      round-trip; excluded from emission, behavior documented (reference
+      identity, never equal to the unboxed primitive).
+
+PROVENANCE
+  package: lodash.intersection@4.4.0 (npm; "lodash modularize" custom build)
+  repo:    lodash/lodash
+  license: MIT
+  source:  node_modules/lodash.intersection/index.js
+           (default export `intersection`, built atop inlined helpers
+            baseRest, arrayMap, castArrayLikeObject, isArrayLikeObject,
+            isArrayLike, isLength, isFunction, isObjectLike,
+            baseIntersection, arrayIncludes, baseIndexOf, baseIsNaN, eq)
+
+# RE-EMITTER DIRECTIVE: emit an ES module whose DEFAULT export is the
+# reconstructed function, i.e.  `export default intersection`.

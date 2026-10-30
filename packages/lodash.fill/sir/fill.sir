@@ -1,0 +1,315 @@
+UNIT fill
+KIND STATE
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# WHY KIND STATE (not a seam): fill MUTATES its first argument `array` IN PLACE
+# and RETURNS THE SAME REFERENCE. There is NO ambient seam here (no clock / RNG /
+# fs / net). It is a pure deterministic function of (array, value, start, end) —
+# deterministic given the *contents* of the args. The state it touches is its OWN
+# input argument, which is fully supplied by the caller, so it is ORACLE-CLASS
+# deterministic. The observable the oracle compares is the RETURNED array
+# (== the mutated input ref). See OBSERVABLE below.
+# ----------------------------------------------------------------------------
+
+SIG fill(array, value, start?, end?) -> array
+    # `array`  : the array to fill (mutated in place). May also be null/undefined
+    #            or any array-LIKE object (uses .length); see SCOPE.
+    # `value`  : the value written into each filled slot (any value; written by
+    #            reference / identity for objects — the SAME value object is placed
+    #            at every filled index).
+    # `start`  : optional start index (default 0). Coerced via toInteger (below).
+    # `end`    : optional end index (default array.length). Special raw-compare
+    #            handling (below).
+    # returns  : the SAME `array` reference, mutated  (except the empty/null path,
+    #            which returns a BRAND-NEW [] — NOT the input).
+
+DEPENDS-ON none   # zero runtime deps; all helpers (toInteger/toFinite/toNumber/
+                  # toLength/baseClamp/isObject/isSymbol/isIterateeCall/isIndex/
+                  # isArrayLike/isFunction/isLength/eq/isObjectLike) are inlined in
+                  # the single source file and reproduced below.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline — reproduce EXACTLY)
+# ============================================================================
+#
+# Top-level fill(array, value, start, end):
+#
+#   N0. length = array ? array.length : 0
+#       # `array ?` is JS truthiness: null / undefined / 0 / "" / NaN / false are
+#       # falsy -> length = 0. An array (even empty []) is truthy. A non-empty
+#       # string is truthy and its .length is its char count (array-like path).
+#
+#   N1. if (!length) return []          # NOTE: returns a NEW empty array literal,
+#       # NOT the input. This fires when array is null/undefined, OR array.length
+#       # is 0 / NaN / undefined / falsy. (e.g. fill([], "x") -> a new []  ;
+#       #  fill(null,"x") -> [] ; fill(undefined,"x") -> [].)
+#       # This is the ONLY early return; everything else flows into baseFill.
+#
+#   N2. ITERATEE-CALL GUARD (rarely fires; reproduce faithfully):
+#       if ( start  &&  typeof start != 'number'  &&  isIterateeCall(array, value, start) ):
+#            start = 0
+#            end   = length
+#       # Guard condition requires ALL of:
+#       #   (a) start is truthy (not 0/""/null/undefined/false/NaN),
+#       #   (b) typeof start != 'number'  (so an object/array/string/boolean/bigint),
+#       #   (c) isIterateeCall(array, value, start) === true.
+#       # isIterateeCall(value=array, index=value, object=start):
+#       #     if (!isObject(start)) return false           # start must be object-typed
+#       #     t = typeof value                              # typeof the `value` arg
+#       #     if t == 'number':
+#       #         ok = isArrayLike(start) && isIndex(value, start.length)
+#       #     elif t == 'string':
+#       #         ok = (value in start)
+#       #     else: return false
+#       #     if ok: return eq(start[value], array)         # SameValueZero(start[value], array)
+#       #     else:  return false
+#       # In practice this guard only fires under lodash's internal iteratee-call
+#       # protocol; for normal user calls it is effectively never true. Reproduce
+#       # the predicate exactly so the rare positive case matches.
+#       # (helpers: isObject/isArrayLike/isIndex/eq specified in N6.)
+#
+#   N3. return baseFill(array, value, start, end)
+#
+# ----------------------------------------------------------------------------
+# baseFill(array, value, start, end):
+# ----------------------------------------------------------------------------
+#
+#   B0. length = array.length
+#
+#   B1. start = toInteger(start)                 # see toInteger in N6
+#       if (start < 0):
+#           start = (-start > length) ? 0 : (length + start)
+#       # Negative-from-end normalization: -k counts from the end (length - k),
+#       # but if it would underflow (-start > length) clamp to 0.
+#       # toInteger(undefined) -> 0, so omitted start -> 0.
+#
+#   B2. end = (end === undefined || end > length) ? length : toInteger(end)
+#       # *** CRITICAL RAW-COMPARE BUG-PRESERVE ***
+#       # The comparison `end > length` is performed on the RAW, UNCOERCED `end`
+#       # argument (before toInteger). JS applies abstract relational comparison:
+#       #   - number end: numeric compare.
+#       #   - string end like "10": ToNumber("10")=10 compared to length.
+#       #   - string end like "abc": ToNumber -> NaN, NaN > length is FALSE.
+#       #   - object/array end (e.g. [10]): ToPrimitive -> "10" -> 10 > length.
+#       #   - null end: ToNumber(null)=0, 0 > length false.
+#       #   - true end: ToNumber(true)=1 > length.
+#       #   - NaN end: NaN > length FALSE.
+#       # If (end === undefined OR raw end > length)  -> end = length.
+#       # ELSE                                        -> end = toInteger(end).
+#       # Consequence: any `end` whose RAW value exceeds length collapses to
+#       # length (full clamp), WITHOUT toInteger truncation; otherwise end is
+#       # toInteger-coerced. e.g. end="10" on len-4 array => "10">4 true => end=4.
+#       #                         end="3"  on len-4 array => "3">4 false => toInteger("3")=3.
+#       #                         end=3.9  on len-4 array => 3.9>4 false => toInteger(3.9)=3.
+#
+#   B3. if (end < 0):
+#           end += length
+#       # Negative-from-end for end. (Only reachable when raw end <= length and
+#       # toInteger(end) < 0, i.e. negative finite end.)
+#
+#   B4. end = (start > end) ? 0 : toLength(end)
+#       # If start exceeds end, the write window is empty (end=0, and since
+#       # start>=0 the loop never runs). Otherwise end = toLength(end) which
+#       # clamps end into [0, 4294967295] (MAX_ARRAY_LENGTH). For arrays of normal
+#       # size end <= length here so toLength is effectively a >=0 floor; the
+#       # clamp upper bound never triggers in-envelope. toLength(0)=0; toLength of
+#       # any positive integer e -> e (e <= length <= array size).
+#
+#   B5. while (start < end):
+#           array[start] = value
+#           start = start + 1
+#       # Writes `value` (same identity each iteration) to indices [start, end).
+#       # Fills holes in sparse arrays (creates own enumerable props).
+#
+#   B6. return array          # SAME reference, now mutated.
+#
+# ============================================================================
+# N6. NUMERIC COERCION HELPERS  (reproduce EXACTLY — these define start/end semantics)
+# ============================================================================
+#
+# Constants:
+#   INFINITY         = Infinity
+#   MAX_SAFE_INTEGER = 9007199254740991
+#   MAX_INTEGER      = 1.7976931348623157e+308
+#   NAN              = NaN
+#   MAX_ARRAY_LENGTH = 4294967295
+#   reTrim     = /^\s+|\s+$/g
+#   reIsBadHex = /^[-+]0x[0-9a-f]+$/i
+#   reIsBinary = /^0b[01]+$/i
+#   reIsOctal  = /^0o[0-7]+$/i
+#   reIsUint   = /^(?:0|[1-9]\d*)$/
+#   funcTag='[object Function]'  genTag='[object GeneratorFunction]'  symbolTag='[object Symbol]'
+#
+# toNumber(value):
+#   if typeof value == 'number': return value
+#   if isSymbol(value):          return NaN          # symbols -> NaN (do NOT throw here)
+#   if isObject(value):                               # typeof in {'object','function'} and truthy
+#       other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#       value = isObject(other) ? (other + '') : other
+#   if typeof value != 'string':
+#       return value === 0 ? value : +value           # +value: e.g. true->1, false->0, null->0,
+#                                                      # undefined->NaN, [] (already stringified above
+#                                                      # if object) ... bigint -> THROWS (see OUT).
+#   value = value.replace(reTrim, '')                 # strip leading/trailing whitespace
+#   isBinary = reIsBinary.test(value)
+#   if (isBinary || reIsOctal.test(value)):
+#       return parseInt(value.slice(2), isBinary ? 2 : 8)   # "0b101"->5, "0o17"->15
+#   if reIsBadHex.test(value): return NaN              # "-0x1f" / "+0xAB" -> NaN
+#   return +value                                      # "  3.2 "->3.2, "0x10"->16 (Number hex ok),
+#                                                      # "abc"->NaN, ""->0, "+1"->1
+#
+# toFinite(value):
+#   if (!value): return value === 0 ? value : 0        # falsy: 0/-0 -> itself; NaN/null/undefined/
+#                                                      # ""/false -> 0
+#   value = toNumber(value)
+#   if (value === INFINITY || value === -INFINITY):
+#       sign = value < 0 ? -1 : 1
+#       return sign * MAX_INTEGER                       # +-Infinity -> +-1.7976931348623157e+308
+#   return value === value ? value : 0                  # NaN -> 0, else the finite number
+#
+# toInteger(value):
+#   result = toFinite(value)
+#   remainder = result % 1
+#   return result === result ? (remainder ? result - remainder : result) : 0
+#   # => truncation TOWARD ZERO of a finite number; 3.9->3, -1.9->-1, 1.0->1.
+#   # NaN-path already mapped to 0 by toFinite. +-Infinity already mapped to
+#   # +-MAX_INTEGER (integral) by toFinite.
+#
+# toLength(value):
+#   return value ? baseClamp(toInteger(value), 0, MAX_ARRAY_LENGTH) : 0
+#   # falsy -> 0; else clamp toInteger(value) into [0, 4294967295].
+#
+# baseClamp(number, lower, upper):
+#   if (number === number):                # not NaN
+#       if (upper !== undefined): number = number <= upper ? number : upper
+#       if (lower !== undefined): number = number >= lower ? number : lower
+#   return number
+#
+# Predicate helpers used only by the N2 iteratee guard:
+#   isObject(v):     type=typeof v; return !!v && (type=='object' || type=='function')
+#   isObjectLike(v): return !!v && typeof v == 'object'
+#   isSymbol(v):     return typeof v=='symbol' || (isObjectLike(v) && objToString(v)==symbolTag)
+#   isLength(v):     return typeof v=='number' && v>-1 && v%1==0 && v<=MAX_SAFE_INTEGER
+#   isFunction(v):   tag = isObject(v) ? objToString(v) : ''; return tag==funcTag || tag==genTag
+#   isArrayLike(v):  return v != null && isLength(v.length) && !isFunction(v)
+#   isIndex(v,len):  len = (len==null) ? MAX_SAFE_INTEGER : len
+#                    return !!len && (typeof v=='number' || reIsUint.test(v)) &&
+#                           (v > -1 && v%1==0 && v < len)
+#   eq(a,b):         return a === b || (a !== a && b !== b)     # SameValueZero
+#   (objToString = Object.prototype.toString.call)
+#
+# ============================================================================
+# WORKED EXAMPLES  (every one VERIFIED against the real package@3.4.0)
+# ============================================================================
+#   fill([1,2,3], "a")                 -> ["a","a","a"]            (whole)
+#   fill([4,6,8,10], "*", 1, 3)        -> [4,"*","*",10]           (partial)
+#   fill(Array(3), 2)                  -> [2,2,2]                  (sparse holes filled)
+#   fill([0,0,0,0], "x", 1.9)          -> [0,"x","x","x"]          (start trunc->1)
+#   fill([0,0,0,0], "x", -1.9)         -> [0,0,0,"x"]              (start trunc->-1 -> idx3)
+#   fill([0,0,0,0], "x", 0, 2.9)       -> ["x","x",0,0]            (end trunc->2)
+#   fill([0,0,0,0], "x", -2)           -> [0,0,"x","x"]            (start -2 -> idx2)
+#   fill([0,0,0,0], "x", -10)          -> ["x","x","x","x"]        (-(-10)=10>4 -> start 0)
+#   fill([0,0,0,0], "x", 0, -1)        -> ["x","x","x",0]          (end -1 -> +4 -> 3)
+#   fill([0,0,0,0], "x", 0, -10)       -> [0,0,0,0]               (end -10 -> -6 -> start>end -> 0)
+#   fill([0,0,0,0], "x", "2")          -> [0,0,"x","x"]            (string start)
+#   fill([0,0,0,0], "x", "  2  ")      -> [0,0,"x","x"]            (whitespace trimmed)
+#   fill([...17 zeros], "x", "0x2")    -> idx [2,17) filled        (hex string ->2)
+#   fill([0,0,0,0], "x", true)         -> [0,"x","x","x"]          (true->1)
+#   fill([0,0,0,0], "x", false)        -> ["x","x","x","x"]        (false falsy: guard skip, start 0)
+#   fill([0,0,0,0], "x", null)         -> ["x","x","x","x"]        (null->0)
+#   fill([0,0,0,0], "x", NaN)          -> ["x","x","x","x"]        (NaN->0)
+#   fill([0,0,0,0], "x", Infinity)     -> [0,0,0,0]               (Inf->MAX_INTEGER>len -> start 0? see note)
+#       # NOTE: start=Infinity -> toInteger=MAX_INTEGER (positive, huge). start<0 false.
+#       #       loop start..end never runs since start huge>length -> end clamps and start>end.
+#       #       Net: no writes. Confirmed -> [0,0,0,0].
+#   fill([0,0,0,0], "x", -Infinity)    -> ["x","x","x","x"]        (-Inf-> -MAX_INTEGER<0 ->
+#                                                                   -(-MAX)>4 -> start 0)
+#   fill([0,0,0,0], "x", 0, 99)        -> ["x","x","x","x"]        (raw 99>4 -> end=length=4)
+#   fill([0,0,0,0], "x", 0, "99")      -> ["x","x","x","x"]        (raw "99">4 -> end=4)
+#   fill([0,0,0,0], "x", 0, 3.5)       -> ["x","x","x",0]          (3.5>4 false -> toInteger->3)
+#   fill([0,0,0,0], "x", 0, "3")       -> ["x","x","x",0]          ("3">4 false -> 3)
+#   fill([0,0,0,0], "x", 0, null)      -> [0,0,0,0]               (null>4 false -> toInteger(null)=0)
+#   fill([0,0,0,0], "x", 0, true)      -> ["x",0,0,0]             (true>4 false -> toInteger(true)=1)
+#   fill([0,0,0,0], "x", 0, NaN)       -> [0,0,0,0]               (NaN>4 false -> toInteger(NaN)=0)
+#   fill([0,0,0,0], "x", 0, Infinity)  -> ["x","x","x","x"]        (Inf>4 true -> end=4)
+#   fill([0,0,0,0,0], "x", 3, 1)       -> [0,0,0,0,0]             (start>end -> end 0 -> no write)
+#   fill([0,0,0,0], "x", [2])          -> [0,0,"x","x"]            ([2]->"2"->2)
+#   fill([0,0,0,0], "x", [])           -> ["x","x","x","x"]        ([]->""->0)
+#   fill([0,0,0,0], "x", [1,2])        -> ["x","x","x","x"]        ([1,2]->"1,2"->NaN->0)
+#   fill([0,0,0,0], "x", "abc")        -> ["x","x","x","x"]        ("abc"->NaN->0)
+#   fill([0,0,0,0], "x", {})           -> ["x","x","x","x"]        ({}->"[object Object]"->NaN->0)
+#   fill([0,0,0,0], "x", "0b10")       -> idx[2,4) of len5 (binary 2)  # ["x"@2..]
+#   fill([0,0,0,0], "x", "+1")         -> [0,"x","x","x"]          ("+1"->1)
+#   fill([0,0,0,0], "x", "-0x1")       -> ["x","x","x","x"]        (bad hex -> NaN -> 0)
+#   fill([1,2,3], undefined)           -> [undefined,undefined,undefined]  (value=undefined written;
+#                                          length stays 3; indices present)
+#   fill([0,0], {k:1})                 -> [{k:1},{k:1}]            (SAME object ref at both indices)
+#   fill(null, "x")  / fill(undefined,"x") / fill([], "x")        -> []  (NEW empty array)
+#
+# ============================================================================
+# OBSERVABLE  (what the oracle records)
+# ============================================================================
+#   The return value of fill(...). Because fill returns the SAME array reference
+#   it mutated (except the empty/null path -> fresh []), observing the RETURN
+#   captures the post-mutation array contents. No separate "inspect the input
+#   afterward" step is needed. The harness/codec must NOT alias the input array
+#   across calls (each tuple is an independent object graph) so one call's
+#   mutation cannot poison another tuple — see input-generator (deep-cloned tuples).
+#
+# ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire fill/baseFill pipeline above
+#   plus the inlined toInteger/toFinite/toNumber/toLength/baseClamp coercion and
+#   the N2 iteratee guard predicate (isIterateeCall/isObject/isArrayLike/isIndex/
+#   eq/isLength/isFunction/isSymbol/isObjectLike). All deterministic; no carried
+#   data tables (only small named regex/constants reproduced verbatim above).
+#
+# CARRIED DATA: NONE.
+#
+# DEMONSTRATED IN-SCOPE INPUT SUBSET (self-consistent with genInputs):
+#   array : non-empty array of JSON-serializable elements (numbers/strings/null/
+#           nested arrays/plain objects); empty array []; null; undefined; a
+#           non-array falsy scalar (0, "", false, NaN) -> all hit N1 empty path;
+#           a sparse array (holes) via the codec's hole support.
+#   value : number | string | null | undefined | plain object | array | RegExp |
+#           Set | Map | Uint8Array | bigint | boolean | -0. (Object-typed values
+#           are placed by identity — same ref at each filled index.)
+#   start : omitted | number(int/float/neg/0/-0/huge) | numeric-string |
+#           whitespace-string | radix-string ("0x..","0b..","0o..") | bad-hex |
+#           "abc"(NaN) | "" | "+1" | boolean | null | NaN | +-Infinity |
+#           single/empty/multi-element arrays | {} | [].
+#   end   : omitted | number(int/float/neg) | numeric-string (in- and out-of-range
+#           e.g. "3" vs "10") | null | true | NaN | +-Infinity | array | object |
+#           "abc". Specifically exercises the RAW `end > length` branch (B2) on
+#           both number and string/object forms.
+#
+# OUT-OF-ENVELOPE / DOCUMENTED-OUT (NOT emitted by genInputs; behavior specified
+# here so a blind re-emitter can still reconstruct it):
+#   * bigint in start OR end position -> THROWS TypeError
+#     "Cannot convert a BigInt value to a number" (toNumber falls through to
+#     `+value` on a bigint). bigint round-trips the codec but is excluded from the
+#     start/end slots to avoid a throw-path that the codec records as {__throw}.
+#     (bigint AS the `value` arg is fine and IS in scope.)
+#   * Symbol anywhere -> Symbols are NOT codec-round-trippable; excluded.
+#     (Semantics if supplied: Symbol as start/end -> toNumber/isSymbol -> NaN -> 0;
+#      Symbol as value -> written by identity.)
+#   * function-typed `value` or function elements -> not codec-round-trippable;
+#     excluded. (Semantics if supplied: a function value is written by identity;
+#     a function as start/end -> isObject true, valueOf->itself stringified ->
+#     "function..." -> NaN -> 0.)
+#   * boxed primitives (new Number/String/Boolean) -> not round-trippable; excluded.
+#   * array-LIKE non-array first arg (string, {length,...} object): fill mutates
+#     it via .length and index assignment and returns the SAME ref. In scope of
+#     the real fn but EXCLUDED from genInputs (the contract type is Array; the
+#     codec/identity semantics for a returned string vs object would muddy the
+#     differential). Documented so it is reconstructable.
+
+PROVENANCE lodash.fill@3.4.0 (npm). Repo: lodash/lodash (custom modularized build,
+  `lodash modularize exports="npm"`). License: MIT. Source file: index.js
+  (single file; module.exports = fill). NOTE: despite the package version 3.4.0,
+  the bundled coercion helpers are lodash 4.x-semantics (toInteger/toFinite/
+  toNumber/toLength with @since 4.x), reproduced verbatim above.

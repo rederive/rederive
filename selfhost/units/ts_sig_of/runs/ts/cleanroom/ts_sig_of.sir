@@ -1,0 +1,83 @@
+UNIT ts_sig_of
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@7f015c4d1023 cli/lang-ts.mts sigOf (and its helper matchClose) — the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG ts_sig_of(sig: text) -> record[exportName: text | none, fnType: text]
+ENVELOPE sig is any well-formed text (no lone surrogate). Most inputs are TypeScript SIG lines; any other text is in scope
+  and either reads (the reader does not validate TypeScript, R11) or throws (R10). Throws are observations; the message is
+  not graded.
+DEPENDS-ON none
+DESCRIPTION Read a ts language file's SIG line — "export function NAME<GENERICS>(PARAMS): RET" or the same with
+  "export default function" — into the name it exports (none for a default export) and the function TYPE it declares,
+  GENERICS + PARAMS + " => " + RET, which the ts conformance check pastes into a compiled shim. The reader refuses a SIG
+  that could be more than one declaration, that names any or never, or that reaches a value's type through typeof,
+  import or infer; brackets are matched on a copy of the text in
+  which string literal types are blanked out. Every piece of the result is copied verbatim from the input.
+BEHAVIOR
+R1 BLANK means exactly the two characters U+0020 SPACE and U+0009 TAB; it is the only whitespace this unit knows outside
+  R9's emptiness test. Let S be sig with every leading and every trailing BLANK removed (nothing else is trimmed: a line
+  break, U+00A0 or U+FEFF at either end stays). Positions, cuts and counts below are in S, by character.
+R2 HEAD: S must begin with the literal "export", one or more BLANK, optionally the literal "default" followed by one or
+  more BLANK, the literal "function", one or more BLANK, then NAME, then a possibly empty run of BLANK, taken as long as
+  possible. Literals are case-sensitive and must be followed by BLANK ("exportfunction", "export function" and
+  "export async function" have no HEAD). NAME = one character of A-Z a-z _ $, then every following character of A-Z a-z
+  0-9 _ $ (longest run: "café" gives NAME "caf" and the cursor on "é"). No HEAD -> throws. The cursor C is placed right
+  after HEAD.
+R3 MASK: M is S with the interior of every string literal replaced by spaces, one space per character, so M and S align
+  position for position. Literals are found scanning S from the start: at a character " or ' the scan tries a literal
+  closed by the next same quote character, where a backslash consumes itself and the character after it (so an escaped
+  quote does not close) unless that character is one of the four BREAKS LF, CR, U+2028, U+2029; a BREAK that does not
+  follow a backslash is ordinary literal content. When it closes, both quotes stay, the interior becomes spaces and the
+  scan resumes after the closing quote. When it cannot close (the end of S, a backslash at the end, or a backslash before
+  a BREAK), that quote is ordinary text and the scan resumes at the very next character — which may itself open
+  a literal. The other quote character inside a literal is ordinary content. Every structural test below (R4 to R8) reads
+  M (R4 reads T, built from M); every cut is taken from S.
+R4 ONE DECLARATION: T is M with every ";" that lies at BRACE DEPTH above zero replaced by a space (an object type's
+  member separator). The depth is counted over M from its start: "{" adds one, "}" subtracts one but never goes below
+  zero, and a ";" is replaced when the depth from the characters before it is above zero. Braces are not required to
+  balance: an extra "}" leaves the depth at zero (so a later ";" is top level unless a later "{" opens again), and an
+  unclosed "{" leaves every later ";" inside. Braces inside string literals are blanked in M and never count. T containing
+  any of the following throws: ";" (so only a top-level ";" refuses), a backtick, CR, LF, U+2028, U+2029, the pairs "//",
+  "/*" or "*/", or an "=" whose next character is not ">" (so "=>" is allowed, while "=", "==>", ">=" and a final "="
+  throw, inside braces too). Inside a string literal all of these are content (a raw CR, LF, U+2028 or U+2029 between
+  quotes is masked and passes); "," is not refused. T is used by R4 alone.
+R5 NO ANY, NEVER, TYPEOF, IMPORT OR INFER: M containing any of the five words "any", "never", "typeof", "import" or
+  "infer" throws, where a word occurrence is one whose preceding
+  character (if there is one) is not A-Z a-z 0-9 _ $ or "." and whose following character (if any) is not A-Z a-z 0-9 _ $.
+  So "x.any", "$never", "company", "x.typeof", "importer" and "infers" pass, while ". any", "{ any: s }", "éany",
+  "(a: typeof x)", "import('m').T", "infer U" and a NAME that is one of the five words throw; inside a string literal
+  the word is blanked and passes CITED FIDELITY package.
+R6 GENERICS: when M has "<" at C, find its CLOSE by counting over M from C: each "<" adds one; each ">" subtracts one
+  unless the character before it is "=" (the ">" of an arrow is skipped, neither counted nor closing); the first counted
+  ">" that brings the count to zero is the close. None before the end -> throws. GENERICS = the text of S from "<" through
+  the close, inclusive (an empty "<>" counts); C moves past it. Otherwise GENERICS is empty and C stays.
+R7 C then skips BLANK characters only (a U+00A0 or any other character before "(" is not skipped).
+R8 PARAMS: M must have "(" at C (the end of S does not) -> otherwise throws. Find its close the R6 way over "(" and ")"
+  alone in M (every "(" adds one, every ")" subtracts one, the first ")" reaching zero closes); none -> throws. PARAMS = the
+  text of S from that "(" through that ")", inclusive.
+R9 REST = the text of S after PARAMS with its leading BLANK removed. REST must begin with ":", and what follows the ":"
+  must hold at least one character outside the whitespace set WS (pinned below) -> otherwise throws (an empty REST, a REST
+  that begins with anything else, and a ":" followed only by WS characters such as U+000B, U+00A0 or U+FEFF all throw).
+  RET = what follows that ":" with its leading BLANK removed; leading non-BLANK whitespace, U+0085 and any interior text
+  ("," or a second ":") are kept.
+R10 Every refusal of R2, R4, R5, R6, R8 and R9 is a throw; which one fires first affects only the message, which is not
+  graded. The real messages begin "SIG is not an exported function declaration", "SIG is more than one declaration",
+  "SIG uses any or never", "SIG uses typeof / import / infer", "unbalanced <>", "SIG has no parameter list", "unbalanced ()" and "SIG declares no return
+  type".
+R11 Result: exportName = none when HEAD held "default", else NAME; fnType = GENERICS, then PARAMS, then the four
+  characters " => ", then RET — taken from S, so string literal contents are kept exactly. Nothing else is checked: NAME
+  is not reserved ("export function default(): s" reads), and PARAMS and RET are never parsed as TypeScript CITED FIDELITY
+  package.
+PINNED charset WS = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000-U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED R9 — the emptiness test of RET only; U+0085, U+180E, U+200B and U+2060 are NOT in it
+INVARIANT every non-throwing result's fnType contains ") => ", starts with "(" or "<", and is free of CR, LF, U+2028,
+  U+2029, a backtick and the five R5 words outside string literals, and of any ";" at brace depth zero (R4).
+ORACLE value -> oracles/ts_sig_of.json  CANONICAL-SHA256 b7af1ff5d882a1c38e1e295315e7798a8886bca35249f5a5a3359cb511ca0f71
+SCOPE in contract: the whole function. Out of contract: the caller (prepareTs) that writes fnType into a conformance shim
+  and runs the compiler, and the artifact any-ban.
+NOTE the caller, not this unit, also holds the conformance CANARY (round 5b): prepareTs pastes fnType as a type alias
+  "type RdvSig = fnType;" and requires that a function of a foreign unique-symbol type NOT be assignable to it (under
+  @ts-expect-error), so a SIG that accepts nearly anything fails the check there. sigOf neither builds nor tests it.
+PROVENANCE rederive@7f015c4d1023 cli/lang-ts.mts lines 132-157 (sigOf, matchClose), MIT; re-cut 2026-10-27 (round 5b delta:
+  U+2028/U+2029 and typeof/import/infer refusals, #114; round 5k delta: a ";" inside braces is a member separator, #158) by
+  the sighted decomposer for REDERIVE_SELF_PLAN Tier 3.

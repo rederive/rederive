@@ -1,0 +1,321 @@
+UNIT invert
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG invert(object) -> Object          # default export; module.exports = invert
+
+DEPENDS-ON none                       # zero runtime deps; self-contained lodash custom build
+
+# ============================================================================
+# OVERVIEW
+# ----------------------------------------------------------------------------
+# invert returns a NEW plain object whose keys/values are swapped relative to
+# `object`. For each own-enumerable (key, value) pair iterated left-to-right,
+# it assigns:  result[value] = key   (native JS property assignment).
+# The value is the iteratee-transformed value, and the iteratee here is
+# IDENTITY (the value is passed through UNCHANGED), so the *only* transform on
+# the value is the implicit ToPropertyKey coercion performed by `result[value] = key`.
+#
+# CRITICAL: there is NO lodash custom value->string function. The value-to-key
+# coercion is plain JavaScript `ToPropertyKey(value)`, which for any
+# non-Symbol value equals `ToString(value)` (i.e. the same string `String(value)`
+# / `${value}` / `(value).toString()` produce). This was VERIFIED by running the
+# real package. In particular `-0` becomes key "0" (NOT "-0"), because ECMAScript
+# Number::toString(-0) === "0".  The operator hint's guess that lodash maps -0 to
+# "-0" is FALSE — both String(-0) and the property-key path yield "0".
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# SOURCE STRUCTURE (the real call graph, faithfully)
+# ----------------------------------------------------------------------------
+#   invert        = createInverter(setter, constant(identity))
+#   setter        = function(result, value, key) { result[value] = key; }
+#   iteratee      = identity  (value -> value, no transform)
+#   createInverter(setter, toIteratee) =
+#                   function(object, iteratee) {
+#                     return baseInverter(object, setter, toIteratee(iteratee), {});
+#                   }
+#                   # toIteratee is constant(identity); toIteratee(undefined) === identity.
+#   baseInverter(object, setter, iteratee, accumulator):
+#                   baseForOwn(object, function(value, key, object){
+#                     setter(accumulator, iteratee(value), key, object);   # result[value] = key
+#                   });
+#                   return accumulator;                                    # the NEW {} passed in
+#   baseForOwn(object, iteratee) = object && baseFor(object, iteratee, keys)
+#                   # NOTE: `object && ...` => if object is falsy (null/undefined/0/""/false/NaN),
+#                   # baseForOwn short-circuits, no iteration happens, accumulator stays {}.
+#   baseFor       = createBaseFor()   # fromRight is undefined => LEFT-TO-RIGHT iteration
+#                   for index 0..props.length-1: iteratee(iterable[props[index]], props[index], iterable)
+#   keys(object)  = isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object)
+#
+# The accumulator `{}` is freshly allocated per call => return value is always a
+# brand-new own plain object. Input object is NEVER mutated (VERIFIED).
+#
+# VERIFIED AT SOURCE (index.js): the setter is LITERALLY `function(result, value, key) {
+# result[value] = key; }` (no String() wrapper, no baseToString call). There is NO
+# lodash baseToString anywhere in invert's call graph. The string coercion is 100%
+# the JS-engine's native ToPropertyKey on `result[value] = key`. (Round-1 HARDEN
+# re-read confirmed this: the operator hint's mention of "baseToString?" is moot —
+# invert does not use it.)
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline / BRANCH nodes — exact + complete)
+# ============================================================================
+
+# NODE 1 — FALSY / NON-ITERABLE GUARD
+#   baseForOwn does `object && baseFor(...)`. If `object` is falsy the function
+#   iterates nothing and returns a fresh {}.
+#   Falsy inputs that yield {}:  null, undefined, false, 0, -0, NaN, "" (empty string).
+#   VERIFIED: invert(null) -> {} ; invert(undefined) -> {}.
+#   Truthy non-objects: keys() coerces via Object(value):
+#     - number primitive (e.g. 42): isArrayLike(42)? 42.length is undefined ->
+#       isLength(undefined) false -> baseKeys(Object(42)) -> Object.keys(Number box) -> []. Result {}.
+#       VERIFIED: invert(42) -> {} ; invert(true) -> {}.
+#     - string primitive (e.g. "hi"): isArrayLike("hi")? "hi".length===2, not a function -> TRUE.
+#       arrayLikeKeys path; a String box is NOT Array/Arguments so result starts [],
+#       skipIndexes=false; for-in over the boxed string yields own enum index keys "0".."n-1".
+#       Each index VALUE is the character. So invert("hi") -> {"h":"0","i":"1"}. VERIFIED.
+#   (genInputs only emits objects/arrays/array-likes/null/undefined as the documented
+#    in-contract envelope; the primitive cases above are documented for completeness.)
+
+# NODE 2 — KEY ENUMERATION  keys(object)
+#   keys = isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object)
+#
+#   isArrayLike(v) := v != null && isLength(v.length) && !isFunction(v)
+#     isLength(n) := typeof n=='number' && n>-1 && n%1==0 && n<=9007199254740991  (MAX_SAFE_INTEGER)
+#     isFunction(v): Object#toString(v) is "[object Function]"/"[object GeneratorFunction]"
+#
+#   BRANCH 2A — ARRAY-LIKE  (isArrayLike true): arrayLikeKeys(value, inherited=undefined)
+#     var result = (isArray(value) || isArguments(value))
+#                    ? baseTimes(value.length, String)   # ["0","1",...,String(length-1)]
+#                    : [];
+#     length = result.length; skipIndexes = !!length;
+#     for (key in value):                                # own + inherited string keys (for-in)
+#        if ((inherited || hasOwnProperty.call(value,key)) &&     # inherited is falsy => own only
+#            !(skipIndexes && (key=='length' || isIndex(key,length)))):
+#           result.push(key)
+#     return result
+#     # CONSEQUENCES (all VERIFIED):
+#     #  * Real Array / Arguments object: result pre-seeded with index strings "0".."len-1"
+#     #    (so iteration covers ALL indices incl. sparse HOLES, because baseTimes uses .length,
+#     #    not actual own keys). skipIndexes=true => the for-in pass DROPS own "length"
+#     #    (arrays' length is non-enumerable anyway) and DROPS any own key that isIndex<length
+#     #    (no dup). Extra own-enumerable NON-index props (e.g. arr.extra) ARE appended.
+#     #      invert([10,20,30]) -> {"10":"0","20":"1","30":"2"}
+#     #      invert(["a","b"])  -> {"a":"0","b":"1"}
+#     #      invert([5,5,5])    -> {"5":"2"}            # collision: highest index (last) wins
+#     #      invert([])         -> {}
+#     #      arr=[10,20]; arr.extra="Z" -> {"10":"0","20":"1","Z":"extra"}
+#     #      sparse [,,7] (length 3) -> indices "0","1","2"; values undefined,undefined,7 ->
+#     #          {"undefined":"1","7":"2"}   # both holes coerce to key "undefined", index "1" wins
+#     #  * Typed array (Uint8Array) / Buffer: NOT Array/Arguments => result=[], skipIndexes=false.
+#     #    `length` lives on the PROTOTYPE (not own-enumerable) so it is naturally excluded;
+#     #    for-in yields own-enum index keys "0".."n-1"; their element values become result keys.
+#     #      invert(new Uint8Array([10,20,30])) -> {"10":"0","20":"1","30":"2"}
+#     #      invert(Buffer.from([65,66]))       -> {"65":"0","66":"1"}
+#     #  * ARRAY-LIKE PLAIN OBJECT with own-enumerable numeric `length` (e.g. {0:'x',1:'y',length:2}):
+#     #    NOT Array/Arguments => result=[], skipIndexes=false => the own-enumerable `length`
+#     #    property IS included as a regular key, so its VALUE becomes a result key.
+#     #      invert({0:'x',1:'y',length:2}) -> {"x":"0","y":"1","2":"length"}
+#     #      invert({0:'a',5:'b',length:6}) -> {"a":"0","b":"5","6":"length"}
+#     #    (Output object key ORDER then follows JS own-key ordering — integer-like keys ascending
+#     #     first — so the serialized form is {"2":"length","x":"0","y":"1"}; see NODE 5.)
+#     #  * length that fails isLength (so input is NOT array-like, falls to baseKeys/BRANCH 2B):
+#     #      length > MAX_SAFE_INTEGER (e.g. 2^53), non-integer length (1.5), negative (-1),
+#     #      non-number length. Then `length` is just another own key.
+#     #      invert({0:'a',length:9007199254740992}) -> {"a":"0","9007199254740992":"length"}
+#     #      invert({0:'a',length:1.5})              -> {"a":"0","1.5":"length"}
+#     #      invert({0:'a',length:-1})               -> {"a":"0","-1":"length"}
+#     #    isIndex(value,length): length==null?MAX_SAFE_INTEGER:length;
+#     #      !!length && (typeof value=='number' || reIsUint.test(value)) && value>-1 && value%1==0 && value<length
+#     #      reIsUint = /^(?:0|[1-9]\d*)$/   (unsigned-integer string test)
+#     #     Set/Map are NOT array-like (no numeric .length) => BRANCH 2B; they have no own
+#     #     enumerable string props => keys=[] => invert(Set/Map) -> {}.  VERIFIED.
+#
+#   BRANCH 2B — NOT ARRAY-LIKE: baseKeys(object)
+#     if (!isPrototype(object)) return nativeKeys(object);   # Object.keys(object): own enumerable STRING keys
+#     # isPrototype(v): v === ((typeof v.constructor=='function' && v.constructor.prototype) || Object.prototype)
+#     #   i.e. v is the .prototype object of its constructor (e.g. Foo.prototype, Object.prototype).
+#     else:  # prototype-object special case
+#       result = []; for (key in Object(object)): if hasOwn(object,key) && key!='constructor': result.push(key)
+#       # own enumerable keys EXCEPT the literal "constructor" key.
+#       VERIFIED: invert(Bar.prototype) where Bar.prototype.p='P' -> {"P":"p"} (constructor skipped).
+#     # SYMBOL keys: never enumerated (Object.keys / for-in yield string keys only) => Symbol-keyed
+#     #   entries are SILENTLY SKIPPED. VERIFIED: invert({a:1,[Symbol('s')]:2}) -> {"1":"a"}.
+#     # INHERITED keys: excluded (Object.keys is own-only; the for-in branch gates on hasOwn).
+#     #   VERIFIED: Object.create({inherited:'X'}) with own .own='Y' -> {"Y":"own"}.
+#     # NON-ENUMERABLE own props: excluded. VERIFIED.
+
+# NODE 3 — ITERATION ORDER  baseFor (LEFT-TO-RIGHT)
+#   createBaseFor() with fromRight=undefined iterates props[0], props[1], ... props[length-1]
+#   in the exact order returned by NODE 2's keys(). Each step calls setter(result, value, key).
+#   ORDER MATTERS for collisions (NODE 4): the LAST-iterated entry that maps to a given key WINS.
+
+# NODE 4 — SETTER & COLLISION (LAST-WINS)  result[value] = key
+# ----------------------------------------------------------------------------
+# THE VALUE->KEY COERCION RULE (read this exactly — round-1 emitters diverged HERE):
+#   The setter is literally `result[value] = key`. JavaScript property assignment runs the
+#   abstract operation ToPropertyKey(value):
+#     - If value is a Symbol -> the property key IS that Symbol (a symbol-keyed prop). [OUT-OF-CONTRACT]
+#     - Otherwise -> the key is ToString(value), the SAME string produced by `String(value)`,
+#       `'' + value`, `${value}`, and `(value).toString()`.
+#   For OBJECT values, ToString does NOT hardcode "[object Object]" and does NOT call
+#   Object.prototype.toString.call(value). It runs the full ECMAScript ToString:
+#       ToString(obj) = ToString( ToPrimitive(obj, hint "string") )
+#     and ToPrimitive(obj, "string") tries, IN ORDER, the object's OWN methods:
+#         1. obj.toString()  (if it returns a primitive, use it)
+#         2. obj.valueOf()   (fallback if toString did not yield a primitive)
+#   So the object's OWN toString (whether inherited from Object.prototype OR overridden on the
+#   value) is what runs. Concretely:
+#       * a PLAIN object {} or {x:1} (no own/overridden toString) -> inherits
+#         Object.prototype.toString -> the string "[object Object]".
+#       * an ARRAY [1,2] -> Array.prototype.toString === join(',') -> "1,2"  (empty array [] -> "").
+#       * a RegExp /x/g -> RegExp.prototype.toString -> "/x/g".
+#       * an object whose OWN toString returns "custom" -> the key is "custom" (NOT "[object Object]").
+#       * an object with NO toString but a valueOf returning a primitive -> that primitive's string.
+#   ==> A re-emitter MUST coerce object values with native String(value) (equivalently
+#       `'' + value`), so that the value's OWN toString/valueOf is honored. It MUST NOT
+#       substitute a literal "[object Object]" and MUST NOT use
+#       Object.prototype.toString.call(value) — those break exactly the custom-toString case.
+#
+#   WORKED EXAMPLE (the round-1 held-out v28 coercion, stated for the spec — see CODEC note below
+#   for why it is not exercised through genInputs):
+#       const v = { toString() { return 'custom'; } };
+#       invert({ a: v })  ===  { custom: 'a' }      # because String(v) === 'custom'
+#   Contrast a PLAIN empty object:
+#       invert({ a: {} })  ===  { '[object Object]': 'a' }   # String({}) === '[object Object]'
+#   Both are the SAME RULE (native String(value)); they differ only because the values differ.
+#
+#   *** CODEC-FAITHFULNESS WARNING (why round-1 failed; NOT a behavior change) ***
+#   The held-out vector v28 was POISONED, not behaviorally wrong: the generator emitted the live
+#   value { a: { toString(){return 'custom'} } }; the oracle stamped expected={custom:'a'} from the
+#   LIVE object, but the harness codec (orchestrator/lib/codec.mjs) STRIPS function-valued own keys
+#   on encode, so the PERSISTED args decoded back to a bare { a: {} }. The blind re-emitter therefore
+#   received { a: {} } and correctly produced { '[object Object]': 'a' } — which mismatched the
+#   stored expected. The fix is to STOP EMITTING custom-toString object values from genInputs (they
+#   are not codec-round-trippable); the COERCION RULE above is unchanged and remains in-contract. A
+#   blind re-emitter reconstructs the rule from this spec; it is simply not graded through the lossy
+#   codec. (See genInputs DOCUMENTED-as-OUT + CODEC NOTE.)
+# ----------------------------------------------------------------------------
+#   Non-Symbol value V => key string = ToString(V) == String(V):
+#         number n           -> "" + n  (e.g. 1->"1", 1.5->"1.5", -0->"0", NaN->"NaN",
+#                               Infinity->"Infinity", -Infinity->"-Infinity", 1e21->"1e+21")
+#         bigint b           -> b.toString() (10n -> "10")
+#         boolean            -> "true"/"false"
+#         string s           -> s itself (so {a:1,b:"1"} BOTH map to key "1" and COLLIDE)
+#         null               -> "null"
+#         undefined          -> "undefined"   (incl. sparse-array holes)
+#         plain object {}    -> "[object Object]"  (inherited Object.prototype.toString)
+#         array [1,2]        -> "1,2"          (Array.prototype.toString -> join(','))   [] -> ""
+#         object w/ custom toString/valueOf -> HONORED: {toString:()=>"custom"} -> "custom"
+#                              (native String(value); NOT a hardcoded "[object Object]")
+#         Date               -> its .toString() (locale/TZ-dependent string)  [OUT-OF-CONTRACT: env-dependent]
+#         RegExp /x/g        -> "/x/g"
+#     Symbol value          => set as a SYMBOL-keyed property on result (invisible to JSON /
+#                              Object.keys). [OUT-OF-CONTRACT — see SCOPE.]
+#   Assignment is plain `result[k] = key`, so when two source entries coerce to the SAME key
+#   string, the LATER one (in NODE-3 order) OVERWRITES the earlier => LAST-WINS.
+#     VERIFIED: invert({a:1,b:2,c:1}) -> {"1":"c","2":"b"}
+#               invert({a:1,b:1,c:1}) -> {"1":"c"}
+#               invert({a:1,b:"1"})   -> {"1":"b"}    # number 1 and string "1" collide, b is later
+#               invert({a:"1",b:1})   -> {"1":"b"}    # same collision, b later
+#               invert({a:0,b:-0})    -> {"0":"b"}    # both coerce to "0", b later
+#               invert({a:NaN,b:NaN}) -> {"NaN":"b"}
+
+# NODE 5 — RETURN  accumulator (the fresh {})
+#   Return is a NEW plain object. Its keys are the coerced value-strings; its values are the
+#   original keys (always strings, since source keys are strings). KEY ORDER of the returned
+#   object follows standard ECMAScript own-property ordering: ascending integer-index keys
+#   first (numeric, by value), then remaining string keys in insertion order.
+#     VERIFIED: invert({a:2,b:10,c:1}) -> {"1":"c","2":"a","10":"b"}  # integer keys 1<2<10
+#               invert({z:1,a:2,m:3})  -> {"1":"z","2":"a","3":"m"}
+#               invert({a:1,b:"foo",c:2}) -> {"1":"a","2":"c","foo":"b"}  # ints first, then "foo"
+#   Output is always JSON-serializable (string keys, string values) for the in-contract envelope.
+
+# ============================================================================
+# DETERMINISM / SEAMS
+# ----------------------------------------------------------------------------
+# Pure function. No clock/RNG/env/fs/net seam. ORACLE-CLASS deterministic.
+# Input object is NOT mutated (VERIFIED: input identical before/after). The
+# returned object is a fresh allocation distinct from the input.
+# The ONLY env-sensitive value coercion is Date.prototype.toString (locale/TZ);
+# such values are documented OUT-OF-CONTRACT and NOT emitted by genInputs.
+# ============================================================================
+
+# ============================================================================
+# ORACLE
+# ----------------------------------------------------------------------------
+ORACLE value -> oracle.json
+#   Differential/quorum value oracle: expected = invert(args[0]) compared by deep
+#   structural equality of the returned plain object (keys+values). Input persisted
+#   via JSON.stringify(encode(args)); the harness codec round-trips the in-contract
+#   envelope (plain objects/arrays, JSON primitives, Set/Map/Uint8Array/Buffer/bigint,
+#   -0/NaN/+-Infinity, sparse holes, null/undefined). Outputs are plain string->string
+#   objects and serialize cleanly.
+#   CODEC-FAITHFULNESS (HARDEN): an object VALUE carrying a function-valued own key (e.g. a
+#   custom `toString`) does NOT survive encode/decode — the codec strips function-valued own
+#   keys, collapsing the value to a bare {}, while `expected` is stamped from the live object.
+#   Such values are therefore OUT-OF-ENVELOPE for grading (NOT emitted by genInputs); the
+#   coercion RULE for them is still fully specified in NODE 4 for a blind re-emitter.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly — this is the whole unit):
+#   - The createInverter/baseInverter/baseForOwn/baseFor/keys/arrayLikeKeys/baseKeys
+#     pipeline above. Value->key coercion = native ToPropertyKey == ToString for
+#     non-Symbol values (NOT a lodash custom toString). For OBJECT values this is native
+#     String(value): the value's OWN toString/valueOf (per ToPrimitive) is honored — a plain
+#     {} yields "[object Object]", an object whose own toString returns "custom" yields "custom";
+#     do NOT hardcode "[object Object]" or use Object.prototype.toString.call. result[value]=key,
+#     last-wins, left-to-right own-enumerable string-key iteration. Fresh {} per call, no mutation.
+#   - In-scope value classes (each demonstrated above, self-consistent with genInputs):
+#       number (incl. -0, 0, NaN, Infinity, -Infinity, floats, large), bigint, boolean,
+#       string (incl. collisions with numeric-string), null, undefined (incl. sparse holes),
+#       plain object value ("[object Object]"), array value ("a,b" join; [] -> ""),
+#       RegExp value ("/x/g").
+#   - In-scope input shapes: plain object, empty object, real Array (incl. sparse + extra
+#     own props), array-like POJO with own-enumerable length, typed array / Buffer,
+#     Set / Map (-> {}), Object.create child (inherited excluded), prototype object
+#     (constructor skipped), null/undefined (-> {}).
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - CUSTOM-toString OBJECT VALUES: the COERCION (native String(value) honoring the value's own
+#     toString/valueOf) is IN-CONTRACT and specified in NODE 4 with the {toString:()=>"custom"}
+#     worked example. But such a value is NOT codec-round-trippable (the harness codec strips the
+#     function-valued toString own-key on encode, collapsing it to {}), so it is excluded from
+#     generation to avoid a poisoned oracle (round-1 v28). A blind re-emitter reconstructs the rule
+#     from NODE 4; it is just not exercised through the lossy codec.
+#   - Symbol KEYS in input: silently skipped (Object.keys/for-in are string-key only).
+#     Symbol VALUES: become symbol-keyed props on result (invisible to JSON/structural
+#     comparison) — not codec-round-trippable; excluded from generation.
+#   - Function VALUES: coerce via Function.prototype.toString to engine-dependent source
+#     text; not stable / not a meaningful invert use; excluded from generation.
+#   - Date VALUES: coerce to a locale/timezone-dependent string (env seam in the *value*);
+#     excluded from generation to keep the oracle deterministic.
+#   - Truthy non-object primitives as the INPUT (number/string/boolean): behavior documented
+#     in NODE 1 but outside the object-input contract; not emitted.
+#
+# CARRIED DATA: none. The only literals are the regex reIsUint=/^(?:0|[1-9]\d*)$/ and the
+#   constant MAX_SAFE_INTEGER=9007199254740991 and the Object#toString tag strings
+#   ('[object Function]','[object GeneratorFunction]','[object Arguments]'); all small and
+#   reproduced inline in BEHAVIOR. No large literal table => no carried.json.
+
+# ============================================================================
+# RE-EMITTER DIRECTIVE
+# ----------------------------------------------------------------------------
+# The unit is the DEFAULT export. The re-emitter MUST `export default <fn>` (NOT a named
+# export). Signature: default export is a function taking one argument `object` and returning
+# a NEW plain object. Do not mutate the input. A faithful re-emitter can simply implement:
+#   own-enumerable string-key enumeration in the orders specified by NODE 2/3, then
+#   result[value] = key with native property-key coercion, last-wins, fresh {} accumulator,
+#   plus the falsy-input -> {} guard and the array/array-like/prototype branch nuances.
+# COERCION PITFALL (round-1 failure mode): use native `result[value] = key` (or
+# `result[String(value)] = key`) so that for OBJECT values the value's OWN toString/valueOf is
+# honored via ToPrimitive. Do NOT special-case objects to a literal "[object Object]" and do NOT
+# use Object.prototype.toString.call(value) — a plain {} happens to yield "[object Object]" only
+# because that is what its inherited toString returns, not because the string is hardcoded.
+# ============================================================================
+
+PROVENANCE lodash.invert@4.3.0  (npm) — lodash custom build (modularize exports="npm")
+           repo: lodash/lodash  •  license: MIT  •  source file: index.js
+           original read at: /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-lodash_invert-Y5PTfm/node_modules/lodash.invert/index.js

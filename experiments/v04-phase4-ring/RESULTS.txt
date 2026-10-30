@@ -1,0 +1,18 @@
+§22 — a ring may DROP outcomes, never INVENT one
+
+  shared cursor (racy)
+    R_free = 6 outcome(s) over 16 schedules  ["[1,2,3]","[1,3,2]","[2,1,3]","[2,3,1]","[3,1,2]","[3,2,1]"]
+    R_ring = 1 outcome(s)  ["[1,2,3]"]
+    R_ring subset of R_free: YES — sound
+    verdict: REFINEMENT — drops 5 outcome(s), must be documented
+
+  independent slots (already order-insensitive)
+    R_free = 1 outcome(s) over 16 schedules
+    R_ring = 1 outcome(s)
+    verdict: behavior-PRESERVING (recognition) — R_ring = R_free
+
+  a BROKEN "ring" (reverses + mangles values)
+    R_ring = ["[101,102,103]"]
+    R_ring subset of R_free: NO — CAUGHT: it invents an outcome the free unit cannot produce
+
+PHASE 4 (§22): PASS — refinement checked, recognition distinguished, a fake ring caught.

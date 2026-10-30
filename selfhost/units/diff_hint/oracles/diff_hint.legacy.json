@@ -1,0 +1,587 @@
+{
+ "mode": "vectors",
+ "unit": "diff_hint",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "",
+    ""
+   ],
+   "expected": "binary difference (the texts decode to the same UTF-8)"
+  },
+  {
+   "name": "v1",
+   "args": [
+    "a\n",
+    "a"
+   ],
+   "expected": "line 2: profile has no line 2, existing has \"\""
+  },
+  {
+   "name": "v2",
+   "args": [
+    "one\ntwo",
+    "one\ntwo\nthree"
+   ],
+   "expected": "line 3: existing has no line 3, profile has \"three\""
+  },
+  {
+   "name": "v3",
+   "args": [
+    "abc",
+    "xbc"
+   ],
+   "expected": "line 1, col 1: existing \"abc\" vs profile \"xbc\""
+  },
+  {
+   "name": "v4",
+   "args": [
+    "one\ntwo\nthree",
+    "one\ntwo\nthr3e"
+   ],
+   "expected": "line 3, col 4: existing \"…ee\" vs profile \"…3e\""
+  },
+  {
+   "name": "v5",
+   "args": [
+    "abc",
+    "abcd"
+   ],
+   "expected": "line 1, col 4: existing \"…\" vs profile \"…d\""
+  },
+  {
+   "name": "v6",
+   "args": [
+    "a",
+    ""
+   ],
+   "expected": "line 1, col 1: existing \"a\" vs profile \"\""
+  },
+  {
+   "name": "v7",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+   ],
+   "expected": "line 1, col 1: existing \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\" vs profile \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy…\""
+  },
+  {
+   "name": "v8",
+   "args": [
+    "xxxxxxxxxxAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "xxxxxxxxxxBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "expected": "line 1, col 11: existing \"…Axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\" vs profile \"…Bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\""
+  },
+  {
+   "name": "v9",
+   "args": [
+    "a\r\nb\r\n",
+    "a\nb\n"
+   ],
+   "expected": "line 1, col 2: existing \"…\\r\" vs profile \"…\""
+  },
+  {
+   "name": "v10",
+   "args": [
+    "x\"\\/q",
+    "y\"\\/q"
+   ],
+   "expected": "line 1, col 1: existing \"x\\\"\\\\/q\" vs profile \"y\\\"\\\\/q\""
+  },
+  {
+   "name": "v11",
+   "args": [
+    "x\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f",
+    "y\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\\u007f\" vs profile \"y\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\\u007f\""
+  },
+  {
+   "name": "v12",
+   "args": [
+    "x ­͏؀؁؂؃؄؅؜۝܏࢐࢑࣢ᅟᅠ ᠋᠌᠍᠎",
+    "y ­͏؀؁؂؃؄؅؜۝܏࢐࢑࣢ᅟᅠ ᠋᠌᠍᠎"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u007f\\u0080\\u0081\\u0082\\u0083\\u0084\\u0085\\u0086\\u0087\\u0088\\u0089\\u008a\\u008b\\u008c\\u008d\\u008e\\u008f\\u0090\\u0091\\u0092\\u0093\\u0094\\u0095\\u0096\\u0097\\u0098\\u0099\\u009a\\u009b\\u009c\\u009d\\u009e\\u009f\\u00a0\\u00ad\\u034f\\u0600\\u0601\\u0602\\u0603\\u0604\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u115f\\u1160\\u1680\\u180b\\u180c\\u180d\\u180e\" vs profile \"y\\u007f\\u0080\\u0081\\u0082\\u0083\\u0084\\u0085\\u0086\\u0087\\u0088\\u0089\\u008a\\u008b\\u008c\\u008d\\u008e\\u008f\\u0090\\u0091\\u0092\\u0093\\u0094\\u0095\\u0096\\u0097\\u0098\\u0099\\u009a\\u009b\\u009c\\u009d\\u009e\\u009f\\u00a0\\u00ad\\u034f\\u0600\\u0601\\u0602\\u0603\\u0604\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u115f\\u1160\\u1680\\u180b\\u180c\\u180d\\u180e\""
+  },
+  {
+   "name": "v13",
+   "args": [
+    "x           ​‌‍‎‏  ‪‫‬‭‮  ⁠⁡⁢⁣⁤⁦⁧⁨⁩⁪⁫⁬⁭⁮⁯⠀　ㅤ︀︁︂︃︄︅︆︇︈︉︊︋︌︍︎️﻿ﾠ￹￺￻",
+    "y           ​‌‍‎‏  ‪‫‬‭‮  ⁠⁡⁢⁣⁤⁦⁧⁨⁩⁪⁫⁬⁭⁮⁯⠀　ㅤ︀︁︂︃︄︅︆︇︈︉︊︋︌︍︎️﻿ﾠ￹￺￻"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u2000\\u2001\\u2002\\u2003\\u2004\\u2005\\u2006\\u2007\\u2008\\u2009\\u200a\\u200b\\u200c\\u200d\\u200e\\u200f\\u2028\\u2029\\u202a\\u202b\\u202c\\u202d\\u202e\\u202f\\u205f\\u2060\\u2061\\u2062\\u2063\\u2064\\u2066\\u2067\\u2068\\u2069\\u206a\\u206b\\u206c\\u206d\\u206e\\u206f\\u2800\\u3000\\u3164\\ufe00\\ufe01\\ufe02\\ufe03\\ufe04\\ufe05\\ufe06\\ufe07\\ufe08\\ufe09\\ufe0a\\ufe0b\\ufe0c\\ufe0d\\ufe0e\\ufe0f\\ufeff\\uffa0\\ufff9\\ufffa\\ufffb\" vs profile \"y\\u2000\\u2001\\u2002\\u2003\\u2004\\u2005\\u2006\\u2007\\u2008\\u2009\\u200a\\u200b\\u200c\\u200d\\u200e\\u200f\\u2028\\u2029\\u202a\\u202b\\u202c\\u202d\\u202e\\u202f\\u205f\\u2060\\u2061\\u2062\\u2063\\u2064\\u2066\\u2067\\u2068\\u2069\\u206a\\u206b\\u206c\\u206d\\u206e\\u206f\\u2800\\u3000\\u3164\\ufe00\\ufe01\\ufe02\\ufe03\\ufe04\\ufe05\\ufe06\\ufe07\\ufe08\\ufe09\\ufe0a\\ufe0b\\ufe0c\\ufe0d\\ufe0e\\ufe0f\\ufeff\\uffa0\\ufff9\\ufffa\\ufffb\""
+  },
+  {
+   "name": "v14",
+   "args": [
+    "x~¡¬®͎͐׿؆؛؝ۜ۞܎ܐ࢏࢒ࣣ࣡ᅞᅡᙿᚁ᠊᠏឴឵῿‐…‧‰⁞⁥⁰⟿⠁⿿、ㅣㅥ﷿︐﻾＀ﾟﾡ￰￸￼�é中/",
+    "y~¡¬®͎͐׿؆؛؝ۜ۞܎ܐ࢏࢒ࣣ࣡ᅞᅡᙿᚁ᠊᠏឴឵῿‐…‧‰⁞⁥⁰⟿⠁⿿、ㅣㅥ﷿︐﻾＀ﾟﾡ￰￸￼�é中/"
+   ],
+   "expected": "line 1, col 1: existing \"x~¡¬®͎͐׿؆؛؝ۜ۞܎ܐ࢏࢒ࣣ࣡ᅞᅡᙿᚁ᠊᠏឴឵῿‐…‧‰⁞⁥⁰⟿⠁⿿、ㅣㅥ﷿︐﻾＀ﾟﾡ￰￸￼�é中/\" vs profile \"y~¡¬®͎͐׿؆؛؝ۜ۞܎ܐ࢏࢒ࣣ࣡ᅞᅡᙿᚁ᠊᠏឴឵῿‐…‧‰⁞⁥⁰⟿⠁⿿、ㅣㅥ﷿︐﻾＀ﾟﾡ￰￸￼�é中/\""
+  },
+  {
+   "name": "v15",
+   "args": [
+    "😀a",
+    "😀b"
+   ],
+   "expected": "line 1, col 2: existing \"…a\" vs profile \"…b\""
+  },
+  {
+   "name": "v16",
+   "args": [
+    "😀",
+    "😁"
+   ],
+   "expected": "line 1, col 1: existing \"😀\" vs profile \"😁\""
+  },
+  {
+   "name": "v17",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀z",
+    "y"
+   ],
+   "expected": "line 1, col 1: existing \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀…\" vs profile \"y\""
+  },
+  {
+   "name": "v18",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxB"
+   ],
+   "expected": "line 1, col 201: existing \"…Axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\" vs profile \"…B\""
+  },
+  {
+   "name": "v19",
+   "args": [
+    "x𑂽𑃍𓐰𓐱𓐲𓐳𓐴𓐵𓐶𓐷𓐸𓐹𓐺𓐻𓐼𓐽𓐾𓐿𛲠𛲡𛲢𛲣𝅳𝅴𝅵𝅶𝅷𝅸𝅹𝅺󠀁󠀠󠀡󠀢󠀣󠀤󠀥󠀦󠀧󠀨󠀩󠀪󠀫󠀬󠀭󠀮󠀯󠀰󠀱󠀲󠀳󠀴󠀵󠀶󠀷󠀸󠀹󠀺󠀻󠀼󠀽󠀾󠀿",
+    "y𑂽𑃍𓐰𓐱𓐲𓐳𓐴𓐵𓐶𓐷𓐸𓐹𓐺𓐻𓐼𓐽𓐾𓐿𛲠𛲡𛲢𛲣𝅳𝅴𝅵𝅶𝅷𝅸𝅹𝅺󠀁󠀠󠀡󠀢󠀣󠀤󠀥󠀦󠀧󠀨󠀩󠀪󠀫󠀬󠀭󠀮󠀯󠀰󠀱󠀲󠀳󠀴󠀵󠀶󠀷󠀸󠀹󠀺󠀻󠀼󠀽󠀾󠀿"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u{110bd}\\u{110cd}\\u{13430}\\u{13431}\\u{13432}\\u{13433}\\u{13434}\\u{13435}\\u{13436}\\u{13437}\\u{13438}\\u{13439}\\u{1343a}\\u{1343b}\\u{1343c}\\u{1343d}\\u{1343e}\\u{1343f}\\u{1bca0}\\u{1bca1}\\u{1bca2}\\u{1bca3}\\u{1d173}\\u{1d174}\\u{1d175}\\u{1d176}\\u{1d177}\\u{1d178}\\u{1d179}\\u{1d17a}\\u{e0001}\\u{e0020}\\u{e0021}\\u{e0022}\\u{e0023}\\u{e0024}\\u{e0025}\\u{e0026}\\u{e0027}\\u{e0028}\\u{e0029}\\u{e002a}\\u{e002b}\\u{e002c}\\u{e002d}\\u{e002e}\\u{e002f}\\u{e0030}\\u{e0031}\\u{e0032}\\u{e0033}\\u{e0034}\\u{e0035}\\u{e0036}\\u{e0037}\\u{e0038}\\u{e0039}\\u{e003a}\\u{e003b}\\u{e003c}\\u{e003d}\\u{e003e}\\u{e003f}\" vs profile \"y\\u{110bd}\\u{110cd}\\u{13430}\\u{13431}\\u{13432}\\u{13433}\\u{13434}\\u{13435}\\u{13436}\\u{13437}\\u{13438}\\u{13439}\\u{1343a}\\u{1343b}\\u{1343c}\\u{1343d}\\u{1343e}\\u{1343f}\\u{1bca0}\\u{1bca1}\\u{1bca2}\\u{1bca3}\\u{1d173}\\u{1d174}\\u{1d175}\\u{1d176}\\u{1d177}\\u{1d178}\\u{1d179}\\u{1d17a}\\u{e0001}\\u{e0020}\\u{e0021}\\u{e0022}\\u{e0023}\\u{e0024}\\u{e0025}\\u{e0026}\\u{e0027}\\u{e0028}\\u{e0029}\\u{e002a}\\u{e002b}\\u{e002c}\\u{e002d}\\u{e002e}\\u{e002f}\\u{e0030}\\u{e0031}\\u{e0032}\\u{e0033}\\u{e0034}\\u{e0035}\\u{e0036}\\u{e0037}\\u{e0038}\\u{e0039}\\u{e003a}\\u{e003b}\\u{e003c}\\u{e003d}\\u{e003e}\\u{e003f}\""
+  },
+  {
+   "name": "v20",
+   "args": [
+    "a",
+    "a\n\n\n"
+   ],
+   "expected": "line 2: existing has no line 2, profile has \"\""
+  },
+  {
+   "name": "v21",
+   "args": [
+    "x\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "x"
+   ],
+   "expected": "line 2: profile has no line 2, existing has \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\""
+  },
+  {
+   "name": "v22",
+   "args": [
+    "x",
+    "x\n\"\t xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "expected": "line 2: existing has no line 2, profile has \"\\\"\\t\\u00a0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\""
+  },
+  {
+   "name": "v23",
+   "args": [
+    "é",
+    "é"
+   ],
+   "expected": "line 1, col 1: existing \"é\" vs profile \"é\""
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "same\nlines\n",
+    "same\nlines\n"
+   ],
+   "expected": "binary difference (the texts decode to the same UTF-8)"
+  },
+  {
+   "name": "v25",
+   "args": [
+    "x󠁀󠁁󠁂󠁃󠁄󠁅󠁆󠁇󠁈󠁉󠁊󠁋󠁌󠁍󠁎󠁏󠁐󠁑󠁒󠁓󠁔󠁕󠁖󠁗󠁘󠁙󠁚󠁛󠁜󠁝󠁞󠁟󠁠󠁡󠁢󠁣󠁤󠁥󠁦󠁧󠁨󠁩󠁪󠁫󠁬󠁭󠁮󠁯󠁰󠁱󠁲󠁳󠁴󠁵󠁶󠁷󠁸󠁹󠁺󠁻󠁼󠁽󠁾󠁿",
+    "y󠁀󠁁󠁂󠁃󠁄󠁅󠁆󠁇󠁈󠁉󠁊󠁋󠁌󠁍󠁎󠁏󠁐󠁑󠁒󠁓󠁔󠁕󠁖󠁗󠁘󠁙󠁚󠁛󠁜󠁝󠁞󠁟󠁠󠁡󠁢󠁣󠁤󠁥󠁦󠁧󠁨󠁩󠁪󠁫󠁬󠁭󠁮󠁯󠁰󠁱󠁲󠁳󠁴󠁵󠁶󠁷󠁸󠁹󠁺󠁻󠁼󠁽󠁾󠁿"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u{e0040}\\u{e0041}\\u{e0042}\\u{e0043}\\u{e0044}\\u{e0045}\\u{e0046}\\u{e0047}\\u{e0048}\\u{e0049}\\u{e004a}\\u{e004b}\\u{e004c}\\u{e004d}\\u{e004e}\\u{e004f}\\u{e0050}\\u{e0051}\\u{e0052}\\u{e0053}\\u{e0054}\\u{e0055}\\u{e0056}\\u{e0057}\\u{e0058}\\u{e0059}\\u{e005a}\\u{e005b}\\u{e005c}\\u{e005d}\\u{e005e}\\u{e005f}\\u{e0060}\\u{e0061}\\u{e0062}\\u{e0063}\\u{e0064}\\u{e0065}\\u{e0066}\\u{e0067}\\u{e0068}\\u{e0069}\\u{e006a}\\u{e006b}\\u{e006c}\\u{e006d}\\u{e006e}\\u{e006f}\\u{e0070}\\u{e0071}\\u{e0072}\\u{e0073}\\u{e0074}\\u{e0075}\\u{e0076}\\u{e0077}\\u{e0078}\\u{e0079}\\u{e007a}\\u{e007b}\\u{e007c}\\u{e007d}\\u{e007e}\\u{e007f}\" vs profile \"y\\u{e0040}\\u{e0041}\\u{e0042}\\u{e0043}\\u{e0044}\\u{e0045}\\u{e0046}\\u{e0047}\\u{e0048}\\u{e0049}\\u{e004a}\\u{e004b}\\u{e004c}\\u{e004d}\\u{e004e}\\u{e004f}\\u{e0050}\\u{e0051}\\u{e0052}\\u{e0053}\\u{e0054}\\u{e0055}\\u{e0056}\\u{e0057}\\u{e0058}\\u{e0059}\\u{e005a}\\u{e005b}\\u{e005c}\\u{e005d}\\u{e005e}\\u{e005f}\\u{e0060}\\u{e0061}\\u{e0062}\\u{e0063}\\u{e0064}\\u{e0065}\\u{e0066}\\u{e0067}\\u{e0068}\\u{e0069}\\u{e006a}\\u{e006b}\\u{e006c}\\u{e006d}\\u{e006e}\\u{e006f}\\u{e0070}\\u{e0071}\\u{e0072}\\u{e0073}\\u{e0074}\\u{e0075}\\u{e0076}\\u{e0077}\\u{e0078}\\u{e0079}\\u{e007a}\\u{e007b}\\u{e007c}\\u{e007d}\\u{e007e}\\u{e007f}\""
+  },
+  {
+   "name": "v26",
+   "args": [
+    "x𑂼𑂾𑃌𑃎𓐯𓑀𛲟𛲤𝅲𝅻󠀀󠀂󠀟󠂀󠃿󠃿󠇰󠿿􏿿😀",
+    "y𑂼𑂾𑃌𑃎𓐯𓑀𛲟𛲤𝅲𝅻󠀀󠀂󠀟󠂀󠃿󠃿󠇰󠿿􏿿😀"
+   ],
+   "expected": "line 1, col 1: existing \"x𑂼𑂾𑃌𑃎𓐯𓑀𛲟𛲤𝅲𝅻󠀀󠀂󠀟󠂀󠃿󠃿󠇰󠿿􏿿😀\" vs profile \"y𑂼𑂾𑃌𑃎𓐯𓑀𛲟𛲤𝅲𝅻󠀀󠀂󠀟󠂀󠃿󠃿󠇰󠿿􏿿😀\""
+  },
+  {
+   "name": "v27",
+   "args": [
+    "x󠄀󠄁󠄂󠄃󠄄󠄅󠄆󠄇󠄈󠄉󠄊󠄋󠄌󠄍󠄎󠄏󠄐󠄑󠄒󠄓󠄔󠄕󠄖󠄗󠄘󠄙󠄚󠄛󠄜󠄝󠄞󠄟󠄠󠄡󠄢󠄣󠄤󠄥󠄦󠄧󠄨󠄩󠄪󠄫󠄬󠄭󠄮󠄯󠄰󠄱󠄲󠄳󠄴󠄵󠄶󠄷󠄸󠄹󠄺󠄻󠄼󠄽󠄾󠄿󠅀󠅁󠅂󠅃󠅄󠅅󠅆󠅇󠅈󠅉󠅊󠅋󠅌󠅍󠅎",
+    "y󠄀󠄁󠄂󠄃󠄄󠄅󠄆󠄇󠄈󠄉󠄊󠄋󠄌󠄍󠄎󠄏󠄐󠄑󠄒󠄓󠄔󠄕󠄖󠄗󠄘󠄙󠄚󠄛󠄜󠄝󠄞󠄟󠄠󠄡󠄢󠄣󠄤󠄥󠄦󠄧󠄨󠄩󠄪󠄫󠄬󠄭󠄮󠄯󠄰󠄱󠄲󠄳󠄴󠄵󠄶󠄷󠄸󠄹󠄺󠄻󠄼󠄽󠄾󠄿󠅀󠅁󠅂󠅃󠅄󠅅󠅆󠅇󠅈󠅉󠅊󠅋󠅌󠅍󠅎"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u{e0100}\\u{e0101}\\u{e0102}\\u{e0103}\\u{e0104}\\u{e0105}\\u{e0106}\\u{e0107}\\u{e0108}\\u{e0109}\\u{e010a}\\u{e010b}\\u{e010c}\\u{e010d}\\u{e010e}\\u{e010f}\\u{e0110}\\u{e0111}\\u{e0112}\\u{e0113}\\u{e0114}\\u{e0115}\\u{e0116}\\u{e0117}\\u{e0118}\\u{e0119}\\u{e011a}\\u{e011b}\\u{e011c}\\u{e011d}\\u{e011e}\\u{e011f}\\u{e0120}\\u{e0121}\\u{e0122}\\u{e0123}\\u{e0124}\\u{e0125}\\u{e0126}\\u{e0127}\\u{e0128}\\u{e0129}\\u{e012a}\\u{e012b}\\u{e012c}\\u{e012d}\\u{e012e}\\u{e012f}\\u{e0130}\\u{e0131}\\u{e0132}\\u{e0133}\\u{e0134}\\u{e0135}\\u{e0136}\\u{e0137}\\u{e0138}\\u{e0139}\\u{e013a}\\u{e013b}\\u{e013c}\\u{e013d}\\u{e013e}\\u{e013f}\\u{e0140}\\u{e0141}\\u{e0142}\\u{e0143}\\u{e0144}\\u{e0145}\\u{e0146}\\u{e0147}\\u{e0148}\\u{e0149}\\u{e014a}\\u{e014b}\\u{e014c}\\u{e014d}\\u{e014e}\" vs profile \"y\\u{e0100}\\u{e0101}\\u{e0102}\\u{e0103}\\u{e0104}\\u{e0105}\\u{e0106}\\u{e0107}\\u{e0108}\\u{e0109}\\u{e010a}\\u{e010b}\\u{e010c}\\u{e010d}\\u{e010e}\\u{e010f}\\u{e0110}\\u{e0111}\\u{e0112}\\u{e0113}\\u{e0114}\\u{e0115}\\u{e0116}\\u{e0117}\\u{e0118}\\u{e0119}\\u{e011a}\\u{e011b}\\u{e011c}\\u{e011d}\\u{e011e}\\u{e011f}\\u{e0120}\\u{e0121}\\u{e0122}\\u{e0123}\\u{e0124}\\u{e0125}\\u{e0126}\\u{e0127}\\u{e0128}\\u{e0129}\\u{e012a}\\u{e012b}\\u{e012c}\\u{e012d}\\u{e012e}\\u{e012f}\\u{e0130}\\u{e0131}\\u{e0132}\\u{e0133}\\u{e0134}\\u{e0135}\\u{e0136}\\u{e0137}\\u{e0138}\\u{e0139}\\u{e013a}\\u{e013b}\\u{e013c}\\u{e013d}\\u{e013e}\\u{e013f}\\u{e0140}\\u{e0141}\\u{e0142}\\u{e0143}\\u{e0144}\\u{e0145}\\u{e0146}\\u{e0147}\\u{e0148}\\u{e0149}\\u{e014a}\\u{e014b}\\u{e014c}\\u{e014d}\\u{e014e}\""
+  },
+  {
+   "name": "v28",
+   "args": [
+    "x󠅏󠅐󠅑󠅒󠅓󠅔󠅕󠅖󠅗󠅘󠅙󠅚󠅛󠅜󠅝󠅞󠅟󠅠󠅡󠅢󠅣󠅤󠅥󠅦󠅧󠅨󠅩󠅪󠅫󠅬󠅭󠅮󠅯󠅰󠅱󠅲󠅳󠅴󠅵󠅶󠅷󠅸󠅹󠅺󠅻󠅼󠅽󠅾󠅿󠆀󠆁󠆂󠆃󠆄󠆅󠆆󠆇󠆈󠆉󠆊󠆋󠆌󠆍󠆎󠆏󠆐󠆑󠆒󠆓󠆔󠆕󠆖󠆗󠆘󠆙󠆚󠆛󠆜󠆝",
+    "y󠅏󠅐󠅑󠅒󠅓󠅔󠅕󠅖󠅗󠅘󠅙󠅚󠅛󠅜󠅝󠅞󠅟󠅠󠅡󠅢󠅣󠅤󠅥󠅦󠅧󠅨󠅩󠅪󠅫󠅬󠅭󠅮󠅯󠅰󠅱󠅲󠅳󠅴󠅵󠅶󠅷󠅸󠅹󠅺󠅻󠅼󠅽󠅾󠅿󠆀󠆁󠆂󠆃󠆄󠆅󠆆󠆇󠆈󠆉󠆊󠆋󠆌󠆍󠆎󠆏󠆐󠆑󠆒󠆓󠆔󠆕󠆖󠆗󠆘󠆙󠆚󠆛󠆜󠆝"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u{e014f}\\u{e0150}\\u{e0151}\\u{e0152}\\u{e0153}\\u{e0154}\\u{e0155}\\u{e0156}\\u{e0157}\\u{e0158}\\u{e0159}\\u{e015a}\\u{e015b}\\u{e015c}\\u{e015d}\\u{e015e}\\u{e015f}\\u{e0160}\\u{e0161}\\u{e0162}\\u{e0163}\\u{e0164}\\u{e0165}\\u{e0166}\\u{e0167}\\u{e0168}\\u{e0169}\\u{e016a}\\u{e016b}\\u{e016c}\\u{e016d}\\u{e016e}\\u{e016f}\\u{e0170}\\u{e0171}\\u{e0172}\\u{e0173}\\u{e0174}\\u{e0175}\\u{e0176}\\u{e0177}\\u{e0178}\\u{e0179}\\u{e017a}\\u{e017b}\\u{e017c}\\u{e017d}\\u{e017e}\\u{e017f}\\u{e0180}\\u{e0181}\\u{e0182}\\u{e0183}\\u{e0184}\\u{e0185}\\u{e0186}\\u{e0187}\\u{e0188}\\u{e0189}\\u{e018a}\\u{e018b}\\u{e018c}\\u{e018d}\\u{e018e}\\u{e018f}\\u{e0190}\\u{e0191}\\u{e0192}\\u{e0193}\\u{e0194}\\u{e0195}\\u{e0196}\\u{e0197}\\u{e0198}\\u{e0199}\\u{e019a}\\u{e019b}\\u{e019c}\\u{e019d}\" vs profile \"y\\u{e014f}\\u{e0150}\\u{e0151}\\u{e0152}\\u{e0153}\\u{e0154}\\u{e0155}\\u{e0156}\\u{e0157}\\u{e0158}\\u{e0159}\\u{e015a}\\u{e015b}\\u{e015c}\\u{e015d}\\u{e015e}\\u{e015f}\\u{e0160}\\u{e0161}\\u{e0162}\\u{e0163}\\u{e0164}\\u{e0165}\\u{e0166}\\u{e0167}\\u{e0168}\\u{e0169}\\u{e016a}\\u{e016b}\\u{e016c}\\u{e016d}\\u{e016e}\\u{e016f}\\u{e0170}\\u{e0171}\\u{e0172}\\u{e0173}\\u{e0174}\\u{e0175}\\u{e0176}\\u{e0177}\\u{e0178}\\u{e0179}\\u{e017a}\\u{e017b}\\u{e017c}\\u{e017d}\\u{e017e}\\u{e017f}\\u{e0180}\\u{e0181}\\u{e0182}\\u{e0183}\\u{e0184}\\u{e0185}\\u{e0186}\\u{e0187}\\u{e0188}\\u{e0189}\\u{e018a}\\u{e018b}\\u{e018c}\\u{e018d}\\u{e018e}\\u{e018f}\\u{e0190}\\u{e0191}\\u{e0192}\\u{e0193}\\u{e0194}\\u{e0195}\\u{e0196}\\u{e0197}\\u{e0198}\\u{e0199}\\u{e019a}\\u{e019b}\\u{e019c}\\u{e019d}\""
+  },
+  {
+   "name": "v29",
+   "args": [
+    "x󠆞󠆟󠆠󠆡󠆢󠆣󠆤󠆥󠆦󠆧󠆨󠆩󠆪󠆫󠆬󠆭󠆮󠆯󠆰󠆱󠆲󠆳󠆴󠆵󠆶󠆷󠆸󠆹󠆺󠆻󠆼󠆽󠆾󠆿󠇀󠇁󠇂󠇃󠇄󠇅󠇆󠇇󠇈󠇉󠇊󠇋󠇌󠇍󠇎󠇏󠇐󠇑󠇒󠇓󠇔󠇕󠇖󠇗󠇘󠇙󠇚󠇛󠇜󠇝󠇞󠇟󠇠󠇡󠇢󠇣󠇤󠇥󠇦󠇧󠇨󠇩󠇪󠇫󠇬",
+    "y󠆞󠆟󠆠󠆡󠆢󠆣󠆤󠆥󠆦󠆧󠆨󠆩󠆪󠆫󠆬󠆭󠆮󠆯󠆰󠆱󠆲󠆳󠆴󠆵󠆶󠆷󠆸󠆹󠆺󠆻󠆼󠆽󠆾󠆿󠇀󠇁󠇂󠇃󠇄󠇅󠇆󠇇󠇈󠇉󠇊󠇋󠇌󠇍󠇎󠇏󠇐󠇑󠇒󠇓󠇔󠇕󠇖󠇗󠇘󠇙󠇚󠇛󠇜󠇝󠇞󠇟󠇠󠇡󠇢󠇣󠇤󠇥󠇦󠇧󠇨󠇩󠇪󠇫󠇬"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u{e019e}\\u{e019f}\\u{e01a0}\\u{e01a1}\\u{e01a2}\\u{e01a3}\\u{e01a4}\\u{e01a5}\\u{e01a6}\\u{e01a7}\\u{e01a8}\\u{e01a9}\\u{e01aa}\\u{e01ab}\\u{e01ac}\\u{e01ad}\\u{e01ae}\\u{e01af}\\u{e01b0}\\u{e01b1}\\u{e01b2}\\u{e01b3}\\u{e01b4}\\u{e01b5}\\u{e01b6}\\u{e01b7}\\u{e01b8}\\u{e01b9}\\u{e01ba}\\u{e01bb}\\u{e01bc}\\u{e01bd}\\u{e01be}\\u{e01bf}\\u{e01c0}\\u{e01c1}\\u{e01c2}\\u{e01c3}\\u{e01c4}\\u{e01c5}\\u{e01c6}\\u{e01c7}\\u{e01c8}\\u{e01c9}\\u{e01ca}\\u{e01cb}\\u{e01cc}\\u{e01cd}\\u{e01ce}\\u{e01cf}\\u{e01d0}\\u{e01d1}\\u{e01d2}\\u{e01d3}\\u{e01d4}\\u{e01d5}\\u{e01d6}\\u{e01d7}\\u{e01d8}\\u{e01d9}\\u{e01da}\\u{e01db}\\u{e01dc}\\u{e01dd}\\u{e01de}\\u{e01df}\\u{e01e0}\\u{e01e1}\\u{e01e2}\\u{e01e3}\\u{e01e4}\\u{e01e5}\\u{e01e6}\\u{e01e7}\\u{e01e8}\\u{e01e9}\\u{e01ea}\\u{e01eb}\\u{e01ec}\" vs profile \"y\\u{e019e}\\u{e019f}\\u{e01a0}\\u{e01a1}\\u{e01a2}\\u{e01a3}\\u{e01a4}\\u{e01a5}\\u{e01a6}\\u{e01a7}\\u{e01a8}\\u{e01a9}\\u{e01aa}\\u{e01ab}\\u{e01ac}\\u{e01ad}\\u{e01ae}\\u{e01af}\\u{e01b0}\\u{e01b1}\\u{e01b2}\\u{e01b3}\\u{e01b4}\\u{e01b5}\\u{e01b6}\\u{e01b7}\\u{e01b8}\\u{e01b9}\\u{e01ba}\\u{e01bb}\\u{e01bc}\\u{e01bd}\\u{e01be}\\u{e01bf}\\u{e01c0}\\u{e01c1}\\u{e01c2}\\u{e01c3}\\u{e01c4}\\u{e01c5}\\u{e01c6}\\u{e01c7}\\u{e01c8}\\u{e01c9}\\u{e01ca}\\u{e01cb}\\u{e01cc}\\u{e01cd}\\u{e01ce}\\u{e01cf}\\u{e01d0}\\u{e01d1}\\u{e01d2}\\u{e01d3}\\u{e01d4}\\u{e01d5}\\u{e01d6}\\u{e01d7}\\u{e01d8}\\u{e01d9}\\u{e01da}\\u{e01db}\\u{e01dc}\\u{e01dd}\\u{e01de}\\u{e01df}\\u{e01e0}\\u{e01e1}\\u{e01e2}\\u{e01e3}\\u{e01e4}\\u{e01e5}\\u{e01e6}\\u{e01e7}\\u{e01e8}\\u{e01e9}\\u{e01ea}\\u{e01eb}\\u{e01ec}\""
+  },
+  {
+   "name": "v30",
+   "args": [
+    "x󠇭󠇮󠇯",
+    "y"
+   ],
+   "expected": "line 1, col 1: existing \"x\\u{e01ed}\\u{e01ee}\\u{e01ef}\" vs profile \"y\""
+  },
+  {
+   "name": "v31",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx󠁁z",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "expected": "line 1, col 80: existing \"…\\u{e0041}z\" vs profile \"…\""
+  },
+  {
+   "name": "v32",
+   "args": [
+    "xxxxx️",
+    "xxxxx︎"
+   ],
+   "expected": "line 1, col 6: existing \"…\\ufe0f\" vs profile \"…\\ufe0e\""
+  },
+  {
+   "name": "v33",
+   "args": [
+    "line\r",
+    "line"
+   ],
+   "expected": "line 1, col 5: existing \"…\\r\" vs profile \"…\""
+  },
+  {
+   "name": "v34",
+   "args": [
+    "a\rb",
+    "a\nb"
+   ],
+   "expected": "line 1, col 2: existing \"…\\rb\" vs profile \"…\""
+  },
+  {
+   "name": "v35",
+   "args": [
+    " sep",
+    " sep"
+   ],
+   "expected": "line 1, col 1: existing \"\\u2028sep\" vs profile \"\\u2029sep\""
+  },
+  {
+   "name": "v36",
+   "args": [
+    "café x",
+    "café y"
+   ],
+   "expected": "line 1, col 6: existing \"…x\" vs profile \"…y\""
+  },
+  {
+   "name": "v37",
+   "args": [
+    "中文a",
+    "中文b"
+   ],
+   "expected": "line 1, col 3: existing \"…a\" vs profile \"…b\""
+  },
+  {
+   "name": "v38",
+   "args": [
+    "﻿abc",
+    "abc"
+   ],
+   "expected": "line 1, col 1: existing \"\\ufeffabc\" vs profile \"abc\""
+  },
+  {
+   "name": "v39",
+   "args": [
+    "abc",
+    "﻿abc"
+   ],
+   "expected": "line 1, col 1: existing \"abc\" vs profile \"\\ufeffabc\""
+  },
+  {
+   "name": "v40",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy"
+   ],
+   "expected": "line 1, col 80: existing \"…x\" vs profile \"…y\""
+  },
+  {
+   "name": "v41",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+   ],
+   "expected": "line 1, col 1: existing \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" vs profile \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\""
+  },
+  {
+   "name": "v42",
+   "args": [
+    "axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "expected": "line 1, col 1: existing \"axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\" vs profile \"bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\""
+  },
+  {
+   "name": "v43",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxz"
+   ],
+   "expected": "line 1, col 301: existing \"…\" vs profile \"…z\""
+  },
+  {
+   "name": "v44",
+   "args": [
+    "abcd",
+    "abc"
+   ],
+   "expected": "line 1, col 4: existing \"…d\" vs profile \"…\""
+  },
+  {
+   "name": "v45",
+   "args": [
+    "  x",
+    "  x   "
+   ],
+   "expected": "line 1, col 4: existing \"…\" vs profile \"…   \""
+  },
+  {
+   "name": "v46",
+   "args": [
+    "a b",
+    "a\tb"
+   ],
+   "expected": "line 1, col 2: existing \"… b\" vs profile \"…\\tb\""
+  },
+  {
+   "name": "v47",
+   "args": [
+    "a\nb",
+    "a"
+   ],
+   "expected": "line 2: profile has no line 2, existing has \"b\""
+  },
+  {
+   "name": "v48",
+   "args": [
+    "l1\n\nl3",
+    "l1\nX\nl3"
+   ],
+   "expected": "line 2, col 1: existing \"\" vs profile \"X\""
+  },
+  {
+   "name": "v49",
+   "args": [
+    "\n",
+    ""
+   ],
+   "expected": "line 2: profile has no line 2, existing has \"\""
+  },
+  {
+   "name": "v50",
+   "args": [
+    "",
+    "b"
+   ],
+   "expected": "line 1, col 1: existing \"\" vs profile \"b\""
+  },
+  {
+   "name": "v51",
+   "args": [
+    "",
+    "\n"
+   ],
+   "expected": "line 2: existing has no line 2, profile has \"\""
+  },
+  {
+   "name": "v52",
+   "args": [
+    "a\nb\nc",
+    "a\nB"
+   ],
+   "expected": "line 2, col 1: existing \"b\" vs profile \"B\""
+  },
+  {
+   "name": "v53",
+   "args": [
+    "a",
+    "a󠁁"
+   ],
+   "expected": "line 1, col 2: existing \"…\" vs profile \"…\\u{e0041}\""
+  },
+  {
+   "name": "v54",
+   "args": [
+    "❤",
+    "❤️"
+   ],
+   "expected": "line 1, col 2: existing \"…\" vs profile \"…\\ufe0f\""
+  },
+  {
+   "name": "v55",
+   "args": [
+    "🇺🇸",
+    "🇺🇦"
+   ],
+   "expected": "line 1, col 2: existing \"…🇸\" vs profile \"…🇦\""
+  },
+  {
+   "name": "v56",
+   "args": [
+    "👨‍👩",
+    "👨‍👧"
+   ],
+   "expected": "line 1, col 3: existing \"…👩\" vs profile \"…👧\""
+  },
+  {
+   "name": "v57",
+   "args": [
+    "👨‍👩",
+    "👨"
+   ],
+   "expected": "line 1, col 2: existing \"…\\u200d👩\" vs profile \"…\""
+  },
+  {
+   "name": "v58",
+   "args": [
+    "xxxxxxxxxxA\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001",
+    "xxxxxxxxxxB\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001"
+   ],
+   "expected": "line 1, col 11: existing \"…A\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001…\" vs profile \"…B\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001\\u0001…\""
+  },
+  {
+   "name": "v59",
+   "args": [
+    "x\\u00a0",
+    "y\\u00a0"
+   ],
+   "expected": "line 1, col 1: existing \"x\\\\u00a0\" vs profile \"y\\\\u00a0\""
+  },
+  {
+   "name": "v60",
+   "args": [
+    "…abc",
+    "…abd"
+   ],
+   "expected": "line 1, col 4: existing \"…c\" vs profile \"…d\""
+  },
+  {
+   "name": "v61",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😁"
+   ],
+   "expected": "line 1, col 81: existing \"…😀\" vs profile \"…😁\""
+  },
+  {
+   "name": "v62",
+   "args": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀😀",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀😁"
+   ],
+   "expected": "line 1, col 81: existing \"…😀\" vs profile \"…😁\""
+  },
+  {
+   "name": "v63",
+   "args": [
+    "\u0000",
+    ""
+   ],
+   "expected": "line 1, col 1: existing \"\\u0000\" vs profile \"\""
+  },
+  {
+   "name": "v64",
+   "args": [
+    "­",
+    "-"
+   ],
+   "expected": "line 1, col 1: existing \"\\u00ad\" vs profile \"-\""
+  },
+  {
+   "name": "v65",
+   "args": [
+    "ok\n　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　",
+    "ok"
+   ],
+   "expected": "line 2: profile has no line 2, existing has \"\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\\u3000\""
+  },
+  {
+   "name": "v66",
+   "args": [
+    "r0\nr1\nr2\nr3\nr4\nr5\nr6\nr7\nr8\nr9\nr10\nr11\nr12\nr13\nr14\nr15\nr16\nr17\nr18\nr19\nr20\nr21\nr22\nr23\nr24\nr25\nr26\nr27\nr28\nr29\nr30\nr31\nr32\nr33\nr34\nr35\nr36\nr37\nr38\nr39\nr40\nr41\nr42\nr43\nr44\nr45\nr46\nr47\nr48\nr49\nr50\nr51\nr52\nr53\nr54\nr55\nr56\nr57\nr58\nr59\nr60\nr61\nr62\nr63\nr64\nr65\nr66\nr67\nr68\nr69\nr70\nr71\nr72\nr73\nr74\nr75\nr76\nr77\nr78\nr79\nr80\nr81\nr82\nr83\nr84\nr85\nr86\nr87\nr88\nr89\nr90\nr91\nr92\nr93\nr94\nr95\nr96\nr97\nr98\nr99\nr100\nr101\nr102\nr103\nr104\nr105\nr106\nr107\nr108\nr109\nr110\nr111\nr112\nr113\nr114\nr115\nr116\nr117\nr118\nr119\nr120\nr121\nr122\nr123\nr124\nr125\nr126\nr127\nr128\nr129\nr130\nr131\nr132\nr133\nr134\nr135\nr136\nr137\nr138\nr139\nr140\nr141\nr142\nr143\nr144\nr145\nr146\nr147\nr148\nr149\nr150\nr151\nr152\nr153\nr154\nr155\nr156\nr157\nr158\nr159\nr160\nr161\nr162\nr163\nr164\nr165\nr166\nr167\nr168\nr169\nr170\nr171\nr172\nr173\nr174\nr175\nr176\nr177\nr178\nr179\nr180\nr181\nr182\nr183\nr184\nr185\nr186\nr187\nr188\nr189\nr190\nr191\nr192\nr193\nr194\nr195\nr196\nr197\nr198\nr199\nr200\nr201\nr202\nr203\nr204\nr205\nr206\nr207\nr208\nr209\nr210\nr211\nr212\nr213\nr214\nr215\nr216\nr217\nr218\nr219\nr220\nr221\nr222\nr223\nr224\nr225\nr226\nr227\nr228\nr229\nr230\nr231\nr232\nr233\nr234\nr235\nr236\nr237\nr238\nr239\nr240\nr241\nr242\nr243\nr244\nr245\nr246\nr247\nr248\nr249\nr250\nr251\nr252\nr253\nr254\nr255\nr256\nr257\nr258\nr259\nr260\nr261\nr262\nr263\nr264\nr265\nr266\nr267\nr268\nr269\nr270\nr271\nr272\nr273\nr274\nr275\nr276\nr277\nr278\nr279\nr280\nr281\nr282\nr283\nr284\nr285\nr286\nr287\nr288\nr289\nr290\nr291\nr292\nr293\nr294\nr295\nr296\nr297\nr298\nr299\nr300\nr301\nr302\nr303\nr304\nr305\nr306\nr307\nr308\nr309\nr310\nr311\nr312\nr313\nr314\nr315\nr316\nr317\nr318\nr319\nr320\nr321\nr322\nr323\nr324\nr325\nr326\nr327\nr328\nr329\nr330\nr331\nr332\nr333\nr334\nr335\nr336\nr337\nr338\nr339\nr340\nr341\nr342\nr343\nr344\nr345\nr346\nr347\nr348\nr349\nr350\nr351\nr352\nr353\nr354\nr355\nr356\nr357\nr358\nr359\nr360\nr361\nr362\nr363\nr364\nr365\nr366\nr367\nr368\nr369\nr370\nr371\nr372\nr373\nr374\nr375\nr376\nr377\nr378\nr379\nr380\nr381\nr382\nr383\nr384\nr385\nr386\nr387\nr388\nr389\nr390\nr391\nr392\nr393\nr394\nr395\nr396\nr397\nr398\nr399\nr400\nr401\nr402\nr403\nr404\nr405\nr406\nr407\nr408\nr409\nr410\nr411\nr412\nr413\nr414\nr415\nr416\nr417\nr418\nr419\nr420\nr421\nr422\nr423\nr424\nr425\nr426\nr427\nr428\nr429\nr430\nr431\nr432\nr433\nr434\nr435\nr436\nr437\nr438\nr439\nr440\nr441\nr442\nr443\nr444\nr445\nr446\nr447\nr448\nr449\nr450\nr451\nr452\nr453\nr454\nr455\nr456\nr457\nr458\nr459\nr460\nr461\nr462\nr463\nr464\nr465\nr466\nr467\nr468\nr469\nr470\nr471\nr472\nr473\nr474\nr475\nr476\nr477\nr478\nr479\nr480\nr481\nr482\nr483\nr484\nr485\nr486\nr487\nr488\nr489\nr490\nr491\nr492\nr493\nr494\nr495\nr496\nr497\nr498\nr499\nr500\nr501\nr502\nr503\nr504\nr505\nr506\nr507\nr508\nr509\nr510\nr511\nr512\nr513\nr514\nr515\nr516\nr517\nr518\nr519\nr520\nr521\nr522\nr523\nr524\nr525\nr526\nr527\nr528\nr529\nr530\nr531\nr532\nr533\nr534\nr535\nr536\nr537\nr538\nr539\nr540\nr541\nr542\nr543\nr544\nr545\nr546\nr547\nr548\nr549\nr550\nr551\nr552\nr553\nr554\nr555\nr556\nr557\nr558\nr559\nr560\nr561\nr562\nr563\nr564\nr565\nr566\nr567\nr568\nr569\nr570\nr571\nr572\nr573\nr574\nr575\nr576\nr577\nr578\nr579\nr580\nr581\nr582\nr583\nr584\nr585\nr586\nr587\nr588\nr589\nr590\nr591\nr592\nr593\nr594\nr595\nr596\nr597\nr598\nr599\nr600\nr601\nr602\nr603\nr604\nr605\nr606\nr607\nr608\nr609\nr610\nr611\nr612\nr613\nr614\nr615\nr616\nr617\nr618\nr619\nr620\nr621\nr622\nr623\nr624\nr625\nr626\nr627\nr628\nr629\nr630\nr631\nr632\nr633\nr634\nr635\nr636\nr637\nr638\nr639\nr640\nr641\nr642\nr643\nr644\nr645\nr646\nr647\nr648\nr649\nr650\nr651\nr652\nr653\nr654\nr655\nr656\nr657\nr658\nr659\nr660\nr661\nr662\nr663\nr664\nr665\nr666\nr667\nr668\nr669\nr670\nr671\nr672\nr673\nr674\nr675\nr676\nr677\nr678\nr679\nr680\nr681\nr682\nr683\nr684\nr685\nr686\nr687\nr688\nr689\nr690\nr691\nr692\nr693\nr694\nr695\nr696\nr697\nr698\nr699\nr700\nr701\nr702\nr703\nr704\nr705\nr706\nr707\nr708\nr709\nr710\nr711\nr712\nr713\nr714\nr715\nr716\nr717\nr718\nr719\nr720\nr721\nr722\nr723\nr724\nr725\nr726\nr727\nr728\nr729\nr730\nr731\nr732\nr733\nr734\nr735\nr736\nr737\nr738\nr739\nr740\nr741\nr742\nr743\nr744\nr745\nr746\nr747\nr748\nr749\nr750\nr751\nr752\nr753\nr754\nr755\nr756\nr757\nr758\nr759\nr760\nr761\nr762\nr763\nr764\nr765\nr766\nr767\nr768\nr769\nr770\nr771\nr772\nr773\nr774\nr775\nr776\nr777\nr778\nr779\nr780\nr781\nr782\nr783\nr784\nr785\nr786\nr787\nr788\nr789\nr790\nr791\nr792\nr793\nr794\nr795\nr796\nr797\nr798\nr799\nr800\nr801\nr802\nr803\nr804\nr805\nr806\nr807\nr808\nr809\nr810\nr811\nr812\nr813\nr814\nr815\nr816\nr817\nr818\nr819\nr820\nr821\nr822\nr823\nr824\nr825\nr826\nr827\nr828\nr829\nr830\nr831\nr832\nr833\nr834\nr835\nr836\nr837\nr838\nr839\nr840\nr841\nr842\nr843\nr844\nr845\nr846\nr847\nr848\nr849\nr850\nr851\nr852\nr853\nr854\nr855\nr856\nr857\nr858\nr859\nr860\nr861\nr862\nr863\nr864\nr865\nr866\nr867\nr868\nr869\nr870\nr871\nr872\nr873\nr874\nr875\nr876\nr877\nr878\nr879\nr880\nr881\nr882\nr883\nr884\nr885\nr886\nr887\nr888\nr889\nr890\nr891\nr892\nr893\nr894\nr895\nr896\nr897\nr898\nr899\nr900\nr901\nr902\nr903\nr904\nr905\nr906\nr907\nr908\nr909\nr910\nr911\nr912\nr913\nr914\nr915\nr916\nr917\nr918\nr919\nr920\nr921\nr922\nr923\nr924\nr925\nr926\nr927\nr928\nr929\nr930\nr931\nr932\nr933\nr934\nr935\nr936\nr937\nr938\nr939\nr940\nr941\nr942\nr943\nr944\nr945\nr946\nr947\nr948\nr949\nr950\nr951\nr952\nr953\nr954\nr955\nr956\nr957\nr958\nr959\nr960\nr961\nr962\nr963\nr964\nr965\nr966\nr967\nr968\nr969\nr970\nr971\nr972\nr973\nr974\nr975\nr976\nr977\nr978\nr979\nr980\nr981\nr982\nr983\nr984\nr985\nr986\nr987\nr988\nr989\nr990\nr991\nr992\nr993\nr994\nr995\nr996\nr997\nr998\nr999",
+    "r0\nr1\nr2\nr3\nr4\nr5\nr6\nr7\nr8\nr9\nr10\nr11\nr12\nr13\nr14\nr15\nr16\nr17\nr18\nr19\nr20\nr21\nr22\nr23\nr24\nr25\nr26\nr27\nr28\nr29\nr30\nr31\nr32\nr33\nr34\nr35\nr36\nr37\nr38\nr39\nr40\nr41\nr42\nr43\nr44\nr45\nr46\nr47\nr48\nr49\nr50\nr51\nr52\nr53\nr54\nr55\nr56\nr57\nr58\nr59\nr60\nr61\nr62\nr63\nr64\nr65\nr66\nr67\nr68\nr69\nr70\nr71\nr72\nr73\nr74\nr75\nr76\nr77\nr78\nr79\nr80\nr81\nr82\nr83\nr84\nr85\nr86\nr87\nr88\nr89\nr90\nr91\nr92\nr93\nr94\nr95\nr96\nr97\nr98\nr99\nr100\nr101\nr102\nr103\nr104\nr105\nr106\nr107\nr108\nr109\nr110\nr111\nr112\nr113\nr114\nr115\nr116\nr117\nr118\nr119\nr120\nr121\nr122\nr123\nr124\nr125\nr126\nr127\nr128\nr129\nr130\nr131\nr132\nr133\nr134\nr135\nr136\nr137\nr138\nr139\nr140\nr141\nr142\nr143\nr144\nr145\nr146\nr147\nr148\nr149\nr150\nr151\nr152\nr153\nr154\nr155\nr156\nr157\nr158\nr159\nr160\nr161\nr162\nr163\nr164\nr165\nr166\nr167\nr168\nr169\nr170\nr171\nr172\nr173\nr174\nr175\nr176\nr177\nr178\nr179\nr180\nr181\nr182\nr183\nr184\nr185\nr186\nr187\nr188\nr189\nr190\nr191\nr192\nr193\nr194\nr195\nr196\nr197\nr198\nr199\nr200\nr201\nr202\nr203\nr204\nr205\nr206\nr207\nr208\nr209\nr210\nr211\nr212\nr213\nr214\nr215\nr216\nr217\nr218\nr219\nr220\nr221\nr222\nr223\nr224\nr225\nr226\nr227\nr228\nr229\nr230\nr231\nr232\nr233\nr234\nr235\nr236\nr237\nr238\nr239\nr240\nr241\nr242\nr243\nr244\nr245\nr246\nr247\nr248\nr249\nr250\nr251\nr252\nr253\nr254\nr255\nr256\nr257\nr258\nr259\nr260\nr261\nr262\nr263\nr264\nr265\nr266\nr267\nr268\nr269\nr270\nr271\nr272\nr273\nr274\nr275\nr276\nr277\nr278\nr279\nr280\nr281\nr282\nr283\nr284\nr285\nr286\nr287\nr288\nr289\nr290\nr291\nr292\nr293\nr294\nr295\nr296\nr297\nr298\nr299\nr300\nr301\nr302\nr303\nr304\nr305\nr306\nr307\nr308\nr309\nr310\nr311\nr312\nr313\nr314\nr315\nr316\nr317\nr318\nr319\nr320\nr321\nr322\nr323\nr324\nr325\nr326\nr327\nr328\nr329\nr330\nr331\nr332\nr333\nr334\nr335\nr336\nr337\nr338\nr339\nr340\nr341\nr342\nr343\nr344\nr345\nr346\nr347\nr348\nr349\nr350\nr351\nr352\nr353\nr354\nr355\nr356\nr357\nr358\nr359\nr360\nr361\nr362\nr363\nr364\nr365\nr366\nr367\nr368\nr369\nr370\nr371\nr372\nr373\nr374\nr375\nr376\nr377\nr378\nr379\nr380\nr381\nr382\nr383\nr384\nr385\nr386\nr387\nr388\nr389\nr390\nr391\nr392\nr393\nr394\nr395\nr396\nr397\nr398\nr399\nr400\nr401\nr402\nr403\nr404\nr405\nr406\nr407\nr408\nr409\nr410\nr411\nr412\nr413\nr414\nr415\nr416\nr417\nr418\nr419\nr420\nr421\nr422\nr423\nr424\nr425\nr426\nr427\nr428\nr429\nr430\nr431\nr432\nr433\nr434\nr435\nr436\nr437\nr438\nr439\nr440\nr441\nr442\nr443\nr444\nr445\nr446\nr447\nr448\nr449\nr450\nr451\nr452\nr453\nr454\nr455\nr456\nr457\nr458\nr459\nr460\nr461\nr462\nr463\nr464\nr465\nr466\nr467\nr468\nr469\nr470\nr471\nr472\nr473\nr474\nr475\nr476\nr477\nr478\nr479\nr480\nr481\nr482\nr483\nr484\nr485\nr486\nr487\nr488\nr489\nr490\nr491\nr492\nr493\nr494\nr495\nr496\nr497\nr498\nr499\nr500\nr501\nr502\nr503\nr504\nr505\nr506\nr507\nr508\nr509\nr510\nr511\nr512\nr513\nr514\nr515\nr516\nr517\nr518\nr519\nr520\nr521\nr522\nr523\nr524\nr525\nr526\nr527\nr528\nr529\nr530\nr531\nr532\nr533\nr534\nr535\nr536\nr537\nr538\nr539\nr540\nr541\nr542\nr543\nr544\nr545\nr546\nr547\nr548\nr549\nr550\nr551\nr552\nr553\nr554\nr555\nr556\nr557\nr558\nr559\nr560\nr561\nr562\nr563\nr564\nr565\nr566\nr567\nr568\nr569\nr570\nr571\nr572\nr573\nr574\nr575\nr576\nr577\nr578\nr579\nr580\nr581\nr582\nr583\nr584\nr585\nr586\nr587\nr588\nr589\nr590\nr591\nr592\nr593\nr594\nr595\nr596\nr597\nr598\nr599\nr600\nr601\nr602\nr603\nr604\nr605\nr606\nr607\nr608\nr609\nr610\nr611\nr612\nr613\nr614\nr615\nr616\nr617\nr618\nr619\nr620\nr621\nr622\nr623\nr624\nr625\nr626\nr627\nr628\nr629\nr630\nr631\nr632\nr633\nr634\nr635\nr636\nr637\nr638\nr639\nr640\nr641\nr642\nr643\nr644\nr645\nr646\nr647\nr648\nr649\nr650\nr651\nr652\nr653\nr654\nr655\nr656\nr657\nr658\nr659\nr660\nr661\nr662\nr663\nr664\nr665\nr666\nr667\nr668\nr669\nr670\nr671\nr672\nr673\nr674\nr675\nr676\nr677\nr678\nr679\nr680\nr681\nr682\nr683\nr684\nr685\nr686\nr687\nr688\nr689\nr690\nr691\nr692\nr693\nr694\nr695\nr696\nr697\nr698\nr699\nr700\nr701\nr702\nr703\nr704\nr705\nr706\nr707\nr708\nr709\nr710\nr711\nr712\nr713\nr714\nr715\nr716\nr717\nr718\nr719\nr720\nr721\nr722\nr723\nr724\nr725\nr726\nr727\nr728\nr729\nr730\nr731\nr732\nr733\nr734\nr735\nr736\nr737\nr738\nr739\nr740\nr741\nr742\nr743\nr744\nr745\nr746\nr747\nr748\nr749\nr750\nr751\nr752\nr753\nr754\nr755\nr756\nr757\nr758\nr759\nr760\nr761\nr762\nr763\nr764\nr765\nr766\nr767\nr768\nr769\nr770\nr771\nr772\nr773\nr774\nr775\nr776\nr777\nr778\nr779\nr780\nr781\nr782\nr783\nr784\nr785\nr786\nr787\nr788\nr789\nr790\nr791\nr792\nr793\nr794\nr795\nr796\nr797\nr798\nr799\nr800\nr801\nr802\nr803\nr804\nr805\nr806\nr807\nr808\nr809\nr810\nr811\nr812\nr813\nr814\nr815\nr816\nr817\nr818\nr819\nr820\nr821\nr822\nr823\nr824\nr825\nr826\nr827\nr828\nr829\nr830\nr831\nr832\nr833\nr834\nr835\nr836\nr837\nr838\nr839\nr840\nr841\nr842\nr843\nr844\nr845\nr846\nr847\nr848\nr849\nr850\nr851\nr852\nr853\nr854\nr855\nr856\nr857\nr858\nr859\nr860\nr861\nr862\nr863\nr864\nr865\nr866\nr867\nr868\nr869\nr870\nr871\nr872\nr873\nr874\nr875\nr876\nr877\nr878\nr879\nr880\nr881\nr882\nr883\nr884\nr885\nr886\nr887\nr888\nr889\nr890\nr891\nr892\nr893\nr894\nr895\nr896\nr897\nr898\nr899\nr900\nr901\nr902\nr903\nr904\nr905\nr906\nr907\nr908\nr909\nr910\nr911\nr912\nr913\nr914\nr915\nr916\nr917\nr918\nr919\nr920\nr921\nr922\nr923\nr924\nr925\nr926\nr927\nr928\nr929\nr930\nr931\nr932\nr933\nr934\nr935\nr936\nr937\nr938\nr939\nr940\nr941\nr942\nr943\nr944\nr945\nr946\nr947\nr948\nr949\nr950\nr951\nr952\nr953\nr954\nr955\nr956\nr957\nr958\nr959\nr960\nr961\nr962\nr963\nr964\nr965\nr966\nr967\nr968\nr969\nr970\nr971\nr972\nr973\nr974\nr975\nr976\nr977\nr978\nr979\nr980\nr981\nr982\nr983\nr984\nr985\nr986\nr987\nr988\nr989\nr990\nr991\nr992\nr993\nr994\nr995\nr996\nr997\nr998\nR999"
+   ],
+   "expected": "line 1000, col 1: existing \"r999\" vs profile \"R999\""
+  },
+  {
+   "name": "v67",
+   "args": [
+    "r0\nr1\nr2\nr3\nr4\nr5\nr6\nr7\nr8\nr9\nr10\nr11\nr12\nr13\nr14\nr15\nr16\nr17\nr18\nr19\nr20\nr21\nr22\nr23\nr24\nr25\nr26\nr27\nr28\nr29\nr30\nr31\nr32\nr33\nr34\nr35\nr36\nr37\nr38\nr39\nr40\nr41\nr42\nr43\nr44\nr45\nr46\nr47\nr48\nr49\nr50\nr51\nr52\nr53\nr54\nr55\nr56\nr57\nr58\nr59\nr60\nr61\nr62\nr63\nr64\nr65\nr66\nr67\nr68\nr69\nr70\nr71\nr72\nr73\nr74\nr75\nr76\nr77\nr78\nr79\nr80\nr81\nr82\nr83\nr84\nr85\nr86\nr87\nr88\nr89\nr90\nr91\nr92\nr93\nr94\nr95\nr96\nr97\nr98\nr99\nr100\nr101\nr102\nr103\nr104\nr105\nr106\nr107\nr108\nr109\nr110\nr111\nr112\nr113\nr114\nr115\nr116\nr117\nr118\nr119\nr120\nr121\nr122\nr123\nr124\nr125\nr126\nr127\nr128\nr129\nr130\nr131\nr132\nr133\nr134\nr135\nr136\nr137\nr138\nr139\nr140\nr141\nr142\nr143\nr144\nr145\nr146\nr147\nr148\nr149\nr150\nr151\nr152\nr153\nr154\nr155\nr156\nr157\nr158\nr159\nr160\nr161\nr162\nr163\nr164\nr165\nr166\nr167\nr168\nr169\nr170\nr171\nr172\nr173\nr174\nr175\nr176\nr177\nr178\nr179\nr180\nr181\nr182\nr183\nr184\nr185\nr186\nr187\nr188\nr189\nr190\nr191\nr192\nr193\nr194\nr195\nr196\nr197\nr198\nr199\nr200\nr201\nr202\nr203\nr204\nr205\nr206\nr207\nr208\nr209\nr210\nr211\nr212\nr213\nr214\nr215\nr216\nr217\nr218\nr219\nr220\nr221\nr222\nr223\nr224\nr225\nr226\nr227\nr228\nr229\nr230\nr231\nr232\nr233\nr234\nr235\nr236\nr237\nr238\nr239\nr240\nr241\nr242\nr243\nr244\nr245\nr246\nr247\nr248\nr249\nr250\nr251\nr252\nr253\nr254\nr255\nr256\nr257\nr258\nr259\nr260\nr261\nr262\nr263\nr264\nr265\nr266\nr267\nr268\nr269\nr270\nr271\nr272\nr273\nr274\nr275\nr276\nr277\nr278\nr279\nr280\nr281\nr282\nr283\nr284\nr285\nr286\nr287\nr288\nr289\nr290\nr291\nr292\nr293\nr294\nr295\nr296\nr297\nr298\nr299",
+    "r0\nr1\nr2\nr3\nr4\nr5\nr6\nr7\nr8\nr9\nr10\nr11\nr12\nr13\nr14\nr15\nr16\nr17\nr18\nr19\nr20\nr21\nr22\nr23\nr24\nr25\nr26\nr27\nr28\nr29\nr30\nr31\nr32\nr33\nr34\nr35\nr36\nr37\nr38\nr39\nr40\nr41\nr42\nr43\nr44\nr45\nr46\nr47\nr48\nr49\nr50\nr51\nr52\nr53\nr54\nr55\nr56\nr57\nr58\nr59\nr60\nr61\nr62\nr63\nr64\nr65\nr66\nr67\nr68\nr69\nr70\nr71\nr72\nr73\nr74\nr75\nr76\nr77\nr78\nr79\nr80\nr81\nr82\nr83\nr84\nr85\nr86\nr87\nr88\nr89\nr90\nr91\nr92\nr93\nr94\nr95\nr96\nr97\nr98\nr99\nr100\nr101\nr102\nr103\nr104\nr105\nr106\nr107\nr108\nr109\nr110\nr111\nr112\nr113\nr114\nr115\nr116\nr117\nr118\nr119\nr120\nr121\nr122\nr123\nr124\nr125\nr126\nr127\nr128\nr129\nr130\nr131\nr132\nr133\nr134\nr135\nr136\nr137\nr138\nr139\nr140\nr141\nr142\nr143\nr144\nr145\nr146\nr147\nr148\nr149\nr150\nr151\nr152\nr153\nr154\nr155\nr156\nr157\nr158\nr159\nr160\nr161\nr162\nr163\nr164\nr165\nr166\nr167\nr168\nr169\nr170\nr171\nr172\nr173\nr174\nr175\nr176\nr177\nr178\nr179\nr180\nr181\nr182\nr183\nr184\nr185\nr186\nr187\nr188\nr189\nr190\nr191\nr192\nr193\nr194\nr195\nr196\nr197\nr198\nr199\nr200\nr201\nr202\nr203\nr204\nr205\nr206\nr207\nr208\nr209\nr210\nr211\nr212\nr213\nr214\nr215\nr216\nr217\nr218\nr219\nr220\nr221\nr222\nr223\nr224\nr225\nr226\nr227\nr228\nr229\nr230\nr231\nr232\nr233\nr234\nr235\nr236\nr237\nr238\nr239\nr240\nr241\nr242\nr243\nr244\nr245\nr246\nr247\nr248\nr249\nr250\nr251\nr252\nr253\nr254\nr255\nr256\nr257\nr258\nr259\nr260\nr261\nr262\nr263\nr264\nr265\nr266\nr267\nr268\nr269\nr270\nr271\nr272\nr273\nr274\nr275\nr276\nr277\nr278\nr279\nr280\nr281\nr282\nr283\nr284\nr285\nr286\nr287\nr288\nr289\nr290\nr291\nr292\nr293\nr294\nr295\nr296\nr297\nr298\nr299\n"
+   ],
+   "expected": "line 301: existing has no line 301, profile has \"\""
+  },
+  {
+   "name": "v68",
+   "args": [
+    "͏\n󠇰😁󠁁⁥ 𝅳​‍\r中\r\n\n\\c ‐️…/�⁠⠀\\⁥​ㅤ𝅳中⠀\r0 中\r᠏﻿\t😀c󠁁󠀁中𝅳⁥…͏󠇯󠄀؀󠂀￻󠄀 c󠀁…󠀁‮󠄀؀\"͏󠇯\t󠇰\" 0� ⁠xﾠ𑂽😀\"…󠁿😁\r�　0",
+    "\n󠇰😁󠁁⁥ 𝅳​‍\r中\r\n\n\\c ‐️…/�⁠⠀\\⁥​ㅤ𝅳中⠀\r0 中\r᠏﻿\t😀c󠁁󠀁中𝅳⁥…͏󠇯󠄀؀󠂀￻󠄀 c󠀁…󠀁‮󠄀؀\"͏󠇯\t󠇰\" 0� ⁠xﾠ𑂽😀\"…󠁿😁\r�　0"
+   ],
+   "expected": "line 1, col 1: existing \"\\u034f\" vs profile \"\""
+  },
+  {
+   "name": "v69",
+   "args": [
+    "/️⁥中𝅳󠇯󠀁a",
+    "/️中𝅳󠇯󠀁a"
+   ],
+   "expected": "line 1, col 3: existing \"…⁥中\\u{1d173}\\u{e01ef}\\u{e0001}a\" vs profile \"…中\\u{1d173}\\u{e01ef}\\u{e0001}a\""
+  },
+  {
+   "name": "v70",
+   "args": [
+    "️️éy\r⁠😁󠁿…󠂀",
+    "️️éy\r⁠😁󠁿…󠂀\r"
+   ],
+   "expected": "line 1, col 12: existing \"…\" vs profile \"…\\r\""
+  },
+  {
+   "name": "v71",
+   "args": [
+    "󠇰\"0xbㅤ中\rﾠ…󠁿\n؀\u0001中⁠⠀️",
+    "󠇰\"0xbㅤ中\rﾠ…󠁿\n؀\u0001中⁠⠀️"
+   ],
+   "expected": "binary difference (the texts decode to the same UTF-8)"
+  }
+ ]
+}

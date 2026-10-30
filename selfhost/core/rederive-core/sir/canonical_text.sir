@@ -1,0 +1,44 @@
+UNIT canonical_text
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/sir-parse.mjs canonicalText over sirLines — the binding normal form every PRIMARY-SHA256 hashes
+ORACLE-CLASS deterministic
+SIG canonical_text(text: text) -> text
+ENVELOPE well-formed text (Unicode scalar values). Inside it the function is total. Text holding a lone surrogate is OUT in
+  every language: the package throws on it, and no language is graded there. Non-text input is OUT.
+DEPENDS-ON none
+DESCRIPTION Normalize the formatting of a document, line by line, and nothing else: unify line breaks, drop the byte order
+  marks among a line's leading spaces and tabs, drop trailing spaces and tabs, drop blank lines, collapse any indentation of spaces and tabs to
+  exactly two spaces. Every other character is kept as it is. The line cutting of R1–R2 is the same one the SIR parser
+  uses, so two texts with equal results parse alike.
+BEHAVIOR
+R1 The text is cut into lines at every BREAK, scanning left to right (grammar BREAK): a CR immediately followed by LF is
+  one break, a CR alone is a break, an LF alone is a break. So LF then CR is two breaks. The line separator (2028), the
+  paragraph separator (2029), next line (0085), vertical tab and form feed are NOT breaks: they are content. CITED FIDELITY package
+R2 Each line first loses every byte order mark (hex FEFF) inside its LEADING RUN: the longest prefix made only of PAD
+  characters and marks, in any mix and order (it may be empty). The PAD characters of that run stay, in their order;
+  only its marks go. A mark after the first character that is neither PAD nor a mark is content. Then the line loses
+  its trailing run of PAD characters. Every whitespace other than PAD at the end of a line (no-break space,
+  ideographic space, the separators of R1) is content, and so is any pad character before it. CITED FIDELITY package
+R3 A line that is empty after R2 is dropped. A line made only of other whitespace (a no-break space alone) is not empty
+  and is kept.
+R4 A kept line that starts with a PAD character has its whole leading run of PAD characters replaced by exactly two
+  spaces. A line starting with any other character is unchanged; a no-break space at column 0 is content, not
+  indentation.
+R5 The kept lines, in order, are joined with LF and one final LF is added. When no line is kept the result is the EMPTY
+  text (not a lone LF). CITED FIDELITY package
+PINNED charset PAD = hex code points 0020 0009 CITED R2 R4 — space and tab, nothing else
+PINNED grammar BREAK = CR LF | CR | LF, the longest alternative first at each position CITED R1
+INVARIANT the result is empty or ends with LF; it holds no CR; no line of it is empty or ends with space or tab; a line
+  is either two spaces followed by a character that is neither PAD nor a byte order mark, or starts with such a
+  character. Hence the function is idempotent: applied to its own result it returns that result unchanged.
+OUT-OF-DOMAIN no text throws. Malformed SIR is not a concept here: orphan lines, comments, unknown directives and
+  non-directive lines all pass through under R1–R5 unchanged in content.
+ORACLE value -> oracles/canonical_text.json  CANONICAL-SHA256 07d5e3c1abe2557680668091b3d5998ffab3d87651bbb845fa5ff7da178014d3
+SCOPE IN: R1–R5 over well-formed text. OUT: the parse and the canonical print (separate units), the sha256 of the result, lone
+  surrogates.
+PROVENANCE rederive@6199e2cc8b75 (MIT), cli/sir/sir-parse.mjs: sirLines, canonicalText; seam selfhost/seams/canonical_text.mjs. Cold
+  cut 2026-10-26 into the v0.5 contract register from the pinned authority snapshot (round 1 of the self-treatment
+  pilot, replacing canonical_print); re-cut 2026-10-27 for round 5 (FINDINGS #76: sirLines drops the marks after a
+  line's indentation too); re-cut 2026-10-27 for round 5b on 6199e2cc8b75 (FINDINGS #99: every
+  mark in the leading run goes, so one pass reaches the fixed point).

@@ -1,0 +1,185 @@
+UNIT range
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG range([start=0], end?, [step]) -> Array<number>
+# Default export of npm `lodash.range@3.2.0`: `module.exports = range`, where
+# `range = createRange()` (fromRight is the constant `undefined` -> falsy -> left-to-right fill).
+# The re-emitter MUST `export default <fn>` (emissions are .mjs loaded via import()).
+# Pure: no I/O, no clock, no RNG, no mutation of inputs. No seam. ORACLE-CLASS deterministic.
+
+DEPENDS-ON none
+# All helpers (baseRange, toFinite, toNumber, isSymbol, isObject, isIterateeCall, etc.) are
+# INLINED in the single source file. They are reproduced below as in-contract logic; the blind
+# re-emitter implements them directly. No external module, no carried-data table.
+
+BEHAVIOR
+# ============================================================================================
+# Top-level call: range(start, end, step)  (arity is by `arguments`/JS positional binding).
+# Pipeline, in EXACT order:
+#
+# NODE 1  ITERATEE-CALL GUARD (out-of-envelope for codec-faithful inputs; see SCOPE)
+#   if (step && typeof step != 'number' && isIterateeCall(start, end, step)) {
+#       end = step = undefined;
+#   }
+#   - This branch fires ONLY when `step` is TRUTHY, NOT a number, AND `isIterateeCall(start,end,step)`
+#     returns true. `isIterateeCall` requires `step` to be an OBJECT (array-like) such that
+#     `step[end] === start` (SameValueZero) and `end` is a valid index into it. That requires
+#     passing a live array/object as the 3rd arg -> NOT a JSON-codec-faithful argument tuple.
+#   - For ALL inputs `genInputs` emits (numbers / strings / null / undefined / booleans / NaN /
+#     Infinity), this guard is NEVER taken: a primitive `step` is never an object, so
+#     `isIterateeCall` is false (isObject(step) is false). Blind re-emitters MAY implement the
+#     guard verbatim or omit it; on the in-envelope input set the observable result is identical.
+#     The guard is documented for completeness, not exercised by the oracle.
+#
+# NODE 2  START COERCION (sign-of--0 preserving)
+#   start = toFinite(start);
+#
+# NODE 3  END DEFAULTING (the 1-arg vs >=2-arg shift)
+#   if (end === undefined) {            # end OMITTED, or end PASSED AS literal `undefined`
+#       end = start;                    #   -> range becomes [0, start)
+#       start = 0;
+#   } else {
+#       end = toFinite(end);            # end present (incl. null, NaN, strings, booleans...)
+#   }
+#   NOTE: the test is strictly `=== undefined`. Passing literal `undefined` as `end`
+#   (e.g. range(5, undefined)) takes the OMITTED branch: range(5,undefined) === range(5).
+#   Passing `null` as end does NOT: null !== undefined, so end = toFinite(null) = 0.
+#
+# NODE 4  STEP DERIVATION (default sign rule)
+#   step = (step === undefined) ? (start < end ? 1 : -1) : toFinite(step);
+#   - step OMITTED or literal `undefined`  -> +1 if start < end, else -1 (so when start >= end
+#     after defaulting, the implied step is -1, producing a descending run).
+#   - step PRESENT (incl. null/NaN/false/0/strings) -> step = toFinite(step). Note null, NaN,
+#     and false all coerce via toFinite to 0 (they are !== undefined), giving step 0.
+#
+# NODE 5  RETURN baseRange(start, end, step, /*fromRight=*/undefined)
+#
+# ------------------------------------------------------------------------------------------
+# baseRange(start, end, step, fromRight):
+#   length = nativeMax( nativeCeil( (end - start) / (step || 1) ), 0 );   # Math.max(Math.ceil(...),0)
+#   result = Array(length);          # may THROW RangeError if length invalid (see NODE 6)
+#   index = -1;
+#   while (length--) {
+#       result[fromRight ? length : ++index] = start;   # fromRight is falsy -> fill left->right
+#       start += step;
+#   }
+#   return result;
+#
+#   KEY SUBTLETIES (all source-verified):
+#   (a) DIVISOR is `(step || 1)`: when step === 0 (or NaN, since NaN is falsy), the length
+#       formula divides by 1, NOT by 0. So length = max(ceil(end - start), 0). The INCREMENT,
+#       however, is the real `step` (0), so every produced element equals the original `start`.
+#         range(1,4,0)  -> length max(ceil(3/1),0)=3, start+=0 each step -> [1,1,1]
+#         range(0,5,0)  -> length 5 -> [0,0,0,0,0]
+#         range(0,-5,0) -> length max(ceil(-5/1),0)=0 -> []
+#         range(1,5,null|NaN|false) -> step coerces to 0 -> [1,1,1,1]
+#   (b) LENGTH ROUNDING is Math.ceil of the real-number quotient, then clamped to >= 0 by
+#       Math.max(_,0). A wrong-sign or too-large step yields a negative/zero quotient -> length 0
+#       -> [].
+#         range(0,5,-1) -> ceil(5/-1)=-5 -> max(-5,0)=0 -> []
+#         range(1,5,-2) -> ceil(4/-2)=-2 -> 0 -> []
+#         range(0,5,10) -> ceil(5/10=0.5)=1 -> [0]
+#         range(0,5,3)  -> ceil(5/3=1.666)=2 -> [0,3]
+#         range(0,3,2)  -> ceil(3/2=1.5)=2 -> [0,2]
+#   (c) FLOAT STEP: the run is computed by repeated IEEE-754 addition `start += step`, NOT by
+#       multiplication. Reproduce element-by-element with `+=` so floating error matches EXACTLY.
+#         range(0,1,0.1) -> [0,0.1,0.2,0.30000000000000004,0.4,0.5,0.6,0.7,
+#                            0.7999999999999999,0.8999999999999999]   (length = ceil(1/0.1)=10)
+#         range(0,10,3.3) -> [0,3.3,6.6,9.899999999999999]            (length = ceil(10/3.3)=4)
+#         range(0,0.3,0.1) -> length ceil(0.3/0.1 ~= 2.9999...)=3 -> [0,0.1,0.2]
+#         range(0,1,1/3) -> [0,0.3333333333333333,0.6666666666666666]  (length 3)
+#       Use the literal `(end - start) / (step || 1)` then `Math.ceil`, then `Math.max(_,0)`;
+#       do NOT pre-round the quotient. Then build via `+=`.
+#   (d) FLOAT START/END default step: step 1 from a fractional start.
+#         range(2.5,7.5) -> length ceil(5)=5 -> [2.5,3.5,4.5,5.5,6.5]
+#         range(0,2.6)   -> length ceil(2.6)=3 -> [0,1,2]
+#         range(3.5)     -> end=3.5,start=0,step=1 -> length ceil(3.5)=4 -> [0,1,2,3]
+#         range(-3.5)    -> end=-3.5,start=0,step=-1 -> length ceil(-3.5/-1=3.5)=4 -> [0,-1,-2,-3]
+#
+# NODE 6  RangeError PATH (codec-faithful, gradable as a throw)
+#   `Array(length)` throws `RangeError: Invalid array length` when length is not a valid
+#   array length: i.e. negative-after-max can't happen (clamped to >=0), but a NON-INTEGER or
+#   length >= 2^32 (4294967296) throws. The reachable cases from in-envelope inputs:
+#     - end coerces to a huge finite via toFinite(Infinity)=MAX_INTEGER (1.7976931348623157e+308):
+#         range(Infinity)        -> end huge, start 0, step 1 -> length ~1.8e308 -> THROW RangeError
+#         range(0, Infinity)     -> same -> THROW RangeError
+#         range(0, Infinity, 1)  -> THROW RangeError
+#     - A fractional length never arises here because (end-start)/(step||1) is ceil'd to an integer
+#       before Array(); the throw is driven by MAGNITUDE (>= 2^32), not fractionality.
+#   The expected for these is recorded as a throw record `{__throw}` by the harness. The blind
+#   re-emitter reproduces it by letting `Array(length)` throw naturally (do NOT guard it).
+#   COUNTER-CASE: range(0,3,Infinity) does NOT throw: step=toFinite(Infinity)=MAX_INTEGER huge,
+#     length = ceil(3/huge ~= tiny positive)=1 -> [0]. And range(0,3,-Infinity) -> ceil(neg tiny)=0
+#     -> []. Only a huge *length* throws, not a huge *step*.
+#
+# ------------------------------------------------------------------------------------------
+# COERCION HELPERS (in-contract logic — reproduce exactly):
+#
+# toFinite(value):
+#   if (!value) return value === 0 ? value : 0;     # falsy: 0/-0 -> itself; null,undefined,NaN,
+#                                                    #   false,'' -> 0. (-0 returns -0; +0 returns +0)
+#   value = toNumber(value);
+#   if (value === Infinity || value === -Infinity)  # +/-Infinity -> sign * MAX_INTEGER
+#       return (value < 0 ? -1 : 1) * 1.7976931348623157e+308;   # MAX_INTEGER
+#   return value === value ? value : 0;              # NaN-after-toNumber -> 0
+#
+# toNumber(value):
+#   if (typeof value == 'number') return value;
+#   if (isSymbol(value)) return NaN;                 # Symbols -> NaN (out-of-envelope; not emitted)
+#   if (isObject(value)) {                           # objects: valueOf() then String() fallback
+#       var other = (typeof value.valueOf == 'function') ? value.valueOf() : value;
+#       value = isObject(other) ? (other + '') : other;
+#   }
+#   if (typeof value != 'string') return value === 0 ? value : +value;   # e.g. booleans: +true=1,+false=0
+#   value = value.replace(/^\s+|\s+$/g, '');         # TRIM leading/trailing whitespace
+#   isBinary = /^0b[01]+$/i.test(value);
+#   if (isBinary || /^0o[0-7]+$/i.test(value))       # binary/octal string -> parseInt(slice(2), 2|8)
+#       return parseInt(value.slice(2), isBinary ? 2 : 8);
+#   return /^[-+]0x[0-9a-f]+$/i.test(value) ? NaN : +value;   # signed-hex string -> NaN; else +value
+#
+#   STRING COERCION DEMONSTRATED (self-consistent with genInputs):
+#     "4"   -> 4        "1"->1, "5"->5, "0"->0, "10"->10, "2"->2, "3"->3, "-3"->-3
+#     "3.5" -> 3.5      "+5" -> 5         "-5" -> -5        "1e2" -> 100
+#     "  3  " -> 3 (trim)   "  0x0a  " -> trim then +"0x0a" = 10   "0X10" -> +"0X10" = 16
+#     "0x10" -> +"0x10" = 16 (unsigned hex is NOT bad-hex; goes through +value)
+#     "0b101" -> parseInt("101",2) = 5      "0o17" -> parseInt("17",8) = 15
+#     "-0x1" -> matches /^[-+]0x[0-9a-f]+$/i -> NaN -> toFinite -> 0
+#     "abc" -> +"abc" = NaN -> toFinite -> 0       "" -> falsy in toFinite -> 0
+#   PRIMITIVE COERCION DEMONSTRATED:
+#     null  -> toFinite: !null -> null===0? no -> 0
+#     undefined as START -> toFinite: !undefined -> 0       (but as END -> end-defaulting, NODE 3)
+#     true  -> truthy -> toNumber(true): not number, not symbol, not object, not string -> +true = 1
+#     false -> falsy in toFinite -> false===0? no -> 0
+#     NaN   -> falsy in toFinite -> NaN===0? no -> 0
+#     Infinity / -Infinity -> toFinite -> +/- MAX_INTEGER (1.7976931348623157e+308)
+
+ORACLE value -> /tmp/factory-run/lodash.range/sir/range.oracle.json
+# Value-mode: oracle stores JSON.stringify(encode(args)) -> expected output array (or {__throw}).
+# Outputs are plain arrays of finite JS numbers (always finite here: toFinite removes +/-Inf/NaN;
+# the only non-finite outcome is the RangeError throw path, recorded as {__throw}). `-0` may appear
+# as an element only if `-0` is passed literally as start, which JSON does not round-trip; both real
+# and blind serialize `-0` to `0` and agree.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — arg-shift (NODE 3),
+#   step-sign default (NODE 4), length = max(ceil((end-start)/(step||1)),0), element fill by
+#   `start += step`, toFinite/toNumber coercion (strings incl. trim/binary/octal/hex, null,
+#   undefined, booleans, NaN, +/-Infinity), the RangeError throw on huge length, and the
+#   step-0-divides-by-1 subtlety. Demonstrated in-scope value subset is listed inline above and
+#   is self-consistent with genInputs (every char-class/value genInputs emits has its mapping
+#   spelled out: each string form, null, undefined, true, false, NaN, Infinity).
+# CARRIED DATA: none. (No literal table; the 4 regexes and MAX_INTEGER/MAX_SAFE_INTEGER constants
+#   are inlined above verbatim.)
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; documented, not graded):
+#   - Symbol args (toNumber -> NaN): Symbols are not JSON-codec-faithful; excluded.
+#   - The NODE-1 iteratee-call guard: requires a live array/object as `step` (range(v,i,arrObj)
+#     where arrObj[i]===v) -> not a round-trippable primitive tuple; excluded. Documented so a
+#     blind engineer can still reproduce it, but the oracle does not exercise it.
+#   - Object/wrapper args whose valueOf/String coercion matters (new Number(...), {valueOf}):
+#     class-instance identity does not survive the codec; excluded.
+
+PROVENANCE lodash.range@3.2.0 (custom modular build of lodash), repo lodash/lodash, MIT license.
+# Source file read: <pkgroot>/index.js (package.json has no "main" -> Node resolves index.js).
+# Behavior verified by executing the REAL installed package via node on all curated edges
+# (numeric ranges, 1/2/3-arg shifts, zero/negative/float step, start>end, start===end, zero end,
+# string/null/undefined/boolean/NaN/Infinity coercion, RangeError path).

@@ -1,0 +1,214 @@
+UNIT toFinite
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toFinite(value: any) -> number          # default export: module.exports = toFinite
+
+DEPENDS-ON none
+# Self-contained single-file package. The helpers toNumber, isObject, isObjectLike, isSymbol are
+# all BUNDLED in the same source file and inlined into this SIR's BEHAVIOR — they are NOT external
+# deps. Zero runtime dependencies. No carried-data tables.
+
+# Re-emission note: this is a SINGLE DEFAULT export. The blind re-emitter must write
+#   export default function toFinite(value) { ... }
+# (one function, no named export). The harness imports the default.
+
+# ============================================================================
+# CONSTANTS (exact, verified against source)
+# ============================================================================
+#   INFINITY     = 1 / 0            # === +Infinity
+#   MAX_INTEGER  = 1.7976931348623157e+308   # === Number.MAX_VALUE (the largest finite double).
+#                                            # NOTE: this is MAX_VALUE, NOT Number.MAX_SAFE_INTEGER.
+#   NAN          = 0 / 0            # === NaN
+#   symbolTag    = '[object Symbol]'
+#   reTrim       = /^\s+|\s+$/g                 # strip leading + trailing whitespace (global)
+#   reIsBadHex   = /^[-+]0x[0-9a-f]+$/i         # SIGNED hex literal string -> treated as bad -> NaN
+#   reIsBinary   = /^0b[01]+$/i                 # binary literal string
+#   reIsOctal    = /^0o[0-7]+$/i                # octal literal string
+#   freeParseInt = parseInt
+#   objectToString = Object.prototype.toString
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline; toFinite calls the inlined toNumber)
+# ============================================================================
+#
+# toFinite(value):
+#   NODE F1  (falsy short-circuit):
+#     if (!value) {
+#         # `!value` is true for: 0, -0, NaN, '' (empty string), false, null, undefined,
+#         # AND 0n / -0n (zero bigints are falsy too -> they NEVER reach toNumber -> never throw).
+#         return value === 0 ? value : 0
+#         # The comparison `value === 0` uses STRICT equality.
+#         #   - For 0      : 0 === 0  -> true  -> returns the ORIGINAL value, i.e. +0.
+#         #   - For -0     : -0 === 0 -> true  -> returns the ORIGINAL value, i.e. -0.
+#         #                  (-0 is preserved EXACTLY: returns the bound `value`, which is -0.)
+#         #   - For NaN    : NaN === 0 -> false -> returns 0.
+#         #   - For ''     : '' === 0 -> false -> returns 0.
+#         #   - For false  : false === 0 -> false -> returns 0.
+#         #   - For null   : null === 0 -> false -> returns 0.
+#         #   - For undefined : false -> returns 0.
+#         #   - For 0n     : 0n === 0 -> false (strict; different types) -> returns NUMBER 0.
+#         #   - For -0n    : -0n === 0 -> false -> returns NUMBER 0.
+#         #     (So zero bigints produce a plain number 0, NOT a bigint, and do NOT throw.)
+#     }
+#   # value is now TRUTHY (any nonzero number incl. ±Infinity, nonempty string, true,
+#   #  any object/array/function, any boxed primitive, any nonzero bigint, any Symbol).
+#
+#   NODE F2  (coerce to number):
+#     value = toNumber(value)        # inlined below
+#
+#   NODE F3  (Infinity clamp):
+#     if (value === INFINITY || value === -INFINITY) {
+#         var sign = (value < 0 ? -1 : 1)
+#         return sign * MAX_INTEGER
+#         #  +Infinity -> +1.7976931348623157e+308
+#         #  -Infinity -> -1.7976931348623157e+308
+#     }
+#
+#   NODE F4  (NaN final guard):
+#     return value === value ? value : 0
+#         #  `value === value` is false ONLY for NaN -> returns 0.
+#         #  Otherwise returns the finite number from toNumber unchanged (NO further clamping;
+#         #  e.g. Number.MAX_VALUE itself passes through untouched since it is finite, not Infinity).
+#
+# ----------------------------------------------------------------------------
+# toNumber(value):  (inlined helper — exact transcription of source semantics)
+#   NODE N1: if (typeof value == 'number') return value;
+#            # already a number (incl. NaN, ±Infinity) -> returned verbatim.
+#   NODE N2: if (isSymbol(value)) return NAN;
+#            # isSymbol(v) = (typeof v == 'symbol')
+#            #               || (isObjectLike(v) && objectToString.call(v) == '[object Symbol]')
+#            # isObjectLike(v) = (!!v && typeof v == 'object')
+#            # -> Symbol primitive or boxed Symbol object -> NaN.
+#   NODE N3: if (isObject(value)) {
+#                # isObject(v) = (!!v && (typeof v == 'object' || typeof v == 'function'))
+#                # -> arrays, plain objects, functions, boxed Number/String/Boolean, Date, RegExp...
+#                var other = (typeof value.valueOf == 'function') ? value.valueOf() : value;
+#                value = isObject(other) ? (other + '') : other;
+#                # If valueOf() returns a primitive (number/string/etc.), `value` becomes that primitive.
+#                #   e.g. new Number(5).valueOf() -> 5 (number) ; new String('7.5').valueOf() -> '7.5'.
+#                #   e.g. [5].valueOf() -> [5] (still object) -> [5] + '' -> '5' (string).
+#                #   e.g. {} .valueOf() -> {} (object) -> {} + '' -> '[object Object]' (string).
+#                #   e.g. [1,2].valueOf() -> [1,2] -> '1,2' (string).
+#                #   e.g. function(){}.valueOf() -> the fn (object) -> fn + '' -> source string.
+#            }
+#   NODE N4: if (typeof value != 'string') {
+#                return value === 0 ? value : +value;
+#                # By here value is a primitive that is NOT a string.
+#                #   - number (from valueOf): value===0 ? value : +value
+#                #       NOTE preserves -0 here too: new Number(-0) -> valueOf -> -0 -> -0===0 true -> returns -0.
+#                #   - boolean true  -> +true  = 1   (false would have short-circuited in toFinite F1; but
+#                #                                    toNumber alone on false -> false===0 false -> +false = 0)
+#                #   - bigint (nonzero, truthy) -> +<bigint> THROWS TypeError:
+#                #         "Cannot convert a BigInt value to a number".
+#                #         This is the ONLY throw path. Reached only by truthy (nonzero) bigints,
+#                #         because zero bigints are intercepted by toFinite NODE F1.
+#                #   - null/undefined would be +null=0 / +undefined=NaN, but they short-circuit in F1.
+#            }
+#   NODE N5: # value is a STRING here.
+#            value = value.replace(reTrim, '');     # trim leading+trailing whitespace (incl. \t \n \r \f \v and unicode ws)
+#            var isBinary = reIsBinary.test(value); # /^0b[01]+$/i
+#            return (isBinary || reIsOctal.test(value))     # reIsOctal = /^0o[0-7]+$/i
+#               ? freeParseInt(value.slice(2), isBinary ? 2 : 8)   # parse binary/octal body in base 2/8
+#               : (reIsBadHex.test(value) ? NAN : +value);
+#               # reIsBadHex = /^[-+]0x[0-9a-f]+$/i  -> a SIGNED hex string ('+0x..','-0x..') -> NaN.
+#               # Otherwise +value (JS numeric string coercion):
+#               #   '3.5' -> 3.5 ; '  12  ' (trimmed '12') -> 12 ; '' -> 0 ; '   ' (trimmed '') -> 0 ;
+#               #   '0x1f' (UNSIGNED hex) -> +'0x1f' = 31 ; '0xAB' -> 171 ; '0xG' -> NaN ;
+#               #   '1e3' -> 1000 ; '.5' -> 0.5 ; '5.' -> 5 ; '010' -> 10 ; 'abc' -> NaN ;
+#               #   'Infinity' -> Infinity ; '-Infinity' -> -Infinity ;
+#               #   '0b101' -> binary path -> parseInt('101',2) = 5 ; '0B11' -> 3 ;
+#               #   '0o17' -> octal path -> parseInt('17',8) = 15 ; '0O17' -> 15 .
+#
+# ----------------------------------------------------------------------------
+# WORKED RESULTS (verified by running lodash.tofinite@4.12.1 — these are the oracle truth):
+#   toFinite(0)            -> 0          (F1: 0===0 -> original +0)
+#   toFinite(-0)           -> -0         (F1: -0===0 -> original -0, sign bit preserved)
+#   toFinite('')           -> 0          (F1: ''===0 false -> 0)
+#   toFinite(false)        -> 0          (F1)
+#   toFinite(null)         -> 0          (F1)
+#   toFinite(undefined)    -> 0          (F1)
+#   toFinite(NaN)          -> 0          (F1: NaN===0 false -> 0)
+#   toFinite(3.2)          -> 3.2
+#   toFinite(-7.5)         -> -7.5
+#   toFinite(42)           -> 42
+#   toFinite(-1234.56789)  -> -1234.56789
+#   toFinite(1e308)        -> 1e308          (finite, untouched)
+#   toFinite(Number.MIN_VALUE) -> 5e-324
+#   toFinite(Number.MAX_VALUE) -> 1.7976931348623157e+308  (finite, NOT clamped)
+#   toFinite(Infinity)     -> 1.7976931348623157e+308
+#   toFinite(-Infinity)    -> -1.7976931348623157e+308
+#   toFinite('3.5')        -> 3.5
+#   toFinite('  12  ')     -> 12
+#   toFinite('0x1f')       -> 31
+#   toFinite('0xAB')       -> 171
+#   toFinite('0b101')      -> 5
+#   toFinite('0B11')       -> 3
+#   toFinite('0o17')       -> 15
+#   toFinite('0O17')       -> 15
+#   toFinite('-0x1f')      -> 0     (bad signed hex -> NaN -> F4 guard -> 0)
+#   toFinite('+0x1f')      -> 0     (bad signed hex -> NaN -> 0)
+#   toFinite('+0xff')      -> 0
+#   toFinite('   ')        -> 0     (trim -> '' -> +'' = 0)
+#   toFinite('abc')        -> 0     (NaN -> 0)
+#   toFinite('0xG')        -> 0     (+'0xG' = NaN -> 0)
+#   toFinite('1e3')        -> 1000
+#   toFinite('.5')         -> 0.5
+#   toFinite('5.')         -> 5
+#   toFinite('010')        -> 10
+#   toFinite('Infinity')   -> 1.7976931348623157e+308   (string -> +Infinity -> clamp)
+#   toFinite('-Infinity')  -> -1.7976931348623157e+308
+#   toFinite(true)         -> 1     (truthy -> +true = 1)
+#   toFinite(new Number(5))   -> 5
+#   toFinite(new Number(0))   -> 0
+#   toFinite(new Number(-0))  -> -0   (valueOf -> -0 ; -0===0 true -> -0)
+#   toFinite(new String('7.5')) -> 7.5
+#   toFinite(new String(''))    -> 0
+#   toFinite([])           -> 0     ([].valueOf()->[] -> '' -> +'' = 0)
+#   toFinite([5])          -> 5     ([5] -> '5' -> 5)
+#   toFinite(['3.5'])      -> 3.5
+#   toFinite([1,2])        -> 0     ('1,2' -> NaN -> 0)
+#   toFinite({})           -> 0     ('[object Object]' -> NaN -> 0)
+#   toFinite({valueOf: () => 99}) -> 99
+#   toFinite(0n)           -> 0     (NUMBER 0; falsy bigint short-circuits, never throws)
+#   toFinite(-0n)          -> 0     (NUMBER 0)
+#   toFinite(10n)          -> THROW TypeError "Cannot convert a BigInt value to a number"
+#   toFinite(1n)           -> THROW TypeError (any nonzero bigint)
+#
+# THROW CONTRACT: the unit throws a TypeError ONLY when value is a nonzero (truthy) bigint, because
+# `+<bigint>` throws. Zero bigints (0n / -0n) are falsy and return number 0 via F1. Symbols do NOT
+# throw (isSymbol -> NaN -> 0). The harness records the throw as { __throw: ... }.
+
+# ============================================================================
+ORACLE value -> oracle.json
+# ============================================================================
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full F1..F4 pipeline above plus the inlined toNumber N1..N5, all constants, all three
+#     regexes verbatim, the strict-equality semantics, the -0 preservation, the +-Infinity clamp to
+#     +-MAX_INTEGER (=Number.MAX_VALUE), the NaN final guard, and the nonzero-bigint throw.
+#   - String coercion follows native JS Number()/+ semantics for the non-binary/non-octal/non-bad-hex
+#     case; binary/octal go through parseInt(body, 2|8); signed-hex strings -> NaN.
+#
+# CARRIED DATA: none. (Pure value-mode coercion util; zero literal tables.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs — documented for the blind re-emitter):
+#   - SYMBOL values (Symbol('x'), Object(Symbol())): would return 0 (isSymbol -> NaN -> F4 -> 0),
+#     but a Symbol does NOT survive the JSON oracle codec (it has no tag; encode falls through to
+#     `return v` and JSON collapses it). EXCLUDED from genInputs. Behavior documented above only.
+#   - FUNCTION values (function(){}, ()=>{}): would return 0 (valueOf -> fn -> source string -> NaN
+#     -> 0). The codec DROPS function values (own function keys skipped; a bare function arg has no
+#     tag). EXCLUDED from genInputs. Documented only.
+#   - Any value carrying a Symbol or function is likewise non-round-trippable and excluded.
+#   - There is NO ambient seam (no clock/RNG/env/fs/net). The unit is purely deterministic on its
+#     single argument. No injection needed.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+# lodash.tofinite@4.12.1 (lodash Custom Build, modularized export of _.toFinite, since 4.12.0)
+# repo: lodash/lodash   license: MIT (jQuery Foundation; based on Underscore.js 1.8.3)
+# source file: node_modules/lodash.tofinite/index.js  (verified read 2026-06-24)
+# Constants verified: MAX_INTEGER === Number.MAX_VALUE === 1.7976931348623157e+308 (true).

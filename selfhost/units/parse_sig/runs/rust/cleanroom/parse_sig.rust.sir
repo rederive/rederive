@@ -1,0 +1,30 @@
+UNIT parse_sig
+LANG rust
+PRIMARY-SHA256 60b55e0a01fec765e82a808a2ede7490c1e3cf116aa0aa28046eb6dcad91682a
+SIG pub fn parse_sig(s: &str) -> serde_json::Value
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn parse_sig) depending on serde_json only
+  (the result is json) — no main, no I/O, no unsafe, no regex crate. The verifier generates the harness from the abstract
+  SIG: s arrives as a &str, the returned Value is printed as one JSON line. A throw (R1, R2, R5–R8) is a panic; the
+  message is not graded. The result is a Value::Object with keys name (String), args (Array) and result; an argument is an
+  Object with name and type, plus "rest": Bool(true) for a rest parameter only (never false); a type tree is an Object with
+  k and the members the primary names for its kind; a record field is a two-element Array [String, tree]. Key order is
+  immaterial (the canonical form sorts keys).
+ENVELOPE as the primary; no narrowing.
+MECHANISM a recursive-descent reader over the BYTES of s (s.as_bytes() with a usize cursor): every accepted character is
+  ASCII, and any non-ASCII byte simply fails every token test, so a byte cursor never splits a character it accepts.
+  WHITESPACE = b' ' b'\t' b'\r' b'\n' only — NOT char::is_whitespace, u8::is_ascii_whitespace (which adds form feed) or
+  str::trim. IDENT = first byte is_ascii_alphabetic or b'_', then is_ascii_alphanumeric or b'_', longest run. Literal
+  tokens by bytes[i..].starts_with(b"->") and the like, after skipping WHITESPACE. PREFIX (R2): save the cursor, read the
+  words as IDENT tokens, keep them only when each matches and WHITESPACE then an IDENT start byte follow, else restore.
+  Unreachable alternatives (R5): SAME compares an order-free key of each tree (union alts and record "name=key" fields
+  each sorted as byte strings, then joined inside brackets; tuple, list, map members in order), NOT Value ==, which is
+  order-sensitive on arrays; JSON is a recursive bool fn over TABLE JSON_SHAPED;
+  COVERS is a recursive bool fn that holds when ANY row of TABLE COVERS holds (try them all: the LIST, TUPLE, MAP
+  and RECORD rows recurse into COVERS, the union rows recurse both ways); test each later alt against every earlier one.
+  Nesting (R8): a depth counter checked BEFORE recursing, so 17 levels panic as a grammar error and never reach a
+  stack overflow (an abort, not a panic, would lose the throw observation). After the result TYPE skip WHITESPACE and
+  require the end.
+DEPENDS-ON serde_json (crate, version 1)
+PINNED charset WHITESPACE = b' ' b'\t' b'\r' b'\n' CITED primary WHITESPACE — written as Rust byte literals
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs parseSig + reader. Round 5: re-cut after FINDINGS #74 #78 #79; the ABI follows
+  the lab's rust driver (text -> &str, json result -> serde_json::Value).

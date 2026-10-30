@@ -1,0 +1,58 @@
+UNIT bytes
+LANG rust
+PRIMARY-SHA256 41de3c55a3958713a5469424817bccf19bea760a0ffa8b99deb9cb4bd5bbf171
+SIG pub fn bytes(value: &serde_json::Value, options: &serde_json::Value) -> Result<serde_json::Value, String>
+ABI crate shape: the artifact is a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn bytes`) depending on
+  serde_json only — no main, no I/O, no binary, no regex crate. The verifier generates its own harness crate from the
+  abstract SIG: one JSON array of args per stdin line; `value` bound as a serde_json::Value (the json route) and the
+  abstract trailing slot `...options: json` bound as ONE serde_json::Value::Array holding every trailing arg (empty
+  when the call had none) — the OPTIONS value of R2 is that array's first element, if any; the call is
+  bytes(&value, &options); then one JSON line with the result. Compiling that harness against this SIG is the
+  signature check.
+ABI type mapping: json = serde_json::Value: none = Null; bool = Bool; f64 = Number, read with as_f64() (an integer
+  literal beyond 2^53 reads to the nearest f64, exactly as the sender already rounded it); text = String (UTF-8; only
+  well-formed Unicode is ever sent); list = Array; map = Object (serde_json::Map — ABSENT = key not present, Null =
+  none). Result: Ok(Value::String(..)) for text; Ok(Value::from(x)) for an f64 x (serde_json keeps -0.0 and the
+  verifier reads it back as -0 — see ENVELOPE for the non-finite case); Ok(Value::Null) for none; Err(message) for a
+  throw (message not graded; a panic is also recorded as a throw, but Err is the contract).
+ENVELOPE narrowing: a vector whose value is NaN, +Infinity, -Infinity or -0 is narrowed by the verifier before it is
+  sent (serde_json::Value holds none of them), so R7 and the "-0" -> "0B" case of R11 are verified here only through
+  the differential's finite inputs. A PARSE result that is infinite (a numeral beyond the finite f64 range, R4/R5) has
+  no serde_json::Number form (Value::from gives Null) and is outside this language's envelope. Everything else in the
+  primary, OUT-OF-DOMAIN included, is in scope.
+MECHANISM dispatch (R1): match value { Value::String(s) => parse, Value::Number(n) => format(n.as_f64()), _ => Null }.
+  OPTIONS: options.as_array().and_then(|a| a.first()); a non-Object there is all-ABSENT (R2).
+MECHANISM parse (R4-R6): match STRICT by hand over chars (sign, ascii digits, optional '.' + ascii digits, ' '* — the
+  ASCII space only — then one of the five unit words compared with eq_ignore_ascii_case, never to_lowercase, at end of
+  text); the numeral slice
+  goes through str::parse::<f64>() (it accepts a leading '+', is correctly rounded, and yields ±inf beyond range,
+  matching the package); scale * numeral in f64, then f64::floor. LENIENT: skip leading chars in LEADING_SPACE — NOT
+  char::is_whitespace (it includes U+0085 NEL, which the package does not skip, and excludes U+FEFF, which it does);
+  then an optional '+' or '-'; then a run of char::is_ascii_digit (never is_numeric); empty run -> Null; parse the run
+  with str::parse::<f64>() and NEGATE for '-': -(0.0) is -0.0, which realizes R6 (0.0 - x would not); floor is a no-op.
+MECHANISM format (R7-R16): !x.is_finite() -> Null first. Unit: a Value::String is lowercased with str::to_lowercase
+  (the same Unicode mapping as the package — U+212A KELVIN SIGN lowercases to 'k' in both) and matched against the six
+  keys, unmatched -> the magnitude ladder on x.abs(); Null / Bool(false) / a zero Number / "" -> the ladder; any other
+  Bool, Number, Array or Object -> Err (R8). Decimal places: absent -> 2; Null -> 0; Bool -> 0 or 1; Number ->
+  as_f64().trunc() (NaN -> 0); then !(0.0..=100.0).contains(&d) -> Err (R10; ±inf fail it). FIXED rendering (R11) —
+  do NOT use format!("{:.*}", d, x): Rust rounds exact ties half-to-even and prints a sign for -0.0 (0.125 -> "0.12",
+  2.5 -> "2", -0.0 -> "-0.00"; the package gives "0.13", "3", "0.00"). Instead take the EXACT decimal expansion of the
+  magnitude, format!("{:.1100}", q.abs()) (every finite f64 terminates within 1074 fraction digits, so the text is
+  exact), and round the digit string by hand at d places: keep d fraction digits and, when the next digit is '5' or
+  more, add one in the last kept place, carrying into the integer part; drop the point when d is 0. Prefix "-" iff q <
+  0.0 (a strict comparison: -0.0 gets no sign). R12: when q.abs() >= 1e21 use format!("{:e}", q.abs()) — LowerExp
+  prints the shortest round-trip digits as "1.332267629550188e285" — and insert '+' after the 'e' (the package writes
+  "e+285"); "-" iff q < 0.0. TRIM (R13), GROUPING (R14) and assembly (R15) are plain string work on that rendering:
+  split at the first '.', apply TABLE TRIM to the tail, count digits from the right of the leading part for the
+  separator.
+MECHANISM OUT-OF-DOMAIN renderings: a Number separator renders with Display ({}), which agrees with the package's
+  shortest form for 1e-7 <= |n| < 1e21 (integral values print without ".0") and differs outside that range (the
+  package's "1e+21" / "1e-7" exponent forms) — no vector reaches those magnitudes; Bool(true) -> "true"; an Array ->
+  items rendered the same way joined by ",", Null items empty; an Object -> "[object Object]". A decimalPlaces String
+  is read as the host numeral the primary describes (trim whitespace; empty -> 0; decimal with optional exponent, or
+  "0x" hex; unreadable -> NaN -> 0).
+DEPENDS-ON serde_json (crate, version 1) — the SIG's value type and nothing else; no regex crate
+PINNED set LEADING_SPACE = { U+0009, U+000A, U+000B, U+000C, U+000D, U+0020, U+00A0, U+1680, U+2000..U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF } CITED R5 — the ECMAScript WhiteSpace + LineTerminator set the package's integer reading skips; equals Rust's White_Space minus U+0085 plus U+FEFF
+PROVENANCE bytes@3.1.2 index.js (visionmedia/bytes.js, MIT). Language file cut 2026-09-23 with the primary, before any
+  blind re-emission; the ABI follows the lab's rust driver (drivers/rust.mjs: harness generated from the abstract SIG,
+  f64 results wired as bit patterns where the result type is f64-bearing, serde_json::Value results wired as JSON).

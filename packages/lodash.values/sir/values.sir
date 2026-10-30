@@ -1,0 +1,295 @@
+UNIT values
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# lodash.values@4.3.0 -- "Creates an array of the own enumerable string keyed
+#   property values of `object`."  (the lodash `_.values` method exported as a
+#   standalone npm module.)  Pure, zero runtime dependencies, no seam (no clock,
+#   RNG, env, fs, net) -> ORACLE-CLASS deterministic.
+# ---------------------------------------------------------------------------
+
+SIG values(object) -> Array          # returns an array of property VALUES (never throws on codec-faithful input)
+
+# EXPORT SHAPE (load-bearing for the blind re-emitter):
+#   The original source ends with `module.exports = values;` (CommonJS default
+#   export). The re-emitter MUST expose the function as the DEFAULT export of an
+#   ES module:
+#       export default function values(object) { ... }
+#   There is NO named export, NO options object, NO second parameter.
+
+DEPENDS-ON none
+#   Self-contained. The published file inlines every helper it needs
+#   (arrayMap, baseValues, baseTimes, arrayLikeKeys, baseKeys, isIndex,
+#   isPrototype, isArguments, isArray, isArrayLike, isArrayLikeObject,
+#   isFunction, isLength, isObject, isObjectLike, keys). Reproduce the OBSERVABLE
+#   behavior below; you do not need lodash itself.
+
+# ===========================================================================
+# BEHAVIOR  --  the entire computation, exact + complete
+# ===========================================================================
+#
+# The top-level body is EXACTLY:
+#
+#     function values(object) {
+#       return object ? baseValues(object, keys(object)) : [];
+#     }
+#
+# where:
+#     baseValues(object, props) = props.map(key => object[key])   # value extraction
+#     keys(object) = isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object)
+#
+# So the algorithm is: COMPUTE A KEY LIST, then MAP each key to object[key].
+# Everything subtle lives in HOW the key list is computed and in WHAT ORDER.
+#
+# ---------------------------------------------------------------------------
+# NODE 1  --  TOP GUARD:  `object ? ... : []`
+# ---------------------------------------------------------------------------
+#   JS-truthiness test on `object` itself.
+#   If `object` is JS-falsy  ->  return []  (a fresh empty array).
+#     The JS-falsy set here:  null, undefined, false, 0, -0, NaN, "" (empty
+#     string), 0n.  ALL of these return [].
+#     (Note: 0n / "" are falsy -> []. A non-empty string is truthy -> NODE 2.)
+#   Else  ->  proceed to NODE 2 with this (truthy) object.
+#
+#   Confirmed: values(null)=[], values(undefined)=[], values(42)=[],
+#     values(true)=[], values(false)=[], values(0)=[], values(NaN)=[],
+#     values(123n)=[], values("")=[].
+#   (42 and true are TRUTHY at NODE 1 but yield [] anyway -- see NODE 3:
+#    a boxed number/boolean has NO own enumerable string keys.)
+#
+# ---------------------------------------------------------------------------
+# NODE 2  --  ARRAY-LIKE TEST:  isArrayLike(object)
+# ---------------------------------------------------------------------------
+#   isArrayLike(value) := value != null
+#                         && isLength(value.length)
+#                         && !isFunction(value)
+#
+#   isLength(n) := typeof n == 'number'
+#                  && n > -1 && n % 1 == 0 && n <= 9007199254740991   # MAX_SAFE_INTEGER
+#     i.e. n is a number that is a NON-NEGATIVE INTEGER in [0, 2^53-1].
+#     -> Falsy `.length` cases (NOT array-like): undefined length, non-number
+#        length ("3", true, null), negative (-1), non-integer (1.5), > MAX_SAFE
+#        (9007199254740992), NaN, Infinity.
+#     -> length 0 IS a valid length (array-like). length 2.0 IS (integer).
+#        length 9007199254740991 (== MAX_SAFE) IS (boundary inclusive).
+#
+#   isFunction uses Object#toString tag == '[object Function]' or
+#     '[object GeneratorFunction]'. (Functions are excluded; they're also
+#     out-of-envelope for the codec -- see SCOPE.)
+#
+#   BRANCH:
+#     isArrayLike(object) TRUE  -> NODE 2A  (arrayLikeKeys)
+#     isArrayLike(object) FALSE -> NODE 2B  (baseKeys)
+#
+# ---------------------------------------------------------------------------
+# NODE 2A  --  arrayLikeKeys(value)  (the array-like key list)
+# ---------------------------------------------------------------------------
+#   STEP A1 -- seed index keys ONLY for genuine Arrays / arguments objects:
+#       isSeq = isArray(value) || isArguments(value)
+#       result = isSeq ? baseTimes(value.length, String) : []
+#       # baseTimes(n, String) = ["0","1",...,String(n-1)]  -- ALL index strings
+#       #   0..length-1, INCLUDING HOLES (sparse arrays). It does NOT consult
+#       #   which indices actually exist; it just counts to length.
+#       isArray  := Array.isArray(value)                 (true Arrays only)
+#       isArguments := isArrayLikeObject(value)
+#                      && hasOwnProperty(value,'callee')
+#                      && (!propertyIsEnumerable(value,'callee')
+#                          || Object#toString(value) == '[object Arguments]')
+#                      # i.e. a real `arguments` object.
+#
+#   STEP A2 -- skipIndexes = !!result.length   (true iff we seeded in A1)
+#
+#   STEP A3 -- for (key in value):                 # for..in = own + inherited enumerable
+#       push key IFF:
+#         hasOwnProperty(value, key)               # OWN ONLY (inherited skipped)
+#         AND NOT ( skipIndexes
+#                   && ( key == 'length' || isIndex(key, result.length) ) )
+#       isIndex(key, length) := (typeof key=='number' || /^(?:0|[1-9]\d*)$/.test(key))
+#                               && key > -1 && key%1==0 && key < length
+#       # So when seeded (Array/arguments): the literal key 'length' AND every
+#       #   canonical index string 0..length-1 are SKIPPED in A3 (they were
+#       #   already seeded in A1). Only NON-index, non-'length' own enumerable
+#       #   string keys are appended, in for..in (insertion) order.
+#       # When NOT seeded (typed array, Buffer, String object, array-like plain
+#       #   object): skipIndexes is FALSE, so EVERY own enumerable string key is
+#       #   pushed in for..in order -- including 'length' if it's an own
+#       #   enumerable key.
+#
+#   The resulting key list for the THREE array-like sub-shapes:
+#
+#   (i) TRUE ARRAY  ->  ["0".."len-1"]  then  non-index own-enum keys (insertion).
+#         `length` is NEVER in the list. Holes map to undefined at NODE 3.
+#         e.g. [1,2,3]              -> keys 0,1,2          -> values [1,2,3]
+#              [1,<hole>,3]         -> keys 0,1,2          -> values [1, undefined, 3]
+#              [1,2] (len set to 5) -> keys 0..4           -> [1,2,undefined,undefined,undefined]
+#              ([1,2] with .foo='b')-> keys 0,1,'foo'      -> [1,2,'b']
+#              ([a,b,c] +foo +bar)  -> 0,1,2,'foo','bar'   -> ['a','b','c',1,2]
+#              ([] with .k='K')     -> 'k'                 -> ['K']
+#
+#   (ii) ARGUMENTS OBJECT  ->  ["0".."len-1"]  then  non-index own-enum keys.
+#         Same shape as a true Array. `length` and `callee` are non-enumerable
+#         on a normal arguments object, so they don't appear via for..in anyway,
+#         and 'length' is additionally skip-listed.
+#         e.g. arguments(10,20,30)        -> [10,20,30]
+#              arguments(p,q) + .extra='E'-> ['p','q','E']
+#         (NOTE: a real arguments object is NOT codec-faithful -- it is encoded
+#          as a plain object and loses arguments-ness; see SCOPE/OUT-OF-ENVELOPE.
+#          Its behavior is pinned here; it is NOT generated.)
+#
+#   (iii) OTHER ARRAY-LIKE (typed array, Buffer, String object, or an
+#         array-like PLAIN OBJECT that has a valid `.length` but is neither a
+#         true Array nor arguments):  skipIndexes is FALSE.
+#         -> the key list is simply ALL own enumerable string keys in JS for..in
+#            order (integer-index keys ascending, then string keys by insertion).
+#         -> Crucially, an own enumerable 'length' property IS included as a
+#            value here (it is NOT skipped, because skipIndexes is false).
+#         e.g. {0:'x',1:'y',length:2}        -> keys '0','1','length' -> ['x','y',2]
+#              {0:'x',1:'y',length:2,extra:'z'} -> '0','1','length','extra' -> ['x','y',2,'z']
+#              {length:2,1:'y',0:'x'}         -> '0','1','length'        -> ['x','y',2]
+#              {length:0}                     -> 'length'                -> [0]
+#              {length:0, x:1}                -> 'length','x'            -> [0,1]
+#              {length:2.0,0:'a',1:'b'}       -> '0','1','length'        -> ['a','b',2]
+#              new String("ab")               -> '0','1' (chars; length non-enum) -> ['a','b']
+#              new Uint8Array([7,8,9])        -> '0','1','2'             -> [7,8,9]
+#              Buffer.from([5,6])             -> '0','1'                 -> [5,6]
+#              new Uint8Array(0)              -> (no own enum keys)      -> []
+#
+# ---------------------------------------------------------------------------
+# NODE 2B  --  baseKeys(object)  (the NON-array-like key list)
+# ---------------------------------------------------------------------------
+#   IF !isPrototype(object):  return Object.keys(object)
+#       # standard ES Object.keys -- own enumerable STRING keys (NO symbols,
+#       # NO inherited, NO non-enumerable), in [[OwnPropertyKeys]] order:
+#       #   integer-index keys (canonical ToUint32 strings, 0 <= n < 2^32-1)
+#       #   in ASCENDING NUMERIC order FIRST, then the remaining string keys in
+#       #   INSERTION order.
+#       isPrototype(value) := let Ctor = value && value.constructor;
+#                                 proto = (typeof Ctor=='function' && Ctor.prototype) || Object.prototype;
+#                             value === proto
+#         # true only when `object` is literally some constructor's `.prototype`.
+#   ELSE (object IS a prototype object):  iterate for(key in Object(object))
+#       and push own enumerable keys EXCEPT key == 'constructor'.
+#       # Same own-enumerable set as Object.keys but additionally drops the
+#       # 'constructor' key. (Rare; reached only when `object === SomeCtor.prototype`.)
+#
+#   Examples:
+#       {}                         -> []                  # no keys -> []
+#       {a:1,b:2,c:3}              -> [1,2,3]
+#       {b:2,a:1,c:3}              -> [2,1,3]              # insertion order preserved
+#       {2:'two',10:'ten',1:'one',b:'B',a:'A'} -> ['one','two','ten','B','A']
+#                                  # integer keys 1,2,10 ascending, then b,a insertion
+#       {4294967294:'x',4294967295:'y',a:'A'} -> ['x','y','A']
+#                                  # 4294967294 is an integer-index; 4294967295 (>=2^32-1)
+#                                  # is a STRING key (so 'y' comes after 'x' by insertion,
+#                                  # before 'a')
+#       {"-1":'neg',"1.5":'flt',"0":'zero'} -> ['zero','neg','flt']
+#                                  # only "0" is an integer-index; "-1","1.5" are string keys
+#       {0:'a',1:'b',2:'c'} (no length) -> ['a','b','c']  # plain object, NOT array-like
+#       new Foo() where Foo.prototype.c=3, this.a=1,this.b=2 -> [1,2]   # OWN only
+#       Object.create({inherited:'NO'}); .own='YES'      -> ['YES']     # inherited skipped
+#       {hidden(non-enum), shown:'S'}                    -> ['S']       # non-enum skipped
+#       new Number(5)                                    -> []          # no own enum string keys
+#       new Boolean(true)                                -> []
+#       new Map([[1,2]]), new Set([1,2,3])               -> []          # have .size, NOT .length
+#       /abc/g                                           -> []          # RegExp: no own enum keys, no length
+#       (/x/ with .custom='C')                           -> ['C']
+#       new Date()                                       -> []
+#       {length:-1}->[-1], {length:1.5}->[1.5],
+#         {length:'3',0:'q'}->['q',3] (length '3' NOT a valid length -> NODE 2B,
+#                                      own keys '0','length' -> ['q','3']) ... see note
+#       {length:9007199254740992}  -> [9007199254740992]  # > MAX_SAFE -> NODE 2B -> key 'length'
+#
+#   Note on {length:'3',0:'q'}: length '3' is a STRING, isLength false -> NODE 2B
+#     -> Object.keys = ['0','length'] -> values ['q','3'].  (Contrast the
+#     valid-length case {length:2,0:'x',1:'y'} which goes through NODE 2A(iii).)
+#
+# ---------------------------------------------------------------------------
+# NODE 3  --  VALUE EXTRACTION:  baseValues(object, props)
+# ---------------------------------------------------------------------------
+#   result = props.map(key => object[key])
+#     * Ordinary indexed GET per key, in the key-list order from NODE 2.
+#     * A key that names a HOLE (sparse Array) or an absent index reads as
+#       `undefined` (e.g. true-array holes seeded by baseTimes).
+#     * Element values are returned BY IDENTITY / REFERENCE (objects, arrays,
+#       RegExp, Map, Set, Buffer, typed arrays, nested structures are NOT cloned).
+#     * If `object` has a getter for a key, the getter is invoked once (pure read).
+#   The returned array length == props.length.
+#
+# THROW BEHAVIOR: there is NO throw path for any codec-faithful input. `values`
+#   never throws for null/undefined/primitive (NODE 1 -> []) nor for any object.
+
+ORACLE value -> oracle.json
+#   Pure deterministic function. The oracle is the exact return array of
+#   `values(...args)` for each generated input tuple. No seam, no clock, no RNG,
+#   no IO. Object/array/nested returns are graded by the harness's structural
+#   codec (identity-by-value is observable as the round-tripped structure; the
+#   SIR additionally documents reference identity for the deployed wrapper's
+#   contract). undefined elements (from sparse holes) survive as the codec's
+#   undefined; -0 / NaN / Infinity VALUES survive via the codec's tagged forms.
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   * NODE 1 top guard `object ? ... : []` and its JS-falsy set.
+#   * NODE 2 isArrayLike split (isLength: number, non-negative integer,
+#     <= 2^53-1; AND not a function).
+#   * NODE 2A arrayLikeKeys -- the THREE sub-shapes:
+#       (i) true Array, (ii) arguments object: seed index keys 0..len-1 via
+#           baseTimes (holes included -> undefined), append NON-index, non-'length'
+#           own enumerable string keys in insertion order; `length` NEVER emitted.
+#       (iii) other array-like (typed array, Buffer, String object, array-like
+#           plain object): NO seeding; emit ALL own enumerable string keys in
+#           for..in order, INCLUDING an own enumerable `length` value.
+#   * NODE 2B baseKeys -- Object.keys order (integer-index keys ascending FIRST,
+#     then string keys by insertion), own + enumerable + string only; plus the
+#     isPrototype special case that drops 'constructor'.
+#   * NODE 3 baseValues value extraction (map key -> object[key], in order, by
+#     identity, holes/absent -> undefined).
+#   * Default-export (`module.exports = values`) -> `export default`.
+#
+# CARRIED DATA: NONE. No literal tables, S-boxes, charmaps, or published-standard
+#   constants. The only literals are the MAX_SAFE_INTEGER constant 9007199254740991
+#   and the unsigned-int regex /^(?:0|[1-9]\d*)$/ (both shown inline above).
+#   NO carried.json is produced.
+#
+# OUT-OF-CONTRACT: NONE. The function is pure -- no side effects, no ambient
+#   reads, no mutation of its argument (it only GETs keys/values; any getters
+#   are the caller's own and are invoked by ordinary property access).
+#
+# OUT-OF-ENVELOPE (behavior fully specified above, but NOT emitted by genInputs
+#   because the JSON-string codec cannot round-trip the relevant property
+#   FAITHFULLY -- a blind re-emitter still reconstructs these from the NODE rules):
+#   * REAL arguments objects: encode() flattens an arguments object to a plain
+#     object (loses callee/arguments-ness and its baseTimes seeding distinction),
+#     so the persisted input is no longer an arguments object. The arguments
+#     branch (NODE 2A(ii)) is documented but NOT generated. (The EQUIVALENT
+#     array-like PLAIN OBJECT, e.g. {0:'p',1:'q',length:2}, IS generated and
+#     exercises NODE 2A(iii) -- which DIFFERS from arguments in that it includes
+#     `length` as a value.)
+#   * FUNCTION-valued own properties: encode() DROPS own keys whose value is a
+#     function (codec.mjs), so such a property never reaches `values`. Do not
+#     emit function values. (A function-valued property would otherwise appear
+#     in the output by identity; pinned here, not generated.)
+#   * SYMBOL-keyed properties: not enumerable string keys -> never in the output
+#     anyway, and not codec-representable. Documented (always excluded), not
+#     generated.
+#   * FUNCTION inputs (the object itself a function): isFunction -> isArrayLike
+#     false -> NODE 2B -> Object.keys of the function's own enumerable props.
+#     Functions are not codec-faithful; documented, not generated.
+#   * Codec-faithful special VALUES (undefined as a sparse-hole result, -0, NaN,
+#     +/-Infinity as property values) ARE round-trippable via the codec's tagged
+#     forms and ARE exercised. bigint/RegExp/Set/Map/Uint8Array/Buffer as
+#     property VALUES round-trip and ARE exercised (they yield [] when they are
+#     the top-level `object`, since none expose an own-enumerable string key
+#     except the index keys of typed arrays/Buffer/String objects).
+
+PROVENANCE lodash.values@4.3.0
+#   repo: lodash/lodash (modularized npm build, path lodash.values)
+#   license: MIT (jQuery Foundation; based on Underscore.js 1.8.3)
+#   source file: node_modules/lodash.values/index.js
+#     (function values, lines 463-465; helpers arrayLikeKeys 117-134,
+#      baseKeys 143-154, baseValues 70-74, isArrayLike 259-261, isLength 342-345,
+#      isIndex 164-169, isPrototype 178-183, isArguments 203-207, keys 433-435)
+#   build banner: "lodash (Custom Build) -- modularize exports=npm -o ./"

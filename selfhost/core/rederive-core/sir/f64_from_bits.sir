@@ -1,0 +1,28 @@
+UNIT f64_from_bits
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive cli/sir/canon.mjs f64fromBits at b15b56613f9d — the decoder every driver uses to turn an oracle f64's 16-hex bit pattern back into a double
+ORACLE-CLASS deterministic
+SIG f64_from_bits(bits: text) -> f64
+ENVELOPE text only. Accepted: exactly 16 characters, each a LOWERCASE hex digit 0-9 a-f (the form the oracle codec
+  writes). Every other text throws (R1).
+DEPENDS-ON none
+DESCRIPTION Read the 16 hex digits as a 64-bit unsigned integer, most significant digit first, and return the IEEE-754
+  binary64 double whose bit pattern it is (bit 63 = sign, bits 62..52 = biased exponent, bits 51..0 = fraction).
+BEHAVIOR
+R1 The text must consist of EXACTLY 16 characters, every one of them in HEX16; otherwise -> throws. Nothing is
+  trimmed or normalized first: uppercase digits, fewer or more than 16 digits, any whitespace anywhere (including one
+  final line feed), a prefix, a sign, a separator and non-ASCII digits all throw. The throw's message is not part of
+  the contract. CITED FIDELITY package
+R2 The result is the binary64 value whose bit pattern is the 64-bit integer the digits denote, reinterpreted without
+  any numeric conversion: 8000000000000000 is negative zero, 7ff0000000000000 and fff0000000000000 are the infinities,
+  and every pattern with all exponent bits set and a non-zero fraction is a NaN.
+PINNED charset HEX16 = 0 1 2 3 4 5 6 7 8 9 a b c d e f CITED R1 — lowercase ASCII only; the uppercase letters A-F are NOT in it
+INVARIANT for every accepted input the function is the exact inverse of the encoder's bit pattern: no rounding, no canonicalization.
+NOTE NaN payloads are invisible to grading: the oracle compares f64 results by their canonical bits, and every NaN canonicalizes to one quiet NaN. Any NaN is a correct result for a NaN pattern; an emitter need not preserve sign or payload.
+ORACLE value -> oracles/f64_from_bits.json  CANONICAL-SHA256 04297c3c08eefc8c70c09dbbf157260fcfaed673eb98422513ccb80f2a482e6d
+SCOPE IN: R1–R2 over all text. OUT: non-text input (a number, none, a list) — the signature excludes it (the real
+  code throws on it too); text that is not well-formed Unicode (a lone surrogate) — the codec cannot carry it.
+PROVENANCE rederive@b15b56613f9d (rederive, the trust kernel), cli/sir/canon.mjs function f64fromBits; driven by
+  selfhost/seams/f64_from_bits.mjs. Cut cold 2026-10-26 (round 1 at b329a40412df); round 2 re-cut against the strict
+  decoder that acted on the round-1 findings.

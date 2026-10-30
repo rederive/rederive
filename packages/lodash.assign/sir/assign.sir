@@ -1,0 +1,230 @@
+UNIT assign
+KIND STATE
+ORACLE-CLASS deterministic
+SIG assign(object, ...sources) -> object        # the (mutated) destination object is returned
+
+DEPENDS-ON none                                  # zero runtime deps; self-contained module
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
+# lodash.assign@4.2.0 default export. Equivalent in intent to Object.assign but
+# with lodash-specific copy rules. It assigns the OWN ENUMERABLE STRING-KEYED
+# properties of each source object onto `object`, sources applied LEFT TO RIGHT
+# (last source wins on overlapping keys). It MUTATES `object` in place and
+# RETURNS the same (coerced) object reference. The OBSERVABLE is the returned
+# object. There is no customizer in this export (see node-CUSTOMIZER).
+#
+# This is KIND STATE because it mutates its first argument. It is ORACLE-CLASS
+# deterministic (no clock/RNG/io/net seam): for a fixed argument list it always
+# produces the same observable. The mutation is the contract, not a side effect
+# to quarantine.
+
+# =============================================================================
+# BEHAVIOR  (ordered pipeline; reconstruct EXACTLY)
+# =============================================================================
+# Call shape: assign(object, source0, source1, ..., sourceK)  (rest params).
+#
+# node-1  COERCE-DESTINATION:
+#         object := Object(object)        # ECMAScript ToObject
+#         - plain object / array  -> returned unchanged (same reference)
+#         - null  or  undefined   -> a NEW empty plain object {}  (fresh ref)
+#         - primitive number/string/boolean/bigint/symbol -> a boxed wrapper
+#           object (e.g. Object(5) is a Number wrapper). [Boxed-first-arg is
+#           IN-CONTRACT but OUT-OF-ENVELOPE for the generator; see SCOPE.]
+#         All mutation and the return target this coerced object.
+#
+# node-2  ITERATE SOURCES left to right, index 0..length-1, where `length` is
+#         the count of rest sources (subject to node-GUARD below). For each
+#         `source` at the current index:
+#
+#         node-2a  SKIP-FALSY-SOURCE:
+#                  if (!source) { continue }   # JS truthiness
+#                  Skipped values: null, undefined, false, 0, -0, NaN, "" .
+#                  (A skipped source contributes nothing.)
+#
+#         node-2b  COPY OWN ENUMERABLE STRING KEYS of `source` onto `object`:
+#                  The set of keys to copy is decided by a branch:
+#
+#                  IF  isArrayLike(source)  (and source is not a function):
+#                      # array, string, arguments-object, typed array (Uint8Array,
+#                      # Buffer), or any object with an integer-valued .length in
+#                      # [0, 2^53-1].
+#                      keys := arrayLikeKeys(source):
+#                        - the string index keys "0".."length-1" (each present
+#                          own index), PLUS
+#                        - any OTHER own enumerable string keys that are NOT an
+#                          array index and NOT the literal key "length".
+#                        - The "length" property itself is NEVER copied.
+#                      For each key in keys: assignValue(object, key, source[key]).
+#                  ELSE:
+#                      # plain object branch (the common case).
+#                      for (key in source):
+#                        if (own property of source):   # hasOwnProperty
+#                            assignValue(object, key, source[key])
+#                      # Inherited / prototype-chain keys are NOT copied.
+#                      # Non-enumerable own keys are NOT visited by for-in.
+#                      # String keys only; Symbol keys are NOT copied.
+#
+#                  Iteration order is standard ECMAScript own-string-key order:
+#                  integer-index keys ascending first, then remaining string
+#                  keys in insertion order. `assign` does not reorder; the final
+#                  key order of `object` follows from applying keys in this order.
+#
+# node-3  RETURN the (mutated, coerced) object reference.
+#
+# ---------------------------------------------------------------------------
+# node-ASSIGNVALUE  (the per-key write — the "no-op optimization"):
+#   assignValue(object, key, value):
+#     objValue := object[key]
+#     WRITE iff:
+#         NOT ( object has-own key  AND  SameValueZero(objValue, value) )
+#       OR
+#         ( value === undefined  AND  key NOT in object )
+#     i.e. it does NOT overwrite when the destination ALREADY OWNS `key` and the
+#     existing value is SameValueZero-equal to the incoming value.
+#
+#   SameValueZero(a, b)  ==  (a === b) || (a !== a && b !== b)
+#     - NaN equals NaN (so {a:NaN} <- {a:NaN} is a no-op).
+#     - +0 and -0 are EQUAL (so {k:-0} <- {k:0} is a no-op: the destination
+#       KEEPS its -0; and {k:0} <- {k:-0} keeps +0). This is the ONLY commonly
+#       observable consequence of the no-op optimization, distinguishable only
+#       via Object.is. [OUT-OF-ENVELOPE for the generator observable, which is
+#       JSON-flattened; documented but not emitted. See node-NOOP-NOTE.]
+#     - Distinct-but-equal objects ({} vs {}) are NOT SameValueZero-equal, so
+#       they ARE overwritten.
+#   For ALL inputs the generator emits, the WRITE always occurs (no two distinct
+#   sources share a -0/+0 collision on a pre-existing destination key in a way
+#   that survives JSON), so the externally observable result is exactly:
+#   "object[key] becomes source[key], last source wins".
+#
+# ---------------------------------------------------------------------------
+# node-GUARD  (isIterateeCall short-circuit — IN-CONTRACT, exercised):
+#   Before iterating, lodash detects the "called as an iteratee" pattern:
+#     guard := (number_of_sources > 2) ? sources[2] : undefined
+#     if ( guard  AND  isIterateeCall(sources[0], sources[1], guard) ):
+#         length := 1     # collapse to a SINGLE source (sources[0] only)
+#   isIterateeCall(value=sources[0], index=sources[1], object=sources[2]):
+#     if (!isObject(object)) return false                 # object must be obj/fn
+#     t := typeof index
+#     if (t == 'number'): trigger = isArrayLike(object)
+#                                   && isIndex(index, object.length)
+#                                   && SameValueZero(object[index], value)
+#     else if (t == 'string'): trigger = (index in object)
+#                                        && SameValueZero(object[index], value)
+#     else: trigger = false
+#   When triggered: ONLY sources[0] is assigned; sources[1] and sources[2]+ are
+#   ignored. When NOT triggered: every truthy source is assigned normally
+#   (e.g. a numeric source like 0/5 is processed but for-in over a number yields
+#   no keys, contributing nothing).
+#   This path only matters with >=3 sources where sources[2] is an object and
+#   sources[0]/[1] form a matching (value,index) pair into it. The generator
+#   exercises BOTH a triggering and a non-triggering 3+-source shape.
+#
+# ---------------------------------------------------------------------------
+# node-CUSTOMIZER  (why there is NO customizer in `assign`):
+#   The shared createAssigner only honors a trailing-function customizer when
+#   the inner assigner's arity > 3. assign's inner assigner is
+#   function(object, source){...}  with .length == 2, so the customizer is
+#   ALWAYS undefined. CONSEQUENCE: a trailing function argument is NOT a
+#   customizer — it is treated as an ordinary source. A function source is
+#   truthy and not array-like, so the plain-object for-in branch runs over it;
+#   a plain function has no own enumerable string keys, so it contributes
+#   nothing. (Function values stored under a key ARE copied by reference — that
+#   is a value, not the source. Function sources are OUT-OF-ENVELOPE; documented.)
+#
+# ---------------------------------------------------------------------------
+# node-NOOP-NOTE (-0 observability): the -0-preserving no-op is real in-package
+#   behavior but is NOT distinguishable through the JSON-flattened observable
+#   the harness compares (JSON.stringify(-0) === "0"). The generator therefore
+#   does NOT rely on it for grading; a blind re-emitter that implements either
+#   "always write" or the exact SameValueZero no-op produces an identical
+#   observable on every generated input. Documented for completeness/fidelity.
+
+# =============================================================================
+# REFERENCE BEHAVIOR EXAMPLES (verified against lodash.assign@4.2.0)
+# =============================================================================
+#   assign({a:0}, {a:1, b:2})                 -> {a:1, b:2}          (single src)
+#   assign({a:0}, {a:1}, {a:9, b:2})          -> {a:9, b:2}          (last wins)
+#   assign({a:0}, null, {b:2}, undefined, {c:3}) -> {a:0, b:2, c:3}  (skip null/undef)
+#   assign(o={a:1})                           -> o (same ref), {a:1} (no sources)
+#   assign(o={a:1}, {b:2})  mutates o          -> returns o === input, {a:1,b:2}
+#   assign({}, [10,20,30])                    -> {"0":10,"1":20,"2":30}  (length NOT copied)
+#   (arr=[1,2]; arr.foo="bar")  assign({}, arr) -> {"0":1,"1":2,"foo":"bar"}
+#   assign({a:1}, {})                         -> {a:1}               (empty src)
+#   assign({a:1}, {a:undefined})              -> {a:undefined}  (key present, value undefined)
+#   assign({}, {z:undefined})                 -> {z:undefined}  (new key, value undefined)
+#   assign({}, {k: <fn>})                     -> {k: <same fn ref>} (value copied by ref)
+#   assign({}, "hi")                          -> {"0":"h","1":"i"}  (string is array-like)
+#   assign({a:1}, 7)                          -> {a:1}    (number src: no keys)
+#   assign({a:1}, false/0/""/NaN)             -> {a:1}    (falsy src skipped)
+#   assign(5, {a:1})                          -> Number-wrapper with own a=1 (boxed; OUT-OF-ENVELOPE)
+#   assign(null, {a:1})                       -> {a:1}    (fresh plain object)
+#   assign({}, {x:1,y:2}, {y:3,z:S})          -> {x:1,y:3,z:S} (z is SAME ref as S)
+#   # GUARD non-trigger (3 srcs, sources[2] obj but no value/index match):
+#   assign({z:9}, {a:1}, 5, {x:1})            -> {z:9, a:1, x:1}
+#   # GUARD trigger (sources[0] === sources[2][sources[1]]):
+#   (s0={a:1}; coll=[s0,{b:2}]) assign({z:9}, s0, 0, coll) -> {z:9, a:1}  (only s0)
+#   assign({}, new Uint8Array([10,20,30]))    -> {"0":10,"1":20,"2":30}
+#   assign({k:1}, new Set([1,2]))             -> {k:1}    (Set: no own string keys)
+#   assign({k:1}, new Map([["a",1]]))         -> {k:1}    (Map: no own string keys)
+#   assign({}, {n: 10n})                      -> {n: 10n} (bigint value copied)
+
+# =============================================================================
+# ORACLE
+# =============================================================================
+ORACLE value -> oracle.json
+# Differential/quorum oracle: run the real fn on each generated arg-tuple,
+# record the RETURNED (mutated) object as the observable. Compare structurally.
+# Because the unit MUTATES arg[0], each tuple must be a FRESH deep-cloned object
+# graph at call time (the generator guarantees this — no shared refs across
+# tuples or across the stamp/grade calls). The observable is the return value
+# (=== the coerced/mutated arg[0]); for plain-object/array first args this is
+# the mutated input itself.
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): everything in BEHAVIOR above —
+#   destination coercion, left-to-right source iteration, falsy-source skip,
+#   array-like vs plain-object key selection (incl. "length" exclusion and
+#   non-index own keys on array-likes), own-enumerable-string-key-only copy,
+#   inherited-key exclusion, last-source-wins, the SameValueZero no-op write
+#   rule, the isIterateeCall GUARD short-circuit, the absence of a customizer,
+#   and mutate-and-return identity.
+#
+# CARRIED DATA: none.
+#
+# DEMONSTRATED IN-SCOPE INPUT SUBSET (self-consistent with genInputs):
+#   - first arg (`object`): plain object (possibly empty, possibly with
+#     pre-existing keys that overlap sources), or array. (Codec-faithful,
+#     unambiguous observable.)
+#   - sources: plain objects (string keys -> JSON primitives, nested
+#     plain objects/arrays by reference, bigint values), arrays (index keys),
+#     strings (array-like), typed arrays / Buffer (array-like), Set / Map
+#     (no own string keys -> contribute nothing), and primitive sources
+#     (number/boolean) including falsy ones (skipped); null / undefined
+#     (skipped). Multiple sources with overlapping keys (last-wins). Zero
+#     sources. The two 3+-source GUARD shapes (trigger + non-trigger).
+#
+# OUT-OF-ENVELOPE (IN-CONTRACT behavior, NOT emitted by genInputs because the
+# codec or the JSON observable cannot faithfully carry/distinguish it — a blind
+# re-emitter still reconstructs it from this spec):
+#   - Boxed-primitive first arg (assign(5,...), assign("hi",...)): result is a
+#     wrapper object; JSON-flattening is lossy/ambiguous. Behavior documented.
+#   - -0/+0 no-op preservation: not distinguishable post-JSON. Documented.
+#   - Function VALUES / function SOURCES: function identity does not survive the
+#     codec; a function source contributes no keys (documented). Not emitted.
+#   - Symbol-keyed sources: Symbol keys are never copied (string-keyed only) and
+#     do not survive the codec. Documented; not emitted.
+#   - Custom-prototype sources (inherited keys): only OWN keys are copied;
+#     inherited keys are skipped. Custom prototypes are not codec-carriable, so
+#     this is documented rather than emitted (per operator hint).
+#
+# OUT-OF-CONTRACT: none beyond the inherent mutation of arg[0], which is THE
+#   contract (KIND STATE) and is captured as the observable, not quarantined.
+
+# =============================================================================
+PROVENANCE lodash.assign@4.2.0  (repo: lodash/lodash, MIT license)
+           source file: node_modules/lodash.assign/index.js
+           (Custom Build: `lodash modularize exports="npm" -o ./`)

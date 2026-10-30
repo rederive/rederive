@@ -1,0 +1,18 @@
+UNIT parse_type
+LANG js
+PRIMARY-SHA256 13ec282f2ac414f28d67d0f388026277b9171b3b207288adedef231a2b912999
+SIG parse_type(s: string): object
+NOTE named export parse_type
+ABI text = string; the result is a fresh plain object per node (k plus the TABLE NODE members), lists are Arrays, a
+  record field is a two-element Array [name, node]. A throw (R11) is a thrown Error; the message is not graded. The
+  artifact is an ES module that imports nothing.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM WHITESPACE (R1) is an explicit test against the four WS characters — never String.prototype.trim and never the
+  regex class \s, both of which accept far more. NAME (R7) is the IDENT pin applied at the cursor. Field uniqueness (R9) is
+  exact string equality. SAME TYPE (R5) is a structural comparison that ignores union alt order and record field order — a
+  set comparison, or an identity string built with the alts' and the fields' strings SORTED (never JSON.stringify of the
+  nodes as written, which keeps order). The nesting cap (R10) is a depth counter checked before descending. COVERS (R6) is a recursive
+  predicate over two parsed nodes, every clause (a)–(h) tried — it is not a set test on the rendered strings.
+DEPENDS-ON none
+PINNED regex IDENT = /^[A-Za-z_][A-Za-z0-9_]*/ CITED R7 and R9 — applied to the text from the cursor; no u or i flag
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs parseType. Language file re-cut 2026-10-27 with the round-5 primary.

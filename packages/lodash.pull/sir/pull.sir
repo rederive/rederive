@@ -1,0 +1,116 @@
+UNIT pull
+KIND STATE                       # MUTATING: removes elements from `array` in place
+ORACLE-CLASS deterministic        # pure algorithm, no clock/RNG/io seam
+
+SIG pull(array, ...values) -> array
+  # `pull` is the npm default export of lodash.pull@4.1.0: `module.exports = pull`.
+  # It is `baseRest(pullAll)` — a variadic wrapper: arg 0 is `array`, every arg after
+  # position 0 is collected into the rest array `values`. So callers write
+  #   pull(array, v0, v1, v2, ...)
+  # and internally pullAll(array, [v0, v1, v2, ...]) runs.
+  # The RE-EMITTED module MUST default-export this function:  export default pull.
+
+DEPENDS-ON none                   # zero runtime deps; lodash bundled its helpers inline
+
+BEHAVIOR
+  # ---- Top-level wrapper: pull = baseRest(pullAll), start = pullAll.length - 1 = 1 ----
+  # baseRest packs arguments[1..] into `values` (an Array). arguments[0] is `array`.
+  # If pull is called with <2 args, `values` is the empty array [].
+  #
+  # node-1  GUARD (in pullAll):  truthy = (array && array.length && values && values.length)
+  #   if NOT truthy -> return `array` UNCHANGED (same reference), no mutation. Covers:
+  #     - array is null / undefined          -> returns it as-is (null or undefined)
+  #     - array.length is 0 (empty array)    -> returns the same empty array reference
+  #     - array.length is absent/falsy        -> returns array as-is (e.g. a number, {} with no length)
+  #     - values is empty (pull(array) w/ 0 values to remove) -> returns array as-is, UNCHANGED
+  #   The four guard operands are checked for TRUTHINESS only (not type). `array.length === 0`
+  #   short-circuits to a no-op even though `array` is a real array.
+  #
+  # node-2  otherwise -> basePullAll(array, values), which returns `array`.
+  #
+  # ---- basePullAll(array, values)  [iteratee=undefined, comparator=undefined] ----
+  #   indexOf := baseIndexOf            # because comparator is undefined
+  #   seen    := array                  # because iteratee is undefined, seen === array
+  #   (the `array === values` clone branch and the `seen !== array` splice branch are
+  #    NEVER taken on the pull path: values is a fresh rest-array, and seen === array.)
+  #
+  #   for index in 0 .. values.length-1:               # node-3  outer loop over each value to remove
+  #       value := values[index]
+  #       computed := value                            # no iteratee
+  #       fromIndex := 0
+  #       loop:                                        # node-4  inner loop: remove ALL occurrences
+  #           fromIndex := baseIndexOf(array, value, fromIndex)
+  #           if fromIndex == -1: break
+  #           array.splice(fromIndex, 1)               # in-place removal of one element
+  #           # fromIndex is NOT advanced; next baseIndexOf starts again at the same index,
+  #           # which now holds the shifted-down successor — so consecutive duplicates are
+  #           # all removed and survivor ORDER is preserved.
+  #   return array                                     # SAME reference as the input `array`
+  #
+  # ---- baseIndexOf(array, value, fromIndex)  — the comparator semantics (SameValueZero) ----
+  #   node-5  if (value !== value)  i.e. value is NaN:
+  #             return baseFindIndex(array, baseIsNaN, fromIndex)
+  #             baseFindIndex scans index = fromIndex, fromIndex+1, ... and returns the first
+  #             index where (element !== element), i.e. the first NaN. So NaN MATCHES NaN.
+  #   node-6  else (value is not NaN):
+  #             scan index = fromIndex .. length-1, return first index where array[index] === value
+  #             (strict ===).  Consequences:
+  #               * +0 and -0 are EQUAL under === (0 === -0 is true), so pull(a, 0) removes both
+  #                 +0 and -0 occurrences, and pull(a, -0) removes both +0 and -0 occurrences.
+  #                 This is the SameValueZero collapse of signed zero.
+  #               * type-strict: 1 !== "1", false !== 0, null !== undefined, {} !== {} (identity).
+  #                 Object/array ELEMENTS match only by reference identity.
+  #
+  # SUMMARY of equality (SameValueZero): two values match iff
+  #   (a === b)  OR  (a is NaN AND b is NaN).
+  # i.e. SameValueZero = strict-equals, except NaN equals NaN. ±0 are equal (as under ===).
+
+OBSERVABLE
+  # `pull` returns the SAME reference it was passed as `array`; the return value and the
+  # post-call state of the `array` argument are identical. The GRADING OBSERVABLE is the
+  # RETURNED value (which equals the mutated `array`):
+  #   - on the mutate path  -> the array after in-place removals (element order preserved)
+  #   - on the guard no-op  -> the unchanged input (the same array, OR null / undefined /
+  #                            non-array passthrough value)
+  # Because pull MUTATES in place, the harness and every blind re-emitter MUST each receive
+  # an INDEPENDENT DEEP CLONE of the input tuple (the generator deep-clones every tuple it
+  # yields). Comparing returned arrays element-wise is the contract; reference identity is
+  # internal (always true on the source) and is NOT separately graded across re-emitters.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the baseRest variadic packing (arg0 = array, rest = values)
+    - the four-operand truthiness guard and its no-op passthrough
+    - the per-value outer loop + remove-ALL-occurrences inner loop with order preservation
+    - SameValueZero equality: strict === plus NaN-equals-NaN; ±0 collapse
+    - mutate-in-place and return-the-same-reference
+  CARRIED DATA: none.
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT produced by genInputs because they are
+  NOT oracle-codec-faithful or are non-array hosts outside the stated contract):
+    - NaN as an ARRAY ELEMENT or as a VALUE-to-remove: behavior is well-defined (SameValueZero,
+      NaN matches NaN, node-5) and a blind re-emitter MUST reconstruct it from this SIR, but
+      NaN does NOT survive JSON.stringify (serializes to null), so the generator does NOT emit
+      it (the persisted held-out arg would be corrupted -> false divergence). DOCUMENTED, not generated.
+    - -0 as an ELEMENT or VALUE: JSON.stringify(-0) === "0", so a literal -0 does not round-trip.
+      Behaviorally pull treats 0 and -0 identically (0 === -0). The generator therefore exercises
+      the zero path with plain 0 only; the ±0 collapse is covered behaviorally (removing 0 removes
+      every signed-zero occurrence) and observationally indistinguishable post-JSON. DOCUMENTED.
+    - +Infinity / -Infinity elements or values: do not round-trip through JSON (-> null). DOCUMENTED, not generated.
+    - undefined as an ARRAY ELEMENT: array holes / undefined elements do not survive JSON
+      round-trip (become null). The generator does NOT put `undefined` inside the array. (Passing
+      `undefined` as a top-level value-to-remove is fine and covered, since the rest-args are not
+      array elements of the persisted `array`; but to stay strictly codec-faithful the generator
+      uses null/array passthrough for the no-op path and avoids undefined inside arrays.)
+    - Function / Symbol elements or values: not JSON-round-trippable. DOCUMENTED, not generated.
+    - Non-array, non-null `array` hosts: a primitive string with content THROWS (splice hits a
+      read-only indexed property); a number or a plain {} (no truthy length) hits the guard and is
+      returned as-is; an array-LIKE object with a numeric `.length` is actually mutated via
+      Array.prototype.splice.call. These host types are outside the stated (Array | null) contract
+      and are NOT generated; the in-scope passthrough is exercised with null and with empty arrays.
+
+PROVENANCE lodash.pull@4.1.0, repo lodash/lodash (Custom Build, modularize exports="npm"),
+  MIT license, source file index.js (module.exports = pull = baseRest(pullAll); helpers
+  basePullAll, baseIndexOf, baseFindIndex, baseIsNaN, copyArray, arrayMap, baseRest, apply
+  all inlined in the same file).

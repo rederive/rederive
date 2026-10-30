@@ -1,0 +1,15 @@
+UNIT spec_version_for
+LANG js
+PRIMARY-SHA256 b4bc2a94f8a75a40ea06352528c695afc42a5a705d03c519677dec1e8adc7d49
+SIG spec_version_for(features: string[]): string
+NOTE default export
+ABI text = string; list[text] = an Array of strings, read only. The result is one of the four version strings of the
+  primary's VERSION-ORDER table. A throw (R3) is a thrown Error; the message is not graded (the package's reads: unknown
+  feature "<name>" — not in cli/capabilities.json; refusing to stamp a version for it). The artifact is an ES module
+  default-exporting the function and imports nothing (the table is written into the module).
+ENVELOPE as the primary; no widening.
+MECHANISM hold FEATURES in a Map (or a null-prototype object, Object.create(null)) and test membership with Map.has or
+  Object.hasOwn. A plain-object property read (table[name]) reaches inherited members (constructor, toString, __proto__)
+  and would accept names R3 says throw. Compare versions by the VERSION-ORDER table (or a numeric dotted compare).
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/features.mjs specVersionFor. Language file cut 2026-10-26 with the primary, before any blind re-emission.

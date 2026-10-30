@@ -1,0 +1,917 @@
+{
+  "unit": "carried_canonical",
+  "judge": "rederive@7d8e61a4d90d",
+  "primarySha": "f0f8bfd7fcf65ee10da915c5044801760095bf39afc82f9b18fe04a03e3cf1a3",
+  "features": [
+    "vectors",
+    "lang-variant"
+  ],
+  "lint": {
+    "ok": true,
+    "density": 0.01818181818181818,
+    "leaks": 0
+  },
+  "results": {
+    "js": {
+      "artifacts": [
+        {
+          "artifact": "runs/js/emit_1.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "22/22",
+          "heldout": "35/35",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 22,
+              "ran": 22,
+              "narrowed": 0
+            },
+            "heldout": {
+              "pass": 35,
+              "ran": 35,
+              "narrowed": 0
+            }
+          },
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "2/2",
+            "heldout": "13/13",
+            "ok": true,
+            "misses": []
+          }
+        },
+        {
+          "artifact": "runs/js/emit_2.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "22/22",
+          "heldout": "35/35",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 22,
+              "ran": 22,
+              "narrowed": 0
+            },
+            "heldout": {
+              "pass": 35,
+              "ran": 35,
+              "narrowed": 0
+            }
+          },
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "2/2",
+            "heldout": "13/13",
+            "ok": true,
+            "misses": []
+          }
+        },
+        {
+          "artifact": "runs/js/emit_3.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "22/22",
+          "heldout": "35/35",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 22,
+              "ran": 22,
+              "narrowed": 0
+            },
+            "heldout": {
+              "pass": 35,
+              "ran": 35,
+              "narrowed": 0
+            }
+          },
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "2/2",
+            "heldout": "13/13",
+            "ok": true,
+            "misses": []
+          }
+        }
+      ],
+      "divergence": {
+        "round": 1,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    },
+    "rust": {
+      "artifacts": [
+        {
+          "artifact": "runs/rust/emit_1",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "cargo check ok (library crate)"
+          },
+          "frozen": "15/15 (7 narrowed)",
+          "heldout": "21/21 (14 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 15,
+              "ran": 15,
+              "narrowed": 7
+            },
+            "heldout": {
+              "pass": 21,
+              "ran": 21,
+              "narrowed": 14
+            }
+          },
+          "narrowed": {
+            "count": 21,
+            "names": [
+              "v10",
+              "v11",
+              "v17",
+              "v18",
+              "v19",
+              "v20",
+              "v21",
+              "v37",
+              "v38",
+              "v49",
+              "v53",
+              "v55",
+              "v56",
+              "v57",
+              "v59",
+              "v60",
+              "v61",
+              "v62",
+              "v67",
+              "v68",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v10",
+                "args": [
+                  "{\"n\":[0,1,-1,0.5,0.1,0.3333333333333333,100,100000000000000000000,1e+21,123456789012345680000,0.000001,1e-7,1.23e-18,5e-324,1.7976931348623157e+308,-1e+21,9007199254740992,9007199254740992]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v11",
+                "args": [
+                  "{\"big\":1e+21,\"edge20\":100000000000000000000,\"edge6\":0.000001,\"neg\":-0.000001234,\"small\":1e-7}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "{\"a\":1,\"nan\":NaN}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v18",
+                "args": [
+                  "{\"inf\":Infinity}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v19",
+                "args": [
+                  "{\"ninf\":[1,-Infinity]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v20",
+                "args": [
+                  "{\"m\":{\"negzero\":-0}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v21",
+                "args": [
+                  "{\"deep\":[{\"x\":[0,-0]}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v37",
+                "args": [
+                  "{\"1\":[0.000001],\"1e3\":1e-7,\"4294967294\":{\"1e3\":-2.5},\"😀\":{\"Z\":1.23e-18,\"\\\\\":1e-7,\"toString\":-100000000000000000000,\"\":255}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v38",
+                "args": [
+                  "{\"\\\"\":1.5e+300,\"-1\":0.000001,\"/\":{\"__t\":0,\"\":0.000001},\"~\":\"<>&'\"}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v49",
+                "args": [
+                  "{\"10\":[\"x\",\"😀\"],\"4294967294\":{\"1e3\":[],\"blue\":{\"__throw\":\"\",\"é\":1.23e-18}},\"a\":[-2.5,-0.5,-1e+21],\" \":[]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v53",
+                "args": [
+                  "{\"\\t\":null,\"4294967294\":[],\"B\":1.7976931348623157e+308,\"\":[null,-1,null],\"！\":\"\\b\\f\\r\"}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "{\"\\u001f\":[-1,255,1],\"100\":\"\\u0000\\u001f\",\"B\":null,\"constructor\":-1,\" \":0.000001,\"𝒜\":{\"1e3\":-2.5,\"Z\":-2.5,\"~\":1.7976931348623157e+308,\"\":123456789012345680000}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "{\"1\":-0.5,\"1.5\":-9007199254740992,\"a\":null,\"\":1.5e+300}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v57",
+                "args": [
+                  "{\"\":0,\"2\":1,\"__throw\":1,\"aliceblue\":[0.3333333333333333,{\"4294967294\":123456789012345680000},1],\"constructor\":{\"4294967295\":true},\" \":true}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v59",
+                "args": [
+                  "{\"01\":[4294967295],\"9\":255,\"Z\":{\"\":123456789012345680000},\"red\":100}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "{\"4294967295\":{\"Z\":100000000000000000000,\"green\":100000000000000000000,\"toString\":-1e-7,\"\":-123456789012345680000},\"__t\":{\"0\":255,\"aliceblue\":0.5,\"b\":100000000000000000000},\"b\":\"\",\"😀\":[9007199254740992,-2.5,100000000000000000000]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v61",
+                "args": [
+                  "{\"green\":1.5e+300,\"red\":-123456789012345680000,\"𝒜\":{\"\\u001f\":\"back\\\\slash\",\"\":true}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "{\"\\n\":[1,100000000000000000000,1e+21],\"/\":-2.5,\"100\":0.5,\"green\":[128,4294967295],\"é\":0.000001}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "{\"\\\"\":[{\"9\":[],\"\\\\\":\"slash/ok\"},[]],\"1\":1e+21,\"100\":1e-7,\"2\":255,\"zz\":123456789012345680000}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "{\"10\":null,\"4294967295\":[-1.23e-18,1e+21,1.7976931348623157e+308],\"B\":9007199254740992,\"constructor\":0,\"\":{\"\\u001f\":0.1,\"__proto__\":-100}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "{\"\\t\":false,\"\\n\":[true,1.7976931348623157e+308,[\"\\u0000\\u001f\",{\"가\":100,\"😀\":0.3333333333333333}]],\"1e3\":\"\",\"Z\":[\"😀\",-2.5,[]],\"red\":null}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/rust/emit_2",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "cargo check ok (library crate)"
+          },
+          "frozen": "15/15 (7 narrowed)",
+          "heldout": "21/21 (14 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 15,
+              "ran": 15,
+              "narrowed": 7
+            },
+            "heldout": {
+              "pass": 21,
+              "ran": 21,
+              "narrowed": 14
+            }
+          },
+          "narrowed": {
+            "count": 21,
+            "names": [
+              "v10",
+              "v11",
+              "v17",
+              "v18",
+              "v19",
+              "v20",
+              "v21",
+              "v37",
+              "v38",
+              "v49",
+              "v53",
+              "v55",
+              "v56",
+              "v57",
+              "v59",
+              "v60",
+              "v61",
+              "v62",
+              "v67",
+              "v68",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v10",
+                "args": [
+                  "{\"n\":[0,1,-1,0.5,0.1,0.3333333333333333,100,100000000000000000000,1e+21,123456789012345680000,0.000001,1e-7,1.23e-18,5e-324,1.7976931348623157e+308,-1e+21,9007199254740992,9007199254740992]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v11",
+                "args": [
+                  "{\"big\":1e+21,\"edge20\":100000000000000000000,\"edge6\":0.000001,\"neg\":-0.000001234,\"small\":1e-7}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "{\"a\":1,\"nan\":NaN}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v18",
+                "args": [
+                  "{\"inf\":Infinity}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v19",
+                "args": [
+                  "{\"ninf\":[1,-Infinity]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v20",
+                "args": [
+                  "{\"m\":{\"negzero\":-0}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v21",
+                "args": [
+                  "{\"deep\":[{\"x\":[0,-0]}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v37",
+                "args": [
+                  "{\"1\":[0.000001],\"1e3\":1e-7,\"4294967294\":{\"1e3\":-2.5},\"😀\":{\"Z\":1.23e-18,\"\\\\\":1e-7,\"toString\":-100000000000000000000,\"\":255}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v38",
+                "args": [
+                  "{\"\\\"\":1.5e+300,\"-1\":0.000001,\"/\":{\"__t\":0,\"\":0.000001},\"~\":\"<>&'\"}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v49",
+                "args": [
+                  "{\"10\":[\"x\",\"😀\"],\"4294967294\":{\"1e3\":[],\"blue\":{\"__throw\":\"\",\"é\":1.23e-18}},\"a\":[-2.5,-0.5,-1e+21],\" \":[]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v53",
+                "args": [
+                  "{\"\\t\":null,\"4294967294\":[],\"B\":1.7976931348623157e+308,\"\":[null,-1,null],\"！\":\"\\b\\f\\r\"}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "{\"\\u001f\":[-1,255,1],\"100\":\"\\u0000\\u001f\",\"B\":null,\"constructor\":-1,\" \":0.000001,\"𝒜\":{\"1e3\":-2.5,\"Z\":-2.5,\"~\":1.7976931348623157e+308,\"\":123456789012345680000}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "{\"1\":-0.5,\"1.5\":-9007199254740992,\"a\":null,\"\":1.5e+300}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v57",
+                "args": [
+                  "{\"\":0,\"2\":1,\"__throw\":1,\"aliceblue\":[0.3333333333333333,{\"4294967294\":123456789012345680000},1],\"constructor\":{\"4294967295\":true},\" \":true}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v59",
+                "args": [
+                  "{\"01\":[4294967295],\"9\":255,\"Z\":{\"\":123456789012345680000},\"red\":100}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "{\"4294967295\":{\"Z\":100000000000000000000,\"green\":100000000000000000000,\"toString\":-1e-7,\"\":-123456789012345680000},\"__t\":{\"0\":255,\"aliceblue\":0.5,\"b\":100000000000000000000},\"b\":\"\",\"😀\":[9007199254740992,-2.5,100000000000000000000]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v61",
+                "args": [
+                  "{\"green\":1.5e+300,\"red\":-123456789012345680000,\"𝒜\":{\"\\u001f\":\"back\\\\slash\",\"\":true}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "{\"\\n\":[1,100000000000000000000,1e+21],\"/\":-2.5,\"100\":0.5,\"green\":[128,4294967295],\"é\":0.000001}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "{\"\\\"\":[{\"9\":[],\"\\\\\":\"slash/ok\"},[]],\"1\":1e+21,\"100\":1e-7,\"2\":255,\"zz\":123456789012345680000}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "{\"10\":null,\"4294967295\":[-1.23e-18,1e+21,1.7976931348623157e+308],\"B\":9007199254740992,\"constructor\":0,\"\":{\"\\u001f\":0.1,\"__proto__\":-100}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "{\"\\t\":false,\"\\n\":[true,1.7976931348623157e+308,[\"\\u0000\\u001f\",{\"가\":100,\"😀\":0.3333333333333333}]],\"1e3\":\"\",\"Z\":[\"😀\",-2.5,[]],\"red\":null}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/rust/emit_3",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "cargo check ok (library crate)"
+          },
+          "frozen": "15/15 (7 narrowed)",
+          "heldout": "21/21 (14 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 15,
+              "ran": 15,
+              "narrowed": 7
+            },
+            "heldout": {
+              "pass": 21,
+              "ran": 21,
+              "narrowed": 14
+            }
+          },
+          "narrowed": {
+            "count": 21,
+            "names": [
+              "v10",
+              "v11",
+              "v17",
+              "v18",
+              "v19",
+              "v20",
+              "v21",
+              "v37",
+              "v38",
+              "v49",
+              "v53",
+              "v55",
+              "v56",
+              "v57",
+              "v59",
+              "v60",
+              "v61",
+              "v62",
+              "v67",
+              "v68",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v10",
+                "args": [
+                  "{\"n\":[0,1,-1,0.5,0.1,0.3333333333333333,100,100000000000000000000,1e+21,123456789012345680000,0.000001,1e-7,1.23e-18,5e-324,1.7976931348623157e+308,-1e+21,9007199254740992,9007199254740992]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v11",
+                "args": [
+                  "{\"big\":1e+21,\"edge20\":100000000000000000000,\"edge6\":0.000001,\"neg\":-0.000001234,\"small\":1e-7}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "{\"a\":1,\"nan\":NaN}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v18",
+                "args": [
+                  "{\"inf\":Infinity}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v19",
+                "args": [
+                  "{\"ninf\":[1,-Infinity]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v20",
+                "args": [
+                  "{\"m\":{\"negzero\":-0}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v21",
+                "args": [
+                  "{\"deep\":[{\"x\":[0,-0]}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v37",
+                "args": [
+                  "{\"1\":[0.000001],\"1e3\":1e-7,\"4294967294\":{\"1e3\":-2.5},\"😀\":{\"Z\":1.23e-18,\"\\\\\":1e-7,\"toString\":-100000000000000000000,\"\":255}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v38",
+                "args": [
+                  "{\"\\\"\":1.5e+300,\"-1\":0.000001,\"/\":{\"__t\":0,\"\":0.000001},\"~\":\"<>&'\"}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v49",
+                "args": [
+                  "{\"10\":[\"x\",\"😀\"],\"4294967294\":{\"1e3\":[],\"blue\":{\"__throw\":\"\",\"é\":1.23e-18}},\"a\":[-2.5,-0.5,-1e+21],\" \":[]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v53",
+                "args": [
+                  "{\"\\t\":null,\"4294967294\":[],\"B\":1.7976931348623157e+308,\"\":[null,-1,null],\"！\":\"\\b\\f\\r\"}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "{\"\\u001f\":[-1,255,1],\"100\":\"\\u0000\\u001f\",\"B\":null,\"constructor\":-1,\" \":0.000001,\"𝒜\":{\"1e3\":-2.5,\"Z\":-2.5,\"~\":1.7976931348623157e+308,\"\":123456789012345680000}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "{\"1\":-0.5,\"1.5\":-9007199254740992,\"a\":null,\"\":1.5e+300}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v57",
+                "args": [
+                  "{\"\":0,\"2\":1,\"__throw\":1,\"aliceblue\":[0.3333333333333333,{\"4294967294\":123456789012345680000},1],\"constructor\":{\"4294967295\":true},\" \":true}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v59",
+                "args": [
+                  "{\"01\":[4294967295],\"9\":255,\"Z\":{\"\":123456789012345680000},\"red\":100}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "{\"4294967295\":{\"Z\":100000000000000000000,\"green\":100000000000000000000,\"toString\":-1e-7,\"\":-123456789012345680000},\"__t\":{\"0\":255,\"aliceblue\":0.5,\"b\":100000000000000000000},\"b\":\"\",\"😀\":[9007199254740992,-2.5,100000000000000000000]}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v61",
+                "args": [
+                  "{\"green\":1.5e+300,\"red\":-123456789012345680000,\"𝒜\":{\"\\u001f\":\"back\\\\slash\",\"\":true}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "{\"\\n\":[1,100000000000000000000,1e+21],\"/\":-2.5,\"100\":0.5,\"green\":[128,4294967295],\"é\":0.000001}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "{\"\\\"\":[{\"9\":[],\"\\\\\":\"slash/ok\"},[]],\"1\":1e+21,\"100\":1e-7,\"2\":255,\"zz\":123456789012345680000}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "{\"10\":null,\"4294967295\":[-1.23e-18,1e+21,1.7976931348623157e+308],\"B\":9007199254740992,\"constructor\":0,\"\":{\"\\u001f\":0.1,\"__proto__\":-100}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "{\"\\t\":false,\"\\n\":[true,1.7976931348623157e+308,[\"\\u0000\\u001f\",{\"가\":100,\"😀\":0.3333333333333333}]],\"1e3\":\"\",\"Z\":[\"😀\",-2.5,[]],\"red\":null}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        }
+      ],
+      "divergence": {
+        "round": 1,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    },
+    "ts": {
+      "artifacts": [
+        {
+          "artifact": "runs/ts/emit_1.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc 7.0.2 --strict ok, conforms to SIG"
+          },
+          "frozen": "22/22",
+          "heldout": "35/35",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 22,
+              "ran": 22,
+              "narrowed": 0
+            },
+            "heldout": {
+              "pass": 35,
+              "ran": 35,
+              "narrowed": 0
+            }
+          },
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/ts/emit_2.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc 7.0.2 --strict ok, conforms to SIG"
+          },
+          "frozen": "22/22",
+          "heldout": "35/35",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 22,
+              "ran": 22,
+              "narrowed": 0
+            },
+            "heldout": {
+              "pass": 35,
+              "ran": 35,
+              "narrowed": 0
+            }
+          },
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/ts/emit_3.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc 7.0.2 --strict ok, conforms to SIG"
+          },
+          "frozen": "22/22",
+          "heldout": "35/35",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "counts": {
+            "frozen": {
+              "pass": 22,
+              "ran": 22,
+              "narrowed": 0
+            },
+            "heldout": {
+              "pass": 35,
+              "ran": 35,
+              "narrowed": 0
+            }
+          },
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": []
+        }
+      ],
+      "divergence": {
+        "round": 1,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    }
+  },
+  "cross": {
+    "languages": [
+      "js",
+      "rust",
+      "ts"
+    ],
+    "seeded": 2000,
+    "narrowed": 605,
+    "n": 628,
+    "agree": 628,
+    "ok": true,
+    "examples": [],
+    "envelopeProbes": {
+      "n": 767,
+      "agree": 767,
+      "disagree": 0,
+      "examples": []
+    }
+  },
+  "at": "2026-10-28T17:02:02.891Z",
+  "gradedAt": "2026-10-28T17:02:02.891Z",
+  "labHead": "1ca646c"
+}

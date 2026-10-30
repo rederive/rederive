@@ -1,0 +1,949 @@
+{
+ "mode": "vectors",
+ "unit": "rust_carried_table",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "pub static T: &[(&str, &str)] = &[(\"a\", \"x\"), (\"b\", \"y\"), (\"c\", \"\")];",
+    ""
+   ],
+   "expected": {
+    "a": "x",
+    "b": "y",
+    "c": ""
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "pub const C: [(&str, [u8; 3]); 2] = [\n  (\"red\", [255, 0, 0]),\n  (\"blue\", [0, 0, 255]),\n];",
+    "map text -> list[u8]"
+   ],
+   "expected": {
+    "red": [
+     255,
+     0,
+     0
+    ],
+    "blue": [
+     0,
+     0,
+     255
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "static P: phf::Map<&'static str, i32> = phf_map! {\n  \"a\" => 1,\n  \"b\" => -2,\n  \"c\" => 0x10,\n};",
+    "map[text, i64]"
+   ],
+   "expected": {
+    "a": 1,
+    "b": -2,
+    "c": 16
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "fn f(s: &str) -> Option<f64> { match s { \"pi\" => Some(3.14), \"e\" => Some(2.71), \"nan\" => None, _ => None } }",
+    null
+   ],
+   "expected": {
+    "pi": 3.14,
+    "e": 2.71,
+    "nan": null
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "// (\"x\", 1) is a comment\nlet m = HashMap::from([\n  (\"on\", true), /* (\"y\", 2) /* nested */ (\"z\", 3) */\n  (\"off\", false),\n]);",
+    "map[text, bool]"
+   ],
+   "expected": {
+    "on": true,
+    "off": false
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    "&[(\"nl\", \"a\\nb\"), (\"tab\", \"\\t\"), (\"cr\", \"\\r\"), (\"nul\", \"\\0\"), (\"bs\", \"\\\\\"), (\"q\", \"\\\"\"), (\"ap\", \"\\'\"), (\"x\", \"\\x41\\x7e\"), (\"u\", \"\\u{1F600}\\u{e9}\"), (\"cont\", \"one \\\n     two\")]",
+    "map[text, text]"
+   ],
+   "expected": {
+    "nl": "a\nb",
+    "tab": "\t",
+    "cr": "\r",
+    "nul": "\u0000",
+    "bs": "\\",
+    "q": "\"",
+    "ap": "'",
+    "x": "A~",
+    "u": "😀é",
+    "cont": "one two"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    "&[(r\"raw\\n\", r#\"has \"quotes\"\"#), (\"bytes\", b\"ab\\x41\"), (br\"braw\", r##\"x\"#y\"##)]",
+    null
+   ],
+   "expected": {
+    "raw\\n": "has \"quotes\"",
+    "bytes": "abA",
+    "braw": "x\"#y"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "impl<'a> T<'a> { fn g(x: &'a str) {} }\nconst C: &[(&str, char)] = &[(\"x\", 'x'), (\"nl\", '\\n'), (\"ap\", '\\''), (\"dq\", '\"'), (\"smile\", '\\u{263A}'), (\"hx\", '\\x41')];",
+    "map[text, text]"
+   ],
+   "expected": {
+    "x": "x",
+    "nl": "\n",
+    "ap": "'",
+    "dq": "\"",
+    "smile": "☺",
+    "hx": "A"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    "&[(\"hex\", 0xFF), (\"oct\", 0o17), (\"bin\", 0b1010_1010), (\"us\", 1_000_000), (\"suf\", 255u8), (\"f\", 2.5e-3), (\"f32\", 0.5f32), (\"f32i\", 16777216f32), (\"bf\", 0b1f32), (\"hexf\", 0x1f64), (\"neg\", -7i64), (\"E\", 1E3)]",
+    null
+   ],
+   "expected": {
+    "hex": 255,
+    "oct": 15,
+    "bin": 170,
+    "us": 1000000,
+    "suf": 255,
+    "f": 0.0025,
+    "f32": 0.5,
+    "f32i": 16777216,
+    "bf": 1,
+    "hexf": 8036,
+    "neg": -7,
+    "E": 1000
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    "&[(\"a\", 255 as u8), (\"b\", -1 as i8), (\"c\", 1.0 as u8), (\"d\", 1e3 as u16), (\"e\", 0.5 as f32), (\"f\", 0.1 as f64), (\"g\", 7 as usize), (\"h\", -0x80 as i8), (\"i\", -0.0 as u8), (\"j\", 4294967295 as u32), (\"k\", 9007199254740991 as u64), (\"l\", -9007199254740991 as i128), (\"m\", [1 as i16, 2 as u32]), (\"n\", -2147483648 as i32), (\"o\", -0 as i64), (\"p\", 9007199254740992 as u64), (\"q\", -9007199254740992 as i64), (\"r\", -0i64), (\"s\", -0.0 as f64)]",
+    null
+   ],
+   "expected": {
+    "a": 255,
+    "b": -1,
+    "c": 1,
+    "d": 1000,
+    "e": 0.5,
+    "f": 0.1,
+    "g": 7,
+    "h": -128,
+    "i": 0,
+    "j": 4294967295,
+    "k": 9007199254740991,
+    "l": -9007199254740991,
+    "m": [
+     1,
+     2
+    ],
+    "n": -2147483648,
+    "o": 0,
+    "p": 9007199254740992,
+    "q": -9007199254740992,
+    "r": {
+     "__t": "num",
+     "v": "-0"
+    },
+    "s": {
+     "__t": "num",
+     "v": "-0"
+    }
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    "&[(\"list\", [1, 2, 3]), (\"tup\", (1, \"a\", true)), (\"paren\", (5)), (\"one\", (5,)), (\"unit\", ()), (\"empty\", []), (\"some\", Some(4)), (\"ref\", &[&1, &2]), (\"nest\", [[1], [2, [3]]]), (\"none\", None), (\"opt\", [Some(1), None]), (\"sn\", Some(&None)), (\"sp\", Some((None))), (\"ss\", Some(&Some(2)))]",
+    "map[text, json]"
+   ],
+   "expected": {
+    "list": [
+     1,
+     2,
+     3
+    ],
+    "tup": [
+     1,
+     "a",
+     true
+    ],
+    "paren": 5,
+    "one": [
+     5
+    ],
+    "unit": [],
+    "empty": [],
+    "some": 4,
+    "ref": [
+     1,
+     2
+    ],
+    "nest": [
+     [
+      1
+     ],
+     [
+      2,
+      [
+       3
+      ]
+     ]
+    ],
+    "none": null,
+    "opt": [
+     1,
+     null
+    ],
+    "sn": null,
+    "sp": null,
+    "ss": 2
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "const MAX: u64 = 18446744073709551615;\nconst T: &[(&str, u64)] = &[(\"p53\", 9007199254740992), (\"p60\", 0x1000_0000_0000_0000), (\"p64\", 18446744073709551616), (\"neg63\", -9223372036854775808i64), (\"r\", 9007199254740993.0)];",
+    "map[text, f64]"
+   ],
+   "expected": {
+    "p53": 9007199254740992,
+    "p60": 1152921504606847000,
+    "p64": 18446744073709552000,
+    "neg63": -9223372036854776000,
+    "r": 9007199254740992
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "&[(\"big\", 9007199254740993u64)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: 9007199254740993u64 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "&[(\"a\", 1), (\"b\", x)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: the value of entry \"b\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "pub static T: &[(&str, u8)] = &[];",
+    null
+   ],
+   "expected": {
+    "__throw": "carried.rs: no carried entries found — expected a Rust table of (\"key\", value) tuples (&[(k, v), …], [(k, v); N], vec![…], HashMap::from([…])) or \"key\" => value arms (phf_map! / match); string-literal keys, values a string / number / bool or a [..] / (..) of those"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "&[(\"a\", [0]), (\"a\", [-0]), (\"b\", 1), (\"b\", 1.0), (\"c\", None), (\"c\", None), (\"constructor\", 1), (\"__proto__\", [2]), (\"toString\", \"x\")]",
+    null
+   ],
+   "expected": {
+    "a": [
+     {
+      "__t": "num",
+      "v": "-0"
+     }
+    ],
+    "b": 1,
+    "c": null,
+    "constructor": 1,
+    "__proto__": [
+     2
+    ],
+    "toString": "x"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    "&[(\"a\", 0), (\"a\", -0)]",
+    null
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 duplicate key \"a\" with a different value (0 then 0) — the table is ambiguous"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "static P: phf::Map<&str, u8> = phf_map! { \"a\" => 1, \"b\" => 2 };\nfn label() -> String { format!(\"{}\", 5) }",
+    null
+   ],
+   "expected": {
+    "{}": 5
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "static M: phf::Map<&str, u8> = phf_map! { \"a\" => 1, \"b\" => foo() };",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: the arm \"b\" => … has a value this reader does not read — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "&[(\"a\", 1.5)]",
+    "map text -> i64"
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 entry \"a\" has value 1.5 which does not fit the declared SHAPE value type i64: not i64: 1.5 (NaN/Inf/fraction can never occupy an integer slot — envelope violation) (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "match k { \"a\" | \"b\" => 1, \"c\" => 2, _ => 0 }",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: an or-pattern arm (\"a\" | \"b\" => v) is not read — one key per arm"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "&[(\"red\", [255, 0, 0, \"r\"]), (\"blue\", [0, 0, 255, \"b\"])]",
+    "map text -> tuple[u8, u8, u16, text]; rgb plus a name"
+   ],
+   "expected": {
+    "red": [
+     255,
+     0,
+     0,
+     "r"
+    ],
+    "blue": [
+     0,
+     0,
+     255,
+     "b"
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    "&[(\"a\", 1), (\"b\", Some(None))]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: a nested Option is not read (Some(None) and None are one json value)"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "&[(\"a\", \"bad \\q escape\")]",
+    null
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 unknown escape \\q in string literal"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "&[(\"n\", 1), (\"s\", \"x\"), (\"z\", None)]",
+    "map[text, f64 | text | none]"
+   ],
+   "expected": {
+    "n": 1,
+    "s": "x",
+    "z": null
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "&[(\"a\", 1)]",
+    "map[text, json | text]"
+   ],
+   "expected": {
+    "__throw": "a union alternative is unreachable: an earlier json accepts every value it does at 21 in \"map[text, json | text]\""
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "&[(\"a\", [1, 2])]",
+    "map[text, tuple[json, f64] | tuple[f64, f64]]"
+   ],
+   "expected": {
+    "__throw": "a union alternative is unreachable: an earlier tuple accepts every value it does at 44 in \"map[text, tuple[json, f64] | tuple[f64, f64]]\""
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    "&[(\"a\", 1)]",
+    "map[text, record[a: text] | record[a: text, b: none]]"
+   ],
+   "expected": {
+    "__throw": "a union alternative is unreachable: an earlier record accepts every value it does at 52 in \"map[text, record[a: text] | record[a: text, b: none]]\""
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    "&[(\"a\", 1), (\"b\", [1.5])]",
+    "map[text, f64 | record[a: text, b: none] | record[a: text] | list[f64] | list[i64] | map[text, f64]]"
+   ],
+   "expected": {
+    "a": 1,
+    "b": [
+     1.5
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    "&[(\"a\", 1), (\"b\", 2)]",
+    "map[text, f64 | record[u8: u8, i16: list[i32 ]]]"
+   ],
+   "expected": {
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    "&[(\"a\", -1)]",
+    "map\t text\t->  u32 \t"
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 entry \"a\" has value -1 which does not fit the declared SHAPE value type u64: u64 out of range: -1 (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    "&[(\"a\", 1)]",
+    "﻿map[text, f64]"
+   ],
+   "expected": {
+    "__throw": "expected an identifier at 0 in \"﻿map[text, f64]\""
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    "&[(\"a\", 1)]",
+    "\nmap[text,\r\nf64]\n"
+   ],
+   "expected": {
+    "a": 1
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "&[(\"a\", 1)]",
+    "\r\nmap\ntext ->\nu8\r\n"
+   ],
+   "expected": {
+    "a": 1
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "&[(\"a\", -1)]",
+    "map[text,\nu8]"
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 entry \"a\" has value -1 which does not fit the declared SHAPE value type u64: u64 out of range: -1 (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    "&[(\"a\", 1)]",
+    "\n"
+   ],
+   "expected": {
+    "__throw": "expected an identifier at 0 in \"\""
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    "&[(\"a\", 1)]",
+    "map\u000btext -> f64"
+   ],
+   "expected": {
+    "__throw": "expected '[' at 3 in \"map\\u000btext -> f64\""
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    "&[(\"a\", [[[[[[[[[[[[[[[1]]]]]]]]]]]]]]])]",
+    "map[text, list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[u8]]]]]]]]]]]]]]]]"
+   ],
+   "expected": {
+    "a": [
+     [
+      [
+       [
+        [
+         [
+          [
+           [
+            [
+             [
+              [
+               [
+                [
+                 [
+                  [
+                   1
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "&[(\"a\", [[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]])]",
+    "map[text, list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[u8]]]]]]]]]]]]]]]]]"
+   ],
+   "expected": {
+    "__throw": "types nest deeper than 16 at 89 in \"map[text, list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[u64]]]]]]]]]]]]]]]]]\""
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    "&[(\"a\", [1])]",
+    "map[text, tuple[f64, f64]]"
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 entry \"a\" has value [1] which does not fit the declared SHAPE value type tuple[f64, f64]: not tuple (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    "&[(\"a\", 1e19), (\"b\", -0.0), (\"c\", 0xFFFF_FFFF_FFFF_F800)]",
+    "map[text, u64]"
+   ],
+   "expected": {
+    "a": 10000000000000000000,
+    "b": {
+     "__t": "num",
+     "v": "-0"
+    },
+    "c": 18446744073709550000
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "&[(\"a\", 9.3e18)]",
+    "map[text, i64]"
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 entry \"a\" has value 9300000000000000000 which does not fit the declared SHAPE value type i64: i64 out of range: 9300000000000000000 (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "&[(\"a\", 9.2e18), (\"b\", -9.2e18), (\"c\", 1e3), (\"d\", -9223372036854775808)]",
+    "map[text, i64]"
+   ],
+   "expected": {
+    "a": 9200000000000000000,
+    "b": -9200000000000000000,
+    "c": 1000,
+    "d": -9223372036854776000
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "&[(\"a\", 1)]",
+    "record[a: text]"
+   ],
+   "expected": {
+    "__throw": "carried.rs: declared SHAPE 'record[a: text]' is not a map — a Rust (key, value) table can only realize map[K, V]"
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    "&[(\"a\", 1)]",
+    "map[i64, f64]"
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 key \"a\" does not fit the declared SHAPE key type i64: not i64: a (NaN/Inf/fraction can never occupy an integer slot — envelope violation)"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    "&[(\"long\", 1.0000000000000000000000000000000000000000000000000000000000000000000000), (\"ok\", 2), (\"a\", r##############################\"x\"##############################), (\"b\", br#############################\"y\"#############################)]",
+    null
+   ],
+   "expected": {
+    "ok": 2,
+    "a": "x",
+    "b": "y"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    "&[(\"a\", r###############################\"x\"###############################), (\"b\", 1)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: the value of entry \"a\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "&[(\"dot\", 1.), (\"cast\", true as u8), (\"ch\", 'a' as u8), (\"par\", (1) as u8), (\"sum\", 1 + 2), (\"two\", 1 as u8 as u16), (\"big\", 1 + 99999999999999999), (\"kept\", 3), (\"a\", (\"b\", 1), 3), (\"z\", 0X10)]",
+    null
+   ],
+   "expected": {
+    "kept": 3,
+    "b": 1
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "match s { \"g\" if f => 3, \"d\" => (\"e\", 4), \"h\" => 5 }",
+    null
+   ],
+   "expected": {
+    "d": [
+     "e",
+     4
+    ],
+    "h": 5
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "\"a\" => 1",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: the arm \"a\" => … has a value this reader does not read — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "\"a\" | x => 1, \"c\" => 2, _ if s == \"d\" || \"e\" => 3,",
+    null
+   ],
+   "expected": {
+    "c": 2,
+    "e": 3
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "&[(\"q\", 'static)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: the value of entry \"q\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    "fn f(n: &str) -> String { format!(\"{}\", n) }\n&[(\"a\", 1)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: the value of entry \"{}\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "&[(\"a\", Some(Some(1)))]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: a nested Option is not read (Some(None) and None are one json value)"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    "&[(\"a\", 0.1f32)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: 0.1f32 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "&[(\"a\", 16777217f32)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: 16777217f32 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    "&[(\"a\", 1)] /* this comment never closes (\"b\", 2)",
+    null
+   ],
+   "expected": {
+    "a": 1
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    "&[(\"a\", \"\\u{110000}\")]",
+    null
+   ],
+   "expected": {
+    "__throw": "Invalid code point 1114112"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "&[(\"a\", \"\\u{}\")]",
+    null
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 bad \\u{…} escape in string literal"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "&[(\"a\", r#\"never closed)]",
+    null
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 unterminated raw string"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    "&[(\"a\", \"never closed)]",
+    null
+   ],
+   "expected": {
+    "__throw": "carried.rs:1 unterminated string literal"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    "&[(\"ua\", \"\\u{_1_F_6_0_0}\"), (\"ub\", \"\\xFF\"), (\"uc\", \"p\\\r\n \tq\"), (\"c\", -0x10), (\"d\", - 5), (\"e\", -9007199254740991), (\"g\", (None)), (\"h\", -0)]",
+    null
+   ],
+   "expected": {
+    "ua": "😀",
+    "ub": "ÿ",
+    "uc": "pq",
+    "c": -16,
+    "d": -5,
+    "e": -9007199254740991,
+    "g": null,
+    "h": {
+     "__t": "num",
+     "v": "-0"
+    }
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    "&[(\"b\", 'x'), (\"é\", \"日本語\"), (\"emoji\", ['\\u{1F600}', \"\\u{10FFFF}\"]), (\"a\", 0x1FFFFFFFFFFFFF), (\"nb\", 0o377), (\"c\", 0b1111_0000u8), (\"d\", 1e5u8), (\"e\", 1_f64), (\"f\", 007), (\"g\", 0X10), (\"h\", 1e-400)]",
+    null
+   ],
+   "expected": {
+    "b": "x",
+    "é": "日本語",
+    "emoji": [
+     "😀",
+     "􏿿"
+    ],
+    "a": 9007199254740991,
+    "nb": 255,
+    "c": 240,
+    "d": 100000,
+    "e": 1,
+    "f": 7,
+    "h": 0
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    "const A: f64 = 1e400; const B: u64 = 0x_; // \"\\q\" in a comment is never read\n&[(\"s\", \"/* not a comment */ // nor this\")]",
+    null
+   ],
+   "expected": {
+    "s": "/* not a comment */ // nor this"
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "\"a\" => 1, \"b\" => [1, (2,), (3)], \"c\" => -1, \"a\" => 1 }",
+    "map[text, json]"
+   ],
+   "expected": {
+    "a": 1,
+    "b": [
+     1,
+     [
+      2
+     ],
+     3
+    ],
+    "c": -1
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    "&[(\"a\", 1e400)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: 1e400 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "&[(\"a\", 0x_)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: 0x_ has no exact JSON number"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "&[(\"a\", 18446744073709551615 + 1)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: 18446744073709551615 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    "&[(\"a\", 1.9 as u8)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: `1.9 as u8` changes the value — write the value itself"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    "&[(\"a\", 0.1 as f32)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: `0.1 as f32` changes the value"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "&[(\"a\", 1 as char)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: `1 as char` is not a numeric cast this reader applies"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    "&[(\"a\", 18014398509481984 as u64)]",
+    null
+   ],
+   "expected": {
+    "__throw": "rust carried table: line 1: `18014398509481984 as u64` changes the value — write the value itself"
+   }
+  }
+ ]
+}

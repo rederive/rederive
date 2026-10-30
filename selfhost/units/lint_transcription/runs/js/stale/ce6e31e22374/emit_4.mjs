@@ -1,0 +1,41 @@
+const SHAPES = [
+  ["typeof", /\btypeof\b/],
+  ["arrow fn", /=>/],
+  ["method call", /\.(match|reduce|slice|test|exec|split|map|filter)\(/],
+  ["JS builtin", /\b(parseInt|parseFloat|Number|String|Math)\s*[.(]/],
+  ["if (", /\bif\s*\(/],
+  ["return", /\breturn\b/],
+  ["loop", /\bfor\s+\w+\s+in\b|\bfor\s*\(|\bwhile\s*\(/],
+  ["STEP/NODE/BRANCH narration", /^\s*#?\s*(STEP|NODE|BRANCH|GATE)\s+[\w-]+/i],
+  ["indexed assignment", /\w\[\w+\]\s*=(?!=)/],
+  ["dialect regex literal", /\/\^.*\$\/[a-z]*/],
+  ["JS value name (say none)", /\b(null|undefined)\b/],
+  ["assignment statement", /[A-Za-z_]\w*\s*=\s*[^=\s].*;\s*$/],
+  ["capture-group reference", /\bgroup\d\b/],
+];
+const QUOTED = /"(?:\\.|[^"\\\n])*"/g;
+
+export default function lint_transcription(text) {
+  const raw = text.split(/\r\n|\r|\n/);
+  const hits = [];
+  const hitSet = new Set();
+  let lines = 0;
+  let commentLines = 0;
+  raw.forEach((l0, idx) => {
+    const line = l0.replace(/^﻿+/, "").replace(/[ \t]+$/, "");
+    const t = line.trim();
+    if (t === "") return;
+    lines++;
+    if (t.startsWith("#")) commentLines++;
+    const s = line.replace(QUOTED, '""');
+    const shown = Array.from(t).slice(0, 96).join("");
+    for (const [what, re] of SHAPES) {
+      if (re.test(s)) {
+        hits.push({ line: idx + 1, what, text: shown });
+        hitSet.add(idx + 1);
+      }
+    }
+  });
+  const hitLines = hitSet.size;
+  return { hits, hitLines, lines, commentLines, density: lines === 0 ? 0 : hitLines / lines };
+}

@@ -1,0 +1,174 @@
+UNIT mixinDeep
+KIND STATE                    # MUTATES its first argument (target) in place and returns it
+ORACLE-CLASS deterministic    # pure logic, no seam (no clock/RNG/env/io/net) — fully reproducible
+SIG mixinDeep(target, ...rest) -> target            # default export: module.exports = mixinDeep
+DEPENDS-ON none               # zero runtime deps; two inline pure helpers isObject + isValidKey
+
+# ============================================================================
+# OBSERVABLE CONTRACT
+# The oracle compares the RETURNED value, which is the SAME (mutated) object as
+# `target` (identity: ret === target). Because the unit mutates in place, the
+# graded observation is the post-call state of `target`. Sources in `rest` are
+# NOT mutated by the unit itself (see "source aliasing" caveat below).
+# ============================================================================
+
+BEHAVIOR
+  # ---- helper: isObject(val) -> boolean -------------------------------------
+  # isObject(val) === ( typeof val === 'function'
+  #                     OR ( typeof val === 'object' AND val !== null AND !Array.isArray(val) ) )
+  # TRUE  for: plain objects, class instances (Date, RegExp, Map, Set, ...), FUNCTIONS.
+  # FALSE for: null, arrays, and all primitives (number, string, boolean, undefined, bigint, symbol).
+  # This is the SOLE predicate that decides "recurse-merge" vs "overwrite".
+  # NOTE: arrays are explicitly NOT objects here -> arrays are always treated as opaque
+  #       values (overwrite/assign, never element-merged).
+
+  # ---- helper: isValidKey(key) -> boolean -----------------------------------
+  # isValidKey(key) === ( key !== '__proto__' AND key !== 'constructor' AND key !== 'prototype' )
+  # These three keys are SKIPPED entirely during iteration (prototype-pollution guard).
+  # The check is by string equality of the property name. An own-enumerable property
+  # literally named "__proto__"/"constructor"/"prototype" (e.g. produced by JSON.parse,
+  # or Object.defineProperty with enumerable:true) is detected and skipped. Nothing is
+  # written to the target for these keys; Object.prototype is never polluted.
+
+  # ---- top-level: mixinDeep(target, ...rest) --------------------------------
+  NODE iterate-sources:
+    FOR each obj in rest, IN ORDER (left-to-right; this gives LAST-WINS semantics):
+      BRANCH isObject(obj) is FALSE:
+        # source is null, an array, or a primitive -> skip it entirely (no-op).
+      BRANCH isObject(obj) is TRUE:
+        FOR each key in `for...in obj`:
+          # for...in enumeration => OWN *and INHERITED* enumerable string keys.
+          #   Order: integer-like keys first in ascending numeric order, then remaining
+          #   string keys in insertion order, then inherited enumerable keys.
+          #   (Symbol keys are never visited by for...in.)
+          BRANCH isValidKey(key) is FALSE:  # key is __proto__/constructor/prototype -> SKIP
+          BRANCH isValidKey(key) is TRUE:   # -> mixin(target, obj[key], key)
+            CALL mixin(target, obj[key], key)
+    RETURN target          # always the (possibly mutated) original target object (identity preserved)
+
+  # ---- mixin(target, val, key) ----------------------------------------------
+  NODE mixin:
+    LET obj = target[key]                  # current value at that key in the target (read)
+    BRANCH isObject(val) AND isObject(obj):
+      # BOTH the incoming value and the existing target slot are "objects"
+      # (per isObject: plain object / function / class instance, NOT array, NOT null).
+      # -> RECURSE: mixinDeep(obj, val).  The TARGET'S existing object `obj` is kept and
+      #    mutated in place; `val`'s enumerable keys are merged INTO it (deep).
+      #    Because the recursion treats `val` as a source, only val's enumerable own+
+      #    inherited string keys are copied; if `val` is a class instance with no own
+      #    enumerable keys (e.g. Date, RegExp), nothing is copied and `obj` is unchanged
+      #    (the instance `val` is discarded).
+      CALL mixinDeep(obj, val)
+    BRANCH otherwise (at least one of val/obj is NOT an isObject):
+      # -> OVERWRITE: target[key] = val
+      #    The reference to `val` is assigned directly (NO clone). When `val` is itself an
+      #    object/array assigned into a fresh/non-object slot, target now SHARES that
+      #    reference with the source (aliasing — see caveat).
+      target[key] = val
+
+# ============================================================================
+# DERIVED / DEMONSTRATED BEHAVIORS (verified against mixin-deep@2.0.1)
+# ============================================================================
+# - Shallow flat merge:          mixinDeep({a:1,b:2},{b:3,c:4})        -> {a:1,b:3,c:4}
+# - Deep nested merge:           mixinDeep({a:{x:1,y:2}},{a:{y:3,z:4}})-> {a:{x:1,y:3,z:4}}
+# - Multi-level:                 mixinDeep({a:{b:{c:1}}},{a:{b:{d:2}}})-> {a:{b:{c:1,d:2}}}
+# - Multiple sources LAST-WINS:  mixinDeep({a:1},{a:2},{a:3})          -> {a:3}
+# - Deep last-wins across srcs:  mixinDeep({a:{x:1}},{a:{y:2}},{a:{x:9,z:3}}) -> {a:{x:9,y:2,z:3}}
+# - Array value OVERWRITES (never element-merged):
+#     mixinDeep({a:[1,2,3]},{a:[4,5]})    -> {a:[4,5]}        # arr over arr: replace
+#     mixinDeep({},{a:[1,2,3]})           -> {a:[1,2,3]}      # arr into empty slot: assign (shared ref)
+#     mixinDeep({a:[1,2]},{a:{x:1}})      -> {a:{x:1}}        # obj over arr: replace (arr not isObject)
+#     mixinDeep({a:{x:1}},{a:[1,2]})      -> {a:[1,2]}        # arr over obj: replace (arr not isObject)
+# - Primitive over object:       mixinDeep({a:{x:1}},{a:5})            -> {a:5}
+# - Object over primitive:       mixinDeep({a:5},{a:{x:1}})           -> {a:{x:1}}   # obj=5 not isObject -> overwrite
+# - null value:                  mixinDeep({a:1},{a:null})            -> {a:null}    # null not isObject -> overwrite
+#                                mixinDeep({a:{x:1}},{a:null})        -> {a:null}
+#                                mixinDeep({a:null},{a:{x:1}})        -> {a:{x:1}}   # obj=null not isObject -> overwrite
+# - undefined value OVERWRITES:  mixinDeep({a:1},{a:undefined})       -> target.a === undefined
+#     (the key REMAINS present with value undefined; JSON.stringify of the target drops it,
+#      so a JSON view shows {} — but `'a' in target` is true. See codec note below.)
+# - No sources:                  mixinDeep({a:1})                     -> {a:1}   (unchanged, same object)
+# - Empty source object:         mixinDeep({a:1},{})                  -> {a:1}   (unchanged)
+# - Non-object sources skipped:  mixinDeep({a:1},null,undefined,5,'s',[1,2]) -> {a:1} (all skipped)
+# - Array TARGET is iterated/written (target is NOT isObject-gated):
+#     mixinDeep([1,2,3],{0:99,b:'x'})     -> array [99,2,3] with extra own prop b='x'
+#       (result is still an Array; numeric-string key writes to the index, string key adds a prop)
+# - for...in visits INHERITED enumerable keys (envelope-relevant): a source whose prototype
+#   chain has enumerable props will have those props merged too.
+# - Identity:                    ret === target  (always).
+# - Source not mutated by the unit's own writes; BUT shared-reference aliasing means a nested
+#   object assigned-by-reference from a source can later be mutated through the target (see caveat).
+
+# ============================================================================
+# PROTOTYPE-POLLUTION GUARD (security-critical — verified)
+# ============================================================================
+# Source keys equal to "__proto__", "constructor", or "prototype" are SKIPPED at every level
+# of recursion (the guard is applied inside the per-key loop of mixinDeep, so it protects
+# nested levels too).
+#   mixinDeep({}, JSON.parse('{"__proto__":{"polluted":true}}'))  -> {} ; ({}).polluted === undefined
+#   mixinDeep({}, JSON.parse('{"constructor":{"x":1},"prototype":{"y":2},"safe":3}')) -> {safe:3}
+#   mixinDeep({a:{}}, JSON.parse('{"a":{"__proto__":{"p":1},"ok":2}}')) -> {a:{ok:2}} ; Object.prototype.p undefined
+# (An own-enumerable property literally named __proto__ created via Object.defineProperty is
+#  also detected by the string-equality check and skipped.)
+
+# ============================================================================
+# ERROR / THROW BEHAVIOR (deterministic, gradable as {__throw})
+# ============================================================================
+# A throw occurs ONLY when a key write/read is actually attempted against a target that
+# cannot host properties:
+#   - PRIMITIVE target (number/string/boolean) WITH a valid source key:
+#       mixinDeep(5,{a:1})  -> TypeError "Cannot create property 'a' on number '5'"
+#       (thrown at `target[key] = val` in mixin)
+#   - null/undefined target WITH a valid source key:
+#       mixinDeep(null,{a:1}) -> TypeError "Cannot read properties of null (reading 'a')"
+#       (thrown earlier, at `let obj = target[key]` read in mixin)
+#   - NO throw when no key write is reached:
+#       mixinDeep(5)            -> 5     (no sources)
+#       mixinDeep(5,{})         -> 5     (empty source, no keys)
+#       mixinDeep(5,[1,2])      -> 5     (array source skipped)
+#       mixinDeep(null)         -> null  (no sources)
+# A throw may leave the target PARTIALLY mutated (keys processed before the failing one are
+# already written) — relevant only for object/array targets that hit a later failure; for
+# in-envelope object/array targets no throw occurs, so partial-mutation is moot.
+
+# ============================================================================
+ORACLE value -> oracle.json    # deterministic; expecteds = returned (mutated) target, captured by harness
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the isObject predicate (function|non-null-non-array object) and isValidKey guard;
+    - the iterate-sources loop with left-to-right LAST-WINS ordering;
+    - the mixin recurse-vs-overwrite decision and deep recursion;
+    - for...in enumeration semantics (own + inherited enumerable string keys; integer-key-first order);
+    - array-as-opaque-value, primitive<->object overwrites, null/undefined handling;
+    - the prototype-pollution guard at every nesting level;
+    - identity (ret === target) and the throw cases above.
+  CARRIED DATA: none (no literal tables).
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they are not
+  oracle-codec-faithful or their identity/behavior is not JSON-serializable):
+    - FUNCTION values: isObject(fn) is true, so a function value either recurses (copying the
+      function's enumerable own+inherited props into an existing target object, discarding the
+      function) or is assigned by reference into a new slot. Functions do not survive JSON.
+    - CLASS INSTANCES as values (Date, RegExp, Map, Set, typed arrays): isObject true ->
+      RECURSE path copies only their OWN-ENUMERABLE keys (usually none) and DISCARDS the instance
+      (target's existing object kept); OVERWRITE path assigns the instance by reference. Identity/
+      type is not preserved through JSON, so these are out-of-envelope.
+        e.g. mixinDeep({a:{x:1}},{a:new Date()}) -> {a:{x:1}} (Date discarded, obj kept).
+    - SYMBOL keys/values: for...in never visits Symbol keys; a Symbol value is a primitive
+      (isObject false -> overwrite) but does not survive JSON. Out-of-envelope.
+    - GETTERS / accessor properties on sources: read via target[key]/obj[key] at access time;
+      side effects are out-of-contract. Out-of-envelope.
+    - PRIMITIVE / null / undefined TARGET combined with a valid source: produces a TypeError
+      (documented above). genInputs DOES emit the null-target+valid-source throw case (it is
+      codec-faithful and the throw is recorded as {__throw}); it does NOT emit primitive-number
+      targets (kept simple, behavior identical class of throw — documented here for the blind
+      re-emitter).
+    - SHARED-REFERENCE ALIASING caveat: on the OVERWRITE path the unit assigns `val` by reference
+      (no clone). When a nested object/array from a source is assigned into a fresh target slot,
+      target and source then share that sub-object. The unit does not itself mutate the source,
+      but the shared reference is observable if the caller later mutates either side. The oracle
+      observes only the immediate post-call target snapshot, so aliasing does not affect grading;
+      it is documented for fidelity.
+
+PROVENANCE mixin-deep@2.0.1 — github.com/jonschlinkert/mixin-deep — MIT —
+           source file: index.js (entire module, 38 LOC). CJS, zero runtime dependencies.

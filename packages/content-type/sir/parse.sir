@@ -1,0 +1,316 @@
+# ============================================================================
+# SIR — content-type@1.0.5  named export `parse`
+# ============================================================================
+UNIT parse
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure function. No clock / RNG / fs / net seam. Read-only: does NOT mutate
+# its argument and has no side effects. ORACLE value-mode.
+
+SIG parse(string: string | object) -> { parameters: object, type: string }
+# Returns an instance of a private `ContentType` class whose OWN enumerable
+# properties are exactly TWO, inserted in THIS ORDER:
+#       1st: `parameters`   (created FIRST)
+#       2nd: `type`         (assigned SECOND)
+# This insertion order is LOAD-BEARING — see the RETURN CONTRACT section. The
+# grader compares the returned value via JSON.stringify, which is property-
+# ORDER-SENSITIVE, so a re-emitter that returns the same two fields in the
+# WRONG order ({ type, parameters }) is semantically identical but FAILS the
+# byte-for-byte JSON comparison. `parameters` is a null-prototype object
+# (Object.create(null)); `type` is a plain lowercased string.
+# On error this function THROWS a TypeError (never returns) — see THROWS.
+
+DEPENDS-ON none
+# Zero runtime dependencies. Self-contained regexes + one private class.
+
+# ----------------------------------------------------------------------------
+# RETURN CONTRACT (HARD REQUIREMENT — this is where round 1 failed 0/3)
+# ----------------------------------------------------------------------------
+# The original builds the result via a private constructor:
+#       function ContentType (type) {
+#         this.parameters = Object.create(null)   # <-- parameters set FIRST
+#         this.type = type                        # <-- type set SECOND
+#       }
+# and `parse` does `var obj = new ContentType(type.toLowerCase())`, fills
+# `obj.parameters[key] = value` for each param, then `return obj`.
+#
+# CONSEQUENCE (VERIFIED against the real package — `node -e` below):
+#   Object.keys(parse("text/html; charset=utf-8"))  ===  ["parameters","type"]
+#   JSON.stringify(parse("text/html; charset=utf-8"))
+#       === '{"parameters":{"charset":"utf-8"},"type":"text/html"}'
+#   Object.getPrototypeOf(parse("text/html").parameters)  ===  null
+#
+# RULE 1 (property order — MANDATORY): the returned object's `parameters`
+#   property MUST be created/assigned BEFORE its `type` property, so that
+#   Object.keys(result) is exactly ["parameters", "type"] and JSON.stringify
+#   matches the real package BYTE-FOR-BYTE. Round 1 diverged ONLY here: all
+#   three blind emitters were behaviorally correct on every held-out vector
+#   but returned `{ type, parameters }` (type first) and the order-sensitive
+#   JSON.stringify grader counted them non-equivalent -> 0/3. Do NOT return a
+#   `{ type, ..., parameters }` literal (that inserts `type` first).
+#
+#   CONCRETE EMITTER SHAPE (either form is VERIFIED to yield the right order):
+#     (A) object built parameters-first:
+#           const obj = { parameters: Object.create(null) };
+#           # ... fill obj.parameters[key] = value for each parsed param ...
+#           obj.type = type.toLowerCase();      # type assigned LAST
+#           return obj;
+#     (B) a small class with fields declared parameters-then-type:
+#           class ContentType {
+#             constructor(type) {
+#               this.parameters = Object.create(null);   # FIRST
+#               this.type = type;                          # SECOND
+#             }
+#           }
+#           const obj = new ContentType(type.toLowerCase());
+#           # ... fill obj.parameters[key] = value ...
+#           return obj;
+#   In BOTH forms `parameters` is created up front (empty), parameters are
+#   then assigned into it, and `type` is assigned LAST — mirroring the source
+#   constructor's field order. (Assigning `type` first and `parameters` later,
+#   or using a `{ type, parameters }` literal, produces the WRONG key order.)
+#
+# RULE 2 (parameter insertion order within `parameters`): keys are inserted in
+#   SOURCE / scan order (the order the params appear left-to-right in the
+#   header). There is NO sorting in `parse` (the sibling `format` sorts, but
+#   `parse` does not). VERIFIED:
+#     JSON.stringify(parse("text/html; b=2; a=1"))
+#       === '{"parameters":{"b":"2","a":"1"},"type":"text/html"}'  # b before a
+#   For a duplicate key, the FIRST occurrence fixes the key's POSITION in the
+#   object and the LAST occurrence's value wins (plain reassignment keeps the
+#   original slot; see NODE 7f).
+#
+# RULE 3 (null prototype): `parameters` is `Object.create(null)` (no
+#   prototype). JSON.stringify and structural key comparison are unaffected by
+#   the prototype, but reproduce it for fidelity (and so an emitter never
+#   accidentally inherits Object.prototype keys). Empty params -> `{}` in JSON.
+
+DEPENDS-ON none
+
+# ----------------------------------------------------------------------------
+# EXACT CONSTANTS (regexes) — transcribe these BYTE-FOR-BYTE. They are small,
+# in-contract literals (NOT carried data). The `u`-less JS source uses \uXXXX
+# escapes; reproduce the identical code-point sets.
+# ----------------------------------------------------------------------------
+# tchar class (used in type token, param key, and unquoted param value):
+#   TCHAR = [!#$%&'*+.^_`|~0-9A-Za-z-]
+#   (literal char class, exactly: ! # $ % & ' * + . ^ _ ` | ~  digits  A-Z a-z  hyphen)
+#
+# TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+#   i.e.  ^TCHAR+ "/" TCHAR+$   (one slash, both sides >=1 tchar, NOTHING else;
+#   no whitespace, no obs-text high bytes are allowed in the TYPE token.)
+#
+# PARAM_REGEXP (BYTE-EXACT, from source line 23):
+#   /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[ !#-[]-~-ÿ]|\\[ -ÿ])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g
+#   Structure:  ";"  " "*  ( KEY = TCHAR+ )  " "*  "="  " "*  ( VALUE )  " "*
+#     KEY   (capture group 1) = TCHAR+
+#     VALUE (capture group 2) = EITHER
+#        (a) a quoted-string:  '"'  ( qdtext | quoted-pair )*  '"'
+#              qdtext char set =  (vertical tab),   (space),
+#                                ! ('!'), #-[ ('#'..'['),
+#                                ]-~ (']'..'~'),
+#                                -ÿ (obs-text high bytes).
+#              NOTE the gap: " ('"') and \ ('\\') are EXCLUDED from
+#              qdtext. quoted-pair = '\\' followed by any char in
+#               or  -ÿ.
+#        (b) a token value: TCHAR+  (no quotes, no backslash, no whitespace).
+#   The space runs around ';', '=' are literal SPACE ( ) only via " *".
+#   NOTE: " *" matches ZERO-OR-MORE SPACE characters only. (Tabs etc. are NOT
+#   matched by these optional-space runs; but the type/header trimming below
+#   uses String.prototype.trim which strips all whitespace incl. \t \n \r.)
+#   The regex is GLOBAL (/g) and driven via .lastIndex / .exec in a loop.
+#
+# QESC_REGEXP = /\\([ -ÿ])/g
+#   Unescape: replace each backslash + (char in  or  -ÿ) with
+#   just that captured char. Applied to a quoted value AFTER stripping the
+#   surrounding quotes, ONLY when the value still contains a backslash.
+#
+# (TEXT_REGEXP, TOKEN_REGEXP, QUOTE_REGEXP exist in the source but are used
+#  ONLY by the sibling `format` function — NOT by `parse`. Ignore for parse.)
+
+# ----------------------------------------------------------------------------
+BEHAVIOR  # ordered pipeline — reproduce EXACTLY in this order
+# ----------------------------------------------------------------------------
+# Let `arg` be the single argument.
+#
+# NODE 1 — falsy guard:
+#   IF (!arg)  i.e. arg is any FALSY value
+#      ( undefined | null | false | 0 | -0 | 0n | NaN | "" (empty string) )
+#   THEN throw new TypeError('argument string is required').
+#   [exact message string: "argument string is required"]
+#
+# NODE 2 — resolve header from object-or-string:
+#   IF typeof arg === 'object'  (note: a truthy object; arrays are objects too;
+#                                RegExp/Map/Set/Buffer are objects too)
+#   THEN header = getcontenttype(arg)   # see NODE 2a
+#   ELSE header = arg                    # arg is a primitive that passed NODE 1
+#                                        # (a non-empty string, a truthy number,
+#                                        #  a truthy bigint, the boolean true, or
+#                                        #  a Symbol — though Symbol is out of
+#                                        #  codec envelope, see SCOPE).
+#
+#   NODE 2a — getcontenttype(obj)  (only reached when arg is an object):
+#     header2a := undefined
+#     IF typeof obj.getHeader === 'function'        # res-like
+#        header2a = obj.getHeader('content-type')   # call it with that exact key
+#     ELSE IF typeof obj.headers === 'object'       # req-like
+#        header2a = obj.headers && obj.headers['content-type']
+#        # i.e. if obj.headers is truthy, read obj.headers['content-type'];
+#        # if obj.headers is null (typeof null === 'object'), the `&&` short-
+#        # circuits to null -> header2a = null.
+#     # (else: neither branch -> header2a stays undefined)
+#     IF typeof header2a !== 'string'
+#        throw new TypeError('content-type header is missing from object').
+#        [exact message: "content-type header is missing from object"]
+#     RETURN header2a
+#   # PRECEDENCE: getHeader is checked FIRST; if present (a function), headers is
+#   # never consulted, even when getHeader returns a non-string (which then
+#   # throws 'content-type header is missing from object').
+#
+# NODE 3 — header must be a string:
+#   IF typeof header !== 'string'
+#   THEN throw new TypeError('argument string is required to be a string').
+#   [exact message: "argument string is required to be a string"]
+#   # This catches the case where `arg` was a TRUTHY NON-OBJECT, NON-STRING
+#   # primitive (e.g. the number 42, the boolean true, a bigint 5n): NODE 1
+#   # passed (truthy), NODE 2 took the ELSE branch (header = arg), and arg is
+#   # not a string. (For object args, NODE 2a already guaranteed a string or
+#   # threw, so this node is a no-op for objects.)
+#
+# NODE 4 — split type vs parameters at the FIRST ';':
+#   index := header.indexOf(';')        # -1 if no semicolon present
+#   type  := (index !== -1) ? header.slice(0, index).trim()
+#                           : header.trim()
+#   # String.prototype.trim strips leading/trailing whitespace
+#   # (space, \t, \n, \r, \f, \v, NBSP, etc.) but NOT interior whitespace.
+#
+# NODE 5 — validate type:
+#   IF NOT TYPE_REGEXP.test(type)
+#   THEN throw new TypeError('invalid media type').
+#   [exact message: "invalid media type"]
+#   # Fails for: missing slash, >1 slash that breaks the shape, interior
+#   # whitespace surviving trim ("te xt/html"), empty token side, obs-text /
+#   # high bytes in the token ("é/é" THROWS here), control chars, etc.
+#
+# NODE 6 — construct result  (SEE RETURN CONTRACT — order is load-bearing):
+#   Create the result object with `parameters` FIRST as a null-prototype object,
+#   then (NODE 7) fill params into it, then assign `type` LAST:
+#       obj.parameters := Object.create(null)        # CREATED FIRST (empty)
+#       # ... NODE 7 fills obj.parameters[key] = value ...
+#       obj.type       := type.toLowerCase()         # ASSIGNED LAST; TYPE LOWERCASED
+#   The source constructs `new ContentType(type.toLowerCase())` (which sets
+#   `this.parameters = Object.create(null)` then `this.type = type`) BEFORE the
+#   param loop; functionally identical to creating an empty params object up
+#   front and assigning type. What matters for the grader is the final key
+#   INSERTION ORDER: parameters BEFORE type. (Do NOT emit a `{type,parameters}`
+#   literal — that inserts type first and FAILS the JSON.stringify comparison.)
+#
+# NODE 7 — parse parameters (ONLY if index !== -1, i.e. a ';' was present):
+#   PARAM_REGEXP.lastIndex := index             # start scanning AT the ';'
+#   LOOP: while (match = PARAM_REGEXP.exec(header)) is non-null:
+#     7a. IF match.index !== index
+#            throw new TypeError('invalid parameter format').
+#            [exact message: "invalid parameter format"]
+#         # Every successful match MUST begin exactly where the previous one
+#         # ended (contiguous). A gap (garbage between params, e.g.
+#         # "a=b XXX; c=d", or an unparseable region) makes match.index advance
+#         # past `index` -> throw. A leading "garbage" before the first ';'
+#         # cannot occur because we seeded lastIndex at the ';'.
+#     7b. index := index + match[0].length      # advance by the whole match
+#     7c. key   := match[1].toLowerCase()        # PARAM KEY IS LOWERCASED
+#     7d. value := match[2]                       # raw VALUE (group 2)
+#     7e. IF value.charCodeAt(0) === 0x22  (i.e. value starts with a '"'):
+#            value := value.slice(1, -1)          # strip the surrounding quotes
+#            IF value.indexOf('\\') !== -1:        # only if an escape remains
+#               value := value.replace(QESC_REGEXP, '$1')   # unescape \X -> X
+#     7f. obj.parameters[key] := value            # VALUE CASE IS PRESERVED
+#         # Insertion order = scan order. Duplicate keys: the FIRST occurrence
+#         # fixes the key's POSITION; the LAST occurrence's value WINS (plain
+#         # assignment overwrites the value but keeps the original key slot).
+#   END LOOP
+#   7g. AFTER the loop: IF index !== header.length
+#          throw new TypeError('invalid parameter format').
+#          [exact message: "invalid parameter format"]
+#       # i.e. there must be NO leftover trailing characters after the last
+#       # matched parameter. A trailing bare ';' ("text/html;") or trailing
+#       # junk ("...; ") throws here. A trailing run of SPACES is consumed by
+#       # the final " *" of the regex, so trailing spaces after a value are OK
+#       # ("text/html; charset=utf-8   " is valid).
+#
+# NODE 8 — return obj  with own keys in order ["parameters", "type"]
+#          (parameters first, type second — see RETURN CONTRACT).
+
+# ----------------------------------------------------------------------------
+# LOWERCASING RULE (the load-bearing invariant)
+# ----------------------------------------------------------------------------
+#   * The media TYPE is lowercased (NODE 6: type.toLowerCase()).
+#   * Each parameter KEY is lowercased (NODE 7c: match[1].toLowerCase()).
+#   * Parameter VALUES are NOT lowercased — original case is PRESERVED
+#     ("TEXT/HTML; Charset=UTF-8"  ->  type "text/html",
+#      parameters { charset: "UTF-8" }). Quoted values likewise preserve case.
+
+# ----------------------------------------------------------------------------
+# THROWS — every error path is `throw new TypeError(<message>)`. EXACT strings:
+# ----------------------------------------------------------------------------
+#   1. "argument string is required"
+#        when arg is FALSY (undefined, null, false, 0, -0, 0n, NaN, "").
+#   2. "argument string is required to be a string"
+#        when arg is a TRUTHY, NON-OBJECT, NON-STRING primitive
+#        (number != 0, bigint != 0n, boolean true, Symbol).
+#   3. "content-type header is missing from object"
+#        when arg is an object (incl. array/RegExp/etc.) and getcontenttype
+#        could not resolve a string content-type header (no getHeader fn and no
+#        string headers['content-type']; or getHeader returned a non-string).
+#   4. "invalid media type"
+#        when the trimmed type token fails TYPE_REGEXP (NODE 5).
+#   5. "invalid parameter format"
+#        when a parameter region is non-contiguous / unparseable (NODE 7a) OR
+#        leftover trailing characters remain after the last param (NODE 7g).
+#   The throw oracle records the THROWN TypeError's message string. All five
+#   messages above are exact and must match byte-for-byte.
+
+# ----------------------------------------------------------------------------
+# EMISSION / EXPORT CONTRACT (the grader loads a .mjs via dynamic import())
+# ----------------------------------------------------------------------------
+#   * Emit an ES MODULE (.mjs) exporting a NAMED export `parse`:
+#         export function parse(string) { ... }
+#     (or `function parse(...){}; export { parse };`). The grader resolves
+#     m['parse'] — a default export will NOT be found. exportName = 'parse',
+#     importKind = 'named'.
+#   * The original is CommonJS (module.exports.parse = parse); the re-emitter
+#     must NOT use module.exports — produce a real ESM named export.
+#   * Do NOT require('http') or any module — this unit has zero dependencies.
+#   * Use real regex literals with the EXACT \uXXXX code-point classes above.
+#   * The returned object's own-key order MUST be ["parameters", "type"]
+#     (see RETURN CONTRACT) — the grader's JSON.stringify comparison is
+#     order-sensitive; type-first FAILS even when behavior is correct.
+
+# ----------------------------------------------------------------------------
+SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire NODE 1..8 pipeline, the
+#   getcontenttype object-resolution (getHeader-first, then headers), the three
+#   regexes (TYPE_REGEXP, PARAM_REGEXP, QESC_REGEXP) transcribed byte-exact, the
+#   lowercasing rule, the quoted-value unescaping, all five exact throw
+#   messages, AND the RETURN CONTRACT (parameters-before-type key order, null-
+#   prototype parameters, scan-order param insertion). NO carried data — these
+#   constants are small in-contract literals.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#   * Symbol argument: NODE 1 (!symbol) is false (truthy), NODE 2 typeof is
+#     'symbol' (not 'object') -> header = symbol; NODE 3 throws
+#     'argument string is required to be a string'. Symbols do NOT round-trip
+#     the JSON codec, so genInputs does not emit one; behavior is documented.
+#   * The sibling `format` export and the private getcontenttype/qstring/
+#     ContentType helpers are not separately graded; only `parse` behavior.
+#   * Inputs whose behavior depends on values that don't survive
+#     JSON.stringify(encode(args)) are not emitted (see GENERATOR NOTE). NaN
+#     and undefined ARE in the stated codec round-trip set and are exercised.
+
+PROVENANCE content-type@1.0.5  (jshttp/content-type)  MIT License
+            source file: index.js  (function `parse`, lines ~106-167; the
+            private class `ContentType` lines ~222-225 that fixes the
+            parameters-then-type field order; the module-level regex constants
+            lines ~23-47; and the private helper getcontenttype lines ~177-193)

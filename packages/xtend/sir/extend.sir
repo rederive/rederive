@@ -1,0 +1,188 @@
+UNIT extend
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# WHICH FILE WAS ENCODED
+# ----------------------------------------------------------------------------
+# package.json "main": "immutable"  ->  require('xtend') resolves to immutable.js.
+# Verified: `require('xtend')` === the function in immutable.js (the NON-mutating
+# variant). xtend ships TWO variants:
+#   - immutable.js : extend()        -> builds a FRESH {} target, copies into it,
+#                                        does NOT mutate any argument. (THIS UNIT)
+#   - mutable.js   : extend(target)  -> mutates and returns the FIRST argument.
+# We encode the IMMUTABLE variant because that is what the default export
+# (`main`) resolves to. The mutable variant is a different unit and out of scope.
+# This unit is the DEFAULT export: the re-emitter MUST `export default <fn>`.
+
+SIG extend(...sources) -> object
+  # Variadic. Reads `arguments`; no formally-named parameters in the source.
+  # No options object. Zero dependencies.
+
+DEPENDS-ON none
+
+# ----------------------------------------------------------------------------
+# SEAM CHECK
+# ----------------------------------------------------------------------------
+# Pure function. No clock / RNG / env / fs / net. No ambient reads. No seam.
+# Read-only with respect to its inputs (no mutation) => the mutation seam is N/A.
+# => ORACLE-CLASS deterministic. value -> oracle.json.
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (exact pipeline — transcribed & execution-verified against xtend@4.0.2)
+# ----------------------------------------------------------------------------
+# Source (immutable.js), verbatim semantics:
+#
+#   var hasOwnProperty = Object.prototype.hasOwnProperty;
+#   function extend() {
+#       var target = {}
+#       for (var i = 0; i < arguments.length; i++) {
+#           var source = arguments[i]
+#           for (var key in source) {
+#               if (hasOwnProperty.call(source, key)) {
+#                   target[key] = source[key]
+#               }
+#           }
+#       }
+#       return target
+#   }
+#
+# NODE 1 (init): Create a fresh result object `target = {}`.
+#   - target's prototype is Object.prototype (a plain object literal).
+#   - The returned object is ALWAYS a brand-new object, distinct from every
+#     argument (object identity differs). Verified: extend() with 0 args returns
+#     {} whose prototype === Object.prototype.
+#
+# NODE 2 (iterate sources in argument order, LEFT TO RIGHT):
+#   for i = 0 .. arguments.length-1, source = arguments[i].
+#   ORDER MATTERS: later sources are processed after earlier ones, so a later
+#   source's key OVERWRITES (last-wins) an earlier source's same key.
+#
+# NODE 3 (for..in over source):
+#   `for (var key in source)` enumerates the source's ENUMERABLE keys, INCLUDING
+#   inherited (prototype-chain) enumerable string keys. `key` is always a STRING.
+#   for..in NEVER yields Symbol keys.
+#   - If source is null or undefined: for..in over it executes ZERO iterations
+#     (a silent no-op — null/undefined args are effectively skipped). Verified.
+#   - If source is a primitive (number, boolean, bigint): for..in finds no own
+#     enumerable keys -> no-op. (number 42 -> {}, true -> {}.) Verified.
+#   - If source is a STRING primitive: for..in yields the index keys "0".."len-1"
+#     (the `length` property is non-enumerable, so NOT yielded). Verified:
+#     extend("hi") -> {"0":"h","1":"i"}.
+#   - If source is an ARRAY: for..in yields the numeric index keys as STRINGS
+#     plus any own enumerable string-named extra props. `length` is non-enumerable.
+#     Verified: extend(["a","b","c"]) -> {"0":"a","1":"b","2":"c"};
+#     an array with `.extra="z"` -> {"0":"a","1":"b","extra":"z"}.
+#
+# NODE 4 (hasOwnProperty guard):
+#   `if (Object.prototype.hasOwnProperty.call(source, key))` — only OWN keys are
+#   copied; INHERITED enumerable keys are filtered OUT.
+#   - Verified: an instance with prototype prop `inh` and own `own` -> only `own`
+#     is copied. An Object.create(null) source with own `b` IS copied (no proto,
+#     but own key passes the guard).
+#   - The guard uses the borrowed Object.prototype.hasOwnProperty.call(...), so it
+#     is robust to a source that shadows or lacks its own `hasOwnProperty`
+#     (e.g. Object.create(null) sources). Verified: nullproto source copies fine.
+#
+# NODE 5 (assignment): `target[key] = source[key]`.
+#   - The VALUE is read once from the source and assigned to target.
+#   - Object/array/function VALUES are copied BY REFERENCE (same identity), NOT
+#     deep-cloned. Verified: extend({n:nested}).n === nested  (true).
+#   - A getter on the source is invoked once; its returned value is stored.
+#     Verified: source with enumerable getter x->99 yields {"x":99}.
+#   - undefined VALUES are preserved as present keys: extend({a:undefined},{b:"foo"})
+#     -> result has own key "a" whose value is undefined, plus "b":"foo".
+#     Verified: ("a" in result) === true and result.a === undefined.
+#   - Falsy values (0, "", false, null) are copied normally (no skipping).
+#     Verified: extend({a:"default"},{a:0}) -> {"a":0}.
+#   - SPECIAL CASE key === "__proto__"  (EXECUTION-VERIFIED, deterministic):
+#     `target["__proto__"] = value` does NOT create an own data property. It is an
+#     assignment THROUGH the inherited `__proto__` accessor on Object.prototype,
+#     i.e. it invokes the [[Set]] prototype-mutation path on `target`:
+#       * value is an OBJECT  -> target's PROTOTYPE is REASSIGNED to that object.
+#         Result has NO own "__proto__" key; `result.<k>` for keys of `value`
+#         RESOLVES VIA THE NEW PROTOTYPE (inheritance). Object.keys(result) does
+#         NOT include those keys, and JSON.stringify(result) does NOT include them.
+#         Object.prototype is NOT polluted (the change is local to `target`).
+#         Verified: extend({}, JSON.parse('{"__proto__":{"oops":"x"}}')) ->
+#           Object.keys === []  ;  JSON.stringify === "{}"  ;
+#           result.oops === "x" (inherited from reassigned proto) ;
+#           ({}).oops === undefined (NO global pollution).
+#       * value is null -> target's prototype is set to null (Object.keys === []).
+#         Verified: extend({}, JSON.parse('{"__proto__":null}')) -> proto === null.
+#       * value is a PRIMITIVE (e.g. 42) -> the __proto__ setter IGNORES it: no
+#         prototype change, no own key. Verified: extend({safe:1},
+#         JSON.parse('{"__proto__":42}')) -> {safe:1}, proto === Object.prototype.
+#     This outcome is STANDARD ECMAScript [[Set]] behavior for the literal body
+#     `target[key]=value`; EVERY conforming re-emitter using that body reproduces
+#     it identically (so it is convergent, not ambiguous). NOTE: a plain object
+#     literal `{__proto__: X}` written in code does NOT enumerate "__proto__" via
+#     for..in (it sets the literal's prototype at construction). An OWN-ENUMERABLE
+#     "__proto__" reaches NODE 5 only via JSON.parse of a `"__proto__"` member or
+#     Object.create(null)+defineProperty — those are the curated cases here.
+#
+# NODE 6 (return): return target.
+#
+# KEY-ORDERING of the result (ECMAScript ordinary [[OwnPropertyKeys]] order):
+#   Integer-index keys ASCENDING first, then remaining string keys in INSERTION
+#   order. Insertion order across sources follows first-time-seen order during the
+#   left-to-right / for..in walk (overwriting an existing key does NOT move it).
+#   Verified: extend({b:1, "2":1, a:1, "1":1}) -> {"1":1,"2":1,"b":1,"a":1}.
+#   (The harness compares VALUE-equality of the result object; integer-key
+#   reordering is the engine's standard behavior and is the same for every
+#   conforming re-emitter.)
+#
+# NO-MUTATION INVARIANT (assert behaviorally in curated cases):
+#   No argument is mutated. After extend(a,b), a and b are byte-for-byte unchanged.
+#   Verified: extend({a:1},{b:2}) leaves the two inputs untouched.
+#   (This is the distinguishing property vs the mutable.js variant.)
+
+ORACLE value -> oracle.json
+  # The oracle records the RETURNED object (value/deep equality). Inputs are
+  # codec-encoded and the expected return is computed by the real package.
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the full NODE 1..6 pipeline above —
+#   fresh-target construction, left-to-right source iteration, for..in enumeration
+#   (string keys incl. inherited), hasOwnProperty own-key filter, by-reference
+#   value copy, last-wins overwrite, undefined/falsy preservation, null/undefined/
+#   primitive/string/array source handling, __proto__ prototype-set semantics, and
+#   the no-mutation invariant.
+#
+# CARRIED DATA: none. (No literal tables; no carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because
+# they do not survive the oracle JSON codec round-trip, NOT because behavior
+# differs — a blind re-emitter still reconstructs the behavior from this spec):
+#   - Symbol-keyed values in sources: for..in never yields Symbols, so extend
+#     NEVER copies Symbol keys (verified: Symbol-keyed source -> 0 symbols in
+#     result). Symbols do not survive JSON.stringify, so they are not generated.
+#     Behavior is fully specified here (Symbols are dropped).
+#   - Function VALUES: copied BY REFERENCE like any object value (verified), but a
+#     function does not round-trip through JSON.stringify, so not generated. The
+#     by-reference copy semantics are specified in NODE 5.
+#   - NaN / +-Infinity / -0 VALUES: copied by-value/by-reference verbatim (no
+#     special handling). Emitted ONLY if the harness codec preserves them; the
+#     random fill stays JSON-safe. Behavior specified in NODE 5 regardless.
+#   - undefined as an OBJECT VALUE ({a: undefined}) IS a real behavior (key
+#     present, value undefined) and IS exercised in the curated prefix. NOTE for
+#     the harness: JSON.stringify drops undefined object values, so the codec MUST
+#     preserve top-level object-value undefined for these two curated tuples to
+#     round-trip; if it cannot, those are the ONLY documented-out value edges (the
+#     behavior is specified in NODE 5 either way).
+
+# ----------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ----------------------------------------------------------------------------
+# Implement as a single pure function and `export default extend`. The callable
+# is variadic over `arguments` (do NOT bind a fixed arity). Use the borrowed
+# Object.prototype.hasOwnProperty.call(source, key) guard (NOT source.hasOwnProperty)
+# so Object.create(null) sources work. Use the plain `target[key] = source[key]`
+# assignment (this gives the exact __proto__ semantics in NODE 5). Always return a
+# fresh {} (never an input).
+
+PROVENANCE xtend@4.0.2  (Raynos/xtend, git://github.com/Raynos/xtend.git, MIT)
+  source file: immutable.js  (module.exports = extend)
+  package.json "main": "immutable"  =>  default require target is immutable.js

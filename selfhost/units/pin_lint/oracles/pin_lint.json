@@ -1,0 +1,3671 @@
+{
+ "unit": "pin_lint",
+ "sig": "pin_lint(text: text) -> record[hits: list[record[line: i64, what: text, text: text]], pins: i64]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED regex X = /a/ CITED R1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT u\nPINNED charset C = 0-9\nPINNED charset D = a-f ANCHOR spec\nEARNED round-2 heldout v3",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED charset C = 0-9",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x = 1 # not cited",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x = 1 # not cited",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x = \"a CITED b\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x = \"a CITED b\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x\n  CITED R1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x\n\n# c\n  EARNED r1\nNOTE n\n  CITED late",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x CITED\nPINNED y CITED   ANCHOR\nPINNED z CITED  \nPINNED q CITED \"\"\nPINNED r CITED '​'\nPINNED s CITED \nPINNED t CITED “”",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x CITED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y CITED   ANCHOR",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED z CITED  ",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED q CITED \"\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED r CITED '​'",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "EARNED\nEARNED CITED\nEARNED\n  round-1\nEARNED: r2\nEARNED\n  \"\" CITED\nEARNED  \nEARNED\n\n# c\nprose",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED CITED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "6"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "8"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED  ",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "A\rPINNED x\rB CITED y\r\nPINNED z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED z",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿PINNED a\n  ﻿CITED b\n﻿ ﻿PINNED c\n﻿\t﻿﻿ ﻿CITED d\n﻿﻿PINNED e\nPINNED f\n﻿",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED e",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "6"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED f",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": " PINNED a\n\tEARNED b\n PINNED c\n\u000bPINNED d\nPINNED e\nPINNED: f\nPINNED:g",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "6"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED: f",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNEDS x\n  CITED y\nPINNED-X\nPINNED_x\nPINNED9\nR1 rule\npinned x\nEARNEDx",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x citeD\nPINNED y Cited z\nPINNED w CITEDx\nPINNED v xCITED y\nPINNED u CITED:y\nPINNED t\tCITED\tq",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x citeD",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y Cited z",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED w CITEDx",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED v xCITED y",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED u CITED:y",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "6"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x\nCITED R1\nPINNED y\nCITED: R2",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x #CITED y\nPINNED y#\tCITED z\nPINNED z # q CITED w\nPINNED w CITED v #",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x #CITED y",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED z # q CITED w",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "NOTE no pins here\nR1 x CITED y",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x   \t\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "  CITED orphan\nPINNED x\n# CITED y\n  # ANCHOR z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x=\"a CITED b\"\nPINNED y/\"a CITED b\"\nPINNED z 12\"a CITED b\"\nPINNED w /\"(?:a|b)*\"/ CITED R5\nPINNED v +\"a CITED b\"\nPINNED u ?\"a CITED b\"\nPINNED t ~\"a CITED b\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x=\"a CITED b\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "7"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED t ~\"a CITED b\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "7"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x \"a\\\" CITED b\"\nPINNED y \"a\" \"b CITED c\"\nPINNED z \"a\"\"b CITED c\"\nPINNED w \"open CITED q",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x \"a\\\" CITED b\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y \"a\" \"b CITED c\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED z \"a\"\"b CITED c\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "4"
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x \"a # b\" CITED c\nPINNED y \"a # b\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y \"a # b\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED a\nPINNED b\n  ANCHOR\n  CITED\n  EARNED  　",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED a",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED b",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "X\n  PINNED in continuation CITED\nPINNED x\n\n\n\n  ANCHOR far",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x \"\\😀\" CITED\nPINNED y \"\\",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x \"\\😀\" CITED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y \"\\",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "EARNED  \nEARNED # x\nEARNED \"\" ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED  ",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED # x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED \"\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x (\"CITED y\")\nPINNED z [\"q CITED r\"]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x (\"CITED y\")",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED z [\"q CITED r\"]",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x CITED CITED\nPINNED y ANCHOR EARNED z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x CITED CITED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "GUARD-PINNED x\nNOTE PINNED y\nEARNED\r\n\r\n  CITED k\r",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "#PINNED x\nPINNED y\n#\tCITED z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED y",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED x\n\u000b CITED y\nPINNED z\n CITED w",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED z",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # tail comment kept in the text",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "x a\\ CITED “x”\n\u000bEARNED: x = \"q\" CITED ''\nPINNED: \"a\" CITED R1\n﻿ ﻿  CITED q\r\n  # anchor",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": " x ​ CITED   CITED\r﻿ ﻿NOTE round-1 heldout v2 CITED ''\r\u000bNOTE +\"a CITED b\" CITED R1\r \t \n  round-2 heldout v3\r﻿ ﻿  CITED q",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "  \"\"\n \t \n  \"\"\r\nEARNED é ü 日本 CITEDx zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n  ⁠\n EARNED ' \"CITED x\"\nEARNED é ü 日本 \"CITED x\" CITEDx",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": " \t \n\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": " CITED \"\" CITED “x”\nprose\rPINNEDS ​ #x CITED y\nCITED z\nEARNED ​   \rR2 +\"a CITED b\" CITED \tCITED\tq\r\nNOTE *\"a CITED \n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "EARNED ​",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "prose CITED y\nEARNED: ('q') \"CITED x\"\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED_ '\n  ⁠\nANCHOR \"\" CITED '' \" CITED x\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r EARNED \"\"\t zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\nPINNED_ x = \"q\" cited\n﻿# x\n﻿ ﻿PINNED_ ​ CITED  \n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "\tPINNED_ \"a\" \"CITED x\"\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n# CITED R2\r\n﻿﻿PINNED é ü 日本 cited CITEDx\r\nNOTE x\nR2   #x CITED y\r\n\r x *\"a CITED b\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED é ü 日本 cited CITEDx",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "  EARNED:   CITED  \n  PINNEDS ' CITED  \r\nx x=\"a ANCHOR # CITED x zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n   \n﻿# x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "  EARNED\r\n  CITED R1\nprose\r  CITED R1\n  EARNED: \"\" CITED  \n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "prose\n PINNED  \n\tPINNED x=\"a\tCITED\tq\n EARNED:  \t\r﻿# x\r\n PINNED regex X = /a/ CITED  CITEDx",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "  CITED\nPINNEDS +\"a CITED b\"   \nPINNED round-1 heldout v2\n﻿﻿EARNED *\"a CITED R1\n﻿ ﻿R2 round-1 heldout v2 ANCHOR ​ zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n  x +\"a CITED b\" # CITED x\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED round-1 heldout v2",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "# CITED R2\r\nPINNED x=\"a\t\rEARNED  \n CITED x=\"a ANCHOR ​ ANCHOR ​\rEARNED x=\"a CITED  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED x=\"a",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "3"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "# CITED R2\r\nCITED round-1 heldout v2 # #x CITED y\nEARNED é ü 日本 cited",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n﻿ ﻿  CITED q\r\n\tPINNED: round-1 heldout v2 cited\nEARNED ' CITEDx CITED \"\"\r\n\tEARNED \"CITED x\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "prose CITED y\r\n  PINNED: ​ CITED  \r﻿\n  CITED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n﻿PINNED_ \"a\"\nNOTE \"\" #x CITED y cited zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r CITED w\r\n PINNED_ x=\"a CITED R1\tCITED\tq\n  ⁠\n CITED w",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": " x *\"a CITED b\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNEDS '    zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED_ a\\\t\tCITED\tq\n PINNED \"\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNEDS x = \"q\"\"\rEARNED: regex X = /a/ #\n  x # CITED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿ ﻿PINNED_ \"\" # CITED x CITED ''",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "  round-2 heldout v3\r\n ﻿NOTE \"a\" ANCHOR\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿ ﻿PINNEDS round-1 heldout v2 # not cited cited\n x *\"a CITED b\"\n﻿\r\n  EARNED\r R2 x = \"q\" CITED\n﻿pinned +\"a CITED b\" CITED ''\n\u000bPINNEDS\t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": " \t \nprose CITED y\rNOTE x\n﻿# x\n   \n﻿ ﻿PINNED: \"\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": " PINNEDS a\\ cited\nPINNEDS regex X = /a/ ANCHOR CITED “x”\n ﻿PINNED_ +\"a CITED b\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": " PINNEDS 12\" wide CITED \n  EARNED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "\tPINNED ​\t\nCITED: z\r\n﻿\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED: a\\ CITEDx\rCITED a\\ CITED \"\"\n﻿﻿PINNEDS ' \"CITED x\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r R2 round-1 heldout v2\"\r\n\tEARNED \"a\" ANCHOR spec",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "R2 x=\"a cited\r\n\tx 12\" wide EARNED round-1 CITED  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "\tPINNED +\"a CITED b\" CITED R1\rEARNED:   \" CITED x\"\t\n  EARNED\n﻿﻿PINNED: ('q') \"CITED x\" \"CITED x\"\r\n  CITED\r\n﻿# x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "i64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "pin without a citation",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "PINNED: ('q') \"CITED x\" \"CITED x\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "2"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "  x # CITED\nCITED z\r ﻿CITED ' CITED  zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n CITED w\n PINNED é ü 日本 CITED \"\"\r  # anchor",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": " PINNED_ é ü 日本\n  PINNED ' CITED R1 CITED  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿ ﻿  CITED q\n  CITED\r  CITED R1\nPINNED +\"a CITED b\" ANCHOR\n﻿ ﻿  CITED q",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "1"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": " ANCHOR \"a\" \"CITED x\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      "pins",
+      {
+       "t": "i64",
+       "v": "0"
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "canonicalSha256": "a6e647b4568d9b295cc816985067dfa8ab8f6315ea10a40d92a68063a9b01aba"
+}

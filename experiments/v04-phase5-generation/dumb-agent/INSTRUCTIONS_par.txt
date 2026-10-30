@@ -1,0 +1,62 @@
+## SIR FORMAT (line-oriented; one directive per line, repeated lines allowed)
+
+UNIT <name>
+KIND FUNCTIONAL
+FIDELITY spec
+SIG <name>(arg1, arg2, gate) -> Promise<...>
+DESCRIPTION <prose; repeat this line as many times as you need>
+PAR <one line naming what runs concurrently>          # only for concurrent units
+RING <one line naming how the token circulates>       # only for ring units
+INVARIANT <one checkable property; repeat as needed>
+
+A blind engineer will receive ONLY your SIR — no schema, no examples, no access
+to any reference implementation, and no ability to ask you a question. Whatever
+you leave unsaid, they will guess.
+
+## CONCURRENCY KEYWORDS ARE HINTS — the contract lives in DESCRIPTION + INVARIANT
+
+`PAR` and `RING` (and a declared timer/microtask or cancellable-resource effect) tell the VERIFIER which
+mode to run. They tell the blind engineer almost nothing: unlike `TAKES` or `GIVES`, their semantics are
+not inferable from their syntax. So never let a keyword carry meaning by itself — write the behavior out:
+
+- **`PAR`** — say what makes the sub-traces independent, and pin the two things that look alike and aren't:
+  *what the result is keyed by* (input position, not completion order) and *the concurrency bound* with the
+  instant a unit counts as in flight.
+- **`RING`** — say who takes the token, who passes to whom, and who releases it. State mutual exclusion
+  (at most one holder ever) and no-loss (released exactly once, nobody holding at return) as INVARIANT
+  lines. Both are invisible on the value channel: a unit with correct output can still duplicate or strand
+  the token.
+- **Empty input** deserves its own INVARIANT for both — it is the case where "do nothing" and "do the
+  protocol zero times" differ observably.
+
+**Name the collaboration boundary explicitly.** Concurrency units are handed a harness-owned object
+(a gate, a clock, a channel), and the split of labor between unit and harness is the ambiguity these
+contracts fail on — in the v0.4 cleanroom trial, 2 of 3 blind emitters read "each mapping is performed by
+awaiting `gate.open(value)`" as *the gate computes the mapping* and returned the input unchanged. They
+were right to; the sentence permits it. Write which side computes, and what the harness call resolves
+with. Every emitter got the PAR construct itself right — the divergence was on the ordinary sentence
+next to it, which is where it usually is.
+
+Acceptance is unchanged and unforgiving: **a cold re-emitter builds it correctly from the SIR alone.**
+Quorum divergence means the construct needed a footnote to be understood, which means it is specified
+wrong. Harden the SIR; never add the footnote.
+## Writing a `PAR` unit (concurrency over an injected gate)
+
+A unit whose sub-work runs concurrently takes the completion order from the
+harness, not the runtime: it awaits `gate.open(value)` once per concurrent slot,
+and the harness decides which slot settles next. That is what lets the verifier
+explore the space of interleavings instead of whichever order the machine picked.
+
+**Signature convention:** the gate is the LAST parameter — `unit(…args, gate)`.
+
+**`PAR` is a HINT, not the contract.** State the behavior in `INVARIANT` lines,
+because a blind re-emitter reconstructs from the SIR alone and must not need this
+document to understand it. At minimum:
+
+- what the output is keyed by (input position? completion order? — this is the
+  single most common concurrency bug, so say it outright)
+- the concurrency bound, if there is one ("at most min(concurrency, n) in flight")
+- whether the sub-traces are independent (commuting) or share state
+
+**Worth stating explicitly in `DESCRIPTION`:** that each concurrent step is
+`await gate.open(x)`, since the re-emitter has no other way to learn the protocol.

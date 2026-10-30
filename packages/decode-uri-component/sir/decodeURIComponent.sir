@@ -1,0 +1,258 @@
+UNIT decodeURIComponent
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# The module's single default export. A "better decodeURIComponent": behaves like the
+# native global decodeURIComponent EXCEPT it (a) maps '+' to space, (b) never throws on
+# malformed percent-sequences, instead decoding as much as possible and emitting the
+# Unicode REPLACEMENT CHARACTER U+FFFD ('�', shown as the glyph) for certain invalid
+# UTF-8 byte sequences, and (c) maps the UTF-16 BOM percent-pairs to two replacement chars.
+
+SIG  decodeURIComponent(encodedURI: string) -> string
+     # Throws TypeError when encodedURI is not a string (see BRANCH 0).
+
+DEPENDS-ON  native global decodeURIComponent  # the JS built-in; the unit calls it on the
+            # whole string AND on substrings. The native built-in is deterministic and
+            # standards-fixed (ECMAScript URI decoding); a blind re-emitter uses the host
+            # language's own decodeURIComponent equivalent. No package deps. Zero npm deps.
+
+# =====================================================================================
+# EMISSION CONTRACT (for the blind re-emitter)
+# =====================================================================================
+# Original is CommonJS: `module.exports = function (encodedURI) { ... }` (a DEFAULT export,
+# the function itself is the whole module export, not a named property).
+# The re-emitter MUST emit an ES module whose DEFAULT export is this function:
+#     export default function decodeURIComponent(encodedURI) { ... }
+# (or `const fn = ...; export default fn;`). The harness imports the default export and
+# calls it as `fn(encodedURI)`. Inputs are single-element arg arrays: [encodedURI].
+
+# =====================================================================================
+# CONSTANTS (verbatim — these regexes are load-bearing)
+# =====================================================================================
+# token        = '%[a-f0-9]{2}'                          # one percent-escape, case-insensitive hex
+# singleMatcher = new RegExp('(' + token + ')|([^%]+?)', 'gi')
+#                 # global, case-insensitive. Alternation: a single percent-escape, OR a
+#                 # MINIMAL (non-greedy) run of one-or-more non-'%' chars. Because the 2nd
+#                 # branch is non-greedy '[^%]+?', String.match(singleMatcher) (global) yields
+#                 # each non-'%' character as its OWN one-char token. A lone '%' that is not
+#                 # part of a valid %XX escape matches NEITHER branch and is DROPPED from the
+#                 # match array (e.g. '%'.match(singleMatcher) === null).
+# multiMatcher  = new RegExp('(' + token + ')+', 'gi')
+#                 # global, case-insensitive. Matches maximal RUNS of consecutive percent-
+#                 # escapes (one or more adjacent %XX). NOTE: this regex object is MODULE-LEVEL
+#                 # and STATEFUL — it is driven with .exec() in a while-loop (its lastIndex
+#                 # advances). It is only ever used inside customDecodeURIComponent, which
+#                 # exec-loops it to exhaustion (terminating when exec returns null, which
+#                 # also resets lastIndex to 0), so each top-level call starts clean. A
+#                 # re-emitter may use a fresh regex per call to get identical behavior.
+
+# =====================================================================================
+# BEHAVIOR  (ordered; the public function is BRANCH 0..2, fallback machinery below)
+# =====================================================================================
+
+BRANCH 0  TYPE GUARD
+  IF typeof encodedURI !== 'string':
+     THROW  TypeError  with message exactly:
+       "Expected `encodedURI` to be of type `string`, got `" + (typeof encodedURI) + "`"
+     # `typeof` words observed: 'number','object' (for null, plain object, array),
+     # 'undefined','boolean','function','symbol','bigint'. See SCOPE: non-string args are
+     # DOCUMENT-as-OUT (the generator does not emit them; they do not round-trip the codec),
+     # but the throw IS the defined behavior and a blind re-emitter MUST reproduce it.
+
+BRANCH 1  PLUS-NORMALIZE + FAST PATH
+  encodedURI = encodedURI.replace(/\+/g, ' ')      # EVERY literal '+' -> ' ' (space), GLOBALLY,
+                                                    # done BEFORE any decoding. (A '%2B' is NOT a
+                                                    # literal '+', so it is untouched here and later
+                                                    # decodes to '+'.)
+  TRY:
+     return (native) decodeURIComponent(encodedURI) # FAST PATH: if the whole (plus-normalized)
+                                                    # string is well-formed, return the native decode
+                                                    # verbatim. This is the common case (no '%', or
+                                                    # all percent-escapes valid).
+  CATCH (native threw — string contains at least one malformed/undecodable %-sequence):
+     return customDecodeURIComponent(encodedURI)    # -> BRANCH 2
+
+BRANCH 2  customDecodeURIComponent(input)  (the fallback "decode as much as possible" path)
+  # Build a replacement map of  run-substring -> decoded-replacement, then string-replace
+  # every key globally. Insertion ORDER into the map matters (it governs replace order and
+  # which overlapping key wins). The map starts PREFILLED with the two BOM pairs:
+  replaceMap = ordered map:
+     '%FE%FF' -> '��'    # UTF-16 BE BOM bytes -> two replacement chars
+     '%FF%FE' -> '��'    # UTF-16 LE BOM bytes -> two replacement chars
+
+  # Scan input for maximal runs of adjacent percent-escapes using multiMatcher.exec in a loop:
+  FOR each run = multiMatcher run over input (left to right, maximal '(%XX)+'):
+     TRY:
+        replaceMap[run] = (native) decodeURIComponent(run)   # whole run decodes cleanly -> use it
+     CATCH:
+        result = decode(run)                                 # -> see decode() below
+        IF result !== run:                                   # only record if decoding changed it;
+           replaceMap[run] = result                          # if decode() couldn't improve the run,
+                                                              # DO NOT add a key -> run stays LITERAL.
+
+  # After scanning, append the special single-byte lead entry LAST so it cannot pre-empt any
+  # longer valid sequence that begins with %C2 (e.g. '%C2%B5' was already inserted above and
+  # wins because it is replaced first):
+  replaceMap['%C2'] -> '�'    # a bare/dangling C2 lead byte -> one replacement char
+
+  # Apply every map entry, in INSERTION ORDER, as a GLOBAL string replace:
+  FOR key in Object.keys(replaceMap) (insertion order):
+     input = input.replace(new RegExp(key, 'g'), replaceMap[key])
+     # NOTE: keys are percent-escape strings; '%' and hex are regex-literal, so each key is a
+     # plain global substring replace. Replacement VALUES are inserted literally (the source
+     # passes a string, not a function; for the inputs in scope no replacement value contains a
+     # '$n'/'$&' pattern that would re-expand — see SCOPE note).
+  return input
+
+decode(input)   # used by decodeComponents-driven recursion; "decode this run, salvaging max"
+  TRY:
+     return (native) decodeURIComponent(input)    # whole run clean -> done
+  CATCH:
+     tokens = input.match(singleMatcher) || []     # split run into per-escape / per-char tokens
+     FOR i = 1; i < tokens.length; i++:
+        input = decodeComponents(tokens, i).join('')   # try splitting the token list at index i
+        tokens = input.match(singleMatcher) || []       # re-tokenize the (possibly shortened) result
+     return input
+  # Net effect: progressively isolates the longest decodable prefixes/suffixes; escapes that
+  # cannot be decoded in any grouping are left as their literal '%XX' text.
+
+decodeComponents(components, split=1)   # recursive binary-split decoder over a token array
+  TRY:
+     return [ (native) decodeURIComponent(components.join('')) ]   # this whole sub-array decodes
+  CATCH: (do nothing)
+  IF components.length === 1:
+     return components                 # a single token that won't decode -> leave it literal
+  split = split || 1
+  left  = components.slice(0, split)
+  right = components.slice(split)
+  return [].concat(decodeComponents(left), decodeComponents(right))   # decode halves independently
+  # This recursively decodes the maximal decodable groupings and leaves undecodable single
+  # tokens (e.g. a lone continuation byte, a truncated lead byte) as literal '%XX'.
+
+# =====================================================================================
+# RESULTING DECISION RULE for percent-runs (the observable contract — what a blind
+# engineer must reproduce; verified by running the real package):
+# =====================================================================================
+#  * A run (or sub-grouping) that the native decoder accepts -> its native UTF-8 decode.
+#  * The exact run '%FE%FF' or '%FF%FE' anywhere -> '��' (BOM pairs, prefilled).
+#  * A dangling '%C2' (the UTF-8 2-byte lead C2 not followed by a valid continuation that
+#    forms a decodable char in its run) -> '�'.  (But '%C2%B5'->'µ', '%C2%A9'->'©', etc.
+#    decode normally and win because the longer valid escape is mapped first.)
+#  * ANY OTHER undecodable escape or fragment (lone continuation byte like '%80'/'%A4';
+#    a truncated/lone lead byte like '%E2','%FE','%FF','%F0'; an overlong/invalid sequence
+#    like '%C0%80'; a token whose last escape is malformed-as-text like trailing '%A' in
+#    '%E0%A4%A') -> LEFT LITERALLY as its '%XX' text (NOT replaced with U+FFFD).
+#  * A standalone '%' that is not a valid escape, or non-hex like '%XY','%G0' -> LEFT LITERAL.
+#
+# This LITERAL-vs-REPLACEMENT distinction is the most error-prone part: only the BOM pairs
+# and a dangling '%C2' become U+FFFD; all other malformed bytes stay as their percent text.
+
+# =====================================================================================
+# WORKED EXAMPLES (input -> output) — produced by EXECUTING decode-uri-component@0.2.2:
+# =====================================================================================
+#   ''                  -> ''                       (empty; native fast path)
+#   'hello world'       -> 'hello world'             (no '%'; fast path)
+#   'abcDEF123'         -> 'abcDEF123'               (no '%'; fast path)
+#   'café'              -> 'café'                    (already decoded; no '%'; fast path)
+#   '%20'               -> ' '                       (fast path)
+#   '%25'               -> '%'                       (fast path)
+#   '%24'               -> '$'                       (fast path)
+#   '%0A'               -> '\n'  (U+000A)            (fast path)
+#   '%00'               -> ' '                  (fast path)
+#   '%7F'               -> '' (DEL)            (fast path)
+#   '%C3%A9'            -> 'é'                        (2-byte UTF-8; fast path)
+#   '%c3%a9'            -> 'é'                        (lowercase hex also valid; fast path)
+#   '%E2%82%AC'         -> '€'                        (3-byte UTF-8; fast path)
+#   '%F0%9F%98%80'      -> '😀' (U+1F600)            (4-byte UTF-8; fast path)
+#   '%C2%B5'            -> 'µ'                        (fast path)
+#   '%C2%A9'            -> '©'                        (fast path)
+#   'a+b'               -> 'a b'                      ('+'->space; fast path)
+#   'a+b+c'             -> 'a b c'                    (every '+'->space)
+#   '+%XY'              -> ' %XY'                     ('+'->space, then malformed kept literal)
+#   '%2B'               -> '+'                        ('%2B' is NOT literal '+', decodes to '+')
+#   '%2B+'              -> '+ '                       ('%2B'->'+', literal '+'->space)
+#   'a%2Bb'             -> 'a+b'
+#   '%25%24'            -> '%$'                       (fast path)
+#   '%25%25'            -> '%%'                       (fast path)
+#   # ---- fallback (native throws on whole string) ----
+#   '%'                 -> '%'                        (lone '%', no escape; unchanged)
+#   '%XY'               -> '%XY'                      (non-hex; unchanged)
+#   '%G0'               -> '%G0'                      (non-hex; unchanged)
+#   '%XY%ZZ'            -> '%XY%ZZ'                   (unchanged)
+#   '%80'               -> '%80'                      (lone continuation; LITERAL, not U+FFFD)
+#   '%A4'               -> '%A4'                      (lone continuation; LITERAL)
+#   '%FE'               -> '%FE'                      (lone lead; LITERAL, not U+FFFD)
+#   '%FF'               -> '%FF'                      (lone lead; LITERAL)
+#   '%E2'               -> '%E2'                      (truncated 3-byte; LITERAL)
+#   '%E2%82'            -> '%E2%82'                   (truncated 3-byte; LITERAL)
+#   '%F0'               -> '%F0'                      (truncated 4-byte; LITERAL)
+#   '%F0%9F'            -> '%F0%9F'                   (LITERAL)
+#   '%F0%9F%98'         -> '%F0%9F%98'                (LITERAL)
+#   '%E0%A4%A'          -> '%E0%A4%A'                 (trailing '%A' not a full escape; LITERAL)
+#   '%C0%80'            -> '%C0%80'                   (overlong/invalid; LITERAL)
+#   '%FE%FF'            -> '��'  ('��')     (BOM pair -> two U+FFFD)
+#   '%FF%FE'            -> '��'  ('��')     (BOM pair -> two U+FFFD)
+#   '%FE%FF%FE%FF'      -> '����' (each BOM pair maps)
+#   '%FE%FFreal'        -> '��real'  ('��real')
+#   '%C2'               -> '�'  ('�')            (dangling C2 -> one U+FFFD)
+#   '%C2x'              -> '�x' ('�x')           ('+'/text after; C2 dangling -> U+FFFD)
+#   'a%C2b'             -> 'a�b' ('a�b')
+#   'pre%C2post'        -> 'pre�post'
+#   '%C2%C2'            -> '��' ('��')       (two dangling C2)
+#   '%20%C2'            -> ' �' (' �')
+#   '%C2%C2%B5'         -> '�µ' ('�µ')           (first C2 dangling, '%C2%B5'->'µ' wins)
+#   '%C2%B5%C2'         -> 'µ�' ('µ�')
+#   '%C3%A9%C2%C3%A9'   -> 'é�é' ('é�é')
+#   '%FF%C3%A9'         -> '%FFé'                     ('%FF' LITERAL, '%C3%A9'->'é')
+#   '%E2%82%AC%E2'      -> '€%E2'                     ('%E2%82%AC'->'€', trailing '%E2' LITERAL)
+#   '%E2%28%A1'         -> '%E2(%A1'  ('%28'->'(' ; lone leads kept LITERAL)
+#   'valid%20and%ZZbad' -> 'valid and%ZZbad'
+#   '%st%C3%A5le%'      -> '%ståle%'                  (README example)
+#   '%%7Bst%C3%A5le%7D%'-> '%{ståle}%'                (README example)
+#   '%7B%ab%%7C%de%%7D' -> '{%ab%|%de%}'              (README example)
+#   '%24%E2'            -> '$%E2'   ('%24'->'$', '%E2' LITERAL)
+#   '%E2%24'            -> '%E2$'
+#   '%26%E2'            -> '&%E2'
+#   '%E0%A4%A%C3%A9'    -> '%E0%A4%Aé'
+
+# =====================================================================================
+ORACLE value -> oracle.json
+# Pure deterministic string->string (plus the TypeError throw-path, recorded as {__throw}).
+# No clock/RNG/env/fs/net seam; nothing to inject. The fixed dependency (native
+# decodeURIComponent) is a standards-fixed built-in, not an ambient seam.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the type guard + exact TypeError message (BRANCH 0)
+    - global '+' -> ' ' normalization performed BEFORE decoding (BRANCH 1)
+    - native fast-path inside try/catch (BRANCH 1)
+    - the customDecodeURIComponent fallback: the prefilled BOM map ('%FE%FF','%FF%FE' ->
+      two U+FFFD), the multiMatcher run scan, the per-run try-native / else decode() rule,
+      the "only record if result !== run" guard, the appended '%C2' -> U+FFFD entry, and the
+      insertion-ordered global string-replace application.
+    - the decode()/decodeComponents() recursive binary-split salvage and the resulting
+      LITERAL-vs-U+FFFD decision rule documented above.
+    - the exact regexes: token '%[a-f0-9]{2}', singleMatcher, multiMatcher (all 'gi').
+  CARRIED DATA: none. The only literals are the two BOM keys, the '%C2' key, and the two
+    replacement-char values ('�' = U+FFFD) — inline constants, no attested table, no
+    carried.json. The Unicode replacement character U+FFFD and UTF-8 decoding follow the
+    Unicode standard / ECMAScript URI semantics; the re-emitter relies on its host's native
+    decodeURIComponent for UTF-8, exactly as the source does.
+  OUT-OF-CONTRACT / DOCUMENT-as-OUT (the generator does NOT emit these; they do not survive
+    the oracle codec, OR their behavior is the documented throw):
+    - non-string args (number, boolean, null, undefined, plain object, array, function,
+      symbol, bigint): the unit THROWS TypeError with the message in BRANCH 0. This throw is
+      the defined behavior (a blind re-emitter reproduces it), but the generator emits only
+      string args because non-string values either don't round-trip the codec or would only
+      exercise the one type-guard branch. Symbol/function/undefined are non-codec-faithful.
+    - replacement VALUES containing a '$'-pattern: in principle a decoded chunk used as a
+      String.replace replacement string could contain '$n'/'$&'. No in-scope input produces
+      such a value in a position that re-expands (verified: '%24%E2'->'$%E2' is literal), so
+      this is out of the exercised envelope; the generator does not target it.
+
+PROVENANCE
+  decode-uri-component@0.2.2
+  repo: SamVerschueren/decode-uri-component (github.com/SamVerschueren/decode-uri-component)
+  license: MIT (c) Sam Verschueren
+  source file: index.js (single file; CommonJS; `module.exports = function (encodedURI){...}`)
+  Behavior in WORKED EXAMPLES verified by executing the installed package via node require().

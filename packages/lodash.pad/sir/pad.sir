@@ -1,0 +1,232 @@
+UNIT pad
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG pad(string = '', length = 0, chars = ' ') -> string
+DEPENDS-ON none   # zero runtime deps; pure string util
+
+# ============================================================================
+# EXPORT SHAPE (for the blind re-emitter)
+# ----------------------------------------------------------------------------
+# The original CommonJS module is `module.exports = pad`. The re-emitted ES
+# module MUST expose the function as the DEFAULT export, value mode:
+#     export default function pad(string, length, chars) { ... }
+# The oracle calls the default export with arg-tuple [string, length, chars].
+# ============================================================================
+
+BEHAVIOR
+# pad CENTER-pads `string` to a total *symbol* width of `length`, putting the
+# SMALLER half of the padding on the LEFT (floor) and the LARGER half on the
+# RIGHT (ceil). This floor-left / ceil-right split is the single most
+# important behavior to get exact.
+#
+# --- top-level pipeline (in order) ---
+#
+# N1. string = toString(string)            # coerce arg0 to a string (see toString below)
+# N2. length = toInteger(length)           # coerce arg1 to an integer (see toInteger below)
+# N3. strLength = length ? stringSize(string) : 0
+#       # NOTE: when length is falsy (0, -0, NaN-coerced-to-0) strLength is
+#       # forced to 0 WITHOUT inspecting the string. (Micro-optimization; it
+#       # does not change the result because the next guard returns anyway.)
+# N4. GUARD: if (!length || strLength >= length) return string
+#       # `!length` is true for length === 0 (and -0). Any length <= 0 falls
+#       # here because toInteger never returns NaN (returns 0 instead), and a
+#       # negative length makes `strLength >= length` true (strLength >= 0 > neg).
+#       # If the string is already wide enough (symbol count >= length),
+#       # return it UNCHANGED (no truncation ever).
+# N5. mid = (length - strLength) / 2        # a real number, may be x.0 or x.5
+# N6. return createPadding(floor(mid), chars)   # LEFT  padding (floor)
+#            + string
+#            + createPadding(ceil(mid), chars)   # RIGHT padding (ceil)
+#       # floor(mid) <= ceil(mid); they differ by exactly 1 only when
+#       # (length - strLength) is ODD, in which case the EXTRA pad symbol goes
+#       # RIGHT. When the total padding is even, both halves are equal.
+#
+#   Worked splits (VERIFIED against the real package):
+#     pad("abc",8)    total pad 5  -> floor 2 left / ceil 3 right -> "  abc   "
+#     pad("ab",5)     total pad 3  -> 1 left / 2 right            -> " ab  "
+#     pad("a",2)      total pad 1  -> 0 left / 1 right            -> "a "
+#     pad("abcd",5)   total pad 1  -> 0 left / 1 right            -> "abcd "
+#     pad("",4)       total pad 4  -> 2 left / 2 right            -> "    "
+#
+# ----------------------------------------------------------------------------
+# stringSize(string) -> integer  (UNICODE-AWARE symbol count)
+# ----------------------------------------------------------------------------
+#   if hasUnicode(string): return unicodeSize(string)   # count grapheme-ish symbols
+#   else:                  return string.length         # plain UTF-16 code-unit count
+#
+#   hasUnicode(s): true iff s matches the char-class regex reHasUnicode (below).
+#     reHasUnicode = RegExp('[' + ZWJ + ASTRAL + COMBO_MARKS + COMBO_SYMBOLS + VAR + ']')
+#       ZWJ           = ‍
+#       ASTRAL        = \ud800-\udfff           (any high or low surrogate)
+#       COMBO_MARKS   = ̀-ͯ︠-︣
+#       COMBO_SYMBOLS = ⃐-⃰
+#       VAR           = ︎️            (variation selectors 15/16)
+#     i.e. a string "has unicode" iff it contains ANY surrogate code unit, any
+#     combining mark (the two ranges above), a ZWJ, or a variation selector.
+#     This regex is NON-global (stateless) -> safe to call repeatedly.
+#
+#   unicodeSize(s): count matches of the unicode symbol regex reUnicode over s.
+#     The matcher groups astral/surrogate pairs, combining sequences,
+#     regional-indicator (flag) pairs, ZWJ sequences, and Fitzpatrick/variation
+#     modifiers into single symbols. Implementation counts hits of the GLOBAL
+#     regex reUnicode (the lastIndex is reset to 0 before counting):
+#         result = reUnicode.lastIndex = 0
+#         while (reUnicode.test(s)) result++
+#         return result
+#     reUnicode (the exact pattern, 'g' flag) is composed from these pieces:
+#       rsAstralRange  = '\\ud800-\\udfff'
+#       rsComboMarksRange   = '\\u0300-\\u036f\\ufe20-\\ufe23'
+#       rsComboSymbolsRange = '\\u20d0-\\u20f0'
+#       rsVarRange     = '\\ufe0e\\ufe0f'
+#       rsAstral   = '[' + rsAstralRange + ']'
+#       rsCombo    = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+#       rsFitz     = '\\ud83c[\\udffb-\\udfff]'
+#       rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+#       rsNonAstral= '[^' + rsAstralRange + ']'
+#       rsRegional = '(?:\\ud83c[\\udde6-\\uddff]){2}'
+#       rsSurrPair = '[\\ud800-\\udbff][\\udc00-\\udfff]'
+#       rsZWJ      = '\\u200d'
+#       reOptMod   = rsModifier + '?'
+#       rsOptVar   = '[' + rsVarRange + ']?'
+#       rsOptJoin  = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+#       rsSeq      = rsOptVar + reOptMod + rsOptJoin
+#       rsSymbol   = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')'
+#       reUnicode  = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+#     Net effect (VERIFIED): "\u{1F600}" -> 1, "é"=e+́ -> 1, US flag
+#     "\u{1F1FA}\u{1F1F8}" -> 1, ZWJ family "\u{1F468}‍\u{1F469}‍\u{1F467}" -> 1.
+#
+# ----------------------------------------------------------------------------
+# createPadding(length, chars) -> string  (build padding of exactly `length` SYMBOLS)
+#   `length` here is an already-floored/ceiled integer (>= 0).
+# ----------------------------------------------------------------------------
+#   chars = (chars === undefined) ? ' ' : baseToString(chars)
+#     # When the CALLER omits chars (arg2 undefined), default is a single space.
+#     # Otherwise coerce chars to a string via baseToString (NOT toString):
+#     # baseToString does NOT nullish-guard, so chars === null coerces to the
+#     # string "null" (matters only via the pad-level call: pad always forwards
+#     # chars unchanged, so chars===null reaches here and becomes "null";
+#     # chars===undefined becomes the default " ").
+#   charsLength = chars.length                      # UTF-16 code-unit length of chars
+#   if (charsLength < 2):
+#       return charsLength ? baseRepeat(chars, length) : chars
+#         # charsLength === 1 (single code unit): repeat that unit `length` times.
+#         # charsLength === 0 (chars is the EMPTY string ""): return "" (the empty
+#         #   chars). This is why pad("abc",8,"") returns "abc" unchanged: both
+#         #   padding sides are "".
+#   # charsLength >= 2 (multi code-unit chars):
+#   result = baseRepeat(chars, ceil(length / stringSize(chars)))
+#       # repeat whole chars enough times to cover `length` SYMBOLS.
+#   if hasUnicode(chars):
+#       return castSlice(stringToArray(result), 0, length).join('')
+#         # truncate to exactly `length` SYMBOLS (split into unicode symbols,
+#         # take first `length`, rejoin). Astral/combining safe.
+#   else:
+#       return result.slice(0, length)
+#         # plain ASCII/BMP-no-combining chars: truncate to `length` UTF-16
+#         # code units (which equals `length` symbols here since no unicode).
+#
+#   baseRepeat(s, n):
+#       if (!s || n < 1 || n > MAX_SAFE_INTEGER) return ''    # MAX_SAFE_INTEGER = 9007199254740991
+#       # exponentiation-by-squaring repeat; result === s concatenated n times.
+#       # So baseRepeat(s, 0) === '' and baseRepeat('', n) === ''.
+#
+#   stringToArray(s): hasUnicode(s) ? (s.match(reUnicode) || []) : s.split('')
+#   castSlice(arr, 0, end): if end >= arr.length returns arr, else arr.slice(0,end)
+#     (end-clamped, start 0). Net: take first `length` symbols.
+#
+#   Worked chars cases (VERIFIED):
+#     pad("abc",8,"_-") -> "_-abc_-_"   (left floor2: "_-", right ceil3: "_-_")
+#     pad("a",7,"abc")  -> "abcaabc"    (left 3: "abc", right 3: "abc")
+#     pad("x",8,"\u{1F600}\u{1F601}\u{1F602}") -> 😀😁😂 x 😀😁😂😀
+#                                        (left 3 symbols, right 4 symbols, astral-safe)
+#     pad("abc",9,{})   -> "[obabc[ob"  ({} -> "[object Object]", left floor3 "[ob",
+#                                        right ceil3 "[ob")
+#
+# ----------------------------------------------------------------------------
+# COERCION HELPERS (exact)
+# ----------------------------------------------------------------------------
+# toString(value):   value == null ? '' : baseToString(value)
+#     # null AND undefined -> ''. (The arg0 default '' is realized here because
+#     # an omitted arg0 is undefined -> '' .)
+# baseToString(value):
+#     if typeof value === 'string' return value
+#     if isSymbol(value) return symbolToString ? value.toString() : ''   # OUT-OF-ENVELOPE (see SCOPE)
+#     result = (value + '')
+#     return (result === '0' && (1/value) === -Infinity) ? '-0' : result
+#     # => baseToString(-0) === '-0'; baseToString(0) === '0'; arrays join with ','
+#     #    ([1,2,3] -> "1,2,3"); plain objects -> "[object Object]";
+#     #    true -> "true"; false -> "false"; 123 -> "123"; NaN -> "NaN";
+#     #    Infinity -> "Infinity".
+#
+# toInteger(value):  result = toFinite(value); rem = result % 1;
+#                    return result===result ? (rem ? result - rem : result) : 0
+#     # truncates toward zero (drops the fractional part). 8.9 -> 8, 8.1 -> 8,
+#     # -2.5 -> -2. NaN-safe (returns 0).
+# toFinite(value):
+#     if (!value) return value === 0 ? value : 0      # 0/-0 -> itself, '' / null / undefined / NaN / false -> 0
+#     value = toNumber(value)
+#     if (value === Infinity || value === -Infinity) return (value<0?-1:1) * 1.7976931348623157e+308
+#     return value === value ? value : 0              # NaN -> 0
+# toNumber(value):
+#     if typeof value === 'number' return value
+#     if isSymbol(value) return NaN                   # OUT-OF-ENVELOPE
+#     if isObject(value): other = (typeof value.valueOf==='function') ? value.valueOf() : value;
+#                         value = isObject(other) ? (other+'') : other
+#     if typeof value !== 'string': return value === 0 ? value : +value
+#     value = value.replace(/^\s+|\s+$/g, '')         # trim
+#     isBinary = /^0b[01]+$/i.test(value)
+#     return (isBinary || /^0o[0-7]+$/i.test(value))
+#         ? parseInt(value.slice(2), isBinary ? 2 : 8)
+#         : (/^[-+]0x[0-9a-f]+$/i.test(value) ? NaN : +value)
+#     # length-as-string semantics (VERIFIED):
+#     #   "8" -> 8 ; "0x8" -> 8 (NOT bad-hex: reIsBadHex requires a sign +/-)
+#     #   "-0x8" -> NaN -> toInteger 0 ; "+0x8" -> NaN -> 0
+#     #   "0b1000" -> 8 ; "0o10" -> 8 ; "  8  " -> 8 (trimmed)
+#     # length-as-object (VERIFIED): {valueOf:()=>8} -> 8 ; [8] -> "8" -> 8 ;
+#     #   [8,9] -> "8,9" -> NaN -> 0 ; true -> 1 ; false -> 0 ; null -> 0.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — the
+    floor-left / ceil-right center split; unicode-aware stringSize (surrogate
+    pairs, combining marks ̀-ͯ & ︠-︣, combining symbols
+    ⃐-⃰, ZWJ ‍, regional-indicator pairs, Fitzpatrick/variation
+    selectors ︎️); createPadding repeat-then-truncate (symbol-truncate
+    when chars hasUnicode, else UTF-16 slice); baseRepeat (empty-string and
+    n<1 -> ''); the empty-chars ("") -> unchanged behavior; the
+    `!length || strLength >= length` guard (length<=0, length===0/-0, and
+    already-wide strings returned UNCHANGED, never truncated); full coercion
+    chains toString/baseToString (incl. -0 -> "-0"), toInteger/toFinite/toNumber
+    (truncate toward zero, NaN->0, Infinity->1.79e308, string hex/octal/binary
+    parsing, object valueOf).
+    The exact in-scope value subset DEMONSTRATED here is self-consistent with
+    genInputs: every accent / astral / flag / ZWJ / combining char and every
+    coercion edge the generator can emit is mapped above.
+
+  CARRIED DATA: none. (The unicode regex char-class ranges are small inline
+    string constants reproduced verbatim in BEHAVIOR above, not a large table.)
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; documented for
+    completeness only, since the oracle codec cannot round-trip them and/or
+    they are non-deterministic-faithful):
+    - Symbol values as `string`/`length`/`chars` (isSymbol path: baseToString
+      uses Symbol#toString, toNumber returns NaN). Symbols are not codec-
+      round-trippable.
+    - Functions as args. Not round-trippable; behavior would be (fn + '')
+      source-text which is engine/whitespace-sensitive — excluded.
+    - Boxed primitives (new Number/new String) as args — identity-sensitive,
+      not codec-round-trippable.
+    - `length` so large that the padded result would exceed string memory
+      limits — excluded for practicality (baseRepeat caps n > MAX_SAFE_INTEGER
+      to '' but intermediate sizes still blow memory). genInputs keeps lengths
+      modest (<= a few hundred).
+    No stateful mutators, no side-effecting APIs, no ambient reads (clock / RNG
+    / env / fs / net): this unit is PURE -> ORACLE-CLASS deterministic, no seam.
+
+PROVENANCE lodash.pad@4.5.1 (npm), repo lodash/lodash, MIT license,
+  source file: index.js (single file; the `pad` function + private helpers
+  createPadding/baseRepeat/castSlice/baseSlice/stringSize/unicodeSize/
+  stringToArray/hasUnicode + coercion helpers toString/baseToString/toInteger/
+  toFinite/toNumber). Read-only original at
+  /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-lodash_pad-CWqepz/node_modules/lodash.pad

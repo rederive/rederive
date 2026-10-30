@@ -1,0 +1,56 @@
+{
+ "status": "ok",
+ "unit": "tree_sha",
+ "primary": "selfhost/units/tree_sha/sir/tree_sha.sir",
+ "primarySha256": "e12613dad5808632c7fe28510214c96c79e264473e10d7833fc2a007d5805be8",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "A path is VALID when it is one or more NAMES joined by \"/\", it does not start with \"/\", it holds no backslash, and no NAME is empty, \".\" or \"..\". So \"\", \"/abs\", \"a\\b\", \"a//b\", \"./a\", \"a/.\", \"../x\", \"a/../b\" and \"a/\" are INVALID; \"...\", \".hidden\" and \"a b\" are ordinary NAMES.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R2",
+   "text": "If any path of files is INVALID -> throws. The message is the text \"tree_sha: not a relative path \" followed by the path as a JSON string literal (the message is informative, not graded). No hash is computed. CITED FIDELITY package — the seam refuses before it writes",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R3",
+   "text": "Build output is excluded: a path with at least two NAMES whose FIRST NAME is exactly \"target\" contributes nothing (the crate-root target directory). Everything else is kept: a root FILE named \"target\", a \"target\" directory below the root (\"src/target/x.rs\"), a file \"src/target\", and any other spelling (\"Target\", \"TARGET\", \"targets\", \"target.rs\"). CITED FIDELITY package",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R4",
+   "text": "Each kept path p yields one LINE: p exactly as given, then U+0000, then HEX(SHA-256 of the UTF-8 bytes of the file's text), then U+000A. An empty text hashes as the SHA-256 of zero bytes.",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "R5",
+   "text": "The LINES are sorted ascending by the whole line, comparing UTF-16 code units as unsigned integers (lexicographic, a proper prefix first). Because no path holds U+0000, this equals sorting the paths themselves by UTF-16 code units over the FULL path text — never NAME by NAME and never by UTF-8 bytes. So \"a-b\" < \"a.b\" < \"a/b\" (U+002D, U+002E, U+002F), and U+1F600 (units D83D DE00) sorts BEFORE U+E000 and U+FFFD, the reverse of their UTF-8 byte order. CITED FIDELITY package — the host's default string sort",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "R6",
+   "text": "The result is HEX(SHA-256 of the UTF-8 bytes of T), T being the sorted LINES concatenated with no separator. With no kept path T is empty and the result is HEX of the SHA-256 of zero bytes.",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "R7",
+   "text": "SHA-256 is the FIPS 180-4 hash. HEX renders a 32-byte digest as 64 characters, two per byte, most significant nibble first, digits 0-9 and lowercase a-f.",
+   "ambiguity": 0.15
+  }
+ ],
+ "ranked": [
+  "R5",
+  "R2",
+  "R3",
+  "R1",
+  "R4",
+  "R6",
+  "R7"
+ ],
+ "at": "2026-10-28T03:42:12Z"
+}

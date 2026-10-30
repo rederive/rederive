@@ -5,10 +5,11 @@
 // Agent-facing docs (/prompt.md, /llms.txt) PLUS content pages (homepage, blog index, blog posts, spec, promise)
 // so launch-week reads are visible, not just downstream actions. Classification (browser vs bot vs agent) and
 // country happen server-side in the counter; static assets don't match these specific patterns.
-// Minimal type for the edge runtime's env access (avoids pulling all of @types/node just for this).
-declare const process: { env: Record<string, string | undefined> };
-
 export const config = { matcher: ['/', '/prompt.md', '/llms.txt', '/blog.html', '/blog/:path*', '/spec.html', '/promise.html'] };
+
+// Edge runtime provides process.env; declared here so the type check passes
+// without pulling @types/node (this site deliberately has no dependencies).
+declare const process: { env: Record<string, string | undefined> };
 
 export default function middleware(request: Request, context: { waitUntil(p: Promise<unknown>): void }) {
   const url = process.env.METRICS_URL;

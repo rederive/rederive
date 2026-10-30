@@ -1,0 +1,85 @@
+UNIT canonical_string
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/sir/canon.mjs, function canonicalString — the text every oracle hash (vectorSetSha) and every
+  typed-value equality (eqCanonical) is computed over; SIR_SCHEMA §10 "The canonical string" states the same rule
+ORACLE-CLASS deterministic
+SIG canonical_string(value: json) -> text
+ENVELOPE the SIG type is json because the closed type set has no recursive named type for the true domain, a CANONICAL
+  TREE: text, bool, list of canonical trees, map[text, canonical tree] — no f64 and no none anywhere the rendering
+  examines (numbers and none live inside the tree only as tagged maps such as {"t":"f64","bits":..} and {"t":"none"}).
+  Every json value is IN the envelope; a json value that is not a canonical tree THROWS (R8), and that throw is part of
+  the contract. Nesting is capped by R10 (a node deeper than 416 throws). The shared oracle carries values up to the
+  codec's value depth of 100; the cap's boundary probes (raw depth 415..417) are deeper than that and are graded through
+  the js extension only (js, ts); rust cannot receive them (its language file). The js file widens to host values beyond
+  json, all of which throw except text holding unpaired surrogates (OUT-OF-DOMAIN).
+DEPENDS-ON none
+DESCRIPTION Render a canonical tree as one compact, deterministic text: maps with their keys sorted, no whitespace outside
+  text content, text quoted and escaped. The key "t" is reserved: a map tagged f64 renders as its bit pattern alone, a
+  map tagged throw as its tag alone. Equal results mean canonically equal values; the result is what is hashed.
+BEHAVIOR
+R1 text -> QUOTE(text): a quotation mark, each character of the text rendered by TABLE ESCAPE in order, a quotation mark.
+  bool -> "true" or "false".
+R2 list -> "[" + the renderings of its elements, in order, separated by "," + "]". The empty list -> "[]".
+R3 map -> "{" + one entry per key in KEY ORDER (R4), separated by ",", each entry QUOTE(key) + ":" + the rendering of
+  its value + "}". The empty map -> "{}". Keys escape exactly as text (R1).
+R4 KEY ORDER is ascending lexicographic comparison of the keys as sequences of 16-bit code units, a proper prefix
+  sorting first; a character outside the basic multilingual plane counts as its two surrogate code units (lead unit in
+  0xD800..0xDBFF). This is NOT scalar-value order: a key holding an astral character sorts BEFORE a key holding a
+  character in 0xE000..0xFFFF at the same position ("😀" before "" before "￿"); both orders agree everywhere
+  below 0xD800. Digit-spelled keys sort as text ("10" before "2"). CITED ANCHOR SIR_SCHEMA §10 — keys sort by 16-bit code units
+R5 f64 PROJECTION. A map whose key "t" holds exactly the text "f64" must have key "bits" holding text of exactly 16
+  characters, each a digit or a LOWER-case letter a..f; otherwise -> throws (absent, not text, 15 or 17 characters,
+  upper-case hex). A valid one renders as "{\"bits\":" + QUOTE(bits) + ",\"t\":\"f64\"}". Every other entry, "v"
+  included, is dropped WITHOUT being examined: a raw number or none under a dropped key does not throw. CITED FIDELITY package
+R6 throw PROJECTION. A map whose key "t" holds exactly the text "throw" renders as "{\"t\":\"throw\"}"; every other
+  entry, the message included, is dropped without being examined. CITED FIDELITY package
+R7 The projections test only the exact text value of key "t" (case and whitespace significant; a list holding "f64" or a
+  bool there does not match) and apply to EVERY map at every depth, inside lists and inside other maps' values. A list
+  is never projected. Every other tag ("text", "map", "list", "i64", "none", "record", "bytes", ...) is an ordinary map
+  under R3.
+R8 A raw f64 (any value, NaN and -0 included) or a none reached anywhere by R1-R3 -> throws: the whole call throws and
+  yields no text. That it throws is the observation; the message is a display hint, not part of the contract.
+R9 The result contains no whitespace or separator outside quoted text: no space after "," or ":", no newline.
+R10 NESTING CAP. Every node the rendering visits has a depth: the whole value is depth 0, and each element of a list and
+  each value of a map is one deeper than the list or map holding it (keys are not nodes). Visiting a node deeper than
+  416 -> throws; 416 = 4 x 100 + 16, the codec's 100-value cap at up to four raw levels per typed value, plus 16 (TABLE
+  DIALS). Only visited nodes count: entries dropped by R5 and R6 are never visited at any depth, while the entries a
+  projection renders ("bits" and "t") sit one level below the projected map. So a text or bool at depth 416 renders and at
+  417 throws; an empty list or map at depth 416 renders and at 417 throws; an f64- or throw-tagged map at depth 416 throws,
+  at 415 renders; a typed list chain {"t":"list","v":[...]} costs two depths per level. The check precedes every other rule
+  at a node: a too-deep node throws whatever it holds. CITED FIDELITY package
+TABLE DIALS — name -> value; meaning
+  MAX_VALUE_DEPTH  -> 100; the codec's value-nesting cap (this unit never checks it; it sizes RAW_CAP)
+  RAW_CAP          -> 416; 4 x MAX_VALUE_DEPTH + 16, the deepest node depth that renders
+TABLE ESCAPE — one character of text (or of a key) -> its rendering; first matching row wins
+  quotation mark                                       -> "\""
+  reverse solidus                                      -> "\\"
+  backspace 0x08                                       -> "\b"
+  form feed 0x0C                                       -> "\f"
+  line feed 0x0A                                       -> "\n"
+  carriage return 0x0D                                 -> "\r"
+  tab 0x09                                             -> "\t"
+  any other control character 0x00..0x1F               -> "\u00" + two LOWER-case hex digits (0x1F -> "\u001f")
+  an unpaired surrogate code unit (js widening only)   -> "\u" + four LOWER-case hex digits (0xD800 -> "\ud800")
+  anything else, delete 0x7F, solidus "/", 0x2028, 0x2029 and every non-ASCII scalar included -> itself, unescaped
+INVARIANT every non-throwing result is valid json text; parsed back it equals the input with the projections applied.
+INVARIANT the result depends only on the value, never on the order in which a map's entries were built.
+INVARIANT a json value containing no f64 and no none renders unless an f64-tagged map in it has invalid bits (R5).
+OUT-OF-DOMAIN js widening (verified by the js and ts variants only; oracle vectors routed to the js extension). Throws, like
+  R8: the host's absent value anywhere examined, a list hole, a big integer, and every host object that is not a plain
+  map (keyed collections, regexps, dates, boxed primitives, typed arrays, class instances). Renders: text holding unpaired
+  surrogates, escaped by TABLE ESCAPE; a map with no prototype, which is a map under R3. Also through the extension: the
+  R10 boundary probes, deeper than the neutral codec's 100 value levels.
+OUT-OF-DOMAIN OUT-OF-ENVELOPE (no oracle vector; the codec cannot carry them): callables and symbols throw like R8; a key
+  spelled "__proto__" is outside the oracle. Trees deeper than R10's cap are refused before any host stack is at risk: the
+  real code renders a 416-deep chain on a default stack, and so must every artifact.
+ORACLE value -> oracles/canonical_string.json  CANONICAL-SHA256 dd6f573b41c3d12d74b6fc1ba836ac41da345a96d75289581c4dcf46641bfbc5
+SCOPE IN: R1-R9 over every json value, plus the js widening of OUT-OF-DOMAIN. OUT: eqCanonical, vectorSetSha and the
+  encoder that builds typed-value trees (separate units calling this one), including the encoder's two map orders (§10 open item).
+PROVENANCE rederive@bb8ded84fa50 (rederive, own code), cli/sir/canon.mjs, export canonicalString, driven through
+  selfhost/seams/canonical_string.mjs; oracle stamped by selfhost/stamp.mjs from the pinned authority snapshot (24 frozen +
+  48 held-out, seed 1). Round 1 re-cut 2026-10-26 after the round-0 findings narrowed the domain (rederive d7e1fb4); round 4
+  re-cut 2026-10-27 for the nesting cap R10 (selfhost FINDINGS 66); round 5 re-cut 2026-10-27 for RAW_CAP 416 (FINDINGS
+  78), the cap probes graded through the js extension. The independent Python implementation, sir-lab
+  lib/canon.py canonical_string, agrees with every vector and with R10.

@@ -1,0 +1,50 @@
+{
+ "status": "ok",
+ "unit": "carried_canonical",
+ "primary": "selfhost/units/carried_canonical/sir/carried_canonical.sir",
+ "primarySha256": "f0f8bfd7fcf65ee10da915c5044801760095bf39afc82f9b18fe04a03e3cf1a3",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "The result is compact JSON: no whitespace anywhere outside text values. A map is an opening brace, its entries as key-text, a colon and the rendered value, separated by commas, and a closing brace; an empty map is the two braces alone. A list is its elements rendered in their own order between square brackets, separated by commas. true, false and none render as \"true\", \"false\" and \"null\".",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R2",
+   "text": "KEY ORDER, applied to the entries of EVERY map, the table itself and every map nested at any depth (directly or inside a list): ascending order of each key's sequence of 16-bit code units, compared unit by unit, a proper prefix first. A character beyond the basic multilingual plane counts as its surrogate pair, so it sorts before the private-use and compatibility characters at the top of the basic plane. No key is special: digit-only keys sort as text (\"10\" precedes \"9\"). The order the entries arrive in never matters.",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R3",
+   "text": "A list keeps its elements in their own order; only map entries are reordered.",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R4",
+   "text": "A text, key or value, renders between double quotes with exactly these escapes: quotation mark and backslash are preceded by a backslash; backspace, form feed, line feed, carriage return and tab become backslash-b, -f, -n, -r, -t; every other control character (code 0 through 31) becomes backslash-u and four LOWERCASE hex digits. Everything else is written raw: solidus, delete, the line and paragraph separators, and every non-ASCII character. Keys sort (R2) on their raw text, never on the escaped form.",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R5",
+   "text": "Positive zero renders \"0\". Any other finite number renders by the ECMAScript Number-to-String algorithm. Take the shortest decimal digit string d (k digits, no leading or trailing zero) and the integer n such that the magnitude is d times ten to the power n - k and that round-trips to the same double (the closest to the exact value when several are shortest). Then: when k <= n <= 21, write d followed by n - k zeros; when 0 < n <= 21, write the first n digits, a point, and the rest; when -6 < n <= 0, write \"0.\", then -n zeros, then d; otherwise write the first digit, a point and the remaining digits when k > 1, then \"e\", the sign of n - 1 (\"+\" or \"-\") and its magnitude. A negative number carries a leading \"-\". So 255 is \"255\", 1e20 is \"100000000000000000000\", 1e21 is \"1e+21\", 0.000001 is \"0.000001\" and 1e-7 is \"1e-7\".",
+   "ambiguity": 0.66
+  },
+  {
+   "id": "R6",
+   "text": "A number that is NaN, +Infinity, -Infinity or negative zero, anywhere in the table, makes the whole call throw; nothing is rendered CITED FIDELITY package — JSON has no form that tells these apart from zero or none",
+   "ambiguity": 0.3
+  }
+ ],
+ "ranked": [
+  "R5",
+  "R2",
+  "R1",
+  "R4",
+  "R6",
+  "R3"
+ ],
+ "at": "2026-10-26T17:46:56Z"
+}

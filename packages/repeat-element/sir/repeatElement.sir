@@ -1,0 +1,155 @@
+UNIT repeatElement
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG repeat(ele: any, num: any) -> Array<any>      # default export; blind re-emitter MUST `export default <fn>`
+
+DEPENDS-ON none      # zero runtime dependencies; pure stdlib (Array constructor + Array.prototype.fill)
+
+# ============================================================================
+# BEHAVIOR  (exact, source-verified against repeat-element@1.1.4 / index.js)
+# ============================================================================
+#
+# The entire body of the published source is:
+#
+#     module.exports = function repeat(ele, num) {
+#       if (Array.prototype.fill) {
+#         return new Array(num).fill(ele);        # BRANCH A (taken in all modern envs)
+#       }
+#       var arr = new Array(num);                 # BRANCH B (legacy fallback)
+#       for (var i = 0; i < num; i++) { arr[i] = ele; }
+#       return arr;
+#     };
+#
+# ---- ENVIRONMENT GUARD (node-1) --------------------------------------------
+# `Array.prototype.fill` has existed since ES2015 / Node >= 4. In EVERY target
+# environment the re-emitter runs in (modern Node), the guard is TRUE, so
+# BRANCH A is ALWAYS executed. The CONTRACT of this unit is exactly the
+# observable behavior of BRANCH A:  `new Array(num).fill(ele)`.
+#
+# BRANCH B is dead code in the target environment and is documented below only
+# so the re-emitter understands the source; it MUST NOT reproduce Branch B's
+# behavior where it diverges from Branch A. Re-emit Branch A's behavior.
+# (Divergence example, informational only: for num="3" Branch A yields length 1
+#  while Branch B would yield length 3; for num=null both yield length 1. The
+#  CONTRACT is Branch A: length 1 for num="3", length 1 for num=null.)
+#
+# ---- CONTRACT = semantics of  new Array(num).fill(ele)  --------------------
+#
+# Step 1 (node-2): construct  base = new Array(num)  with `num` as the SOLE
+#   argument to the Array constructor. The single-argument Array constructor has
+#   two regimes keyed on `typeof num`:
+#
+#   (node-2a) IF  typeof num === 'number':
+#       `num` is interpreted as the desired array LENGTH.
+#       - It is a VALID length iff it is a non-negative integer in [0, 2^32 - 1]
+#         (i.e. ToUint32(num) === num AND num >= 0). Equivalently: num is an
+#         integer-valued, finite, non-negative number < 2^32.
+#         -> `base` is a (sparse) array of length `num`.
+#       - OTHERWISE (num is negative, OR non-integer/fractional, OR NaN, OR
+#         +/-Infinity, OR >= 2^32):
+#         -> THROW  RangeError("Invalid array length").  (node-2a-throw)
+#         Note: 3.0 is integer-valued => length 3 (no throw). 2.7 => THROW.
+#
+#   (node-2b) IF  typeof num !== 'number'  (string, boolean, null, undefined,
+#       bigint, object/array, RegExp, Set, Map, etc., INCLUDING a NUMERIC STRING
+#       like "3"):
+#       The single argument is NOT treated as a length. The Array constructor
+#       produces a ONE-ELEMENT array  base = [num]  (length === 1).
+#       NO coercion-to-number is performed. So:
+#         num = "3"      -> base = ["3"]      (length 1)   # NOT length 3
+#         num = "3.5"    -> base = ["3.5"]    (length 1)
+#         num = null     -> base = [null]     (length 1)
+#         num = undefined-> base = [undefined](length 1)   # also the missing-arg case
+#         num = true     -> base = [true]     (length 1)
+#         num = 3n       -> base = [3n]       (length 1)
+#         num = []       -> base = [[]]       (length 1)
+#         num = [2]      -> base = [[2]]      (length 1)
+#
+# Step 2 (node-3): return  base.fill(ele).
+#   `Array.prototype.fill(ele)` with no start/end OVERWRITES EVERY index of
+#   `base` (indices 0 .. base.length-1) with the SAME value `ele`, then returns
+#   `base` (mutated in place; it is the array returned to the caller).
+#   - Because Step 1's `base` was freshly allocated by `new Array(...)`, the
+#     returned array is ALWAYS a NEW array distinct from any caller-held array.
+#   - For the node-2a case of a valid numeric length, fill materializes that
+#     many slots, each === `ele`.
+#   - For the node-2b case, base already had length 1 with one slot; fill
+#     overwrites that single slot with `ele`. RESULT LENGTH IS 1, and the
+#     original placeholder value (num itself) is discarded.
+#
+# ---- RESULT SHAPE SUMMARY --------------------------------------------------
+#   num is number, valid length L  -> array of length L, every element === ele
+#   num is number, invalid length  -> THROW RangeError("Invalid array length")
+#   num is NOT a number            -> array of length 1, element === ele
+#   In particular:
+#     num = 0          -> []            (length 0, empty)
+#     num = 1          -> [ele]
+#     num = N (int>=1) -> [ele, ele, ... ele]  (N copies)
+#     num = -1, -5     -> THROW RangeError("Invalid array length")
+#     num = 2.7, 2.2   -> THROW RangeError("Invalid array length")
+#     num = NaN        -> THROW RangeError("Invalid array length")
+#     num = Infinity   -> THROW RangeError("Invalid array length")
+#     num = 2^32       -> THROW RangeError("Invalid array length")
+#     num = undefined / missing / "3" / null / true / 3n / [] -> [ele] (length 1)
+#
+# ---- OBJECT-IDENTITY INVARIANT  (node-4) -- LOAD-BEARING -------------------
+# `ele` is placed at EVERY index BY REFERENCE. The unit does NOT clone, copy,
+# spread, structuredClone, JSON-roundtrip, or otherwise duplicate `ele`. When
+# `ele` is an object/array/Buffer/RegExp/Set/Map/typed-array (any reference
+# type), the SAME reference occupies all indices:
+#     result[i] === ele      for all 0 <= i < result.length
+#     result[i] === result[j] for all i, j
+# Consequence (a re-emitter that clones WILL FAIL this oracle): mutating
+# result[0] is observable through result[k] for every k, because they are the
+# one and the same object. The generator emits object/array/Set/Map/Buffer/
+# RegExp `ele` values precisely so a cloning re-implementation is caught:
+# the oracle compares the returned array structurally and the shared-reference
+# property is observable (every slot deep-equals `ele`, and for the same input
+# the real package and the re-emission must agree slot-for-slot).
+# For primitive `ele` (number/string/boolean/null/undefined/NaN/bigint),
+# "same reference" and "same value" coincide; each slot === ele (and for NaN,
+# each slot is NaN — compared as NaN-equal by the harness codec).
+#
+# ---- NO MUTATION OF INPUTS, NO AMBIENT READS -------------------------------
+# Pure function: reads no clock/RNG/env/fs/net (no seam). Does not mutate `ele`
+# or `num`. The only mutation is to the freshly-allocated returned array.
+# Deterministic: identical (ele, num) -> identical result (or identical throw).
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full mapping of (ele, num) -> result described in BEHAVIOR, i.e. the
+#     semantics of `new Array(num).fill(ele)`:
+#       * numeric-length regime (node-2a) incl. the valid-length predicate
+#         (non-negative integer < 2^32) and the RangeError throw on invalid.
+#       * non-number regime (node-2b): result is [ele] (length 1).
+#       * the object-identity / same-reference invariant (node-4).
+#       * empty/degenerate (num=0 -> []), missing/undefined num (-> [ele]).
+#   - Throw behavior: RangeError with message "Invalid array length" on invalid
+#     numeric length. (Harness records throws as {__throw}; the error TYPE is
+#     RangeError. The message text is the V8 standard "Invalid array length".)
+#
+# CARRIED DATA: none. No literal tables; nothing to attest.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - num so large it is a valid array length but exhausts memory when filled,
+#     e.g. num = 2^32 - 1 (4294967295). `new Array(2^32-1)` does NOT throw (it
+#     is a valid length, lazily sparse) but `.fill(ele)` materializes ~4.3e9
+#     slots and OOM-crashes the process. This is genuine package behavior but is
+#     NOT exercised by the generator (it would crash the harness, not reveal a
+#     divergence). Re-emitters are told it is in-contract-but-unbounded; the
+#     generator caps numeric `num` at a small safe range (<= 1000).
+#   - `ele` values that are NOT oracle-codec-faithful (live Function values,
+#     Symbols) are NOT emitted. The identity invariant would hold for them too,
+#     but they cannot survive JSON.stringify(encode(args)) persistence, so they
+#     are out-of-envelope by the generator contract. A blind re-emitter still
+#     reconstructs their behavior from node-4 (placed by reference, unchanged).
+#   - Legacy BRANCH B (fallback loop): dead code in modern Node; out of the
+#     observed contract. Not reproduced.
+
+PROVENANCE repeat-element@1.1.4, repo github.com/jonschlinkert/repeat-element,
+  MIT license, source file index.js (entry "main": "index.js" per package.json).

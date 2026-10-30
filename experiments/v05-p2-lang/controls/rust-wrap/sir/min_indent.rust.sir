@@ -1,0 +1,20 @@
+UNIT min_indent
+LANG rust
+PRIMARY-SHA256 27d9af564c7f4fa2ac092b56471c5941dc3c0d2315072c4e5f00f7fbfbd19048
+SIG pub fn min_indent(input: &str) -> u64
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn min_indent) — no main, no I/O, no
+  binary, no unsafe. The verifier generates its own harness crate from the abstract SIG (one JSON args line on stdin ->
+  the text marshalled to &str -> the call -> one JSON number on stdout) and depends on the artifact by path; compiling
+  that harness against this SIG is the signature check.
+ABI text=&str (UTF-8, iterate as chars = code points); u64=u64. Every INDENT member is one ASCII char, so the indent
+  count of R2 is the same whether counted in chars, bytes or UTF-16 units. No error path: no Result, no Option, no panic.
+ENVELOPE narrowing: an unpaired surrogate half has no &str form, so inputs carrying one are outside this language's
+  envelope; every other text (all oracle vectors) is representable.
+MECHANISM implement the three primary charsets as explicit match arms over char — the std predicates are NOT these
+  sets: str::lines splits only at '\n' (CR alone, U+2028, U+2029 are missed as breaks; oracle v15, v16, v17);
+  char::is_whitespace is Unicode White_Space, which wrongly includes U+0085 and excludes U+FEFF; char::is_ascii_whitespace
+  wrongly excludes U+000B and every non-ASCII member of BLANK (oracle v26, v27). One pass over input.chars(): at each
+  line start count INDENT chars, then test the next char against BLANK; restart at every BREAK char. No regex crate needed.
+DEPENDS-ON none
+PINNED charset BLANK_RS = '\u{9}' '\u{A}' '\u{B}' '\u{C}' '\u{D}' '\u{20}' '\u{A0}' '\u{1680}' '\u{2000}'..='\u{200A}' '\u{2028}' '\u{2029}' '\u{202F}' '\u{205F}' '\u{3000}' '\u{FEFF}' CITED the primary BLANK pin, spelled as Rust char literals and one inclusive range
+PROVENANCE min-indent@1.0.1 index.js — this file states the crate shape, the type mapping and the std-library traps only; no behavior.

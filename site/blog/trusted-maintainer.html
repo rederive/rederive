@@ -87,35 +87,18 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
 
 @media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}}
 .skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+
+/* responsive nav (ported from index) */
+.topnav{flex-wrap:wrap;max-width:960px;gap:1.4em;padding-left:20px;padding-right:20px}
+.topnav .navlinks{display:flex;align-items:center;gap:inherit;flex-wrap:wrap;min-width:0}
+.nav-toggle{display:none;background:none;border:1px solid #3a3f4e;border-radius:6px;color:#e8e8e8;padding:0.3em 0.55em;cursor:pointer;font-size:1.05em;line-height:1}
+.nav-toggle:hover,.nav-toggle:focus-visible{border-color:#c27c4e;color:#fff}
+@media(max-width:1040px){.topnav .by{display:none}.topnav .navlinks{order:3;flex-basis:100%;padding-top:0.1em}}
+@media(max-width:720px){.topnav .navlinks{display:none}.topnav.open .navlinks{display:flex;order:5;flex-basis:100%;flex-direction:column;align-items:flex-start;gap:0.95em;padding:0.9em 0 0.4em}.nav-toggle{display:inline-flex}}
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Article","headline":"colors.js had a trusted maintainer. That was the problem.","description":"The January 2022 colors.js sabotage shipped with valid credentials and would have carried valid provenance. Every defense built since verifies the pipeline; none verifies the payload.","url":"https://rederive.ai/blog/trusted-maintainer.html","datePublished":"2026-07-02","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"}}
 </script>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WF3PHQF0SX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-WF3PHQF0SX');
-  </script>
-<style>
-/* topnav hamburger */
-.nav-burger{display:none;margin-left:auto;background:none;border:0;color:#e8e8e8;font-size:1.55em;line-height:1;cursor:pointer;padding:0 2px}
-.topnav .nav-links{display:flex;align-items:center;gap:1.4em;flex:1}
-.topnav .nav-links a:not(.cta-nav){color:#b0b0b0;transition:color .15s}
-.topnav .nav-links a:not(.cta-nav):hover{color:#fafafa;text-decoration:none}
-.topnav .nav-links a.current{color:#fafafa;font-weight:600}
-@media(max-width:860px){
-  .topnav{flex-wrap:wrap;gap:0.5em}
-  .nav-burger{display:block}
-  .topnav .nav-links{display:none;flex:0 0 100%;flex-direction:column;align-items:flex-start;gap:0.1em;margin-top:0.6em}
-  .topnav.nav-open .nav-links{display:flex}
-  .topnav .nav-links a{padding:0.6em 0;width:100%;font-size:1.05em}
-  .topnav .cta-nav{margin-left:0;margin-top:0.3em}
-}
-</style>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -124,17 +107,19 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
 <nav class="topnav">
   <a href="/index.html" class="logo" style="text-decoration:none">
     <span class="logo-mark"><span></span><span></span><span></span></span>
-    rederive <span class="by">· from Semcom</span>
+    rederive
   </a>
-  <button class="nav-burger" aria-label="Menu" aria-expanded="false" onclick="var o=this.parentNode.classList.toggle('nav-open');this.setAttribute('aria-expanded',o)">☰</button>
-    <div class="nav-links">
-  <a href="/#get-started">Get started</a>
-  <a href="/guide.html">Guide</a>
-  <a href="/spec.html">SIR Spec</a>
-  <a href="/blog.html" class="current">Blog</a>
-  <a href="https://github.com/rederive">GitHub</a>
-  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+  <div class="navlinks" id="navlinks">
+    <a class="nl" href="/index.html#get-started">Get started</a>
+    <a class="nl" href="/index.html#how">How it works</a>
+    <a class="nl" href="/index.html#compliance">Compliance</a>
+    <a class="nl" href="/spec.html">SIR Spec</a>
+    <a class="nl active" href="/blog.html">Blog</a>
+    <a class="nl" href="/promise.html">Promise</a>
+    <a class="nl" href="https://github.com/rederive">GitHub</a>
   </div>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a call</a>
+  <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="navlinks">☰</button>
 </nav>
 </div>
 
@@ -201,7 +186,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
   <h2>Where this goes</h2>
   <p>The catalog stands at 218 verified, zero-dependency packages — three public in the repo today (<code>colors</code>, <code>rdv</code>, <code>request</code>), the rest rolling out — concentrated where the risk actually lives: the abandoned-but-load-bearing tail of npm that nobody audits and everybody ships. The SIR format is an open spec — we'd like nothing more than registry-native contracts to make our catalog redundant. Everything load-bearing is Apache-2.0, with a <a href="/promise.html">written charter</a> of what we will never do to the community.</p>
   <p>If you want to kick the tires, <code>colors</code> is small enough to audit in an afternoon — the whole contract, oracle vectors and all, is in the open:</p>
-<pre><span class="dim">$</span> npm i -g rederive
+<pre><span class="dim">$</span> npm i -g rederive@^0.5
 <span class="dim">$</span> git clone https://github.com/rederive/rederive && cd rederive
 <span class="dim">$</span> rdv check packages/colors        <span class="ok">→ ✓ VERIFIED</span></pre>
   <p>Then flip a byte in <code>src/strip.js</code> and run it again.</p>
@@ -215,11 +200,10 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
 
 <footer>
   <div class="footer-inner">
-    <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <span style="color:#b0b0b0;font-weight:600">rederive &middot; by Apilify Inc.</span>
     <div class="footer-links">
       <a href="/index.html">Home</a>
       <a href="/spec.html">SIR Spec</a>
-  <a href="/guide.html">Guide</a>
       <a href="https://semcom.ai">Semcom</a>
       <a href="mailto:lane@apilify.com">Contact</a>
     </div>
@@ -227,5 +211,9 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
   </div>
 </footer>
 
+<script>
+document.addEventListener('click',function(e){var t=e.target.closest('.nav-toggle');if(t){var n=t.closest('.topnav');var o=n.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');return}
+if(e.target.closest('.navlinks a')){var n2=document.querySelector('.topnav.open');if(n2){n2.classList.remove('open');n2.querySelector('.nav-toggle').setAttribute('aria-expanded','false')}}});
+</script>
 </body>
 </html>

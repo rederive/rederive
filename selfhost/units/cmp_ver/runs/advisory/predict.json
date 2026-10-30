@@ -1,0 +1,44 @@
+{
+ "status": "ok",
+ "unit": "cmp_ver",
+ "primary": "selfhost/units/cmp_ver/sir/cmp_ver.sir",
+ "primarySha256": "b2087b4c7c8740ff879851f7acb0fbd2767c3584f9eb5f2dd8f3e7abf547ad8b",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "VALIDATE — a is checked, then b: if either text is not a VERSION -> throws. The WHOLE text must match, with nothing before or after: no whitespace or line break at either end, no sign, prefix, suffix, exponent, empty segment, leading or trailing full stop, leading zero (\"0\" alone is the only segment that may start with 0), or non-ASCII digit. The throw message is not graded.",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "R2",
+   "text": "SEGMENTS — a VERSION is cut at each full stop \".\" into segments; each segment is a non-negative integer of ANY size, read exactly (no rounding, no width limit: \"9007199254740993\" is greater than \"9007199254740992\").",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R3",
+   "text": "PAD — when one version has fewer segments, its missing trailing segments count as 0 (\"0.5\" equals \"0.5.0\").",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R4",
+   "text": "ORDER — walk positions from the first; at the first position whose integers differ the result is -1 if a's is smaller and 1 if larger; if none differs the result is 0.",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "R5",
+   "text": "The result is always exactly -1, 0 or 1.",
+   "ambiguity": 0.14
+  }
+ ],
+ "ranked": [
+  "R1",
+  "R2",
+  "R4",
+  "R3",
+  "R5"
+ ],
+ "at": "2026-10-28T03:42:00Z"
+}

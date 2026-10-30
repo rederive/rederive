@@ -1,0 +1,28 @@
+UNIT rust_carried_table
+LANG ts
+PRIMARY-SHA256 b54a3ed7077e52f9f806a114c3b438b12912312756bbc114692a863b763fbfec
+SIG export default function rust_carried_table(src: string, shape: string | null): Record<string, Json>
+ABI TypeScript compiles to the js runtime and is driven exactly as js: rust_carried_table(src, shape), shape null for none.
+  Declare in the artifact
+  type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json }
+  (the abstract json; the reader only ever yields null, string, number, boolean and arrays of those). text = string
+  (UTF-16, well-formed); a number = number (double; -0 kept); a None value = null. The result is a fresh
+  Record<string, Json>. STRICT: the artifact type-checks under strict: true with no any, no non-null assertions (!), no
+  @ts-ignore and no @ts-expect-error. A throw (R3, R4, R6, R7, R9, R10, R11, R12, R13) is a thrown Error; the message is
+  not graded. ES module default export; imports nothing.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM (restated from js — language files are self-contained) tokenize by index over UTF-16 code units (every window of
+  R1/R5 counts ASCII-only matches). R5's value: strip underscores and the suffix, then Number(body) (0x / 0o / 0b and
+  correctly rounded decimals); EXACT for an integer-shaped body is BigInt(body) === BigInt(n) with n finite; an f32 suffix on a non-hex literal is ALSO INEXACT
+  when Math.fround(n) !== n; keep the INEXACT flag on the token and throw only when R6 reads it. TABLE CAST f32: Math.fround(x) === x. R4 "\u{…}": check the
+  hex text is non-empty and starts with a hex digit, then parseInt(hex, 16) and String.fromCodePoint (RangeError above
+  U+10FFFF is R4's throw). R11: trim with the TRIM-ST pin (NOT String.prototype.trim — the shape trims only space, tab, CR and LF); the arrow split may use the ARROW
+  pin, the width rewrite the WIDTH pin. Model the parsed type as a discriminated union (kind: 'text' | 'list' | 'tuple' |
+  'map' | 'record' | 'union' | …) with COVERS and FIT as functions over it. R13: Object.hasOwn for presence and
+  Object.defineProperty to store (an assigned "__proto__" would set the prototype); SAME is Object.is for a non-list
+  earlier value, else both arrays with equal JSON.stringify.
+DEPENDS-ON none
+PINNED regex TRIM-ST = /^[ \t\r\n]+|[ \t\r\n]+$/g CITED R11 step 2 — space, tab, CR, LF only
+PINNED regex ARROW = /^map[ \t\r\n]+(.+?)[ \t\r\n]*->[ \t\r\n]*(.+)$/s CITED R11 step 2 — K lazy, V greedy, both re-normalized
+PINNED regex WIDTH = /(^|[[,|:][ \t\r\n]*)([ui])(8|16|32)(?=[ \t\r\n]*(?:[\],|]|$))/g CITED R11 step 3 — keep the prefix, the sign letter, then 64
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs. Language file re-cut 2026-10-27 (round 5b) with the primary, before any blind re-emission.

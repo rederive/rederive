@@ -1,0 +1,261 @@
+UNIT truncate
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG truncate(string, options?) -> string
+    # default export: module.exports = truncate
+    # string: any value (coerced, see COERCION). options: any value; only honored when it is an Object.
+DEPENDS-ON none   # zero runtime deps; all helpers below are bundled in index.js
+
+# =====================================================================
+# CONSTANTS (pin EXACTLY as in source)
+# =====================================================================
+# DEFAULT_TRUNC_LENGTH   = 30
+# DEFAULT_TRUNC_OMISSION = '...'        # 3 chars
+# INFINITY               = 1/0  (=== +Infinity)
+# MAX_INTEGER            = 1.7976931348623157e+308
+# NAN                    = 0/0  (=== NaN)
+# regexpTag              = '[object RegExp]'
+# symbolTag              = '[object Symbol]'
+# reTrim   = /^\s+|\s+$/g                # used by toNumber on string operands
+# reFlags  = /\w*$/                      # extracts a regexp's flags from its String() coercion
+# reIsBadHex = /^[-+]0x[0-9a-f]+$/i
+# reIsBinary = /^0b[01]+$/i
+# reIsOctal  = /^0o[0-7]+$/i
+#
+# --- Unicode regex composition (build these EXACT sources) ---
+# rsAstralRange       = '\\ud800-\\udfff'
+# rsComboMarksRange   = '\\u0300-\\u036f\\ufe20-\\ufe23'
+# rsComboSymbolsRange = '\\u20d0-\\u20f0'
+# rsVarRange          = '\\ufe0e\\ufe0f'
+# rsAstral    = '[' + rsAstralRange + ']'
+# rsCombo     = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+# rsFitz      = '\\ud83c[\\udffb-\\udfff]'
+# rsModifier  = '(?:' + rsCombo + '|' + rsFitz + ')'
+# rsNonAstral = '[^' + rsAstralRange + ']'
+# rsRegional  = '(?:\\ud83c[\\udde6-\\uddff]){2}'
+# rsSurrPair  = '[\\ud800-\\udbff][\\udc00-\\udfff]'
+# rsZWJ       = '\\u200d'
+# reOptMod    = rsModifier + '?'
+# rsOptVar    = '[' + rsVarRange + ']?'
+# rsOptJoin   = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+# rsSeq       = rsOptVar + reOptMod + rsOptJoin
+# rsSymbol    = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')'
+# reUnicode    = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+# reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange + rsComboMarksRange + rsComboSymbolsRange + rsVarRange + ']')
+#   # NOTE reHasUnicode is NON-global (no 'g' flag) -> .test() is stateless. reUnicode IS global.
+
+# =====================================================================
+# COERCION HELPERS (bundled; reproduce exactly)
+# =====================================================================
+# isObject(v):  type = typeof v;  return !!v && (type=='object' || type=='function')
+# isObjectLike(v): return !!v && typeof v == 'object'
+# isSymbol(v): typeof v=='symbol' || (isObjectLike(v) && Object.prototype.toString.call(v)=='[object Symbol]')
+# isRegExp(v): isObject(v) && Object.prototype.toString.call(v)=='[object RegExp]'
+#              (source prefers a node util.isRegExp when available; behavior is identical -> use the
+#               objectToString form; both classify a real RegExp as true and everything else as false)
+#
+# toString(v):  return v == null ? '' : baseToString(v)
+#   # v == null is true for null AND undefined -> both -> ''
+# baseToString(v):
+#   if typeof v == 'string': return v
+#   if isSymbol(v): return symbolToString(v) (Symbol#toString) else ''   # OUT-OF-ENVELOPE (not generated)
+#   result = (v + '')                                                    # JS string coercion
+#   return (result == '0' && (1/v) == -INFINITY) ? '-0' : result          # preserves negative zero
+#
+# toNumber(v):
+#   if typeof v=='number': return v
+#   if isSymbol(v): return NaN
+#   if isObject(v): other = (typeof v.valueOf=='function' ? v.valueOf() : v);
+#                   v = isObject(other) ? (other+'') : other
+#   if typeof v != 'string': return v===0 ? v : +v
+#   v = v.replace(reTrim,'')                                  # strip leading/trailing whitespace
+#   isBinary = reIsBinary.test(v)
+#   return (isBinary || reIsOctal.test(v))
+#            ? parseInt(v.slice(2), isBinary?2:8)
+#            : (reIsBadHex.test(v) ? NaN : +v)
+#
+# toFinite(v):
+#   if !v: return v===0 ? v : 0          # falsy: 0/-0 -> v ; '' / null / undefined / NaN / false -> 0
+#   v = toNumber(v)
+#   if v===+Infinity || v===-Infinity: return (v<0?-1:1)*MAX_INTEGER
+#   return v===v ? v : 0                 # NaN -> 0
+#
+# toInteger(v):
+#   result = toFinite(v); remainder = result % 1
+#   return result===result ? (remainder ? result - remainder : result) : 0
+#   # truncates toward zero (NOT Math.floor): 3.9 -> 3 ; -3.9 -> -3
+#
+# --- unicode size / array helpers ---
+# hasUnicode(s):     return reHasUnicode.test(s)            # non-global, stateless
+# asciiSize(s):      return s == null ? undefined : s.length
+# asciiToArray(s):   return s.split('')
+# unicodeSize(s):    reUnicode.lastIndex=0; result=0; while(reUnicode.test(s)) result++; return result
+# unicodeToArray(s): return s.match(reUnicode) || []
+# stringSize(s):     return hasUnicode(s) ? unicodeSize(s)    : asciiSize(s)
+# stringToArray(s):  return hasUnicode(s) ? unicodeToArray(s) : asciiToArray(s)
+#
+# --- array slice helpers ---
+# baseSlice(array,start,end):   # standard lodash slice with clamping; start/end normalized
+#   length=array.length
+#   if start<0: start = (-start > length) ? 0 : (length+start)
+#   end = end > length ? length : end
+#   if end<0: end += length
+#   length = start>end ? 0 : ((end-start)>>>0)
+#   start >>>= 0
+#   result = new Array(length); for i in 0..length-1: result[i]=array[i+start]; return result
+# castSlice(array,start,end):
+#   length=array.length; end = end===undefined ? length : end
+#   return (!start && end>=length) ? array : baseSlice(array,start,end)
+
+# =====================================================================
+# BEHAVIOR  (the truncate pipeline — ordered, exact)
+# =====================================================================
+BEHAVIOR
+  # ---- N1. Resolve options ----
+  length   = 30        # DEFAULT_TRUNC_LENGTH
+  omission = '...'     # DEFAULT_TRUNC_OMISSION
+  separator = undefined
+  IF isObject(options):                       # only Objects/functions/arrays/regexps honored
+       separator = ('separator' in options) ? options.separator : undefined
+         # NOTE: the source reads `'separator' in options ? options.separator : separator`
+         # where the else-branch `separator` is the still-undefined local -> net effect: undefined
+         # when the key is absent. When the key is present with value undefined, separator stays undefined.
+       length   = ('length' in options)   ? toInteger(options.length)        : 30
+       omission = ('omission' in options) ? baseToString(options.omission)   : '...'
+  # If options is NOT an object (null, undefined, number, string, boolean): keep all defaults.
+
+  # ---- N2. Coerce the subject string ----
+  string = toString(string)                   # null/undefined -> '' ; numbers/arrays -> their String()
+
+  # ---- N3. Measure length in SYMBOLS if unicode, else code units ----
+  strLength = string.length                   # code-unit length
+  strSymbols = undefined                       # (declared; only assigned on the unicode path)
+  IF hasUnicode(string):
+       strSymbols = stringToArray(string)      # array of symbol strings (astral/combining/ZWJ-aware)
+       strLength  = strSymbols.length          # symbol count
+  # strSymbols stays undefined for the ASCII/BMP-only path.
+
+  # ---- N4. Early return: already within the limit ----
+  IF length >= strLength:
+       RETURN string                           # UNCHANGED (note: >= , so exact-length returns unchanged)
+
+  # ---- N5. Compute the content end position (in SYMBOL units when unicode) ----
+  end = length - stringSize(omission)          # subtract the omission's SYMBOL length
+  IF end < 1:
+       RETURN omission                          # not even room for 1 content symbol -> just the omission
+  # (covers length<=0, negative length, length <= omission length.)
+
+  # ---- N6. Take the leading slice ----
+  IF strSymbols (unicode path):
+       result = castSlice(strSymbols, 0, end).join('')   # slice in SYMBOL units, rejoin to string
+  ELSE:
+       result = string.slice(0, end)                     # slice in CODE units
+
+  # ---- N7. No separator -> done ----
+  IF separator === undefined:
+       RETURN result + omission
+
+  # ---- N8. Re-base `end` to CODE units on the unicode path ----
+  IF strSymbols:
+       end += (result.length - end)            # result.length is the code-unit length of the sliced
+                                               # symbols; this makes `end` index into `string`'s code units
+                                               # (i.e. end becomes result.length).
+
+  # ---- N9a. RegExp separator ----
+  IF isRegExp(separator):
+       IF string.slice(end).search(separator):                 # TRUTHY guard (see QUIRK below)
+            match = undefined; substring = result; newEnd = undefined
+            IF !separator.global:
+                 separator = RegExp(separator.source, toString(reFlags.exec(separator)) + 'g')
+                   # reFlags.exec(separator) runs /\w*$/ against String(separator) e.g. "/ /i" -> ["i"];
+                   # toString([...]) joins -> "i"; append 'g' -> flags "ig". Recreates a GLOBAL clone
+                   # with the same source + original flags + g. If already global, separator is reused.
+            separator.lastIndex = 0
+            WHILE (match = separator.exec(substring)):           # iterate ALL matches in `result`
+                 newEnd = match.index                            # keep the LAST match's start index
+            result = result.slice(0, newEnd === undefined ? end : newEnd)
+              # newEnd undefined (no match inside result) -> slice(0,end) == result unchanged.
+              # else trim result at the start of its LAST separator match.
+       # ELSE (search returned 0 -> falsy): block skipped, result kept as-is. (QUIRK below.)
+
+  # ---- N9b. String separator (and any non-RegExp separator) ----
+  ELSE IF string.indexOf(baseToString(separator), end) != end:
+       # i.e. the separator does NOT begin exactly at code-position `end` of the full string.
+       index = result.lastIndexOf(separator)   # last occurrence of separator-as-string within result
+                                               # (lastIndexOf coerces separator with String())
+       IF index > -1:
+            result = result.slice(0, index)    # trim result at the last separator boundary
+       # IF index == -1 (separator absent in result): result unchanged.
+       # IF the indexOf == end test is FALSE (separator begins exactly at `end`): block skipped, result kept.
+
+  # ---- N10. Append omission ----
+  RETURN result + omission
+
+# =====================================================================
+# THE search()===0 QUIRK  (N9a guard — load-bearing, verified by running the package)
+# =====================================================================
+# The guard is `if (string.slice(end).search(separator))`. String.prototype.search returns:
+#   -1  when no match  -> truthy -> ENTER the trimming block
+#    0  when the match is at index 0 of the tail (separator immediately follows the content) -> FALSY
+#        -> SKIP the trimming block entirely -> result + omission with NO trim.
+#   >0  when the match is later -> truthy -> ENTER.
+# VERIFIED EXAMPLE: truncate("aXbXcXdXeXfXgXhXiXjX", {length:10, separator:/x/i})
+#   end = 10-3 = 7 ; result = "aXbXcXd" ; string.slice(7) = "XeXfXgXhXiXjX" ; .search(/x/i) = 0
+#   -> block skipped -> RETURN "aXbXcXd...".  (NOT "aXbXc...".)
+# This 0-falsy behavior is intentional-as-emitted and MUST be reproduced.
+
+# =====================================================================
+# VERIFIED EXAMPLES (from running lodash.truncate@4.4.2)
+# =====================================================================
+# truncate('hi-diddly-ho there, neighborino')                              -> 'hi-diddly-ho there, neighbo...'
+# truncate('abc')                                                          -> 'abc'                 (within length)
+# truncate('a'*30)                                                         -> 'a'*30                (exact, >=)
+# truncate('a'*31)                                                         -> 'a'*27 + '...'
+# truncate(s, {omission:' [...]'})  s=neighborino...                       -> 'hi-diddly-ho there, neig [...]'
+# truncate('abcdefghij', {length:2})                                       -> '...'   (end<1)
+# truncate('abcdefghij', {length:3})                                       -> '...'   (end=0 <1)
+# truncate('abcdefghij', {length:0})                                       -> '...'
+# truncate('abcdefghij', {length:-5})                                      -> '...'
+# truncate(s, {length:24, separator:' '})                                  -> 'hi-diddly-ho there,...'
+# truncate(s, {length:24, separator:/,? +/})                               -> 'hi-diddly-ho there...'
+# truncate(s, {length:24, separator:/,? +/g})                              -> 'hi-diddly-ho there...'
+# truncate('abcdefghijklmnop', {length:10, separator:'X'})                 -> 'abcdefg...'  (sep absent in result)
+# truncate('😀'*10, {length:8})                                            -> '😀'*5 + '...'  (symbol length)
+# truncate('😀'*10)                                                        -> '😀'*10        (10 symbols < 30)
+# truncate('á́b́ćd́é'(5 combining-mark symbols), {length:4})                  -> 'á...'  (symbol slice)
+# truncate(family-ZWJ-emoji (1 symbol), {length:5})                        -> the emoji unchanged
+# truncate('')                                                             -> ''
+# truncate(12345)                                                          -> '12345'
+# truncate(null) / truncate(undefined)                                     -> ''
+# truncate('abcdefghijklmnop', {length:'10'})                              -> 'abcdefg...'  (toInteger '10'=10)
+# truncate('abcdefghijklmnop', {length:10.9})                              -> 'abcdefg...'  (toInteger 10.9=10)
+# truncate('abcdefghijklmnop', {length:Infinity})                          -> 'abcdefghijklmnop' (MAX_INTEGER>=len)
+# truncate('abcdefghijklmnop', {length:10, omission:99})                   -> 'abcdefgh99'  (baseToString 99='99')
+# truncate('abcdefghijklmnop', {length:10, omission:''})                   -> 'abcdefghij'  (end=10, empty omission)
+# truncate(longstr, {separator:undefined})                                 -> default no-separator behavior
+# truncate('aa--bb--cc--dd--ee--ff', {length:12, separator:'--'})          -> 'aa--bb...'
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline N1..N10, all coercion helpers
+    (toString/baseToString/toNumber/toFinite/toInteger/isObject/isObjectLike/isSymbol/isRegExp),
+    the unicode size/array helpers (hasUnicode/stringSize/stringToArray/unicodeSize/unicodeToArray/
+    asciiSize/asciiToArray) with the EXACT reUnicode / reHasUnicode regex sources pinned above,
+    castSlice/baseSlice/baseToString negative-zero preservation, the RegExp global-flag recreation
+    (RegExp(source, flags + 'g')), and the search()===0 falsy quirk.
+  CARRIED DATA: none. (No large literal tables; the unicode regexes are short composed sources,
+    transcribed inline above — they are logic, not a carried table.)
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT generated by genInputs):
+    - Symbol-valued `string` or `options.omission`: baseToString routes through Symbol#toString.
+      Symbols are not codec-round-trippable -> not generated.
+    - Function-valued `options` IS an object per isObject (typeof 'function') and options.length etc.
+      are read off it; but functions are not codec-round-trippable -> not generated. A blind emitter
+      still reproduces it from N1 (isObject true for functions).
+    - `undefined` / NaN / ±Infinity as ARRAY ELEMENTS or object VALUES inside `string` (when string is
+      an array): not codec-round-trippable -> not generated. (Scalar Infinity as options.length IS
+      round-trippable as a number? -> NO, Infinity is not JSON-round-trippable -> documented here, the
+      generator uses a finite huge length instead to exercise the same length>=strLength branch.)
+
+PROVENANCE lodash.truncate@4.4.2 (MIT); https://github.com/lodash/lodash (modularized build);
+  source file: node_modules/lodash.truncate/index.js (function `truncate`, module.exports).

@@ -1,0 +1,160 @@
+UNIT isObjectLike
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isObjectLike(value: any) -> boolean
+
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (single-expression pure predicate; no branches beyond the && )
+# ---------------------------------------------------------------------------
+BEHAVIOR
+  # The unit is a one-line pure predicate. EXACT source expression (verified
+  # against the installed package, see PROVENANCE):
+  #
+  #     return !!value && typeof value == 'object';
+  #
+  # Re-emit this EXACT expression. Two sub-tests, evaluated left-to-right with
+  # JS short-circuit semantics:
+  #
+  # NODE 1  truthiness gate:  !!value
+  #   - `!!value` coerces `value` to a boolean via JS ToBoolean.
+  #   - FALSE (short-circuits, predicate returns false) when value is any
+  #     FALSY value: null, undefined, 0, -0, NaN, '' (empty string), false,
+  #     0n (bigint zero).  (Also document.all in browsers — NOT reachable in
+  #     Node; out of envelope, see SCOPE.)
+  #   - TRUE (proceeds to NODE 2) for every truthy value, which includes
+  #     EVERY object reference (all objects are truthy in JS, even wrapper
+  #     objects of falsy primitives such as new Number(0), new String(''),
+  #     new Boolean(false), and Object.create(null)).
+  #
+  # NODE 2  type gate:  typeof value == 'object'
+  #   - Uses loose equality `==` against the string literal 'object'
+  #     (behaviorally identical to `===` here since typeof always yields a
+  #     string; re-emit `==` to match source exactly).
+  #   - TRUE when JS `typeof value` is exactly the string "object".
+  #     typeof yields "object" for: plain objects, arrays, Date, RegExp,
+  #     Map, Set, WeakMap, WeakSet, typed arrays (Uint8Array etc.), Buffer,
+  #     ArrayBuffer, Error, Promise, class instances, boxed-primitive wrapper
+  #     objects (new Number/String/Boolean), Object(Symbol(...)), and null
+  #     (typeof null === "object" — but null is excluded at NODE 1).
+  #   - FALSE when typeof is anything else: "number", "string", "boolean",
+  #     "bigint", "symbol", "undefined", "function".
+  #
+  # RESULT = NODE1 && NODE2.  Returns a primitive boolean (true | false).
+  # No throw paths: the function never throws for any input (no property
+  # access, no coercion that can fault).  No side effects (read-only).
+  #
+  # EQUIVALENCE NOTE (informational, do NOT change the emitted expression):
+  #   `!!value` is behaviorally equivalent to `value != null` UNDER the NODE 2
+  #   guard, because the ONLY falsy value whose typeof is "object" is null, and
+  #   null is rejected by both. Every other object is truthy. Verified: no
+  #   divergence across all reachable Node inputs. The teaching expression in
+  #   the upstream lodash docs prose says "not null and typeof object"; the
+  #   actual code uses `!!value`. Re-emit `!!value` to be byte-faithful to
+  #   source; either form passes the oracle.
+
+ORACLE value -> oracle.json
+
+# ---------------------------------------------------------------------------
+# EXACT TRUE / FALSE EDGE SET  (self-consistent with genInputs curated prefix)
+# ---------------------------------------------------------------------------
+# Every value the generator can emit has its result fixed here.
+#
+# TRUE  (truthy AND typeof === "object"):
+#   {}                      -> true   # plain object
+#   { a: 1, nested:{...} }  -> true   # populated plain object
+#   Object.create(null)     -> true   # null-prototype object (still typeof object, truthy)
+#   []                      -> true   # empty array
+#   [1,2,3]                 -> true   # populated array
+#   new Date()              -> true
+#   /x/  (RegExp)           -> true
+#   new Map()               -> true
+#   new Set()               -> true
+#   new Uint8Array(n)       -> true   # typed array
+#   Buffer.alloc(n)         -> true   # node Buffer (subclass of Uint8Array)
+#   new Number(1)           -> true   # boxed number wrapper OBJECT (truthy)
+#   new Number(0)           -> true   # boxed wrapper of falsy primitive is STILL truthy
+#   new String('a')         -> true
+#   new String('')          -> true   # boxed wrapper of '' is STILL truthy
+#   new Boolean(true)       -> true
+#   new Boolean(false)      -> true   # boxed wrapper of false is STILL truthy
+#   class instance          -> true
+#   Object(Symbol('s'))     -> true   # wrapped symbol object
+#
+# FALSE  (falsy at NODE 1, OR typeof !== "object"):
+#   null                    -> false  # falsy (and would pass typeof, but rejected by NODE 1)
+#   undefined               -> false  # falsy; typeof "undefined"
+#   0                       -> false  # falsy; typeof "number"
+#   -0                      -> false  # falsy; typeof "number"
+#   1                       -> false  # truthy but typeof "number"
+#   3.14                    -> false  # typeof "number"
+#   NaN                     -> false  # falsy; typeof "number"
+#   Infinity                -> false  # typeof "number"
+#   -Infinity               -> false  # typeof "number"
+#   ''  (empty string)      -> false  # falsy; typeof "string"
+#   'a' (non-empty string)  -> false  # truthy but typeof "string"
+#   true                    -> false  # typeof "boolean"
+#   false                   -> false  # falsy; typeof "boolean"
+#   1n  (bigint)            -> false  # typeof "bigint"
+#   0n  (bigint zero)       -> false  # falsy; typeof "bigint"
+#   function(){}            -> false  # typeof "function"  (OUT-OF-ENVELOPE codec; see SCOPE)
+#   () => {}                -> false  # typeof "function"  (OUT-OF-ENVELOPE codec)
+#   Symbol('s')             -> false  # typeof "symbol"    (OUT-OF-ENVELOPE codec)
+
+# ---------------------------------------------------------------------------
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    The whole unit. A single pure expression `!!value && typeof value == 'object'`.
+    Reproduce both the truthiness gate and the loose-`==` typeof "object" test.
+    Returns a primitive boolean. Never throws. No side effects.
+
+  CARRIED DATA: none. No literal tables, no constants beyond the string "object".
+
+  OUT-OF-CONTRACT: none (no stateful mutators, no side APIs, no ambient seam).
+    The function reads nothing ambient — no clock/RNG/env/fs/net. It is a
+    pure deterministic predicate of its single argument. Side-effect ledger N/A.
+
+  OUT-OF-ENVELOPE (SPECIFIED behavior the inputs codec cannot serialize for
+  cross-process emission — a blind re-emitter still reproduces these from this
+  spec; genInputs does NOT emit them):
+    - functions (any kind: declaration, arrow, async, generator, class
+      constructors referenced as callable) -> typeof "function" -> FALSE.
+    - Symbols (Symbol('x'), well-known symbols) -> typeof "symbol" -> FALSE.
+      (NOTE: a *wrapped* symbol Object(Symbol('x')) IS typeof "object" -> TRUE,
+       and that wrapper is also not round-trippable, so likewise out-of-envelope
+       on the TRUE side.)
+    - document.all (HTMLAllCollection): historically falsy with typeof either
+      "object" or "undefined" depending on engine -> would be FALSE here via the
+      `!!value` gate. NOT reachable in Node; informational only.
+
+  CODEC NOTES for genInputs (which values round-trip vs not):
+    Round-trips through JSON.stringify(encode(args)): plain objects, arrays,
+    RegExp, Set, Map, Uint8Array/Buffer, bigint, JSON primitives
+    (number incl. via special handling for NaN/+-Infinity/-0, string, boolean,
+    null), undefined. Boxed primitives (new Number/String/Boolean) and class
+    instances generally do NOT survive identity-preserving round-trip; the
+    generator therefore exercises the boxed-wrapper TRUE path with PLAIN objects
+    that share the same observable predicate result (typeof "object", truthy),
+    and the SIR above pins the boxed-wrapper results so a blind engineer who
+    reconstructs them by spec still matches. genInputs only emits codec-faithful
+    values; non-round-trippable cases are documented OUT-OF-ENVELOPE above.
+
+# ---------------------------------------------------------------------------
+# EMISSION SHAPE for the SOURCE-BLIND re-emitter
+# ---------------------------------------------------------------------------
+# The original is CommonJS `module.exports = isObjectLike`. The harness loads
+# emissions as .mjs via dynamic import(). Re-emit as an ES module DEFAULT export:
+#
+#     export default function isObjectLike(value) {
+#       return !!value && typeof value == 'object';
+#     }
+#
+# Call convention: single positional argument `value`; returns a boolean.
+
+PROVENANCE
+  package: lodash.isobjectlike@4.0.0
+  repo: lodash/lodash  (homepage https://lodash.com/)
+  license: MIT
+  source file: node_modules/lodash.isobjectlike/index.js  (function isObjectLike, line 33-35)
+  verified expression (read from installed source):  return !!value && typeof value == 'object';

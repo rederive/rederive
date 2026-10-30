@@ -1,0 +1,3018 @@
+{
+ "mode": "vectors",
+ "unit": "parse_sig",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "f(a: text) -> text"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "text"
+    }
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "f(a: list[json] | list[text]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier list accepts every value it does at 28 in \"f(a: list[json] | list[text]) -> none\""
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "f(a: list[text] | list[text | none]) -> list[json] | map[json, json]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "list",
+         "item": {
+          "k": "text"
+         }
+        },
+        {
+         "k": "list",
+         "item": {
+          "k": "union",
+          "alts": [
+           {
+            "k": "text"
+           },
+           {
+            "k": "none"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "list",
+       "item": {
+        "k": "json"
+       }
+      },
+      {
+       "k": "map",
+       "key": {
+        "k": "json"
+       },
+       "val": {
+        "k": "json"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "f(a: json | tuple[text, list[f64]]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier json accepts every value it does at 34 in \"f(a: json | tuple[text, list[f64]]) -> none\""
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "f(a: tuple[json, json] | tuple[text]) -> map[json, json] | map[text, i64]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "json"
+          },
+          {
+           "k": "json"
+          }
+         ]
+        },
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "text"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "map",
+       "key": {
+        "k": "json"
+       },
+       "val": {
+        "k": "json"
+       }
+      },
+      {
+       "k": "map",
+       "key": {
+        "k": "text"
+       },
+       "val": {
+        "k": "i64"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    "f(a: record[a: text] | record[a: text, b: none]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier record accepts every value it does at 47 in \"f(a: record[a: text] | record[a: text, b: none]) -> none\""
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    "f(a: record[a: text, b: none] | record[a: text]) -> record[x: text] | record[y: text]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "record",
+         "fields": [
+          [
+           "a",
+           {
+            "k": "text"
+           }
+          ],
+          [
+           "b",
+           {
+            "k": "none"
+           }
+          ]
+         ]
+        },
+        {
+         "k": "record",
+         "fields": [
+          [
+           "a",
+           {
+            "k": "text"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "record",
+       "fields": [
+        [
+         "x",
+         {
+          "k": "text"
+         }
+        ]
+       ]
+      },
+      {
+       "k": "record",
+       "fields": [
+        [
+         "y",
+         {
+          "k": "text"
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "f(a: text) -> map[json, json] | map[text, text]"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier map accepts every value it does at 47 in \"f(a: text) -> map[json, json] | map[text, text]\""
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    "f(a: json | i64 | u64 | bytes | tuple[text, i64] | record[x: bytes] | map[json, text]) -> none"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "json"
+        },
+        {
+         "k": "i64"
+        },
+        {
+         "k": "u64"
+        },
+        {
+         "k": "bytes"
+        },
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "text"
+          },
+          {
+           "k": "i64"
+          }
+         ]
+        },
+        {
+         "k": "record",
+         "fields": [
+          [
+           "x",
+           {
+            "k": "bytes"
+           }
+          ]
+         ]
+        },
+        {
+         "k": "map",
+         "key": {
+          "k": "json"
+         },
+         "val": {
+          "k": "text"
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "none"
+    }
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    "f(a: json | record[x: none, y: map[text, bool]]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier json accepts every value it does at 47 in \"f(a: json | record[x: none, y: map[text, bool]]) -> none\""
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    "f(a: list[json | i64] | list[u64], b: list[text] | tuple[text]) -> map[text, json] | record[a: text]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "list",
+         "item": {
+          "k": "union",
+          "alts": [
+           {
+            "k": "json"
+           },
+           {
+            "k": "i64"
+           }
+          ]
+         }
+        },
+        {
+         "k": "list",
+         "item": {
+          "k": "u64"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "b",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "list",
+         "item": {
+          "k": "text"
+         }
+        },
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "text"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "map",
+       "key": {
+        "k": "text"
+       },
+       "val": {
+        "k": "json"
+       }
+      },
+      {
+       "k": "record",
+       "fields": [
+        [
+         "a",
+         {
+          "k": "text"
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "f(a: tuple[json, text] | tuple[text, text]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier tuple accepts every value it does at 42 in \"f(a: tuple[json, text] | tuple[text, text]) -> none\""
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "pub fn f(s: text) -> text"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "s",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "text"
+    }
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "f(a: list[text | none] | list[text]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier list accepts every value it does at 35 in \"f(a: list[text | none] | list[text]) -> none\""
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "f(a: record[x: text, y: i64] | record[x: text, y: u64] | record[x: text]) -> list[text] | list[text | json]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "record",
+         "fields": [
+          [
+           "x",
+           {
+            "k": "text"
+           }
+          ],
+          [
+           "y",
+           {
+            "k": "i64"
+           }
+          ]
+         ]
+        },
+        {
+         "k": "record",
+         "fields": [
+          [
+           "x",
+           {
+            "k": "text"
+           }
+          ],
+          [
+           "y",
+           {
+            "k": "u64"
+           }
+          ]
+         ]
+        },
+        {
+         "k": "record",
+         "fields": [
+          [
+           "x",
+           {
+            "k": "text"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "list",
+       "item": {
+        "k": "text"
+       }
+      },
+      {
+       "k": "list",
+       "item": {
+        "k": "union",
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "json"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "f(a: list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[text]]]]]]]]]]]]]]]]]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: types nest deeper than 16 at 89 in \"f(a: list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[text]]]]]]]]]]]]]]]]]) -> none\""
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    "f(a: list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[text]]]]]]]]]]]]]]]]) -> none"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "list",
+       "item": {
+        "k": "list",
+        "item": {
+         "k": "list",
+         "item": {
+          "k": "list",
+          "item": {
+           "k": "list",
+           "item": {
+            "k": "list",
+            "item": {
+             "k": "list",
+             "item": {
+              "k": "list",
+              "item": {
+               "k": "list",
+               "item": {
+                "k": "list",
+                "item": {
+                 "k": "list",
+                 "item": {
+                  "k": "list",
+                  "item": {
+                   "k": "list",
+                   "item": {
+                    "k": "list",
+                    "item": {
+                     "k": "list",
+                     "item": {
+                      "k": "list",
+                      "item": {
+                       "k": "text"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    ],
+    "result": {
+     "k": "none"
+    }
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "f(a: list[json | i64] | list[i64 | text]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier list accepts every value it does at 40 in \"f(a: list[json | i64] | list[i64 | text]) -> none\""
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "f(a: text | json, b: i64 | u64 | bytes | json) -> f64 | none | json"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "text"
+        },
+        {
+         "k": "json"
+        }
+       ]
+      }
+     },
+     {
+      "name": "b",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "i64"
+        },
+        {
+         "k": "u64"
+        },
+        {
+         "k": "bytes"
+        },
+        {
+         "k": "json"
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "f64"
+      },
+      {
+       "k": "none"
+      },
+      {
+       "k": "json"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "f(a: text) -> list[list[json]] | list[list[record[x: text, y: none]]]"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier list accepts every value it does at 69 in \"f(a: text) -> list[list[json]] | list[list[record[x: text, y: none]]]\""
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "f(a: text) -> tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: i64]]]]]]]]]]]]]]]] | none"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "list",
+         "item": {
+          "k": "map",
+          "key": {
+           "k": "text"
+          },
+          "val": {
+           "k": "record",
+           "fields": [
+            [
+             "x",
+             {
+              "k": "tuple",
+              "items": [
+               {
+                "k": "list",
+                "item": {
+                 "k": "map",
+                 "key": {
+                  "k": "text"
+                 },
+                 "val": {
+                  "k": "record",
+                  "fields": [
+                   [
+                    "x",
+                    {
+                     "k": "tuple",
+                     "items": [
+                      {
+                       "k": "list",
+                       "item": {
+                        "k": "map",
+                        "key": {
+                         "k": "text"
+                        },
+                        "val": {
+                         "k": "record",
+                         "fields": [
+                          [
+                           "x",
+                           {
+                            "k": "tuple",
+                            "items": [
+                             {
+                              "k": "list",
+                              "item": {
+                               "k": "map",
+                               "key": {
+                                "k": "text"
+                               },
+                               "val": {
+                                "k": "record",
+                                "fields": [
+                                 [
+                                  "x",
+                                  {
+                                   "k": "i64"
+                                  }
+                                 ]
+                                ]
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          ]
+                         ]
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   ]
+                  ]
+                 }
+                }
+               }
+              ]
+             }
+            ]
+           ]
+          }
+         }
+        }
+       ]
+      },
+      {
+       "k": "none"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "f(a: record[x: json] | record[x: text, y: i64]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier record accepts every value it does at 46 in \"f(a: record[x: json] | record[x: text, y: i64]) -> none\""
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    "f(a: map[text, list[i64]] | map[text, list[text | i64]] | map[i64, text]) -> tuple[text, none] | tuple[none, text]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "map",
+         "key": {
+          "k": "text"
+         },
+         "val": {
+          "k": "list",
+          "item": {
+           "k": "i64"
+          }
+         }
+        },
+        {
+         "k": "map",
+         "key": {
+          "k": "text"
+         },
+         "val": {
+          "k": "list",
+          "item": {
+           "k": "union",
+           "alts": [
+            {
+             "k": "text"
+            },
+            {
+             "k": "i64"
+            }
+           ]
+          }
+         }
+        },
+        {
+         "k": "map",
+         "key": {
+          "k": "i64"
+         },
+         "val": {
+          "k": "text"
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "text"
+        },
+        {
+         "k": "none"
+        }
+       ]
+      },
+      {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "none"
+        },
+        {
+         "k": "text"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "f(a: text) -> none | tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[u64]]]]]]]]]]]]]]]]]"
+   ],
+   "expected": {
+    "__throw": "bad SIG: types nest deeper than 16 at 150 in \"f(a: text) -> none | tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[u64]]]]]]]]]]]]]]]]]\""
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "export default function f(a: text): text"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "text"
+    }
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "f(a: map[text, list[text | i64]] | map[text, list[i64]]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier map accepts every value it does at 55 in \"f(a: map[text, list[text | i64]] | map[text, list[i64]]) -> none\""
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "f(a: record[x: list[record[x: list[record[x: list[record[x: list[text | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | record[x: list[record[x: list[record[x: list[record[x: list[u64 | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool]) -> none"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "record",
+         "fields": [
+          [
+           "x",
+           {
+            "k": "union",
+            "alts": [
+             {
+              "k": "list",
+              "item": {
+               "k": "union",
+               "alts": [
+                {
+                 "k": "record",
+                 "fields": [
+                  [
+                   "x",
+                   {
+                    "k": "union",
+                    "alts": [
+                     {
+                      "k": "list",
+                      "item": {
+                       "k": "union",
+                       "alts": [
+                        {
+                         "k": "record",
+                         "fields": [
+                          [
+                           "x",
+                           {
+                            "k": "union",
+                            "alts": [
+                             {
+                              "k": "list",
+                              "item": {
+                               "k": "union",
+                               "alts": [
+                                {
+                                 "k": "record",
+                                 "fields": [
+                                  [
+                                   "x",
+                                   {
+                                    "k": "union",
+                                    "alts": [
+                                     {
+                                      "k": "list",
+                                      "item": {
+                                       "k": "union",
+                                       "alts": [
+                                        {
+                                         "k": "text"
+                                        },
+                                        {
+                                         "k": "i64"
+                                        }
+                                       ]
+                                      }
+                                     },
+                                     {
+                                      "k": "none"
+                                     }
+                                    ]
+                                   }
+                                  ],
+                                  [
+                                   "y",
+                                   {
+                                    "k": "bool"
+                                   }
+                                  ]
+                                 ]
+                                },
+                                {
+                                 "k": "i64"
+                                }
+                               ]
+                              }
+                             },
+                             {
+                              "k": "none"
+                             }
+                            ]
+                           }
+                          ],
+                          [
+                           "y",
+                           {
+                            "k": "bool"
+                           }
+                          ]
+                         ]
+                        },
+                        {
+                         "k": "i64"
+                        }
+                       ]
+                      }
+                     },
+                     {
+                      "k": "none"
+                     }
+                    ]
+                   }
+                  ],
+                  [
+                   "y",
+                   {
+                    "k": "bool"
+                   }
+                  ]
+                 ]
+                },
+                {
+                 "k": "i64"
+                }
+               ]
+              }
+             },
+             {
+              "k": "none"
+             }
+            ]
+           }
+          ],
+          [
+           "y",
+           {
+            "k": "bool"
+           }
+          ]
+         ]
+        },
+        {
+         "k": "record",
+         "fields": [
+          [
+           "x",
+           {
+            "k": "union",
+            "alts": [
+             {
+              "k": "list",
+              "item": {
+               "k": "union",
+               "alts": [
+                {
+                 "k": "record",
+                 "fields": [
+                  [
+                   "x",
+                   {
+                    "k": "union",
+                    "alts": [
+                     {
+                      "k": "list",
+                      "item": {
+                       "k": "union",
+                       "alts": [
+                        {
+                         "k": "record",
+                         "fields": [
+                          [
+                           "x",
+                           {
+                            "k": "union",
+                            "alts": [
+                             {
+                              "k": "list",
+                              "item": {
+                               "k": "union",
+                               "alts": [
+                                {
+                                 "k": "record",
+                                 "fields": [
+                                  [
+                                   "x",
+                                   {
+                                    "k": "union",
+                                    "alts": [
+                                     {
+                                      "k": "list",
+                                      "item": {
+                                       "k": "union",
+                                       "alts": [
+                                        {
+                                         "k": "u64"
+                                        },
+                                        {
+                                         "k": "i64"
+                                        }
+                                       ]
+                                      }
+                                     },
+                                     {
+                                      "k": "none"
+                                     }
+                                    ]
+                                   }
+                                  ],
+                                  [
+                                   "y",
+                                   {
+                                    "k": "bool"
+                                   }
+                                  ]
+                                 ]
+                                },
+                                {
+                                 "k": "i64"
+                                }
+                               ]
+                              }
+                             },
+                             {
+                              "k": "none"
+                             }
+                            ]
+                           }
+                          ],
+                          [
+                           "y",
+                           {
+                            "k": "bool"
+                           }
+                          ]
+                         ]
+                        },
+                        {
+                         "k": "i64"
+                        }
+                       ]
+                      }
+                     },
+                     {
+                      "k": "none"
+                     }
+                    ]
+                   }
+                  ],
+                  [
+                   "y",
+                   {
+                    "k": "bool"
+                   }
+                  ]
+                 ]
+                },
+                {
+                 "k": "i64"
+                }
+               ]
+              }
+             },
+             {
+              "k": "none"
+             }
+            ]
+           }
+          ],
+          [
+           "y",
+           {
+            "k": "bool"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "none"
+    }
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    "f(a: record[x: list[record[x: list[record[x: list[record[x: list[text | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | record[x: list[record[x: list[record[x: list[record[x: list[text] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier record accepts every value it does at 322 in \"f(a: record[x: list[record[x: list[record[x: list[record[x: list[text | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | record[x: list[record[x: list[record[x: list[record[x: list[text] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool] | i64] | none, y: bool]) -> none\""
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    "f( \t ):record[k: text | none, v: map[i64, tuple[bool, bool]]]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [],
+    "result": {
+     "k": "record",
+     "fields": [
+      [
+       "k",
+       {
+        "k": "union",
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "none"
+         }
+        ]
+       }
+      ],
+      [
+       "v",
+       {
+        "k": "map",
+        "key": {
+         "k": "i64"
+        },
+        "val": {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "bool"
+          },
+          {
+           "k": "bool"
+          }
+         ]
+        }
+       }
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    "f(a: json | text) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier json accepts every value it does at 16 in \"f(a: json | text) -> none\""
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    "f(a: tuple[text, i64] | tuple[text, i64, none] | tuple[json]) -> list[list[text]] | list[list[i64]]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "text"
+          },
+          {
+           "k": "i64"
+          }
+         ]
+        },
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "text"
+          },
+          {
+           "k": "i64"
+          },
+          {
+           "k": "none"
+          }
+         ]
+        },
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "json"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "list",
+       "item": {
+        "k": "list",
+        "item": {
+         "k": "text"
+        }
+       }
+      },
+      {
+       "k": "list",
+       "item": {
+        "k": "list",
+        "item": {
+         "k": "i64"
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    "f(a: record[x: text, y: i64] | record[y: i64, x: text]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union names the same alternative twice at 54 in \"f(a: record[x: text, y: i64] | record[y: i64, x: text]) -> none\""
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    "g(a: bytes, b: bool, c: none, d: i64, e: u64, f_2: f64) -> json"
+   ],
+   "expected": {
+    "name": "g",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "bytes"
+      }
+     },
+     {
+      "name": "b",
+      "type": {
+       "k": "bool"
+      }
+     },
+     {
+      "name": "c",
+      "type": {
+       "k": "none"
+      }
+     },
+     {
+      "name": "d",
+      "type": {
+       "k": "i64"
+      }
+     },
+     {
+      "name": "e",
+      "type": {
+       "k": "u64"
+      }
+     },
+     {
+      "name": "f_2",
+      "type": {
+       "k": "f64"
+      }
+     }
+    ],
+    "result": {
+     "k": "json"
+    }
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "f(a: text) -> none | none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union names the same alternative twice at 25 in \"f(a: text) -> none | none\""
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "pub\nfn\r\nf(a: text) -> u64"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "u64"
+    }
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    "f(a: json | json) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union names the same alternative twice at 16 in \"f(a: json | json) -> none\""
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    " \r\n export\n default\tfunction  f ( a : text , b : i64 ) -> list [ text ]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "text"
+      }
+     },
+     {
+      "name": "b",
+      "type": {
+       "k": "i64"
+      }
+     }
+    ],
+    "result": {
+     "k": "list",
+     "item": {
+      "k": "text"
+     }
+    }
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    ""
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 0 in \"\""
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "f(\n  a: text,\n  b: list[map[text, json]]\n) -> text | none"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "text"
+      }
+     },
+     {
+      "name": "b",
+      "type": {
+       "k": "list",
+       "item": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "json"
+        }
+       }
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "text"
+      },
+      {
+       "k": "none"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    "fé(a: text) -> text"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected '(' at 1 in \"fé(a: text) -> text\""
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    "f(a: record [x: text, y: i64]) -> tuple [text, i64, record[text: bool]]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "record",
+       "fields": [
+        [
+         "x",
+         {
+          "k": "text"
+         }
+        ],
+        [
+         "y",
+         {
+          "k": "i64"
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "tuple",
+     "items": [
+      {
+       "k": "text"
+      },
+      {
+       "k": "i64"
+      },
+      {
+       "k": "record",
+       "fields": [
+        [
+         "text",
+         {
+          "k": "bool"
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "f(text) -> i64"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected ':' at 6 in \"f(text) -> i64\""
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "f(... xs: text) -> list[text]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "xs",
+      "type": {
+       "k": "text"
+      },
+      "rest": true
+     }
+    ],
+    "result": {
+     "k": "list",
+     "item": {
+      "k": "text"
+     }
+    }
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "f(a: text,) -> text"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 10 in \"f(a: text,) -> text\""
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    "pub(fn: text) -> list[list[list[u64]]]"
+   ],
+   "expected": {
+    "name": "pub",
+    "args": [
+     {
+      "name": "fn",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "list",
+     "item": {
+      "k": "list",
+      "item": {
+       "k": "list",
+       "item": {
+        "k": "u64"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    "f(...xs: text, y: i64) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a rest parameter must be last at 22 in \"f(...xs: text, y: i64) -> none\""
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    "pub fn fn(pub: text) -> none"
+   ],
+   "expected": {
+    "name": "fn",
+    "args": [
+     {
+      "name": "pub",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "none"
+    }
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "f(. ..a: text) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 2 in \"f(. ..a: text) -> none\""
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "export(default: text) -> text"
+   ],
+   "expected": {
+    "name": "export",
+    "args": [
+     {
+      "name": "default",
+      "type": {
+       "k": "text"
+      }
+     }
+    ],
+    "result": {
+     "k": "text"
+    }
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "f(a: text, a: i64) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: duplicate parameter name at 18 in \"f(a: text, a: i64) -> none\""
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "f(a: tuple[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[text]]]]]]]]]]]]]]], list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[bool]]]]]]]]]]]]]]]], b: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: tuple[list[map[text, record[x: none]]]]]]]]]]]]]]]]) -> list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[f64]]]]]]]]]]]]]]]]"
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a",
+      "type": {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "list",
+         "item": {
+          "k": "list",
+          "item": {
+           "k": "list",
+           "item": {
+            "k": "list",
+            "item": {
+             "k": "list",
+             "item": {
+              "k": "list",
+              "item": {
+               "k": "list",
+               "item": {
+                "k": "list",
+                "item": {
+                 "k": "list",
+                 "item": {
+                  "k": "list",
+                  "item": {
+                   "k": "list",
+                   "item": {
+                    "k": "list",
+                    "item": {
+                     "k": "list",
+                     "item": {
+                      "k": "list",
+                      "item": {
+                       "k": "list",
+                       "item": {
+                        "k": "text"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        {
+         "k": "list",
+         "item": {
+          "k": "list",
+          "item": {
+           "k": "list",
+           "item": {
+            "k": "list",
+            "item": {
+             "k": "list",
+             "item": {
+              "k": "list",
+              "item": {
+               "k": "list",
+               "item": {
+                "k": "list",
+                "item": {
+                 "k": "list",
+                 "item": {
+                  "k": "list",
+                  "item": {
+                   "k": "list",
+                   "item": {
+                    "k": "list",
+                    "item": {
+                     "k": "list",
+                     "item": {
+                      "k": "list",
+                      "item": {
+                       "k": "list",
+                       "item": {
+                        "k": "bool"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "b",
+      "type": {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "list",
+         "item": {
+          "k": "map",
+          "key": {
+           "k": "text"
+          },
+          "val": {
+           "k": "record",
+           "fields": [
+            [
+             "x",
+             {
+              "k": "tuple",
+              "items": [
+               {
+                "k": "list",
+                "item": {
+                 "k": "map",
+                 "key": {
+                  "k": "text"
+                 },
+                 "val": {
+                  "k": "record",
+                  "fields": [
+                   [
+                    "x",
+                    {
+                     "k": "tuple",
+                     "items": [
+                      {
+                       "k": "list",
+                       "item": {
+                        "k": "map",
+                        "key": {
+                         "k": "text"
+                        },
+                        "val": {
+                         "k": "record",
+                         "fields": [
+                          [
+                           "x",
+                           {
+                            "k": "tuple",
+                            "items": [
+                             {
+                              "k": "list",
+                              "item": {
+                               "k": "map",
+                               "key": {
+                                "k": "text"
+                               },
+                               "val": {
+                                "k": "record",
+                                "fields": [
+                                 [
+                                  "x",
+                                  {
+                                   "k": "none"
+                                  }
+                                 ]
+                                ]
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          ]
+                         ]
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   ]
+                  ]
+                 }
+                }
+               }
+              ]
+             }
+            ]
+           ]
+          }
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "list",
+     "item": {
+      "k": "list",
+      "item": {
+       "k": "list",
+       "item": {
+        "k": "list",
+        "item": {
+         "k": "list",
+         "item": {
+          "k": "list",
+          "item": {
+           "k": "list",
+           "item": {
+            "k": "list",
+            "item": {
+             "k": "list",
+             "item": {
+              "k": "list",
+              "item": {
+               "k": "list",
+               "item": {
+                "k": "list",
+                "item": {
+                 "k": "list",
+                 "item": {
+                  "k": "list",
+                  "item": {
+                   "k": "list",
+                   "item": {
+                    "k": "list",
+                    "item": {
+                     "k": "f64"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "f(a: text)"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected '->' or ':' before the result type at 10 in \"f(a: text)\""
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    "f(a: list[]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 10 in \"f(a: list[]) -> none\""
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "f(a: record[text]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected ':' at 16 in \"f(a: record[text]) -> none\""
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    "f(a: record[x: text, x: i64]) -> none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: duplicate record field at 27 in \"f(a: record[x: text, x: i64]) -> none\""
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "f(a: text) -> text || none"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 20 in \"f(a: text) -> text || none\""
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    "f(a: text) -> text # comment"
+   ],
+   "expected": {
+    "__throw": "bad SIG: unexpected text at 19 in \"f(a: text) -> text # comment\""
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    "﻿f(a: text) -> text"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 0 in \"﻿f(a: text) -> text\""
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "f(a: text)\u000b-> text"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected '->' or ':' before the result type at 10 in \"f(a: text)\\u000b-> text\""
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "f(a: text) -> text"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected an identifier at 13 in \"f(a: text) -> text\""
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    "pub fn(a: text) -> text"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected '(' at 4 in \"pub fn(a: text) -> text\""
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    "pub fn"
+   ],
+   "expected": {
+    "__throw": "bad SIG: expected '(' at 4 in \"pub fn\""
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    " f (a0 :\r\nmap\t[record[c\t: none, y\r\n:\n bytes|\n i64|\n bool, A\r\n:i64],\r\nu64| tuple[bytes, bytes, i64]]|\r\nmap[record[  c : i64, y:\tbytes, A\t:i64],u64] ,...xs1:  bytes  ) : record[y: i64, c:\r\nrecord[  x :tuple  [i64], y\t:\r\ntext\t| tuple[f64]\t| record[\ty  :  text, x :  bool, b  :\tu64], a\n :\n tuple[f64,i64,bytes]], b\r\n: f64, a\r\n: f64]  | record[  a :bool| tuple\n [bytes, list  [\n bool], record[c\t:\tjson, x:text, y\n :none, A:f64]\t|  record[x\r\n:text |\n u64 |\n bool, y:  u64]], b\r\n: i64, c\r\n:\r\nrecord[  x:  tuple  [i64], y\r\n: text\t|\r\ntuple\r\n[f64]\t|\r\nrecord[ b:u64, x : json, y\t:text]], y :map [text, map [text,\r\nu64]]] "
+   ],
+   "expected": {
+    "name": "f",
+    "args": [
+     {
+      "name": "a0",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "map",
+         "key": {
+          "k": "record",
+          "fields": [
+           [
+            "c",
+            {
+             "k": "none"
+            }
+           ],
+           [
+            "y",
+            {
+             "k": "union",
+             "alts": [
+              {
+               "k": "bytes"
+              },
+              {
+               "k": "i64"
+              },
+              {
+               "k": "bool"
+              }
+             ]
+            }
+           ],
+           [
+            "A",
+            {
+             "k": "i64"
+            }
+           ]
+          ]
+         },
+         "val": {
+          "k": "union",
+          "alts": [
+           {
+            "k": "u64"
+           },
+           {
+            "k": "tuple",
+            "items": [
+             {
+              "k": "bytes"
+             },
+             {
+              "k": "bytes"
+             },
+             {
+              "k": "i64"
+             }
+            ]
+           }
+          ]
+         }
+        },
+        {
+         "k": "map",
+         "key": {
+          "k": "record",
+          "fields": [
+           [
+            "c",
+            {
+             "k": "i64"
+            }
+           ],
+           [
+            "y",
+            {
+             "k": "bytes"
+            }
+           ],
+           [
+            "A",
+            {
+             "k": "i64"
+            }
+           ]
+          ]
+         },
+         "val": {
+          "k": "u64"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "xs1",
+      "type": {
+       "k": "bytes"
+      },
+      "rest": true
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "record",
+       "fields": [
+        [
+         "y",
+         {
+          "k": "i64"
+         }
+        ],
+        [
+         "c",
+         {
+          "k": "record",
+          "fields": [
+           [
+            "x",
+            {
+             "k": "tuple",
+             "items": [
+              {
+               "k": "i64"
+              }
+             ]
+            }
+           ],
+           [
+            "y",
+            {
+             "k": "union",
+             "alts": [
+              {
+               "k": "text"
+              },
+              {
+               "k": "tuple",
+               "items": [
+                {
+                 "k": "f64"
+                }
+               ]
+              },
+              {
+               "k": "record",
+               "fields": [
+                [
+                 "y",
+                 {
+                  "k": "text"
+                 }
+                ],
+                [
+                 "x",
+                 {
+                  "k": "bool"
+                 }
+                ],
+                [
+                 "b",
+                 {
+                  "k": "u64"
+                 }
+                ]
+               ]
+              }
+             ]
+            }
+           ],
+           [
+            "a",
+            {
+             "k": "tuple",
+             "items": [
+              {
+               "k": "f64"
+              },
+              {
+               "k": "i64"
+              },
+              {
+               "k": "bytes"
+              }
+             ]
+            }
+           ]
+          ]
+         }
+        ],
+        [
+         "b",
+         {
+          "k": "f64"
+         }
+        ],
+        [
+         "a",
+         {
+          "k": "f64"
+         }
+        ]
+       ]
+      },
+      {
+       "k": "record",
+       "fields": [
+        [
+         "a",
+         {
+          "k": "union",
+          "alts": [
+           {
+            "k": "bool"
+           },
+           {
+            "k": "tuple",
+            "items": [
+             {
+              "k": "bytes"
+             },
+             {
+              "k": "list",
+              "item": {
+               "k": "bool"
+              }
+             },
+             {
+              "k": "union",
+              "alts": [
+               {
+                "k": "record",
+                "fields": [
+                 [
+                  "c",
+                  {
+                   "k": "json"
+                  }
+                 ],
+                 [
+                  "x",
+                  {
+                   "k": "text"
+                  }
+                 ],
+                 [
+                  "y",
+                  {
+                   "k": "none"
+                  }
+                 ],
+                 [
+                  "A",
+                  {
+                   "k": "f64"
+                  }
+                 ]
+                ]
+               },
+               {
+                "k": "record",
+                "fields": [
+                 [
+                  "x",
+                  {
+                   "k": "union",
+                   "alts": [
+                    {
+                     "k": "text"
+                    },
+                    {
+                     "k": "u64"
+                    },
+                    {
+                     "k": "bool"
+                    }
+                   ]
+                  }
+                 ],
+                 [
+                  "y",
+                  {
+                   "k": "u64"
+                  }
+                 ]
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "b",
+         {
+          "k": "i64"
+         }
+        ],
+        [
+         "c",
+         {
+          "k": "record",
+          "fields": [
+           [
+            "x",
+            {
+             "k": "tuple",
+             "items": [
+              {
+               "k": "i64"
+              }
+             ]
+            }
+           ],
+           [
+            "y",
+            {
+             "k": "union",
+             "alts": [
+              {
+               "k": "text"
+              },
+              {
+               "k": "tuple",
+               "items": [
+                {
+                 "k": "f64"
+                }
+               ]
+              },
+              {
+               "k": "record",
+               "fields": [
+                [
+                 "b",
+                 {
+                  "k": "u64"
+                 }
+                ],
+                [
+                 "x",
+                 {
+                  "k": "json"
+                 }
+                ],
+                [
+                 "y",
+                 {
+                  "k": "text"
+                 }
+                ]
+               ]
+              }
+             ]
+            }
+           ]
+          ]
+         }
+        ],
+        [
+         "y",
+         {
+          "k": "map",
+          "key": {
+           "k": "text"
+          },
+          "val": {
+           "k": "map",
+           "key": {
+            "k": "text"
+           },
+           "val": {
+            "k": "u64"
+           }
+          }
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    "  x9 ( xs0:map\t[text, bytes],  ...b1 :map  [map\r\n[text,\r\ntext], map\t[text, text]]\n ) : bytes\t"
+   ],
+   "expected": {
+    "name": "x9",
+    "args": [
+     {
+      "name": "xs0",
+      "type": {
+       "k": "map",
+       "key": {
+        "k": "text"
+       },
+       "val": {
+        "k": "bytes"
+       }
+      }
+     },
+     {
+      "name": "b1",
+      "type": {
+       "k": "map",
+       "key": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "text"
+        }
+       },
+       "val": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "text"
+        }
+       }
+      },
+      "rest": true
+     }
+    ],
+    "result": {
+     "k": "bytes"
+    }
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "\n _cmp\r\n()->json | tuple [u64] "
+   ],
+   "expected": {
+    "name": "_cmp",
+    "args": [],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "json"
+      },
+      {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "u64"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    "export\r\n\tdefault\tfunction\tencode_value\r\n(\r\ninput0 : tuple[bytes]|\n text,\t...\txs1:  tuple[map [bool,json],  tuple  [f64\n |\tbytes,\r\ntext\r\n|u64\r\n|i64,\r\ntext]]  |json )\n-> bytes| list[text ]"
+   ],
+   "expected": {
+    "name": "encode_value",
+    "args": [
+     {
+      "name": "input0",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "bytes"
+          }
+         ]
+        },
+        {
+         "k": "text"
+        }
+       ]
+      }
+     },
+     {
+      "name": "xs1",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "tuple",
+         "items": [
+          {
+           "k": "map",
+           "key": {
+            "k": "bool"
+           },
+           "val": {
+            "k": "json"
+           }
+          },
+          {
+           "k": "tuple",
+           "items": [
+            {
+             "k": "union",
+             "alts": [
+              {
+               "k": "f64"
+              },
+              {
+               "k": "bytes"
+              }
+             ]
+            },
+            {
+             "k": "union",
+             "alts": [
+              {
+               "k": "text"
+              },
+              {
+               "k": "u64"
+              },
+              {
+               "k": "i64"
+              }
+             ]
+            },
+            {
+             "k": "text"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "k": "json"
+        }
+       ]
+      },
+      "rest": true
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "bytes"
+      },
+      {
+       "k": "list",
+       "item": {
+        "k": "text"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "\n encode_value\n (a0:map[text,list\n [\tnone ]]  |\n tuple [list\r\n[\n f64], json, record[\r\na:text, c :  none, y  :text]]\n , input1 :\n json  |record[\n c:\ttuple\t[f64\t|\r\nbytes,\r\nbytes,\r\ni64]]\n , ... key_2 :\r\nu64\r\n) -> list  [list[bool  | none]\t|list\r\n[bool]]\n "
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier list accepts every value it does at 249 in \"\\n encode_value\\n (a0:map[text,list\\n [\\tnone ]]  |\\n tuple [list\\r\\n[\\n f64], json, record[\\r\\na:text, c :  none, y  :text]]\\n , input1 :\\n json  |record[\\n c:\\ttuple\\t[f64\\t|\\r\\nbytes,\\r\\nbytes,\\r\\ni64]]\\n , ... key_2 :\\r\\nu64\\r\\n) -> list  [list[bool  | none]\\t|list\\r\\n[bool]]\\n \""
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "x9 (\r\n)\n-> tuple  [record[ b\t:\n list[\n text\r\n] |\ttuple\n [bool,\n text |u64,\n bool], x:\n tuple[json,\n none,\n f64], A: tuple[bool, u64]]]"
+   ],
+   "expected": {
+    "name": "x9",
+    "args": [],
+    "result": {
+     "k": "tuple",
+     "items": [
+      {
+       "k": "record",
+       "fields": [
+        [
+         "b",
+         {
+          "k": "union",
+          "alts": [
+           {
+            "k": "list",
+            "item": {
+             "k": "text"
+            }
+           },
+           {
+            "k": "tuple",
+            "items": [
+             {
+              "k": "bool"
+             },
+             {
+              "k": "union",
+              "alts": [
+               {
+                "k": "text"
+               },
+               {
+                "k": "u64"
+               }
+              ]
+             },
+             {
+              "k": "bool"
+             }
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "x",
+         {
+          "k": "tuple",
+          "items": [
+           {
+            "k": "json"
+           },
+           {
+            "k": "none"
+           },
+           {
+            "k": "f64"
+           }
+          ]
+         }
+        ],
+        [
+         "A",
+         {
+          "k": "tuple",
+          "items": [
+           {
+            "k": "bool"
+           },
+           {
+            "k": "u64"
+           }
+          ]
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    " pub fn get_rgb  (\tn0\t:f64 ,\r\nn1:  record[ A\n :  record[\n x:\r\ni64, y\t:f64]|map  [text,u64|json|bool]] ,\r\n...\n n2: json\r\n|list [ json| text  ])\n-> list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[text]]]]]]]]]]]]]]]]]"
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier json accepts every value it does at 99 in \" pub fn get_rgb  (\\tn0\\t:f64 ,\\r\\nn1:  record[ A\\n :  record[\\n x:\\r\\ni64, y\\t:f64]|map  [text,u64|json|bool]] ,\\r\\n...\\n n2: json\\r\\n|list [ json| text  ])\\n-> list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[text]]]]]]]]]]]]]]]]]\""
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    "  min_indent(  n0  : record[\n c\t:list\t[\tbytes  ], x:i64\t|  json, y\t:\n list [  f64\r\n]] , input1 :list\r\n[none  ])->tuple[u64,list\r\n[i64\n ]]\n |f64"
+   ],
+   "expected": {
+    "name": "min_indent",
+    "args": [
+     {
+      "name": "n0",
+      "type": {
+       "k": "record",
+       "fields": [
+        [
+         "c",
+         {
+          "k": "list",
+          "item": {
+           "k": "bytes"
+          }
+         }
+        ],
+        [
+         "x",
+         {
+          "k": "union",
+          "alts": [
+           {
+            "k": "i64"
+           },
+           {
+            "k": "json"
+           }
+          ]
+         }
+        ],
+        [
+         "y",
+         {
+          "k": "list",
+          "item": {
+           "k": "f64"
+          }
+         }
+        ]
+       ]
+      }
+     },
+     {
+      "name": "input1",
+      "type": {
+       "k": "list",
+       "item": {
+        "k": "none"
+       }
+      }
+     }
+    ],
+    "result": {
+     "k": "union",
+     "alts": [
+      {
+       "k": "tuple",
+       "items": [
+        {
+         "k": "u64"
+        },
+        {
+         "k": "list",
+         "item": {
+          "k": "i64"
+         }
+        }
+       ]
+      },
+      {
+       "k": "f64"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "\r\nfn (\r\nn0\r\n:\tjson , a1:record[ b:\r\ntuple  [text\n |  none,\tu64,\tf64], c\t:  bytes, a  :\r\nlist\r\n[bool]]\r\n|  record[b\r\n:\ttuple  [text\n |  none, u64, f64] |tuple [json,  bytes\n | json\n | bool], c  :  bytes] , Value2\n :  f64|\r\ntuple[list[\n u64 ]]|\r\nmap[text,list\n [\ti64 ]]\r\n): bytes "
+   ],
+   "expected": {
+    "__throw": "bad SIG: a union alternative is unreachable: an earlier json accepts every value it does at 187 in \"\\r\\nfn (\\r\\nn0\\r\\n:\\tjson , a1:record[ b:\\r\\ntuple  [text\\n |  none,\\tu64,\\tf64], c\\t:  bytes, a  :\\r\\nlist\\r\\n[bool]]\\r\\n|  record[b\\r\\n:\\ttuple  [text\\n |  none, u64, f64] |tuple [json,  bytes\\n | json\\n | bool], c  :  bytes] , Value2\\n :  f64|\\r\\ntuple[list[\\n u64 ]]|\\r\\nmap[text,list\\n [\\ti64 ]]\\r\\n): bytes \""
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    " min_indent( n0\n :i64 |\r\nu64 |\r\nlist[ tuple [json,f64]  ],\n xs1\n : record[  y:  tuple\t[text]],\n input2\n :record[y\n : tuple  [none,text |bytes |json]\t|\n i64]\t|\n json\t|\n u64)\n-> list[\r\nlist\n [ list[\r\nu64 ]] ]"
+   ],
+   "expected": {
+    "name": "min_indent",
+    "args": [
+     {
+      "name": "n0",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "i64"
+        },
+        {
+         "k": "u64"
+        },
+        {
+         "k": "list",
+         "item": {
+          "k": "tuple",
+          "items": [
+           {
+            "k": "json"
+           },
+           {
+            "k": "f64"
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "xs1",
+      "type": {
+       "k": "record",
+       "fields": [
+        [
+         "y",
+         {
+          "k": "tuple",
+          "items": [
+           {
+            "k": "text"
+           }
+          ]
+         }
+        ]
+       ]
+      }
+     },
+     {
+      "name": "input2",
+      "type": {
+       "k": "union",
+       "alts": [
+        {
+         "k": "record",
+         "fields": [
+          [
+           "y",
+           {
+            "k": "union",
+            "alts": [
+             {
+              "k": "tuple",
+              "items": [
+               {
+                "k": "none"
+               },
+               {
+                "k": "union",
+                "alts": [
+                 {
+                  "k": "text"
+                 },
+                 {
+                  "k": "bytes"
+                 },
+                 {
+                  "k": "json"
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "k": "i64"
+             }
+            ]
+           }
+          ]
+         ]
+        },
+        {
+         "k": "json"
+        },
+        {
+         "k": "u64"
+        }
+       ]
+      }
+     }
+    ],
+    "result": {
+     "k": "list",
+     "item": {
+      "k": "list",
+      "item": {
+       "k": "list",
+       "item": {
+        "k": "u64"
+       }
+      }
+     }
+    }
+   }
+  }
+ ]
+}

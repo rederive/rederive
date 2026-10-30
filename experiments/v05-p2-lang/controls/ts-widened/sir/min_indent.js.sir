@@ -1,0 +1,15 @@
+UNIT min_indent
+LANG js
+PRIMARY-SHA256 27d9af564c7f4fa2ac092b56471c5941dc3c0d2315072c4e5f00f7fbfbd19048
+SIG min_indent(input: string): number
+NOTE default export
+ABI text=string (UTF-16 code units; an unpaired surrogate is representable and is content per R4); u64=number (a
+  non-negative integer, well inside the safe-integer range). The reconstruction exports a plain function as the default.
+MECHANISM R1-R5 are one global, multiline match of the LEADING pin over the input: each match is the indent of one
+  content line; no match -> 0, else the minimum of the match lengths. The m flag's ^ realizes BREAK exactly; [ \t]
+  realizes INDENT; the lookahead (?=\S) realizes "next character exists and is not in BLANK" (\S is the ECMAScript
+  complement of BLANK). Do NOT use the u flag (it would change nothing in the sets, but keep the package's form), and
+  do NOT split on "\n" alone — that misses CR, U+2028 and U+2029 as breaks (oracle v15, v16, v17).
+DEPENDS-ON none
+PINNED regex LEADING = /^[ \t]*(?=\S)/gm CITED R1-R5 — min-indent@1.0.1 index.js, the whole computation rides on it
+PROVENANCE min-indent@1.0.1 index.js — the real source (js); this file states the type mapping and the dialect only; no behavior.

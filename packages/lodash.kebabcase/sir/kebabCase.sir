@@ -1,0 +1,285 @@
+UNIT kebabCase
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG kebabCase(string = '') -> string
+   # Single positional argument. Re-emit as a DEFAULT export:  export default function kebabCase(string) { ... }
+   # The original is `module.exports = kebabCase` (CommonJS default). The blind re-emitter MUST default-export
+   # a single function taking ONE argument and returning a string.
+DEPENDS-ON none   # fully self-contained; zero external deps. The deburr letter-table is INLINE LOGIC (see SCOPE), not carried data.
+
+# =====================================================================================================
+# OVERVIEW
+# =====================================================================================================
+# kebabCase converts a string to "kebab case": its constituent WORDS are extracted, each is lowercased,
+# and they are joined with a single hyphen '-'. It is built by lodash's createCompounder over a fixed
+# reducer. The exact, ordered pipeline is below. Reproduce it EXACTLY — the word-splitting regexes and the
+# deburr letter-map are the entire behavioral surface and a blind re-emitter must reconstruct them verbatim.
+#
+# PURE. No clock / RNG / IO / env / network. No seam. ORACLE-CLASS deterministic.
+
+# =====================================================================================================
+# BEHAVIOR  (ordered pipeline — this is the whole of createCompounder applied to the kebab reducer)
+# =====================================================================================================
+#
+# Let S be the input argument.
+#
+# NODE 1 — coerce to string (toString):
+#   - If S is null OR undefined  -> S := '' (empty string). RESULT for empty string is '' (see NODE 7).
+#   - Else if typeof S === 'string' -> use S as-is.
+#   - Else S is coerced to string by the host's "baseToString":
+#       * Symbol primitive/object -> its Symbol#toString (e.g. "Symbol(x)").  [OUT-OF-ENVELOPE — not generated]
+#       * the value -0 coerces to the STRING "-0" (sign preserved), NOT "0".  [the '-' is later a word break]
+#       * everything else -> (value + '') i.e. JS string coercion:
+#             123 -> "123"; true -> "true"; [1,2,3] -> "1,2,3"; {} -> "[object Object]";
+#             NaN -> "NaN"; Infinity -> "Infinity".
+#     # IMPORTANT: these non-string coercions are SPECIFIED but OUT-OF-ENVELOPE for the generator (NaN/Infinity/-0/
+#     # boxed/Symbol/undefined do not survive the JSON codec). genInputs emits ONLY strings. A blind re-emitter
+#     # still reconstructs the coercion from this clause; it is just not exercised by the held-out vectors.
+#
+# NODE 2 — deburr(S):  (operates on the coerced string)
+#   2a. If S is the empty string -> deburr returns '' and the whole result is '' (short-circuit; `string && ...`).
+#   2b. Replace every char matched by reLatin with its deburred basic-Latin mapping (table below):
+#         reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xffĀ-ſ]/g
+#       Each matched char is looked up in DEBURRED-LETTERS (full 190-entry table in SCOPE). Every char in
+#       reLatin's range HAS a table entry (verified: no char in range is unmapped), so no "undefined" is ever
+#       inserted. Some mappings are MULTI-CHAR: 'Ae','ae','Th','th','ss','IJ','ij','Oe','oe', and the special
+#       'ŉ' -> "'n" (an ASCII apostrophe + n; that apostrophe is removed later in NODE 3).
+#       NOTE the deliberate GAPS in reLatin: U+00D7 (MULTIPLICATION SIGN ×) and U+00F7 (DIVISION SIGN ÷) are
+#       NOT in the range and are NOT deburred (they are word-break punctuation, see NODE 5 break set).
+#   2c. Then remove (replace with '') every char matched by reComboMark:
+#         reComboMark = /[̀-ͯ︠-︣⃐-⃰]/g
+#       i.e. combining diacritical marks (U+0300..U+036F), combining marks for symbols (U+20D0..U+20F0), and
+#       the half-mark range (U+FE20..U+FE23) are DELETED. (So "e"+U+0301 -> "e".)  Boundaries are exact:
+#       U+036F deleted, U+0370 kept; U+20F0 deleted; U+FE23 deleted, U+FE24 kept.
+#
+# NODE 3 — strip apostrophes:  S := deburred.replace(reApos, '')
+#         reApos = /['’]/g
+#       Remove EVERY occurrence of ASCII apostrophe U+0027 (') and RIGHT SINGLE QUOTATION MARK U+2019 (’).
+#       NO OTHER quote-like char is removed here: U+2018 (‘ left single), U+02BC (ʼ modifier), backtick ` are
+#       NOT apostrophes for this step. (The apostrophe contraction sub-patterns inside the word regex are thus
+#       MOOT — apostrophes are already gone by the time words() runs. Document them for completeness but they
+#       never fire.)  Examples: "it's"->"its", "it’s"->"its", "we're"->"were", "rock'n'roll"->"rocknroll".
+#
+# NODE 4 — choose word-splitter (words(S) with no explicit pattern):
+#   Compute hasUnicodeWord(S) = reHasUnicodeWord.test(S) where
+#         reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#   i.e. TRUE iff S contains ANY of:
+#       (i)   a lowercase ASCII letter immediately followed by an uppercase ASCII letter (camel hump), OR
+#       (ii)  two-or-more uppercase ASCII letters immediately followed by a lowercase ASCII letter, OR
+#       (iii) an ASCII digit immediately followed by an ASCII letter, OR
+#       (iv)  an ASCII letter immediately followed by an ASCII digit, OR
+#       (v)   ANY character that is NOT in the set [A-Za-z0-9 ] (i.e. any non-ASCII-alnum, non-space char:
+#             punctuation, underscore, accented/non-Latin letters, emoji, etc. — note SPACE U+0020 is the
+#             ONLY whitespace exempted here).
+#   If hasUnicodeWord(S) is TRUE  -> use UNICODE word path (NODE 5).
+#   If hasUnicodeWord(S) is FALSE -> use ASCII word path (NODE 6).
+#   # Both paths return [] for a string with no words; reduce over [] yields '' (NODE 7).
+#
+# NODE 5 — UNICODE word path (unicodeWords): words := S.match(reUnicodeWord) || []
+#   reUnicodeWord is the ALTERNATION below (global). Words are the successive non-overlapping matches, left to
+#   right, of whichever alternative matches first at each position. The alternatives (exact, in order) are:
+#
+#     Building blocks (character classes):
+#       rsApos        = ['’]                        # (moot here — apostrophes already stripped in NODE 3)
+#       rsBreakRange  = \xac\xb1\xd7\xf7                  # math ops ¬ ± × ÷
+#                       \x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf   # ASCII controls/punct/symbols + Latin-1 punct
+#                        -⁯                    # general punctuation
+#                       (space set:) ' '\t\x0b\f\xa0﻿\n\r   ᠎
+#                                     -
+#       rsBreak       = [rsBreakRange]                   # any single "break"/separator char
+#       rsDigits      = \d+                              # one or more ASCII digits 0-9
+#       rsLowerRange  = a-z\xdf-\xf6\xf8-\xff            # ASCII lower + Latin-1 lowercase letters
+#       rsUpperRange  = A-Z\xc0-\xd6\xd8-\xde            # ASCII upper + Latin-1 uppercase letters
+#       rsLower       = [rsLowerRange]
+#       rsUpper       = [rsUpperRange]
+#       rsAstralRange = \ud800-\udfff
+#       rsDingbatRange= ✀-➿
+#       rsMisc        = [^ rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange ]
+#                       # i.e. ANY char that is NOT astral, NOT a break char, NOT a digit, NOT a dingbat,
+#                       # NOT a lower-range letter, NOT an upper-range letter. In practice rsMisc =
+#                       # non-Latin LETTERS and ideographs (Cyrillic, Greek, CJK, Hangul, ligatures like ﬁ, etc.)
+#                       # that are caseless from the regex's point of view.
+#       rsLowerMisc   = (?: rsLower | rsMisc )
+#       rsUpperMisc   = (?: rsUpper | rsMisc )
+#       rsOptLowerContr = (?: rsApos (?:d|ll|m|re|s|t|ve) )?      # never fires (NODE 3 removed apostrophes)
+#       rsOptUpperContr = (?: rsApos (?:D|LL|M|RE|S|T|VE) )?      # never fires
+#       (emoji building blocks rsCombo/rsFitz/rsModifier/rsZWJ/rsRegional/rsSurrPair/rsDingbat/rsSeq/rsEmoji
+#        per the emoji alternative below)
+#
+#     ALTERNATIVES (first match wins at each scan position):
+#       A1: rsUpper? rsLower+ rsOptLowerContr  (?= rsBreak | rsUpper | $ )
+#           # an optional leading uppercase + a run of lowercase letters, ending before a break/uppercase/end.
+#           # e.g. "Foo" in "FooBar"; "bar" in "fooBar".
+#       A2: rsUpperMisc+ rsOptUpperContr  (?= rsBreak | rsUpper rsLowerMisc | $ )
+#           # a run of uppercase-or-misc letters, ending before a break, OR before an Upper followed by a
+#           # Lower/Misc (so an all-caps acronym stops one char before the start of a new CamelWord), or end.
+#           # e.g. "XML" in "XMLHttp"; "AB" in "ABCdef" (stops before "Cdef").
+#       A3: rsUpper? rsLowerMisc+ rsOptLowerContr
+#           # optional leading uppercase + a run of lower-or-misc letters (catches Cyrillic/CJK runs, and
+#           # accented-lowercase runs). e.g. "привет", "café"(after deburr it's ascii though), "日本語テスト".
+#       A4: rsUpper+ rsOptUpperContr
+#           # a pure run of uppercase letters (e.g. trailing acronym "ID" in "getID", "GHI" in "ABCdefGHI").
+#       A5: rsDigits                 # a run of ASCII digits, ALWAYS its own word.
+#       A6: rsEmoji                  # an emoji sequence (dingbat | regional-indicator-pair | surrogate-pair),
+#                                    # optionally with variation selectors / modifiers / ZWJ joins. Each emoji
+#                                    # sequence becomes its own word.
+#
+#     CONSEQUENCES the re-emitter MUST reproduce (verified against the real package):
+#       - "camelCase" -> [camel, Case];  "fooBarBaz" -> [foo, Bar, Baz].
+#       - "XMLHttpRequest" -> [XML, Http, Request];  "PDFLoader" -> [PDF, Loader].
+#       - "ABCdefGHI" -> [AB, Cdef, GHI];  "getID" -> [get, ID];  "IDs" -> [I, Ds]; "userIDs" -> [user, I, Ds].
+#       - DIGITS always split off as their own word and sit between letter-words:
+#             "foo123bar" -> [foo,123,bar];  "v2Beta" -> [v,2,Beta];  "iOS9App" -> [i,OS,9,App];
+#             "a1b2c3" -> [a,1,b,2,c,3];  "HTML5" -> [HTML,5];  "Q1Report" -> [Q,1,Report].
+#       - Non-Latin scripts are caseless rsMisc and stay as single runs:
+#             "Привет Мир" -> [Привет, Мир];  "Ελληνικά" -> [Ελληνικά];  "日本語テスト" -> [日本語テスト].
+#       - Mixed Latin/non-Latin: "fooБарBaz" -> [fooБар, Baz] (lower+misc run, then Camel boundary at B).
+#       - Emoji are kept as standalone words: "hello 😀 world" -> [hello,😀,world]; "us 🇺🇸 flag" -> [us,🇺🇸,flag].
+#       - The "math sign" gap chars ×(U+00D7) ÷(U+00F7) ¬(U+00AC) ±(U+00B1) are BREAK chars: "a×b" -> [a,b].
+#
+# NODE 6 — ASCII word path (asciiWords): words := S.match(reAsciiWord) || []
+#         reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#       i.e. maximal runs of characters that are NOT in those ASCII punctuation/control ranges. Concretely a
+#       "word" is a maximal run of [0-9A-Za-z] PLUS any char >= U+0080 (the negation only excludes ASCII
+#       punctuation/space/control). There is NO camel/digit boundary on this path — runs are split ONLY on
+#       ASCII separators. This path is taken ONLY when hasUnicodeWord is FALSE, i.e. the string has no camel
+#       hump, no digit/letter adjacency, and contains only chars in [A-Za-z0-9 ] plus separators.
+#       Examples: "foo bar" -> [foo,bar]; "FOO BAR" -> [FOO,BAR]; "FOOBAR" -> [FOOBAR];
+#                 "123 456" -> [123,456]; "foobar" -> [foobar]; "fred, barney, & pebbles" -> [fred,barney,pebbles].
+#       # (Note: a string like "foo_bar" takes the UNICODE path because '_' matches [^A-Za-z0-9 ]; both paths
+#       #  yield [foo,bar] for it, so the result is the same — but the PATH differs and the re-emitter must
+#       #  branch on hasUnicodeWord exactly to stay correct on all inputs.)
+#
+# NODE 7 — reduce + lowercase + join (the kebab reducer over arrayReduce, initial accumulator ''):
+#       result := ''
+#       for each word w at index i (0-based) in the words array:
+#           result := result + (i === 0 ? '' : '-') + w.toLowerCase()
+#       return result
+#   - toLowerCase is the host's LOCALE-INDEPENDENT lowercasing (JS String#toLowerCase — NOT toLocaleLowerCase;
+#     no Turkish-I special-casing). "ISTANBUL" -> "istanbul"; "ABC" -> "abc".
+#   - Words that are pure digits or emoji lowercase to themselves.
+#   - Empty words array -> result ''.
+#   - Separator between words is exactly ONE hyphen '-'. There is never a leading/trailing hyphen
+#     (collapsing of separators is implicit because separators are never words).
+#
+# =====================================================================================================
+# EDGE / DEGENERATE CASES (all verified against lodash.kebabcase@4.1.1)
+# =====================================================================================================
+#   ''                       -> ''            (empty)
+#   null / undefined         -> ''            (coerced to '')
+#   '   ' (spaces only)      -> ''            (no words)
+#   '\t\n'                   -> ''
+#   '--__  --'               -> ''            (separators only)
+#   '!!!'  / '_._._'         -> ''            (punctuation only)
+#   'a'                      -> 'a'
+#   'A'                      -> 'a'
+#   '1'                      -> '1'
+#   'Foo Bar'                -> 'foo-bar'
+#   'fooBar'                 -> 'foo-bar'
+#   '__FOO_BAR__'            -> 'foo-bar'
+#   'camelCase'              -> 'camel-case'
+#   'ALLCAPS'                -> 'allcaps'
+#   'XMLHttpRequest'         -> 'xml-http-request'
+#   'foo123bar'              -> 'foo-123-bar'
+#   'v2Beta'                 -> 'v-2-beta'
+#   'déjà vu'                -> 'deja-vu'
+#   'Crème Brûlée'           -> 'creme-brulee'
+#   'ÅÄÖ'                    -> 'aao'
+#   "it's" / "it’s"          -> 'its'
+#   "don't"                  -> 'dont'
+#   "Lebowski's"             -> 'lebowskis'
+#   'foo_bar-baz qux'        -> 'foo-bar-baz-qux'
+#   '  leading  trailing  '  -> 'leading-trailing'
+#   'fred, barney, & pebbles'-> 'fred-barney-pebbles'
+#   'IDs'                    -> 'i-ds'
+#   'userIDs'                -> 'user-i-ds'
+#   'HTTPServer'             -> 'http-server'
+#   'iOS9App'                -> 'i-os-9-app'
+#   'ABCDef'                 -> 'abc-def'
+#   'ABCdefGHI'              -> 'ab-cdef-ghi'
+#   'getHTTPResponse'        -> 'get-http-response'
+#   'ßeta'                   -> 'sseta'        (ß -> 'ss')
+#   'Þor'                    -> 'thor'         (Þ -> 'Th')
+#   'Æon'                    -> 'aeon'         (Æ -> 'Ae')
+#   'œuvre'                  -> 'oeuvre'       (œ -> 'oe')
+#   'ŉ'                      -> 'n'            (U+0149 -> "'n", apostrophe then stripped)
+#   'ﬁle'                    -> 'ﬁle'          (ligature U+FB01 is rsMisc, NOT in deburr table, kept; lowercased to self)
+#   'Привет Мир'             -> 'привет-мир'
+#   'Ελληνικά'               -> 'ελληνικά'
+#   '日本語テスト'           -> '日本語テスト'
+#   'hello 😀 world'         -> 'hello-😀-world'
+#   'a×b' / 'a÷b'            -> 'a-b'          (× ÷ are break chars)
+#   'itʼs' (U+02BC)          -> 'itʼs'         (modifier apostrophe NOT stripped; rsMisc letter kept)
+#   '𝐀𝐁𝐂' (astral)          -> '𝐀-𝐁-𝐂'       (each surrogate-pair is its own emoji-ish word; lowercases to self)
+#   '-0' (string)            -> '0'            ('-' is a break char)
+#
+# =====================================================================================================
+# ORACLE  value -> oracle.json
+#   For each input tuple [string], the expected is the exact returned kebab-cased string (a JS string).
+#   Throw paths: NONE for codec-faithful (string) inputs — kebabCase never throws on a string. (It would throw
+#   only on the unrepresentable Symbol-coercion-with-no-Symbol cases, which are out of envelope.)
+# =====================================================================================================
+
+# =====================================================================================================
+# SCOPE
+# =====================================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full ordered pipeline NODE 1..7 above: toString coercion, deburr (reLatin map + reComboMark delete),
+#     apostrophe strip (reApos), hasUnicodeWord branch, unicodeWords/asciiWords split, lowercase + '-' join.
+#   - ALL regexes verbatim:
+#       reAsciiWord       = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#       reLatin           = /[\xc0-\xd6\xd8-\xf6\xf8-\xffĀ-ſ]/g
+#       reComboMark       = /[̀-ͯ︠-︣⃐-⃰]/g
+#       reApos            = /['’]/g
+#       reHasUnicodeWord  = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#       reUnicodeWord     = the NODE-5 alternation (A1..A6) with the listed building blocks, global flag.
+#
+# IN-CONTRACT DATA — DEBURRED-LETTERS (190 entries; INLINE table, NOT carried data — it is a small, fully
+# demonstrated map that the blind re-emitter transcribes from here. It is generated by lodash, not a published
+# standard, so no independent authority attestation applies; hence INLINE, not a carried.json). The complete
+# map (codepoint -> replacement string), exactly as in source:
+#   Latin-1 Supplement:
+#     C0..C5 -> A ;  E0..E5 -> a ;  C7 -> C ; E7 -> c ; D0 -> D ; F0 -> d ;
+#     C8..CB -> E ;  E8..EB -> e ;  CC..CF -> I ; EC..EF -> i ; D1 -> N ; F1 -> n ;
+#     D2..D6,D8 -> O ; F2..F6,F8 -> o ; D9..DC -> U ; F9..FC -> u ; DD -> Y ; FD -> y ; FF -> y ;
+#     C6 -> Ae ; E6 -> ae ; DE -> Th ; FE -> th ; DF -> ss ;
+#   Latin Extended-A:
+#     0100,0102,0104 -> A ;  0101,0103,0105 -> a ;
+#     0106,0108,010A,010C -> C ; 0107,0109,010B,010D -> c ;
+#     010E,0110 -> D ; 010F,0111 -> d ;
+#     0112,0114,0116,0118,011A -> E ; 0113,0115,0117,0119,011B -> e ;
+#     011C,011E,0120,0122 -> G ; 011D,011F,0121,0123 -> g ;
+#     0124,0126 -> H ; 0125,0127 -> h ;
+#     0128,012A,012C,012E,0130 -> I ; 0129,012B,012D,012F,0131 -> i ;
+#     0134 -> J ; 0135 -> j ; 0136 -> K ; 0137,0138 -> k ;
+#     0139,013B,013D,013F,0141 -> L ; 013A,013C,013E,0140,0142 -> l ;
+#     0143,0145,0147,014A -> N ; 0144,0146,0148,014B -> n ;
+#     014C,014E,0150 -> O ; 014D,014F,0151 -> o ;
+#     0154,0156,0158 -> R ; 0155,0157,0159 -> r ;
+#     015A,015C,015E,0160 -> S ; 015B,015D,015F,0161 -> s ;
+#     0162,0164,0166 -> T ; 0163,0165,0167 -> t ;
+#     0168,016A,016C,016E,0170,0172 -> U ; 0169,016B,016D,016F,0171,0173 -> u ;
+#     0174 -> W ; 0175 -> w ; 0176,0178 -> Y ; 0177 -> y ;
+#     0179,017B,017D -> Z ; 017A,017C,017E -> z ;
+#     0132 -> IJ ; 0133 -> ij ; 0152 -> Oe ; 0153 -> oe ;
+#     0149 -> 'n (ASCII apostrophe + n) ; 017F -> ss
+#   # Coverage proof: every codepoint matched by reLatin has exactly one entry here (verified: no unmapped
+#   # char in reLatin's range), so deburr never inserts the string "undefined".
+#
+# CARRIED DATA: none. (No 1024-entry table, no S-box, no published-standard charmap requiring byte-exact
+#   independent attestation. The 190-entry deburr map is small, demonstrated in full above, and inline.)
+#
+# OUT-OF-CONTRACT: none. Pure function, no side effects, no stateful APIs, no ambient reads.
+#
+# OUT-OF-ENVELOPE (specified but not generated, per the harness JSON codec): non-string arguments
+#   (undefined, null, numbers incl. NaN/Infinity/-0, booleans, arrays, plain objects, Symbols, boxed
+#   primitives). Their behavior is fully specified in NODE 1, but the generator emits ONLY strings because
+#   these values do not survive JSON round-trip and would poison held-out expecteds.
+
+# =====================================================================================================
+# PROVENANCE
+#   package: lodash.kebabcase@4.1.1   (npm; name "lodash.kebabcase", license MIT)
+#   repo:    https://github.com/lodash/lodash  (Custom Build: `lodash modularize exports="npm" -o ./`)
+#   license: MIT (Copyright jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+#   source:  node_modules/lodash.kebabcase/index.js  (module.exports = kebabCase = createCompounder(reducer))
+# =====================================================================================================

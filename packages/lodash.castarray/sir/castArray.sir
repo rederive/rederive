@@ -1,0 +1,129 @@
+UNIT castArray
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG castArray(...args) -> Array      # variadic in form, but ONLY arguments[0] is ever read (see BEHAVIOR)
+DEPENDS-ON none                      # isArray is just a local alias: var isArray = Array.isArray
+EMITTER-DIRECTIVE export default <fn>   # default export; emitter file must `export default castArray`
+
+BEHAVIOR
+  # Source (lodash.castarray@4.4.0, index.js, verbatim semantics):
+  #   function castArray() {
+  #     if (!arguments.length) { return []; }
+  #     var value = arguments[0];
+  #     return isArray(value) ? value : [value];
+  #   }
+  #   var isArray = Array.isArray;
+  #
+  # Pipeline (ordered):
+  NODE 1  ZERO-ARGS BRANCH
+    IF arguments.length === 0  (i.e. the function is called with NO arguments at all)
+       -> RETURN a NEW empty array  []   (fresh array literal each call)
+    Note: this is distinct from castArray(undefined). With ZERO args -> []  (length 0).
+          With one explicit undefined arg -> [undefined] (length 1). See NODE 3.
+
+  NODE 2  READ FIRST ARG ONLY
+    value := arguments[0]
+    # IMPORTANT: no other argument is ever read. arguments[1], arguments[2], ... are
+    # COMPLETELY IGNORED. castArray is variadic in call-form but unary in effect.
+
+  NODE 3  ARRAY BRANCH (the cast decision)
+    IF Array.isArray(value) === true
+       -> RETURN value  (THE SAME REFERENCE — no copy, no clone; identity preserved)
+    ELSE
+       -> RETURN [value]  (a NEW single-element array wrapping value; the element is
+                           value by identity/bit-for-bit: -0 stays -0, NaN stays NaN,
+                           undefined stays undefined, bigint stays bigint, objects by ref)
+
+  # Array.isArray semantics (the predicate that selects the branch):
+  #   - true  for: real Array instances, Array SUBCLASSES (class X extends Array),
+  #                 and CROSS-REALM arrays (vm/iframe). All -> same-reference return.
+  #   - false for: Uint8Array / Buffer / any TypedArray, Set, Map, the arguments object,
+  #                 plain objects, RegExp, Date, functions, strings, numbers, bigint,
+  #                 boolean, null, undefined, symbols. All -> wrapped as [value].
+
+ORACLE value -> oracle.json
+  # DETERMINISTIC and pure: no clock, no RNG, no env, no IO, no network. No seam.
+  #
+  # REFERENCE-IDENTITY SEAM (the one subtlety the value-codec cannot see directly):
+  #   In the ARRAY branch the contract is "return the SAME reference", not merely "return
+  #   an equal array". A value-comparing oracle that JSON-serializes the result CANNOT
+  #   distinguish a faithful same-reference return from a buggy emitter that copies the
+  #   array (e.g. returns value.slice() or [...value]) — both serialize identically.
+  #   To make identity OBSERVABLE in the differential, the input-generator emits, for the
+  #   array-first-arg cases, a SENTINEL-TAGGED first element so the harness/emitter contract
+  #   can be probed for identity, AND — more robustly — the SIR mandates the identity
+  #   property as an explicit behavioral requirement the blind engineer MUST satisfy:
+  #     For an array-typed first arg A, castArray(A) MUST be the exact object A
+  #     (`castArray(A) === A` is true). DO NOT copy/clone/spread. A correct emitter
+  #     returns `value` itself in the array branch; an incorrect one returns a new array.
+  #   Structural floor: even if the oracle compares by value only, the structural contract
+  #   (result deep-equals the input array, same length, same holes) is fully captured by the
+  #   value codec, so a value-comparing oracle still catches MOST array-branch bugs (wrong
+  #   length, mutated elements, double-wrapping like [[...]]). The identity refinement is
+  #   the residual seam and is stated here as a hard requirement on the re-emitter.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the !arguments.length zero-args -> [] branch
+    - "read arguments[0] only; ignore all further args"
+    - Array.isArray(value) ? value : [value]  (same-reference vs new-wrapper)
+    - identity preservation in the array branch (return the SAME object)
+    - element fidelity in the wrap branch (-0, NaN, undefined, bigint, object-by-ref)
+  CARRIED DATA: none. No literal tables, no embedded constants. N/A.
+  OUT-OF-CONTRACT: none. Pure, read-only, no side effects, no stateful mutators.
+
+  # In-scope value classes demonstrated (self-consistent with genInputs curated prefix):
+  #   ZERO-ARG call            -> []
+  #   number first arg     1   -> [1]
+  #   string first arg   "abc" -> ["abc"]
+  #   null first arg           -> [null]
+  #   undefined first arg      -> [undefined]   (length-1, index 0 present)
+  #   bool first arg    true   -> [true]
+  #   bigint first arg   10n   -> [10n]
+  #   -0 first arg             -> [-0]   (Object.is(result[0], -0) === true)
+  #   NaN first arg            -> [NaN]  (Object.is(result[0], NaN) === true)
+  #   Infinity first arg       -> [Infinity]
+  #   plain object {a:1}       -> [{a:1}] (same inner-object ref)
+  #   RegExp /x/g              -> [/x/g]
+  #   Set / Map first arg      -> [set]/[map]  (NOT arrays -> wrapped)
+  #   Uint8Array / Buffer      -> [u8] / [buf] (NOT arrays -> wrapped, len 1)
+  #   ARRAY first arg [1,2,3]  -> SAME [1,2,3] (=== input)
+  #   empty array []           -> SAME [] (=== input, length 0)  NB: distinct from zero-arg []
+  #   nested array [[1],[2]]   -> SAME [[1],[2]] (=== input)
+  #   sparse array [1,,3]      -> SAME sparse array (=== input; hole at index 1 preserved)
+  #   multi-arg (1,2,3)        -> [1]  (ONLY first arg; extras dropped)
+  #   array-then-extras([9],5) -> SAME [9] (=== input; extras dropped)
+
+NOTES (verified behavior + HINT DIVERGENCE — recorded from running the real module)
+  * HINT DIVERGENCE (MAJOR): the operator hint claimed castArray is "variadic" and that
+    "otherwise returns a new array of ALL the args", giving castArray(1,2,3) -> [1,2,3].
+    THIS IS FALSE. Verified against the real lodash.castarray@4.4.0:
+        castArray(1,2,3)   => [1]        (NOT [1,2,3])
+        castArray([9],5,6) => [9]        (same ref; extras 5,6 dropped)
+    The source reads ONLY arguments[0]. The SIR follows the REAL behavior: unary-in-effect.
+    The hint was correct on: zero-args->[], castArray(1)->[1], castArray([1]) same-ref,
+    castArray(null)->[null], castArray(undefined)->[undefined], and the
+    !arguments.length / isArray(args[0]) branch structure.
+  * VERIFIED same-reference: castArray(arr) === arr for plain arrays, Array subclasses,
+    cross-realm (vm) arrays, empty arrays, nested arrays, and sparse arrays (hole preserved).
+  * VERIFIED zero-arg vs undefined-arg distinction: castArray() -> [] (length 0);
+    castArray(undefined) -> [undefined] (length 1, index 0 present, value undefined).
+  * VERIFIED non-array array-likes are WRAPPED, not passed through: Uint8Array, Buffer,
+    Set, Map, and the arguments object all yield a NEW length-1 array [value] because
+    Array.isArray is false for them.
+  * VERIFIED value fidelity in wrap branch: Object.is(castArray(-0)[0], -0)===true;
+    Object.is(castArray(NaN)[0], NaN)===true; bigint preserved (10n).
+  * CODEC NOTE for the generator (oracle persists JSON.stringify(encode(args))):
+    The codec round-trips JSON primitives/arrays/objects/RegExp/Set/Map/Uint8Array/Buffer/
+    bigint, AND (per this run's extended codec) undefined / NaN / ±Infinity / -0 / sparse
+    holes / boxed primitives. genInputs exercises all of these in the curated prefix.
+    DOCUMENT-AS-OUT (NOT emitted by genInputs, behavior stated here for the blind engineer):
+      - function first arg:  Array.isArray(fn)===false -> [fn]  (wrapped, len 1).
+      - Symbol first arg:    Array.isArray(sym)===false -> [sym] (wrapped, len 1).
+    Both follow NODE 3's ELSE branch trivially; they are excluded from genInputs only
+    because they are not codec-round-trippable, not because their behavior is unclear.
+
+PROVENANCE
+  lodash.castarray@4.4.0 (npm) — "lodash 4.4.0 (Custom Build)".
+  repo: lodash/lodash ; license: MIT (https://lodash.com/license).
+  source file: node_modules/lodash.castarray/index.js (function castArray + var isArray).

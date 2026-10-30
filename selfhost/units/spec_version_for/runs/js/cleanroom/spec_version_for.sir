@@ -1,0 +1,47 @@
+UNIT spec_version_for
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b15b56613f9d cli/features.mjs specVersionFor over the feature table of cli/capabilities.json — reproduce the code exactly, accidents included
+ORACLE-CLASS deterministic
+SIG spec_version_for(features: list[text]) -> text
+ENVELOPE features is a list of text of any length (empty and duplicates included). A name is matched exactly as given:
+  case, whitespace and look-alike characters are significant. Throws are IN scope as observations (R3).
+DEPENDS-ON none
+DESCRIPTION The SIR spec version a bundle's feature set requires: the latest version among the features' FEATURES "since"
+  versions, never below the floor "0.2". Under-stamping is the hazard the function guards, so a name it does not know
+  throws instead of being skipped.
+BEHAVIOR
+R1 The result starts at the floor "0.2".
+R2 Each name of features, in list order, is looked up in TABLE FEATURES; a hit whose since is LATER than the current result
+  (TABLE VERSION-ORDER) replaces it. So the result is the latest since over the hits, or "0.2" when there are none; order
+  and duplicates do not change it.
+R3 A name that is not a row of TABLE FEATURES -> throws: the empty text, a case variant (Vectors, RING), a name with
+  extra whitespace, and the names of the host's built-in object members (constructor, toString, __proto__, hasOwnProperty)
+  alike. The throw happens even when the list also holds known features.
+TABLE FEATURES — cli/capabilities.json "features": the feature name and its since; the implemented and generable flags are NOT consulted
+  vectors           | 0.2
+  carried-data      | 0.3
+  envelope          | 0.3
+  trace-seam        | 0.3
+  scheduler         | 0.4
+  lifecycle         | 0.4
+  par-interleaving  | 0.4
+  ring              | 0.4
+  lang-variant      | 0.5
+  cross-lang-anchor | 0.5
+TABLE VERSION-ORDER — the since values compared as dotted numeric versions, earliest first; the result is always one of these four texts exactly
+  0.2 | earliest, the floor
+  0.3 | later than 0.2
+  0.4 | later than 0.3
+  0.5 | latest
+INVARIANT the result is one of 0.2, 0.3, 0.4, 0.5; adding a name to features never lowers it; the input list is never mutated.
+ORACLE value -> oracles/spec_version_for.json  CANONICAL-SHA256 883d849be39f7e385d110d66cf7738af3febb6b9066e56fb51fc3bea1a2aedaf
+OUT-OF-DOMAIN outside the SIG (not representable under list[text], so not in the oracle): an argument that is not a
+  list throws; a list element that is not text throws as an unknown name (R3).
+SCOPE IN: R1–R3 over ENVELOPE, with the FEATURES table as it stands at the anchored commit. OUT: the rest of
+  cli/features.mjs (detectFeatures, languagesOf, the general version comparator beyond the four since values), the
+  throw message text (not graded), and non-text list elements.
+PROVENANCE rederive@b15b56613f9d (rederive, the trust kernel's own cli), cli/features.mjs specVersionFor and
+  cli/capabilities.json features.*.since. Cold cut 2026-10-26 into the v0.5 contract register from the pinned authority.
+  Round 2 (authority b15b56613f9d): names are looked up as own rows of the table, so the inherited-name acceptance rule
+  of round 1 is gone; the argument must be a list; the table is unchanged.

@@ -1,0 +1,21 @@
+UNIT legacy_print_sha
+LANG rust
+PRIMARY-SHA256 211da0e9049f0b9965185081f40026ac44eaf659e75caa15009110a8dd86153c
+SIG pub fn legacy_print_sha(text: &str) -> String
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn legacy_print_sha) with NO
+  dependencies — no main, no I/O, no regex crate, no sha2 crate. The verifier supplies its own harness crate that
+  depends on the artifact by path; compiling it against this SIG is the signature check.
+ABI text=&str (UTF-8; only well-formed Unicode is ever sent). Positions in R5 R6 R8 are CHARACTER (char) positions;
+  since no WS or LT member is astral, char positions and the js code-unit positions decide every rule identically.
+  Result = String of 64 lowercase hex digits.
+MECHANISM SHA-256 (R1) is implemented in the crate per FIPS 180-4 (the standard initial hash values and 64 round
+  constants, big-endian words, the 0x80 / zero / 64-bit bit-length padding) over P.as_bytes(); hex = format!("{:02x}").
+MECHANISM WS membership = a match on exactly the 25 code points of the primary's WS pin; leading/trailing WS removal =
+  trim_matches / trim_end_matches with that predicate. NOT char::is_whitespace, str::trim or str::split_whitespace
+  (they use Unicode White_Space: 0085 in, FEFF out). LT = a match on the 4 code points of the LT pin.
+MECHANISM splitting (R2) = str::split('\n') (yields the empty final piece, as js), then strip_suffix('\r') once. The
+  scanners of R5, R6 and R8 are hand-written over a Vec<char>; INDENT (R3) is the prefix of ' ' and '\t' only.
+MECHANISM ATTRS (R10) = a Vec<(&'static str, String)> kept in first-store order: storing an existing key replaces its
+  value in place (R9) or, inside one R8 run, appends " " + value only when the old value is non-empty.
+DEPENDS-ON none
+PROVENANCE contract from rederive@978444f3baf3 cli/sir/legacy-print.mjs (MIT); a Rust emission is a re-derivation, not a port.

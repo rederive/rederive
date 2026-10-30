@@ -1,0 +1,133 @@
+UNIT bytes
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR bytes@3.1.2 index.js — the default export (format for a number, parse for text); reproduce the package exactly,
+  accidents included (R5, R6, R11, R13 and the OUT-OF-DOMAIN surface)
+ORACLE-CLASS deterministic
+SIG bytes(value: json, ...options: json) -> text | f64 | none
+ENVELOPE value is any json value: text (any Unicode text), f64 (NaN, +Infinity, -Infinity and -0 included), none, bool,
+  list, map. The trailing slot holds zero or more json values; only the first is read (R2) and it is the OPTIONS value.
+  The verified OPTIONS is either not a map (R2) or a map whose recognized keys, when present, hold: unit text | none;
+  decimalPlaces f64 | none; fixedDecimals bool | none; thousandsSeparator text | none; unitSeparator text | none — with
+  unit text that is not, ignoring letter case, "constructor" or "__proto__", and thousandsSeparator text containing no
+  "$". Unrecognized keys are IN and ignored. Every other option value is OUT-OF-DOMAIN (its package behavior is stated
+  there). Two inputs THROW and are IN: decimalPlaces outside 0..100 (R10) and a FILLED non-text unit (R8). A text
+  numeral beyond the finite f64 range yields an infinite result and is IN (R4, R5).
+DEPENDS-ON none
+DESCRIPTION Two-way byte-size conversion. Text is parsed to a count of bytes: a strict numeral-plus-unit form ("1.5kb")
+  scales by a binary (1024-based) unit and floors; any other text is read leniently as a leading integer ("5b", "1024",
+  "  12abc"). A number is formatted as text with a binary unit chosen by magnitude ("1.5KB"), shaped by the options
+  unit, decimalPlaces, fixedDecimals, thousandsSeparator and unitSeparator. Anything else yields none.
+BEHAVIOR
+R1 The kind of value selects the direction: text -> PARSE (R4-R6, result f64 | none); f64 -> FORMAT (R7-R16, result text,
+  none, or a throw); none, bool, list or map -> none, and no option is read.
+R2 The first trailing argument, when there is one, is OPTIONS; any further trailing argument is ignored. OPTIONS is read
+  only by FORMAT — PARSE never consults it. When OPTIONS is absent or is not a map, every option is ABSENT. Keys other
+  than the five of TABLE OPTION are ignored.
+R3 Vocabulary for an option value: ABSENT = the key is not present in the map; BLANK = none, false, the number zero (-0
+  included), NaN, or empty text; FILLED = any other value (true, any other number, any non-empty text, any list or map,
+  even an empty one). TABLE OPTION reads every option with these words.
+R4 PARSE, STRICT form: when the WHOLE text matches STRICT (PINNED below) — an optional sign, one or more digits, an
+  optional point with one or more digits, zero or more ordinary spaces, a unit word in ASCII letter case — the result is
+  floor(scale × numeral): the numeral (sign, integer digits, fraction) read as the nearest f64, multiplied in f64 by
+  UNIT_SCALE at the lowercased unit word, then the largest integer not above the product (toward negative infinity).
+  "5.9kb" -> 6041, "-5.9kb" -> -6042, "+2gb" -> 2147483648, "5  kb" -> 5120. The unit word "b" is NOT in STRICT. Case
+  is folded over the ASCII letters only ("1Mb", "1mB", "1 pB" match; a KELVIN SIGN is not a "k" here, unlike R8).
+R5 PARSE, LENIENT form: any other text. Skip a leading run of LEADING_SPACE characters (PINNED below); then an optional
+  single "+" or "-"; then the longest run of one or more ASCII decimal digits, which must start immediately (no space
+  after the sign, no point before the first digit); no digit there -> none. Everything after the digit run is ignored,
+  a fraction included. The result is the integer the run denotes, as the nearest f64 (beyond the finite range: an
+  infinity), with the sign applied. "1.5b" -> 1, "-1.5" -> -1, "  1 kb  " -> 1, "5\tkb" -> 5, "0x10" -> 0, "1e3" -> 1,
+  "1kb " -> 1, ".5kb" -> none, "- 5" -> none, "abc" -> none, "" -> none, "010" -> 10.
+  CITED FIDELITY package — the fallback is the host's integer reading, so "b" and "B" suffixes, and every strict form with stray whitespace, truncate
+R6 A "-" sign with a zero magnitude yields negative zero in both forms: "-0", "-00", "-0.5", "-0kb", "-0.0kb" -> -0;
+  "+0", "0", "0kb" -> 0.
+  CITED FIDELITY package — the sign survives the multiplication and the floor
+R7 FORMAT: value NaN, +Infinity or -Infinity -> none, before any option is read (a bad option never throws for these).
+R8 The unit. When OPTIONS.unit is text whose lowercase (Unicode default case mapping) is a key of UNIT_SCALE, the suffix
+  is that text AS GIVEN (letter case kept: "Kb" -> "1Kb", "kb" -> "1kb", "b" -> "1024b") and the scale is the key's.
+  When OPTIONS.unit is ABSENT, BLANK, or any other text ("xx", "BYTES", "KBB"), the suffix and scale come from TABLE
+  AUTO_UNIT on |value|. When OPTIONS.unit is FILLED and not text (true, a nonzero number, a list, a map) -> throws.
+  CITED FIDELITY package — the package applies a text operation to whatever it was given
+R9 q = value ÷ scale, in f64 (so -0 stays -0 and a tiny magnitude may become zero).
+R10 Decimal places d: ABSENT -> 2; none -> 0; false -> 0, true -> 1; a number -> truncated toward zero (NaN -> 0). After
+  that, d below 0 or above 100 (an infinity included) -> throws. 1.7 -> 1; -0.5 -> 0; 100.5 -> 100; -1 and 101 throw.
+R11 FIXED rendering of |q| with exactly d digits after the point (no point when d is 0): the d-place decimal nearest to
+  the EXACT binary value of q — not to a shorter decimal reading of it — and when two are equally near, the larger
+  one. The integer part is written in full, "0" when it is zero, with no grouping yet. A "-" is prefixed exactly when
+  q < 0: a negative q that rounds to zero still shows it ("-0", "-0.00"), a negative zero q does not ("0B" for -0).
+  CITED FIDELITY package — 1.005 renders "1" (its binary value lies below the tie); 0.125 renders "0.13"; 1.125 renders "1.13"; 2.5 with d 0 renders "3"; -0.5 with d 0 renders "-1"; 100.5 with d 0 renders "101"
+R12 When |q| is at least 10^21 the rendering is instead the shortest round-trip form: the fewest significant digits
+  that read back as exactly |q|, written as the first digit, then — only when more digits follow — a point and the
+  rest, then "e+" and the decimal exponent without padding (10^21 -> "1e+21"); d has no effect on the digits, though
+  R10's throw still applies; "-" is prefixed when q < 0.
+  CITED FIDELITY package — 1e21 with unit "B" -> "1e+21B"; 1e40 -> "8.881784197001253e+24PB"; -1e40 -> "-8.881784197001253e+24PB"
+R13 TRIM, unless fixedDecimals is on (TABLE OPTION): TABLE TRIM is applied to the rendering, keyed on the characters
+  after its point. It sees characters, not digits: in the R12 form a trailing zero of the EXPONENT is trimmed too
+  ("1.5e+210" -> "1.5e+21", "1.5e+300" -> "1.5e+3", "1.05e+300" stays). "1.50" -> "1.5", "1.00" -> "1", "1.05" stays,
+  "1.050" stays, "1.0500" stays, "1.2030" stays.
+  CITED FIDELITY package — the trimmer only recognizes a zero-free run before the zeros
+R14 GROUPING, when thousandsSeparator is text (TABLE OPTION): in the LEADING PART of the rendering — everything before
+  its first point, or all of it when it has no point — the separator is inserted between two adjacent digits of a
+  digit run wherever the count of digits that follow the position within that run is a positive multiple of three.
+  Nothing else moves: the "-", the point and everything after it are untouched, and the R12 form is never grouped
+  (its runs are at most three digits). "-1234567" -> "-1,234,567", "1000" -> "1,000", "100" -> "100",
+  "1205632705.2" with "." -> "1.205.632.705.2".
+R15 The result is the rendering, then the unitSeparator text (empty when ABSENT or BLANK), then the suffix of R8.
+R16 When both R8 and R10 would throw, R8's throw is the one raised (the unit is read before the decimal places).
+TABLE AUTO_UNIT — |value| -> suffix, scale key of UNIT_SCALE; first row whose condition holds (R8)
+  |value| >= 1125899906842624 (2^50) -> "PB", pb
+  |value| >= 1099511627776 (2^40)    -> "TB", tb
+  |value| >= 1073741824 (2^30)       -> "GB", gb
+  |value| >= 1048576 (2^20)          -> "MB", mb
+  |value| >= 1024 (2^10)             -> "KB", kb
+  otherwise                          -> "B", b
+TABLE OPTION — key -> reading of its value in R3 words (ABSENT / BLANK / FILLED)
+  unit               | ABSENT or BLANK -> AUTO_UNIT | text that lowercases to a UNIT_SCALE key -> that text, verbatim, with that scale | other text -> AUTO_UNIT | FILLED non-text -> throws (R8)
+  decimalPlaces      | ABSENT -> 2 | none -> 0 | false -> 0, true -> 1 | f64 -> truncated toward zero, NaN -> 0, then outside 0..100 -> throws (R10) | text, list, map -> OUT-OF-DOMAIN
+  fixedDecimals      | ABSENT or BLANK -> off | FILLED -> on (R13)
+  thousandsSeparator | ABSENT or BLANK -> no grouping | text -> that text (R14) | FILLED non-text -> OUT-OF-DOMAIN
+  unitSeparator      | ABSENT or BLANK -> empty | text -> that text (R15) | FILLED non-text -> OUT-OF-DOMAIN
+TABLE TRIM — F = the characters after the rendering's point (R13); first row that applies
+  the rendering has no point                                              -> unchanged
+  every character of F is "0"                                             -> the point and F are removed
+  F is one or more characters none of which is "0", then one or more "0"  -> those trailing zeros are removed
+  otherwise (a "0" occurs somewhere before a later non-"0" character)     -> unchanged
+PINNED grammar STRICT = [ "+" | "-" ] DIGIT+ [ "." DIGIT+ ] SPACE* UNIT CITED R4 — bytes@3.1.2 parseRegExp; DIGIT = the ten ASCII digits, SPACE = the ordinary space character only (no tab, no other whitespace), UNIT = one of "kb" "mb" "gb" "tb" "pb" with each letter in ASCII upper or lower case (no other case folding); the grammar must cover the whole text, with nothing before or after
+PINNED charset LEADING_SPACE = { the ASCII controls TAB, LF, VT, FF and CR, the space, no-break space, zero width no-break space, line separator, paragraph separator, and every character of general category Space Separator (Zs) } CITED R5 — the whitespace the package's host skips before a numeral; next line (NEL) and the Mongolian vowel separator are NOT in it
+PINNED map UNIT_SCALE = { b: 1, kb: 1024, mb: 1048576, gb: 1073741824, tb: 1099511627776, pb: 1125899906842624 } CITED FIDELITY package — bytes@3.1.2 map: binary (1024-based) scales keyed by the lowercase unit word
+INVARIANT for text value the result is none, an integer-valued f64 (negative zero included), or an infinity; OPTIONS never
+  changes it.
+INVARIANT for f64 value the result is none exactly when value is not finite; otherwise it is text ending in the suffix
+  of R8, or a throw from R8 or R10.
+OUT-OF-DOMAIN OPTIONS.unit text equal, ignoring letter case, to "constructor" or "__proto__": the package finds an
+  inherited member under that key and divides by it — the rendering is the text "NaN" followed by the unitSeparator
+  and the unit as given ("NaNconstructor", "NaN constructor").
+  A FILLED non-text thousandsSeparator or unitSeparator is rendered as text by the host and then used as R14/R15 say:
+  true -> "true"; a number -> its shortest round-trip decimal rendering (integers without a point: 5 -> "5", -20 ->
+  "-20"; 1.35 -> "1.35"; beyond 10^21 or below 10^-7 the host's exponent form, "1e+21", "1e-7"); a list -> its items
+  rendered the same way joined by ",", a none item rendering as empty text (so an empty list, or a list holding only
+  none, behaves like no separator); a map -> "[object Object]".
+  A thousandsSeparator text containing "$" followed by "$", "&", "`", "'" or "1" is handed by the package to its host's
+  pattern replacement: "$$" inserts "$", "$&" inserts nothing, "$`" inserts the digits before the insertion point, "$'"
+  the digits after it, "$1" the last three digits of the run; any other "$" is literal ("$" -> "1$536$000", "$2" ->
+  "1$2536$2000").
+  A decimalPlaces text is read by the host as a numeral (surrounding whitespace allowed, exponent and "0x" forms
+  allowed, empty or blank -> 0, unreadable -> 0) and then treated as a number by R10 ("1" -> 1, "abc" -> 0); a list
+  with exactly one item reads as that item would, any other list -> 0; a map -> 0.
+  CITED FIDELITY package — every statement of this stanza was probed against bytes@3.1.2
+ORACLE value -> oracles/bytes.json  CANONICAL-SHA256 fb575fae9fa5c8ae05d32429529c78ab8a3a8c1b100a9f76f2fe038619aff64d
+NOTE The SIG carries OPTIONS in a trailing slot because the abstract call is 1-ary or 2-ary and the canonical vector form
+  has no optional parameter; natively the package's second parameter is optional and each language file maps it. A call
+  with three or more arguments is in scope (R2).
+NOTE 16 frozen + 43 held-out, captured once from the real package, never regenerated. Every vector is a json value, so
+  all 59 are language-neutral; the four holding NaN, +Infinity, -Infinity or -0 as value are narrowed by any language
+  whose transport cannot carry them.
+SCOPE IN: R1-R16, the three tables, the three pins and the OUT-OF-DOMAIN surface, over json values and the trailing-
+  argument call shape. OUT: the named exports format and parse as separately callable units (parse's pass-through of a
+  number argument is unreachable through the default export and is not stated); host-only values (the js file's
+  widening); nothing else of bytes@3.1.2 is excluded.
+PROVENANCE bytes@3.1.2 (visionmedia/bytes.js, MIT), pkgs/node_modules/bytes/index.js: bytes (module.exports), format,
+  parse, map, parseRegExp, formatDecimalsRegExp, formatThousandsRegExp. Cold re-cut 2026-09-23 into the v0.5 contract
+  register from the real source and the pre-captured oracle only; every rule, table row and OUT-OF-DOMAIN statement was
+  probed against the real package before it was written.

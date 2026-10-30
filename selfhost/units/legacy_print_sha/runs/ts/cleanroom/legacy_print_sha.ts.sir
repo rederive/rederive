@@ -1,0 +1,22 @@
+UNIT legacy_print_sha
+LANG ts
+PRIMARY-SHA256 211da0e9049f0b9965185081f40026ac44eaf659e75caa15009110a8dd86153c
+SIG export default function legacy_print_sha(text: string): string
+ABI TypeScript compiles to the js runtime: text=string (UTF-16; inputs are well-formed, no WS or LT member is astral);
+  result = string of 64 lowercase hex digits. STRICT: the artifact must type-check under strict: true against this SIG,
+  with no any, no non-null assertions (!), and no @ts-ignore / @ts-expect-error. node:crypto may be imported (the
+  verifier type-checks with Node's definitions).
+MECHANISM (restated from js — language files are self-contained) SHA-256 (R1) = node:crypto
+  createHash('sha256').update(P).digest('hex') — update on a string encodes UTF-8.
+MECHANISM WS = the ECMAScript \s class (String.prototype.trim for "leading and trailing WS removed"); LT = the
+  characters the ECMAScript "." (no s flag) does not match. Splitting (R2) = String.prototype.split on "\n".
+MECHANISM ATTRS (R10) = a Record<string, string> or Map keyed only by CITED, EARNED, ANCHOR, iterated in insertion order;
+  the R8 append fires only when the old value is non-empty (an empty string is replaced).
+DEPENDS-ON none
+PINNED regex COMMENT = /^(.*?)(?:^|\s)#(?=\s|$)(.*)$/ CITED R5 — group 1 with /\s+$/ removed is CODE; the lazy group and the "." that stops at LT ARE the marker rule
+PINNED regex ATTR = /\s+(CITED|EARNED|ANCHOR)\s+(.+)$/ CITED R8 — matched repeatedly (not global) against the shrinking piece; the match index is the cut point
+PINNED regex SPLIT = /^(\S+)(?:\s+(.*))?$/ CITED R6 — group 1 is NAME, group 2 (absent = empty) is TAIL; no match is a failed split
+PINNED regex COLON = /^[A-Z][A-Z0-9-]*:$/ CITED R6
+PINNED regex NAME = /^[A-Z][A-Z0-9-]*$/ CITED R6
+PINNED regex INDENT = /^[ \t]*/ CITED R3
+PROVENANCE rederive@978444f3baf3 cli/sir/legacy-print.mjs (MIT); the pins are its own literals (NAME with its subsumed R-number branch removed).

@@ -1,0 +1,38 @@
+{
+ "status": "ok",
+ "unit": "hash_ok",
+ "primary": "selfhost/units/hash_ok/sir/hash_ok.sir",
+ "primarySha256": "a7fc3172f82e6f55fca50cd60860c3aa6a8917cada4354fb1d6a6db752da2f0c",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "want is none -> true. Checked first: the text is not inspected, so its content never matters on this path.",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "R2",
+   "text": "want is not a pin -> throws. A pin is text of exactly 64 characters, every one of them in 0-9 or a-f (lowercase ASCII only). So the empty text, any uppercase or mixed-case digit, a leading or trailing space or line break, 63 or 65 characters, and any non-ASCII digit all throw. Checked before the text is inspected (R1, R2 hold whatever the text).",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R3",
+   "text": "Otherwise compute D = SHA-256 of the UTF-8 bytes of text, written as exactly 64 hexadecimal digits, lowercase, most significant byte first, two digits per byte with a leading zero kept. -> true iff want equals D exactly; any other pin -> false.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R4",
+   "text": "The bytes are UTF-8 and only UTF-8: one to four bytes per scalar value, no byte-order mark added, none stripped (a leading U+FEFF is hashed as its three bytes), no terminator, no Unicode normalization (a composed and a decomposed spelling of the same word are different bytes, different digests). A digest of the UTF-16 code units or of a one-byte-per-character encoding of the same text does not match.",
+   "ambiguity": 0.24
+  }
+ ],
+ "ranked": [
+  "R2",
+  "R4",
+  "R3",
+  "R1"
+ ],
+ "at": "2026-10-28T03:06:35Z"
+}

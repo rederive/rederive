@@ -1,0 +1,31 @@
+UNIT lint_transcription
+LANG rust
+PRIMARY-SHA256 b2ececf14eac4abb39082b925650a8c58ef7602ee2ee2e491830442bc97851be
+SIG pub fn lint_transcription(text: &str) -> serde_json::Value
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn lint_transcription) depending on serde_json
+  only — no main, no I/O, no binary, no unsafe. The verifier generates its own harness crate from the abstract SIG and depends
+  on the artifact by path; compiling that harness against this SIG is the signature check.
+ABI text=&str (UTF-8). json result = a Value::Object with the five keys of the primary's DESCRIPTION, hits a Value::Array of
+  Value::Object (line, what, text); key order is immaterial (the canonical form sorts keys and reads every json number as an
+  f64, so 3 and 3.0 are the same value). density = hitLines as f64 / lines as f64, or 0 when lines is 0. No error path: no
+  Result, no Option, no panic.
+MECHANISM implement R1-R7 by hand over chars (std only, no regex crate): every std predicate near these rules is the WRONG
+  set. str::lines splits at LF and CR LF but NOT at a lone CR (R1 breaks at CR LF, lone CR and lone LF; split by hand,
+  pairing CR with a following LF first), and trim_end would remove far more than R1's trailing spaces and tabs. str::trim and
+  char::is_whitespace use the Unicode White_Space property, which includes U+0085 and excludes U+FEFF (use the WS_RS pin for
+  trimming, BLANK and every WS of TABLE SHAPES). char::is_alphanumeric and is_alphabetic are Unicode (WORD and BOUNDARY are
+  ASCII only: is_ascii_alphanumeric or the underscore). The narration row folds ASCII case only (eq_ignore_ascii_case);
+  to_lowercase or to_uppercase would fold the long s (U+017F) and the Kelvin sign into ASCII letters.
+MECHANISM stripping (R2) by hand over chars, one left-to-right pass: keep the index just after the last closing quote; a
+  quote opens when it is the line's first char, or the char before it is one of the 16 OPENERS, or its index equals that
+  kept index (R2 (b)); an escape pair is the backslash and the next char (one code point, as R2 counts); an unclosed quote
+  ends the span search. Normalization (R1): take the maximal leading run of ' ', '\t' and '\u{FEFF}', drop every '\u{FEFF}' in it
+  and keep its spaces and tabs in order, then drop trailing ' ' and '\t' — never trim_start_matches('\u{FEFF}') on the
+  whole line, which misses an indented mark and one between two spaces.
+MECHANISM the cut (R6) = the first 96 chars of the trimmed line (chars().take(96)); chars are code points, as R6 counts. Line numbers, counts and density are built from usize
+  then converted to f64-valued json numbers.
+DEPENDS-ON serde_json (crate, version 1)
+PINNED charset WS_RS = '\u{9}' '\u{A}' '\u{B}' '\u{C}' '\u{D}' '\u{20}' '\u{A0}' '\u{1680}' '\u{2000}'..='\u{200A}' '\u{2028}' '\u{2029}' '\u{202F}' '\u{205F}' '\u{3000}' '\u{FEFF}' CITED the primary WS pin, spelled as Rust char literals and one inclusive range
+PINNED charset LT_RS = '\u{2028}' '\u{2029}' CITED the primary LT pin
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs transcriptionLint and cli/sir/sir-parse.mjs sirLines — this file states the crate shape, the type mapping and the
+  std-library traps only; no behavior.

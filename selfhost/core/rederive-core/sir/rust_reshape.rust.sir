@@ -1,0 +1,28 @@
+UNIT rust_reshape
+LANG rust
+PRIMARY-SHA256 eef740648c2929d614081cce771da2f804adfd9fbd02865789bb357ff84dec6c
+SIG pub fn reshape(v: &serde_json::Value, t: &serde_json::Value) -> Result<serde_json::Value, String>
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn reshape) depending on serde_json only
+  — no main, no I/O, no binary, no unsafe. The verifier generates its own harness crate from the abstract SIG: one JSON
+  array of args per stdin line, each json arg bound as a serde_json::Value and passed by reference; the result printed as
+  one JSON line inside the verifier's {ok}/{throw} envelope. A throw (R8) is Err(message) (a panic is also recorded as a
+  throw); the message is not graded.
+ABI type mapping: none = Value::Null; bool = Value::Bool; number = Value::Number, copied verbatim (clone the Value — never
+  convert through f64 or i64, so an integer stays the Number it arrived as); text = Value::String; list = Value::Array;
+  map = Value::Object (serde_json::Map; key order is immaterial — the canonical form sorts keys). "Absent" = a missing
+  key (Map::get returns None) or an index past the end, and reads exactly as Value::Null.
+ENVELOPE as the primary; no narrowing.
+MECHANISM "a map" = Value::Object; "k is exactly the text X" = t.get("k") is Some(Value::String(s)) with s == X (a
+  non-string k never matches). R3: first scan the WHOLE alts array — any Value::Null element is the Err — then count the
+  elements that are not an Object whose k is the String "none"; follow the single other element only when alts.len() == 2
+  and that count is 1. R4: fields Value::Null or missing is the Err; fields Bool or Number returns v; a fields Array whose
+  len() differs from v's returns v; at equal lengths every entry must be a Value::Array (else Err), read with get(0) as
+  the name (a String inside the envelope) and get(1) as the field tree (missing = Null), and the result is a fresh
+  serde_json::Map filled with insert(name, value) in entry order — a later duplicate overwrites. R5: items Bool, Number
+  or String leaves every element unchanged; items Array: items.get(i) that is a Value::Object -> recurse, anything else
+  or None -> the element cloned. R7: a fresh Map with every key of v, the value recursed under t.get("val"). Recursion
+  depth is bounded by the tree, which the SIG type reader caps.
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@bb8ded84fa50 cli/lang/rust.mjs reshape (lines 335–343). Language file re-cut 2026-10-27 with the primary
+  (round 5), before any blind re-emission; the ABI follows the verifier's rust driver (json args and results cross as
+  serde_json::Value; Result Err = a throw, #53).

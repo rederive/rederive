@@ -1,0 +1,226 @@
+UNIT takeRight
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG takeRight(array, n = 1, guard?) -> Array      # default export: module.exports = takeRight
+DEPENDS-ON none                                   # self-contained; vendored helpers inlined below (baseSlice, toInteger, toFinite, toNumber, isObject, isObjectLike, isSymbol)
+
+# ---------------------------------------------------------------------------
+# OVERVIEW
+# ---------------------------------------------------------------------------
+# Pure, READ-ONLY. Creates a slice of `array` containing the LAST `n` elements,
+# returned as a NEW dense plain Array. Never mutates `array`. `n` defaults to 1.
+# A truthy `guard` (the lodash "isIterateeCall" convenience for use as an
+# iteratee in methods like _.map) forces n = 1. `array` may be any array-like
+# receiver (real Array, string, typed array, Buffer, array-like object with a
+# numeric .length). The element at each copied index is taken by index-read
+# (array[index]); reference elements (objects/arrays) are SHALLOW-copied (same
+# reference appears in the result).
+#
+# The blind re-emitter MUST expose this as the default export:
+#     export default function takeRight(array, n, guard) { ... }
+# The grader imports the DEFAULT.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — exact)
+# ---------------------------------------------------------------------------
+# NODE 0  length probe
+#   length = array ? array.length : 0
+#   - If `array` is falsy (null / undefined / 0 / false / "" / 0n / NaN), length = 0.
+#   - Otherwise length = array.length (may be undefined for plain objects without
+#     a .length -> then `!length` is true below). length is used AS-IS (NOT
+#     coerced to integer here); it may be a fractional or non-integer value for
+#     array-like objects, e.g. length = 2.9.
+#
+# NODE 1  empty / no-length early return
+#   if (!length) return []          # returns a NEW empty Array
+#   - "!length" is JS truthiness: 0, undefined, NaN, "" -> early []. A length of
+#     0 (including {length: 0, 0: 'x'}) returns []. A fractional truthy length
+#     (e.g. 2.9) does NOT trigger this.
+#
+# NODE 2  resolve n  (the COUNT of elements to take from the end)
+#   n = (guard || n === undefined) ? 1 : toInteger(n)
+#   - If `guard` is TRUTHY  -> n = 1            (regardless of the passed n; this
+#                                                SHORT-CIRCUITS before toInteger,
+#                                                so a would-throw n like a non-zero
+#                                                bigint is NOT coerced -> no throw).
+#   - Else if n === undefined (omitted or explicitly undefined) -> n = 1.
+#   - Else n = toInteger(n)                      (see TOINTEGER below).
+#   - Note: `guard` is tested only for TRUTHINESS. A FALSY guard (0, null, "",
+#     false, NaN) behaves as if guard were absent: the explicit n is used.
+#
+# NODE 3  compute start, slice
+#   n = length - n                  # `n` is REUSED as the start index here
+#   return baseSlice(array, n < 0 ? 0 : n, length)
+#   - start = length - count, clamped at 0 if negative (count > length -> start 0
+#     -> full copy). end = length (the original NODE 0 length value).
+#   - baseSlice copies array[start .. end) into a fresh Array (see BASESLICE).
+
+# ---------------------------------------------------------------------------
+# BASESLICE(array, start, end)   # the in-contract slice primitive (inlined)
+# ---------------------------------------------------------------------------
+#   index = -1
+#   len   = array.length
+#   if (start < 0) start = (-start > len) ? 0 : (len + start)   # neg-start wrap
+#   end = (end > len) ? len : end                               # clamp end to len
+#   if (end < 0) end += len                                     # neg-end wrap
+#   outLen = (start > end) ? 0 : ((end - start) >>> 0)          # ToUint32 of span
+#   start >>>= 0                                                # ToUint32 of start
+#   result = new Array(outLen)                                  # dense, length=outLen
+#   while (++index < outLen) result[index] = array[index + start]
+#   return result
+#
+#   KEY NUMERIC DETAILS the blind engineer MUST reproduce:
+#   - `>>> 0` is JS unsigned-right-shift-by-0 == ToUint32: it TRUNCATES toward
+#     zero AND wraps into [0, 2^32). For the values takeRight feeds it (start and
+#     span are already in [0, length] after NODE 3 clamping, and length is a
+#     small array length), `>>> 0` simply truncates a fractional value to its
+#     integer floor toward zero. Examples confirmed against the real package:
+#       * array-like {0:'a',1:'b',length:2.9}, count=1:
+#           NODE0 length=2.9 (truthy). NODE2 count=1. NODE3 start=2.9-1=1.9, end=2.9.
+#           baseSlice: start(1.9) not <0; end 2.9 not >len(2.9); outLen=(2.9-1.9)>>>0
+#           = 1>>>0 = 1; start>>>0 = 1.9>>>0 = 1; result = [array[1]] = ['b'].
+#       * same array-like, count=5:
+#           start = 2.9-5 = -2.1 -> clamped to 0 (NODE3); end=2.9.
+#           outLen=(2.9-0)>>>0 = 2; start=0; result=['a','b'].
+#   - The `start < 0` and `end < 0` wrap branches in baseSlice are effectively
+#     UNREACHABLE from takeRight (NODE 3 already clamps start to >= 0, and end is
+#     the non-negative length), but reproduce them for fidelity.
+#   - The result is a DENSE Array of length outLen (new Array(outLen) then filled
+#     0..outLen-1). For an Array/string/typed-array/Buffer/array-like receiver,
+#     elements are read by index. For a string receiver the elements are the
+#     1-char substrings; for a typed array / Buffer they are the numeric byte
+#     values. The RESULT IS ALWAYS A PLAIN ARRAY regardless of receiver type.
+
+# ---------------------------------------------------------------------------
+# TOINTEGER(value)   # lodash _.toInteger (inlined) — coercion of the count `n`
+# ---------------------------------------------------------------------------
+#   result    = toFinite(value)
+#   remainder = result % 1
+#   return (result === result)                         # i.e. not NaN
+#            ? (remainder ? result - remainder : result)  # truncate TOWARD ZERO
+#            : 0
+#   -> Truncates the fractional part toward zero (3.9->3, -3.9->-3, 0.9->0).
+#
+# TOFINITE(value):
+#   if (!value) return value === 0 ? value : 0
+#       # falsy short-circuit: 0 and -0 return value (0 / -0); null/undefined/
+#       # false/""/NaN/0n return 0.   (NOTE: -0 is preserved here, but toInteger's
+#       # `remainder` is 0 so -0 flows through; length - (-0) == length, copy all.)
+#   value = toNumber(value)
+#   if (value === INFINITY || value === -INFINITY)     # INFINITY = 1/0
+#       return (value < 0 ? -1 : 1) * MAX_INTEGER       # MAX_INTEGER = 1.7976931348623157e+308
+#   return value === value ? value : 0                 # NaN -> 0
+#   -> +Infinity  -> +1.7976931348623157e+308 (effectively "take all": start clamps
+#                    to 0 only if count>length; here count is enormous -> full copy).
+#      -Infinity  -> -1.7976931348623157e+308 -> start = length-(neg huge) huge
+#                    positive... NO: NODE3 start = length - count. With count = -MAX,
+#                    start = length + MAX (huge positive), end = length, span<0 ->
+#                    outLen 0 -> []. CONFIRMED: takeRight([1,2,3], -Infinity) -> [].
+#
+# TONUMBER(value):
+#   if typeof value == 'number'  -> value
+#   if isSymbol(value)           -> NaN        # Symbol primitive or [object Symbol]
+#   if isObject(value):                        # typeof 'object' or 'function', non-null
+#       other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#       value = isObject(other) ? (other + '') : other     # object -> String(other)
+#   if typeof value != 'string'  -> (value === 0 ? value : +value)
+#   value = value.replace(/^\s+|\s+$/g, '')    # reTrim: strip leading/trailing ws
+#   isBinary = /^0b[01]+$/i.test(value)        # reIsBinary
+#   if (isBinary || /^0o[0-7]+$/i.test(value)) # reIsOctal
+#       return parseInt(value.slice(2), isBinary ? 2 : 8)   # 0b../0o.. -> base 2/8
+#   return /^[-+]0x[0-9a-f]+$/i.test(value)    # reIsBadHex
+#            ? NaN                              # signed hex like "-0x2"/"+0x1" -> NaN
+#            : +value                           # else JS Number() (handles "0x2"->2,
+#                                               # "1e0"->1, ""->0, "abc"->NaN, "2.9"->2.9)
+#   isObject(v):     !!v && (typeof v == 'object' || typeof v == 'function')
+#   isObjectLike(v): !!v && typeof v == 'object'
+#   isSymbol(v):     typeof v == 'symbol' || (isObjectLike(v) && toString.call(v)=='[object Symbol]')
+
+# ---------------------------------------------------------------------------
+# COERCION TRUTH TABLE for `n` (count) — every value the generator can emit
+#   (each is toInteger(n) unless a truthy guard short-circuits it to 1)
+# ---------------------------------------------------------------------------
+#   omitted / undefined         -> 1   (NODE2 default branch, not toInteger)
+#   integer k                   -> k
+#   float f                     -> trunc-toward-zero(f)         (1.9->1, 2.9->2, -2.7->-2, 0.9->0)
+#   true                        -> 1     ;  false -> 0
+#   null                        -> 0     ;  0 -> 0  ;  -0 -> -0 (treated as 0 in span)
+#   NaN (literal)               -> 0     (DOC-as-OUT for live emit; see CODEC below)
+#   +Infinity (literal)         -> +MAX_INTEGER -> full copy    (DOC-as-OUT; use string "1e400")
+#   -Infinity (literal)         -> -MAX_INTEGER -> []           (DOC-as-OUT; use string "-1e400")
+#   "2" / " 3 " / "2.9" / "1e0" -> Number() of trimmed: 2 / 3 / 2.9->2 / 1   ("2.9"->trunc 2)
+#   "" / "   " (ws only)        -> "" -> +"" = 0
+#   "abc" / "1,2"               -> NaN -> 0
+#   "0x2" (unsigned hex)        -> +"0x2" = 2
+#   "0b10" (binary)             -> parseInt("10",2) = 2
+#   "0o3" (octal)               -> parseInt("3",8) = 3
+#   "-0x2" / "+0x1" (signed hex)-> reIsBadHex -> NaN -> 0
+#   "1e400" / "-1e400"          -> +Infinity / -Infinity  (full copy / [])
+#   "-0"                        -> -0 -> 0 (span)
+#   []  (array)                 -> valueOf->self(object)-> ""+"" => "" -> 0
+#   [2] (array)                 -> "2" -> 2     ;  [3] -> 3
+#   [2,3]                       -> "2,3" -> NaN -> 0
+#   {}  (plain object)          -> "[object Object]" -> NaN -> 0
+#   0n  (bigint zero)           -> falsy in toFinite -> 0    (NO throw)
+#   non-zero bigint (2n,7n,...) -> toNumber: not number/symbol/object -> +value where
+#                                  value is bigint -> THROWS TypeError
+#                                  ("Cannot convert a BigInt value to a number").
+#                                  RECORDED as {__throw} (gradable). BUT: a TRUTHY
+#                                  guard short-circuits NODE2 before toInteger, so
+#                                  takeRight([..], 9n, {}) -> 1 -> NO throw.
+#   Symbol n                    -> NaN -> 0   (DOC-as-OUT: Symbol not codec-faithful)
+
+# ---------------------------------------------------------------------------
+# GUARD (3rd arg) — tested for TRUTHINESS only
+# ---------------------------------------------------------------------------
+#   truthy guard ({}, 1, "k", [..], true, ...) -> count forced to 1 (overrides n)
+#   falsy guard  (0, null, "", false, NaN)     -> ignored; explicit n is used
+#   When guard truthy AND array non-empty -> result = last 1 element.
+#   When guard truthy AND array empty/no-length -> [] (NODE1 fires first).
+
+# ---------------------------------------------------------------------------
+# PURITY / NO-MUTATION INVARIANT  (must hold for every input)
+# ---------------------------------------------------------------------------
+#   takeRight never writes to `array`. After the call, `array` is byte-identical
+#   to before (same length, same elements, same references). Confirmed across all
+#   probed inputs. Reference elements in the result are the SAME references as in
+#   the source (shallow copy): takeRight([o2ref...],2)[i] === source[start+i].
+
+# ---------------------------------------------------------------------------
+# ORACLE
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+#   The grader calls the default export with each emitted arg-tuple and compares
+#   the returned Array (deep value equality, codec-encoded). A throw is recorded
+#   as {__throw: <ErrorType/message>} and compared. No seam (clock/RNG/io/net):
+#   pure deterministic function. As an additional property, the grader MAY assert
+#   the input array is unmutated (the unit guarantees it).
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the full NODE0..NODE3 pipeline, baseSlice
+#   (incl. the `>>> 0` ToUint32 truncation and neg-start/neg-end wrap branches),
+#   toInteger/toFinite/toNumber/isObject/isObjectLike/isSymbol coercion, the
+#   guard short-circuit, the empty/falsy-length early return, and the shallow-copy
+#   purity invariant. Demonstrated in-scope value subset is enumerated in the
+#   COERCION TRUTH TABLE and GUARD sections above and is SELF-CONSISTENT with the
+#   generator's curated prefix (every value the generator emits has its behavior
+#   pinned here).
+# CARRIED DATA: none. The only literal constants are INFINITY (1/0), -INFINITY,
+#   MAX_INTEGER (1.7976931348623157e+308 == Number.MAX_VALUE), NAN (0/0), and the
+#   four regexes (reTrim, reIsBinary /^0b[01]+$/i, reIsOctal /^0o[0-7]+$/i,
+#   reIsBadHex /^[-+]0x[0-9a-f]+$/i) — all inlined above verbatim; no table.
+# OUT-OF-CONTRACT: none (no stateful mutators, no side APIs, no ambient seam).
+# DOCUMENTED-AS-OUT-OF-ENVELOPE (behavior pinned above; NOT emitted by generator
+#   because not codec-faithful): n as literal NaN / +Infinity / -Infinity / -0
+#   (exercised via codec-faithful STRING equivalents instead); function/Symbol
+#   ELEMENTS inside the array; Symbol `n`; sparse-array HOLES; `undefined` as an
+#   array ELEMENT (use `null`, which IS codec-faithful, for falsy-but-present).
+
+# ---------------------------------------------------------------------------
+PROVENANCE lodash.takeright@4.1.1 (https://github.com/lodash/lodash, MIT license,
+  "Custom Build" modular export). Source file: index.js (function takeRight + the
+  inlined baseSlice/toInteger/toFinite/toNumber/isObject/isObjectLike/isSymbol
+  helpers and the INFINITY/MAX_INTEGER/NAN/regex constants). Verified by running
+  the real installed package via node across all branches.

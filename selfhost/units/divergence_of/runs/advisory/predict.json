@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "unit": "divergence_of",
+ "primary": "selfhost/units/divergence_of/sir/divergence_of.sir",
+ "primarySha256": "0ce7a880e772c6442115ba46d2c5225feb139afcaab6b040c501da8eead05955",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "ATTEMPTED = the artifacts whose control is not true (false and none both count as not control), in input order. When ATTEMPTED is empty -> none.",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "R2",
+   "text": "GRADED = the members of ATTEMPTED whose error is none, in input order. When GRADED is empty -> the record round = the input round, quorum = \"0/0\", verdict = \"no-quorum\", heldoutDisagree = an empty list, frozenMissed = none. Nothing else of the artifacts is read in this case: rungs, typeCheck and misses of an errored or control artifact never matter, and never throw.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R3",
+   "text": "Any error text marks the artifact as errored, the EMPTY text included: an artifact with error \"\" is not GRADED.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R4",
+   "text": "A GRADED artifact VOTES when all three hold: (a) one element of its rungs is exactly the text \"harness-verified\" (whole-text, case-sensitive equality; other elements, their order and duplicates do not matter); (b) its typeCheck is none, or its applicable is false, or its ok is true — so applicable true with ok false or none does not vote, and applicable false votes whatever ok holds; (c) it has no miss (misses none or an empty list). VOTES = the number of voting artifacts. quorum = the decimal digits of VOTES, then \"/\", then the decimal digits of the size of GRADED (no sign, no padding). verdict = \"quorum\" when VOTES is at least 2, else \"no-quorum\" — a fixed threshold, independent of the size of GRADED (2 of 5 is a quorum).",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "R5",
+   "text": "When GRADED is non-empty, before any vote or tally, every GRADED artifact is checked: its rungs is none -> throws; one of its misses has a slice that is neither none nor exactly \"frozen\" or \"heldout\" (case-sensitive; \"\", \"Frozen\" and \"held-out\" fail; a slice of none passes) -> throws. The message is not graded. Misses of control and errored artifacts are never checked.",
+   "ambiguity": 0.61
+  },
+  {
+   "id": "R6",
+   "text": "TALLY(S) for a slice name S (\"heldout\" or \"frozen\") is a list built by visiting the GRADED artifacts in order and, within each, its misses in order (misses none is an empty list), keeping only the misses whose slice is exactly S, where a slice of none reads as \"heldout\" — it is tallied, grouped and deduped with the \"heldout\" misses, never with \"frozen\".",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R7",
+   "text": "TALLY grouping: misses are grouped by name (exact text equality). The FIRST miss seen for a name creates the entry, in first-seen order (never sorted), with that miss's args and expected; a later miss with the same name keeps the entry's args and expected (its own are discarded). Each miss appends its artifact's name to the entry's failedBy, in visit order, UNLESS failedBy already holds that exact text — so failedBy never repeats a name. The test is by artifact name: two GRADED artifacts that carry the same name count once CITED FIDELITY package — the dedupe compares names, not artifacts of = the size of GRADED; passedBy = of minus the length of failedBy.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R8",
+   "text": "Otherwise (GRADED non-empty, no throw) -> the record round = the input round, quorum and verdict from R4, heldoutDisagree = TALLY(\"heldout\"), frozenMissed = TALLY(\"frozen\") when that list is non-empty, else none.",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "R9",
+   "text": "round is carried to the output unchanged.",
+   "ambiguity": 0.07
+  }
+ ],
+ "ranked": [
+  "R5",
+  "R6",
+  "R7",
+  "R2",
+  "R8",
+  "R4",
+  "R3",
+  "R1",
+  "R9"
+ ],
+ "at": "2026-10-28T03:04:39Z"
+}

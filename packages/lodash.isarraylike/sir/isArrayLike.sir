@@ -1,0 +1,215 @@
+UNIT isArrayLike
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isArrayLike(value: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; three private helpers (isLength, isFunction, isObject) are inlined below and MUST be reconstructed, not imported
+
+# =============================================================================
+# BEHAVIOR  (exact pipeline, short-circuit AND, evaluated left-to-right)
+# =============================================================================
+# Top-level predicate (THE contract):
+#
+#   isArrayLike(value):
+#     return  (value != null)            # loose inequality: false ONLY for null and undefined
+#          && isLength(value.length)     # value.length is READ here (may throw via a getter — see ENVELOPE)
+#          && !isFunction(value)
+#
+# Short-circuit semantics are load-bearing and observable:
+#   NODE 1  value != null
+#       - Uses LOOSE `!=` (double-equals). It is true for every value EXCEPT
+#         `null` and `undefined`. (`!= null` is the idiomatic JS nullish guard.)
+#       - If value is null OR undefined  -> return false immediately
+#         (value.length is NOT accessed; isLength/isFunction NOT called).
+#       - All other values (numbers, booleans, strings, symbols, bigints,
+#         objects, arrays, functions, ...) PASS this node.
+#   NODE 2  isLength(value.length)
+#       - First READ the `.length` property of value (ordinary member access).
+#         * For a primitive (number/boolean/bigint/symbol) `.length` is read
+#           off the autoboxed wrapper and is `undefined` (those wrappers have
+#           no own `length`)  -> isLength(undefined) is false -> overall false.
+#           NOTE: number 5, true, false, 5n, Symbol(...) all reach here and
+#           return false because their `.length` is undefined, NOT a number.
+#         * For a string primitive `.length` is the character count (a number).
+#         * For arrays / array-like objects / typed arrays / Buffer, `.length`
+#           is the element count (a number).
+#       - Then apply isLength (defined below). If false -> return false (short
+#         circuit; isFunction NOT called).
+#   NODE 3  !isFunction(value)
+#       - Only reached when NODE 1 and NODE 2 both passed.
+#       - If isFunction(value) is true  -> overall false.
+#       - Else                          -> overall true.
+#
+# -----------------------------------------------------------------------------
+# HELPER  isLength(value) -> boolean
+# -----------------------------------------------------------------------------
+# Constant: MAX_SAFE_INTEGER = 9007199254740991   (i.e. 2^53 - 1)
+#
+#   isLength(value):
+#     return  typeof value == 'number'   # MUST be the JS number primitive type
+#          && value > -1                  # strictly greater than -1  (so 0 passes, -0 passes, negatives fail)
+#          && value % 1 == 0              # integer test via modulo (NON-integers fail; Infinity fails because Infinity % 1 is NaN, and NaN == 0 is false; NaN fails because NaN % 1 is NaN)
+#          && value <= MAX_SAFE_INTEGER   # upper bound inclusive
+#
+#   Exact truth of isLength over its domain (all four conjuncts, left-to-right,
+#   short-circuit):
+#     - typeof not 'number' (string '3', null, undefined, bigint 3n, boolean,
+#       symbol, object)                       -> false
+#     - number 0        -> true   (0 > -1, 0%1==0, 0<=MAX)
+#     - number -0       -> true   (-0 > -1 true, -0 % 1 == 0 true, -0 <= MAX)
+#     - number 3        -> true
+#     - number -1       -> false  (-1 > -1 is FALSE)
+#     - number -0.5     -> false  (-0.5 > -1 true, but -0.5 % 1 == -0.5 != 0)
+#     - number 1.5      -> false  (1.5 % 1 == 0.5 != 0)
+#     - number MAX_SAFE_INTEGER (9007199254740991)     -> true   (<= bound)
+#     - number MAX_SAFE_INTEGER + 1 (9007199254740992) -> false  (> bound)
+#     - number 1e21     -> false  (> bound)
+#     - +Infinity       -> false  (Infinity % 1 is NaN; NaN == 0 is false)
+#     - -Infinity       -> false  (-Infinity > -1 is false)
+#     - NaN             -> false  (NaN > -1 is false)
+#
+# -----------------------------------------------------------------------------
+# HELPER  isFunction(value) -> boolean   (lodash 4.2.0 — TAG-BASED, version-specific)
+# -----------------------------------------------------------------------------
+# Constants (Object#toString result strings):
+#   funcTag = '[object Function]'
+#   genTag  = '[object GeneratorFunction]'
+#
+#   isFunction(value):
+#     tag = isObject(value) ? Object.prototype.toString.call(value) : ''
+#     return tag == funcTag || tag == genTag
+#
+#   *** LOAD-BEARING VERSION QUIRK ***  isFunction recognizes ONLY two tags:
+#   '[object Function]' and '[object GeneratorFunction]'. It does NOT recognize
+#   '[object AsyncFunction]' nor '[object Proxy]'. Consequences:
+#     - ordinary function / arrow function -> tag '[object Function]'          -> isFunction TRUE
+#     - generator function (function*)     -> tag '[object GeneratorFunction]' -> isFunction TRUE
+#     - ASYNC function (async function)    -> tag '[object AsyncFunction]'     -> isFunction FALSE  (!!)
+#     - Proxy wrapping a function          -> tag '[object Function]'          -> isFunction TRUE
+#       (a Proxy is transparent to Object#toString; it reflects the target's tag)
+#     - Proxy wrapping a plain object      -> tag '[object Object]'            -> isFunction FALSE
+#   The non-object short-circuit: if value is NOT an object-or-function (per
+#   isObject below), tag is forced to '' and isFunction returns false without
+#   calling toString.
+#
+# -----------------------------------------------------------------------------
+# HELPER  isObject(value) -> boolean
+# -----------------------------------------------------------------------------
+#   isObject(value):
+#     type = typeof value
+#     return  (!!value)                         # truthy guard: rejects null, undefined, 0, -0, NaN, '', false
+#          && (type == 'object' || type == 'function')
+#
+#   - All non-null objects, arrays, functions, regexes, dates, typed arrays,
+#     Map, Set, boxed wrappers (new Number/String/Boolean) -> true.
+#   - Primitives (number, string, boolean, bigint, symbol) and null/undefined -> false.
+
+# =============================================================================
+# WORKED RESULTS  (the real lodash.isarraylike@4.2.0 was RUN to produce these)
+# =============================================================================
+#   [1,2,3]                     -> true   (array, length 3)
+#   []                          -> true   (length 0)
+#   'abc'                       -> true   (string, length 3)
+#   ''                          -> true   (string, length 0)
+#   { length: 3 }               -> true
+#   { length: 0 }               -> true
+#   { length: -0 }              -> true   (-0 passes isLength)
+#   { length: -1 }              -> false
+#   { length: 1.5 }             -> false
+#   { length: 9007199254740991 }-> true   (== MAX_SAFE_INTEGER)
+#   { length: 9007199254740992 }-> false  (== MAX_SAFE_INTEGER + 1)
+#   { length: '3' }             -> false  (typeof '3' is 'string', not 'number')
+#   { length: null }            -> false  (typeof null not 'number')
+#   { length: undefined }       -> false
+#   { 0:'a', 1:'b', length: 2 } -> true
+#   new Uint8Array([1,2,3])     -> true   (typed array, has numeric .length)
+#   Buffer.from([1,2,3])        -> true   (Buffer extends Uint8Array)
+#   arguments object (3 args)   -> true
+#   new String('abc')           -> true   (boxed String has length 3; tag '[object String]' so not a function)
+#   { a: 1 }                    -> false  (.length is undefined)
+#   {}                          -> false
+#   new Map() / Map([..])       -> false  (no .length; has .size)
+#   new Set() / Set([..])       -> false  (no .length; has .size)
+#   /abc/  (RegExp)             -> false  (.length undefined)
+#   new Date()                  -> false  (.length undefined)
+#   new Number(0)               -> false  (boxed Number, .length undefined)
+#   new Boolean(true)           -> false
+#   null                        -> false  (NODE 1)
+#   undefined                   -> false  (NODE 1)
+#   5         (number)          -> false  (.length undefined)
+#   true / false (boolean)      -> false  (.length undefined)
+#   5n        (bigint)          -> false  (.length undefined)
+#   Symbol('x')                 -> false  (.length undefined)   [DOCUMENTED-OUT for codec]
+#   function (a,b,c){}          -> false  (isFunction true, despite .length===3)   [DOCUMENTED-OUT for codec]
+#   (a,b) => {}  (arrow)        -> false  (isFunction true)                        [DOCUMENTED-OUT for codec]
+#   function* (){}              -> false  (isFunction true, genTag)                [DOCUMENTED-OUT for codec]
+#   async function (){}         -> TRUE   (tag AsyncFunction NOT recognized; .length 0) [DOCUMENTED-OUT for codec]
+#   Proxy(function(x){})        -> false  (tag '[object Function]')                [DOCUMENTED-OUT for codec]
+#   Proxy({length:3})           -> true   (tag '[object Object]', has length)      [DOCUMENTED-OUT for codec]
+
+# =============================================================================
+# ENVELOPE  (codec-faithfulness boundary for the input-generator)
+# =============================================================================
+# Inputs are persisted as JSON.stringify(encode(args)) and replayed via dynamic
+# import(). The generator emits ONLY values that survive that round-trip:
+#   IN-ENVELOPE (emitted by genInputs, each with a defined expected above):
+#     arrays, strings, plain objects (incl. {length:n} with codec-faithful n),
+#     nested arrays/objects, Set, Map, Uint8Array, Buffer, bigint, number,
+#     boolean, null. The literal `undefined` is passed as a top-level argument
+#     element (the codec preserves a top-level undefined arg as a present hole;
+#     it is exercised via the curated prefix as the sole-element tuple [undefined]).
+#
+#   DOCUMENTED-OUT (behavior fully specified above; NOT emitted by genInputs
+#   because the value cannot cross the JSON+import() codec boundary, and emitting
+#   it would poison the held-out expected):
+#     * FUNCTIONS (ordinary -> false, arrow -> false, generator -> false,
+#       async -> TRUE, Proxy-of-function -> false). Load-bearing: the !isFunction
+#       term means a non-async function is array-like-FALSE even though its
+#       .length is a valid number; an ASYNC function is array-like-TRUE in this
+#       version. A blind re-emitter reconstructs all five from BEHAVIOR above.
+#     * SYMBOLS  (-> false; typeof symbol, .length undefined).
+#     * Proxy objects (transparent-tag behavior specified above).
+#     * length values that are Infinity / -Infinity / NaN as an OBJECT PROPERTY:
+#       under JSON these serialize to `null`, so `{length: Infinity}` would
+#       round-trip to `{length: null}` (-> false) rather than the math path.
+#       The genuine numeric isLength path for Infinity/NaN (-> false) is
+#       specified in the isLength helper; the generator emits the codec-faithful
+#       equivalents `{length: null}` and `{length: '3'}` for the non-number
+#       branch instead of raw Infinity/NaN object props.
+#     * A `length` getter that THROWS: NODE 2's `value.length` read propagates
+#       the throw (isArrayLike throws). Not codec-faithful (a throwing getter is
+#       not JSON-serializable); documented, not emitted.
+#
+# READ-ONLY: isArrayLike performs no mutation and has no side effects beyond the
+# ordinary (possibly-trapped) read of value.length. N/A for mutation concerns.
+
+# =============================================================================
+# ORACLE value -> oracle.json
+# =============================================================================
+# Pure deterministic predicate; no seam. The harness records the boolean return
+# (and {__throw} only for the documented-out throwing-getter path, which the
+# generator does not reach).
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the three-node short-circuit predicate;
+#   isLength (typeof-number && >-1 && %1==0 && <=MAX_SAFE_INTEGER) with
+#   MAX_SAFE_INTEGER = 9007199254740991; isFunction (TWO-tag, '[object Function]'
+#   and '[object GeneratorFunction]' ONLY — version-specific; NO AsyncFunction,
+#   NO Proxy tag); isObject (truthy && (object|function)).
+# CARRIED DATA: none. (The only literals are MAX_SAFE_INTEGER and the two tag
+#   strings, inlined above; not a table.)
+# OUT-OF-CONTRACT: none (no stateful mutators, no external/ambient APIs).
+
+# =============================================================================
+# RE-EMITTER DIRECTIVE
+# =============================================================================
+# This unit's runtime shape is a SINGLE default-exported function. The emitted
+# module MUST be:  export default function isArrayLike(value) { ... }
+# (or `export default isArrayLike`). Do NOT export named; do NOT import any
+# package. Reconstruct isLength / isFunction / isObject inline per the helpers
+# above. Use Object.prototype.toString.call for the function-tag test (do NOT
+# use `typeof value === 'function'`, which would WRONGLY classify async
+# functions as functions and break the AsyncFunction quirk).
+
+PROVENANCE lodash.isarraylike@4.2.0; repo lodash/lodash (custom modularized build); MIT license; source file index.js (functions isArrayLike, isLength, isFunction, isObject; module.exports = isArrayLike)

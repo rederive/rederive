@@ -1,0 +1,56 @@
+{
+ "status": "ok",
+ "unit": "pin_lint",
+ "primary": "selfhost/units/pin_lint/sir/pin_lint.sir",
+ "primarySha256": "71b5c53b93026436f6ad4f4694173c0bedc8007608077a347838df9dd49e5e92",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Lines. The text breaks at a carriage return followed by a line feed (one break), at a lone carriage return and at a lone line feed; line k counts from 1. Each line is then normalized: every U+FEFF in its leading run of SP and U+FEFF characters is removed (the SP characters of that run stay, in order), then its trailing SP run is removed. SP is the space U+0020 and the tab U+0009 only; every other whitespace (no-break space, vertical tab, form feed, U+2028, U+3000) is ordinary content. A line that is empty after normalization is blank. The empty text is one blank line CITED FIDELITY package",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "R2",
+   "text": "Each non-blank line splits into its INDENT (its leading SP run) and its CONTENT (the rest). A line whose content begins with the character \"#\" is a COMMENT line and contributes nothing. Any other line has a CODE: its content cut at the comment marker (R4) when there is one, with the SP run before the marker removed; else the whole content CITED FIDELITY package",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R3",
+   "text": "Directive lines. A line without indent is a DIRECTIVE line when its NAME — its code up to the first SP or to the end — is NAMEFORM, or NAMEFORM followed by one colon (the colon is dropped), except that the name \"CITED\" (with or without the colon) is never a directive. Its REST is the code after the name as written, from the separating SP on. Every other non-blank, non-comment line is a CONTINUATION of the nearest directive line above it; with no directive line above, it is ignored. Blank lines and comment lines never end a directive: its continuations run to the next directive line or the end of the text. So an indented line, a line led by a no-break space or a vertical tab, a name glued to its text by a non-SP character, a lowercase word, and a line led by \"CITED\" are all continuations CITED FIDELITY package",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R4",
+   "text": "Quoted spans and the comment marker, per content. Scanning left to right, a quotation mark (U+0022) OPENS a span when it is the content's first character, or the character before it is in OPENERS, or it sits directly after the closing quotation mark of the previous span. The span closes at the next quotation mark, where a reverse solidus (U+005C) makes the one character after it ordinary (that character may itself be a quotation mark or a supplementary character). When an opened span finds no closing mark, it and every later quotation mark of the content open nothing. A position is INSIDE a span when it lies after the span's opening mark, up to and including its closing mark. The COMMENT MARKER is the first \"#\" whose previous character is SP, whose next character is SP or the end of the content, and which is not inside a span CITED FIDELITY package",
+   "ambiguity": 0.55
+  },
+  {
+   "id": "R5",
+   "text": "Attributes, per piece: a directive line's piece is its rest; a continuation's piece is one space followed by its code. An attribute is an occurrence of exactly the uppercase word \"CITED\", \"EARNED\" or \"ANCHOR\" in the piece with one or more SP characters directly before it and SP or the end of the piece directly after it, whose first letter is not inside a quoted span (R4, read on the piece). Its VALUE is the text from just after the word to the start of the SP run before the next attribute of the piece, or to the end of the piece, with leading and trailing SP removed. A directive's ARGS are its rest up to the SP run before its first attribute (or all of it), SP-trimmed. A continuation contributes attributes only, never args CITED FIDELITY package",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R6",
+   "text": "Pins. pins = the number of directive lines named PINNED or EARNED (R3: the colon form counts). A text is VISIBLE when it holds at least one character outside INVISIBLE. A pin is CITED iff the value of one attribute of its own line or of any of its continuations is VISIBLE, or it is named EARNED and its args, or the code of any one of its continuations up to the SP run before that piece's first attribute (all of it when it has none), is VISIBLE. A continuation's text never cites a PINNED. A comment, whole-line or trailing, never cites; nor does a citation word in lowercase or mixed case, glued to a neighbour by a non-SP character, or inside a quoted span CITED FIDELITY package",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "R7",
+   "text": "hits = one entry per uncited pin in increasing line order: line = its line number (R1), what = the text \"pin without a citation\", text = its line as normalized by R1 (the trailing comment included), cut to its first 96 characters (Unicode scalar values: a supplementary character counts 1), or the whole of it when shorter CITED FIDELITY package",
+   "ambiguity": 0.33
+  }
+ ],
+ "ranked": [
+  "R4",
+  "R1",
+  "R6",
+  "R5",
+  "R3",
+  "R2",
+  "R7"
+ ],
+ "at": "2026-10-28T03:12:19Z"
+}

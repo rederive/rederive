@@ -1,0 +1,283 @@
+UNIT parseInt
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# INTERFACE / MODULE SHAPE
+# ---------------------------------------------------------------------------
+# The package `lodash.parseint@4.0.2` is a single-function module:
+#     module.exports = parseInt
+# i.e. the DEFAULT export of the module IS the function under test.
+# A blind re-emitter MUST ship it as the module default export:
+#     export default function parseInt(string, radix, guard) { ... }
+# (CommonJS `module.exports = fn` interops with ESM `import fn from '...'`
+#  as the default import; the harness loads the .mjs via import() and calls
+#  the default export.)
+#
+# SIG  parseInt(string: any, radix?: any, guard?: any) -> number
+#   - string : the value to convert (coerced to a string, see baseToString)
+#   - radix  : the radix to interpret `string` by (coerced; see RADIX node)
+#   - guard  : the iteratee-shorthand guard. Present (and truthy) when the
+#              function is used as a callback for collection methods like
+#              `_.map(coll, _.parseInt)` where the iteratee is invoked as
+#              (value, index, collection). A truthy `guard` FORCES radix
+#              auto-detection (radix := 0). See GUARD node.
+#   Returns: an integer Number, or NaN on unparseable input. NEVER THROWS
+#            for any codec-faithful input (verified: null, undefined, true,
+#            false, {}, [], number, bigint, '' all return a number/NaN, no
+#            throw).
+
+DEPENDS-ON none
+# Pure. No external modules. Internally references the HOST's native
+# global parseInt (captured as `nativeParseInt = root.parseInt`). The blind
+# re-emitter MUST delegate the final numeric parse to the platform's native
+# parseInt(string, radix) with the standard ES5/ECMA-262 semantics described
+# in the NATIVE-PARSEINT node below (so the unit is self-contained given a
+# spec-conformant host parseInt — which every JS engine provides).
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact ordered pipeline — reproduce verbatim)
+# ---------------------------------------------------------------------------
+# Constants used (exact literals from source):
+#   reTrim          = /^\s+|\s+$/g        # trims leading AND trailing whitespace
+#   reHasHexPrefix  = /^0x/i              # case-insensitive 0x / 0X prefix
+#   INFINITY        = 1 / 0               # used only inside baseToString for -0
+#
+# The body is exactly:
+#
+#   function parseInt(string, radix, guard) {
+#     if (guard || radix == null) {
+#       radix = 0;
+#     } else if (radix) {
+#       radix = +radix;
+#     }
+#     string = toString(string).replace(reTrim, '');
+#     return nativeParseInt(string, radix || (reHasHexPrefix.test(string) ? 16 : 10));
+#   }
+#
+# Decomposed into ordered nodes:
+
+# NODE 1 — RADIX RESOLUTION (runs FIRST, before string coercion)
+#   The radix variable is resolved by this exact branch ladder:
+#     BRANCH 1a: if (guard || radix == null)  -> radix = 0
+#        * `guard` is evaluated for truthiness (ToBoolean). ANY truthy guard
+#          (e.g. an array, a non-empty/empty object, a non-zero number, a
+#          non-empty string, true) makes this branch taken.
+#          NOTE: guard === 0, '', false, null, undefined, NaN are FALSY guards
+#          and do NOT take this branch via the guard clause.
+#        * `radix == null` uses LOOSE equality: TRUE for radix === null AND
+#          radix === undefined (both, due to ==). FALSE for 0, '', false, NaN.
+#        * Either condition true => radix := 0 (numeric zero).
+#     BRANCH 1b: else if (radix)  -> radix = +radix
+#        * Reached only when branch 1a is NOT taken (guard falsy AND radix is
+#          not null/undefined). `radix` here is tested for truthiness.
+#        * If radix is truthy, radix := +radix  (ToNumber coercion):
+#            +true   -> 1
+#            +"2"    -> 2
+#            +"16"   -> 16
+#            +"0x10" -> 16     (numeric string hex coercion by ToNumber)
+#            +"x"    -> NaN
+#            +2.9    -> 2.9    (no truncation here; truncation happens in
+#                              native parseInt, NODE 3)
+#     BRANCH 1c: else (radix is falsy: 0, '', false, NaN — and not null/undef,
+#                and guard falsy)  -> radix is LEFT AS-IS (the original falsy
+#                value). It is treated as falsy downstream in NODE 3.
+#
+# NODE 2 — STRING COERCION + TRIM (runs SECOND, AFTER radix resolution)
+#   string := toString(string).replace(reTrim, '')
+#   where toString is lodash's _.toString:
+#     toString(value):
+#       if value == null (=== null OR === undefined, loose):  return ''
+#       else: return baseToString(value)
+#     baseToString(value):
+#       if typeof value == 'string':  return value          # fast path
+#       if isSymbol(value):  return symbolToString.call(value) (or '' if no
+#                            Symbol.prototype.toString)       # e.g. 'Symbol(5)'
+#       result = (value + '')                                # ToString
+#       return (result == '0' && (1/value) == -INFINITY) ? '-0' : result
+#         # i.e. preserves the sign of -0: the number -0 stringifies to '-0'
+#         #      (verified: parseInt(-0) -> -0)
+#   Then `.replace(reTrim, '')` strips ALL leading and trailing whitespace
+#   matched by \s. In the host engine (modern V8/Node) \s matches the full
+#   set of whitespace incl. TAB U+0009, LF U+000A, VT U+000B, FF U+000C,
+#   CR U+000D, SP U+0020, NBSP U+00A0, U+1680, U+2000..U+200A, LS U+2028,
+#   PS U+2029, U+202F, U+205F, IDEOGRAPHIC SP U+3000, and BOM U+FEFF.
+#   (All verified to be trimmed; see SCOPE in-contract notes.)
+#   NOTE: only leading/trailing whitespace is removed. Internal characters
+#   (incl. internal whitespace and any non-digit) are NOT removed; native
+#   parseInt stops at the first invalid char (NODE 3).
+#
+# NODE 3 — DELEGATE TO NATIVE PARSEINT (runs LAST, returns its result)
+#   return nativeParseInt(string, radix || (reHasHexPrefix.test(string) ? 16 : 10))
+#   The effective radix argument is computed by:
+#     effRadix = radix || (reHasHexPrefix.test(string) ? 16 : 10)
+#   where:
+#     * `radix ||` short-circuits: if `radix` (after NODE 1) is TRUTHY, that
+#       truthy numeric value is used (e.g. 1, 2, 2.9, 16, NaN-is-falsy-so-no).
+#       NB: NaN is falsy, so a radix coerced to NaN in NODE 1b falls through
+#       to the hex/10 auto-detect. (verified: ('10','x') -> 10, ('0x1f','x') -> 31)
+#     * If `radix` is falsy (0, NaN, '', false — typically 0 from NODE 1a/1c),
+#       then auto-detect: reHasHexPrefix.test(string) tests the ALREADY-TRIMMED
+#       string against /^0x/i. If it matches (string begins '0x' or '0X'),
+#       effRadix = 16; otherwise effRadix = 10.
+#       NB: a leading sign defeats hex auto-detect: '-0x1f' does NOT match
+#           /^0x/i, so effRadix = 10 -> nativeParseInt('-0x1f',10) -> -0.
+#   nativeParseInt is the platform's native parseInt with ES5/ECMA-262
+#   §15.1.2.2 semantics — the contract a blind re-emitter must reproduce via
+#   the host's built-in parseInt:
+#     NATIVE-PARSEINT(S, R):
+#       * Strip leading whitespace (already trimmed here, so no-op).
+#       * Optional leading '+' or '-' sign.
+#       * R is coerced ToInt32 then the standard rules apply:
+#           - if R == 0 (or after-sign no explicit base): default base 10,
+#             UNLESS the post-sign string begins with '0x'/'0X' AND R is 0/16,
+#             in which case base 16 and the '0x' is consumed. (In THIS unit
+#             the '0x'/'0X' auto-detect is already resolved to effRadix=16 by
+#             NODE 3, so native receives R=16 for those.)
+#           - R must be in [2, 36] after ToInt32-style normalization; native
+#             truncates a fractional R toward zero (R=2.9 -> base 2). If R is
+#             outside [2,36] (e.g. 1, 37, -1, or 1.9->1), returns NaN.
+#       * Reads the longest prefix of valid digits for that base; stops at the
+#         first invalid char. If no valid digit follows the optional sign,
+#         returns NaN.
+#       * Sign of -0 is preserved ('-0' -> -0).
+#
+# ---------------------------------------------------------------------------
+# DEMONSTRATED INPUT/OUTPUT TABLE  (all VERIFIED by running the real package;
+# self-consistent with genInputs — every value genInputs can emit is covered
+# by the rules above and a representative is shown here)
+# ---------------------------------------------------------------------------
+#  ('123')                 -> 123        # plain decimal
+#  ('  42  ')              -> 42         # leading+trailing whitespace trimmed
+#  ('42  ')                -> 42         # trailing-only trim
+#  ('  42')                -> 42         # leading-only trim
+#  ('0x1f')                -> 31         # hex auto-detect (lowercase x)
+#  ('0X1F')                -> 31         # hex auto-detect (uppercase X)
+#  ('  0x1f  ')            -> 31         # trim then hex auto-detect
+#  ('0x')                  -> NaN        # '0x' with no digits
+#  ('0xG')                 -> NaN        # invalid hex digit after 0x
+#  ('08')                  -> 8          # NO legacy octal; base 10
+#  ('010')                 -> 10         # base 10 (not octal)
+#  ('10', 2)               -> 2          # explicit radix 2
+#  ('ff', 16)              -> 255        # explicit radix 16
+#  ('z', 36)               -> 35         # explicit radix 36
+#  ('abc')                 -> NaN        # no valid digit
+#  ('')                    -> NaN        # empty string
+#  ('   ')                 -> NaN        # whitespace-only -> '' after trim
+#  ('-5')                  -> -5         # leading minus
+#  ('+7')                  -> 7          # leading plus
+#  ('123abc')              -> 123        # stops at first invalid char
+#  ('1.5')                 -> 1          # stops at '.'
+#  ('-0x1f')               -> -0         # sign defeats hex; base10; '-0'
+#  ('-0xff', 16)           -> -255       # explicit radix 16, signed hex
+#  ('  -42  ')             -> -42        # trim + signed
+#  (42)                    -> 42         # number ToString '42'
+#  (42.9)                  -> 42         # '42.9' -> stops at '.'
+#  (255, 16)               -> 597        # number '255' parsed base16
+#  (-0)                    -> -0         # baseToString preserves '-0'
+#  (Infinity)              -> NaN        # 'Infinity'
+#  (NaN)                   -> NaN        # 'NaN'
+#  (1e21)                  -> 1          # ToString '1e+21' -> '1' then 'e' stops
+#  (0.0000005)             -> 5          # ToString '5e-7' -> '5'
+#  (null)                  -> NaN        # toString -> '' -> NaN
+#  (undefined)             -> NaN        # toString -> '' -> NaN
+#  (true)                  -> NaN        # 'true' -> NaN
+#  (false)                 -> NaN        # 'false' -> NaN
+#  ({})                    -> NaN        # '[object Object]' -> NaN
+#  (['42','7'])            -> 42         # array ToString '42,7' -> 42
+#  ([42])                  -> 42         # array ToString '42'
+#  (10n)                   -> 10         # bigint ToString '10' (typeof bigint,
+#                                        #   not string/symbol -> value+'' path)
+#  (255n, 16)              -> 597        # bigint '255' base 16
+#  ('10', 0)               -> 10         # radix 0 falsy -> auto-detect -> 10
+#  ('10', null)            -> 10         # radix==null -> radix:=0 -> 10
+#  ('10', undefined)       -> 10         # radix==null -> radix:=0 -> 10
+#  ('10', '2')             -> 2          # radix '2' truthy -> +2 -> base2
+#  ('10', false)           -> 10         # radix false: not null, falsy -> as-is
+#                                        #   (NODE 1c) -> falsy -> base10
+#  ('10', true)            -> NaN        # radix true -> +true=1 -> base1 -> NaN
+#  ('10', NaN)             -> 10         # NaN not null, falsy (NODE 1c) -> base10
+#  ('10', '0')             -> 10         # '0' truthy -> +0=0 -> falsy -> base10
+#  ('0x1f', '0')           -> 31         # '0' truthy -> 0 -> falsy -> hex -> 16
+#  ('10', 'x')             -> 10         # 'x' truthy -> +NaN -> falsy -> base10
+#  ('0x1f', 'x')           -> 31         # 'x' truthy -> NaN -> falsy -> hex -> 16
+#  ('10', '0x10')          -> 16         # '0x10' truthy -> +16 -> base16
+#  ('ff', '16')            -> 255        # '16' truthy -> +16 -> base16
+#  ('10', 1)               -> NaN        # radix 1 out of [2,36]
+#  ('10', 37)              -> NaN        # radix 37 out of [2,36]
+#  ('10', -1)              -> NaN        # radix -1 out of [2,36]
+#  ('10', 1.9)             -> NaN        # +1.9 -> native truncates -> 1 -> NaN
+#  ('10', 2.9)             -> 2          # +2.9 -> native truncates -> base2 -> 2
+#  ('7', 8.9)              -> 7          # base 8
+#  ('7', 36.9)             -> 7          # base 36
+#  ('7', 37.9)             -> NaN        # base 37 invalid
+#  ('0x1f', 10)            -> 0          # explicit radix10: '0x1f' base10 -> '0'
+#  ('0x1f', 16)            -> 31         # explicit radix16 -> 31
+#  ('0x1f', 0)             -> 31         # radix 0 falsy -> hex auto -> 16
+#  # GUARD (3-arg) form — used as _.map(coll, _.parseInt) callback:
+#  ('6', 0, ['6','08','10'])    -> 6     # guard=array truthy -> radix:=0 -> 6
+#  ('08', 1, ['6','08','10'])   -> 8     # guard truthy -> radix 0 -> base10 -> 8
+#  ('10', 2, ['6','08','10'])   -> 10    # guard truthy OVERRIDES radix 2;
+#                                        #   radix:=0 -> auto -> base10 -> 10
+#  ('0x1f', 0, ['0x1f'])        -> 31    # guard truthy -> radix:=0 -> hex -> 16
+#  ('0x1f', 16, [1])            -> 31    # guard truthy -> radix:=0 (16 ignored)
+#                                        #   -> hex auto -> 16 -> 31
+#  ('10', 16, [1])              -> 10    # guard truthy -> radix:=0 -> base10
+#  ('10', 2, 0)                 -> 2     # guard=0 is FALSY -> not guard branch;
+#                                        #   radix 2 truthy -> +2 -> base2 -> 2
+
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Pure deterministic function. The harness records {args -> result}. NaN is a
+# legitimate value result (NOT a throw). The codec encodes NaN faithfully.
+# -0 is a distinct observable from 0 (Object.is(-0,0) === false): the oracle
+# MUST distinguish them; a blind re-emitter that returns +0 where the real
+# returns -0 (e.g. parseInt(-0) or parseInt('-0x1f')) is a DIVERGENCE.
+
+# ---------------------------------------------------------------------------
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The 3-node pipeline above: radix-resolution branch ladder (NODE 1),
+#     toString+trim (NODE 2), delegation to native parseInt with the
+#     `radix || hex-auto` effective-radix rule (NODE 3).
+#   - The exact constants: reTrim=/^\s+|\s+$/g, reHasHexPrefix=/^0x/i.
+#   - The -0 preservation in baseToString.
+#   - The guard-forces-radix-0 semantics (iteratee-shorthand guard).
+#   - The == null (loose) test distinguishing null/undefined from 0/''/false/NaN.
+#   - The whitespace set trimmed by \s (host-engine ECMA-262 \s; demonstrated
+#     above — every one of those code points IS trimmed in the target runtime;
+#     a blind re-emitter using its own host's String.replace(/^\s+|\s+$/g,'')
+#     gets the identical set because both run on the same JS engine class).
+#   The unit is self-contained given a spec-conformant host `parseInt`
+#   (universally available). It is ORACLE-CLASS deterministic: NO seam — no
+#   clock/RNG/env/io/net. `nativeParseInt` is a pure deterministic builtin,
+#   NOT an ambient read.
+#
+# CARRIED DATA: none. No large literal tables. (Read-only; no carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs
+# because they are not oracle-codec round-trippable, but a blind re-emitter
+# still reconstructs their behavior from the rules above):
+#   - Symbol first arg: baseToString takes the isSymbol branch and returns
+#     symbolToString.call(value) e.g. 'Symbol(5)'; native parseInt -> NaN.
+#     VERIFIED: parseInt(Symbol('5')) -> NaN (does NOT throw). Symbols do not
+#     survive JSON.stringify(encode(...)), so genInputs MUST NOT emit them.
+#   - Function first arg: toString -> the function's source string -> almost
+#     always NaN (begins with 'function'/'(' etc.). Functions are not codec
+#     round-trippable -> NOT emitted.
+#   - A first arg whose own toString/valueOf THROWS would propagate the throw
+#     (the `value + ''` ToString in baseToString). Such objects are not
+#     codec-faithful and are NOT emitted.
+#   No stateful mutators, no side APIs: the function reads no ambient state
+#   and mutates nothing.
+
+# ---------------------------------------------------------------------------
+PROVENANCE
+# Package: lodash.parseint@4.0.2  (npm)
+# Repo:    https://github.com/lodash/lodash  (modularized build, lodash-cli)
+# License: MIT  (Copyright jQuery Foundation and other contributors)
+# Source:  node_modules/lodash.parseint/index.js  (module.exports = parseInt)
+#          The body aligns with lodash _.parseInt and ES5 parseInt
+#          (https://es5.github.io/#x15.1.2.2).
+# All behavioral claims in this SIR were VERIFIED by executing the real
+# installed package via `node -e` against the demonstrated I/O table above.

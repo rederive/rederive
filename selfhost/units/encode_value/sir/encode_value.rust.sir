@@ -1,0 +1,57 @@
+UNIT encode_value
+LANG rust
+PRIMARY-SHA256 d91d945d8d17d24001cdc090bc43f8c5eb89a2c7df0116a28a0cb40c0dfc2727
+SIG pub fn encode_value(value: &serde_json::Value, ty: &str) -> serde_json::Value
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn encode_value) depending on serde_json only — no
+  main, no I/O, no unsafe. The verifier's generated harness parses each stdin args line, binds value as a
+  serde_json::Value and ty as &str, calls encode_value(&value, ty) and prints the result as one JSON line. A throw (R1,
+  R2, R5, R6, R7, R10, R13) is a panic; the message is not graded. The result is a Value tree of Object / Array / String / Bool
+  only (TABLE NODES); member order is immaterial.
+ABI numbers: every json number in value is an IEEE-754 double — read it with as_f64() ONLY, never as_u64 / as_i64 (the
+  wire spells 2^64-2048 as 18446744073709550000, which as_u64 reads as a different integer; as_f64 recovers the double
+  18446744073709549568, the value the oracle encodes). Integral = finite and x.trunc() == x; the range check and the
+  decimal run on the exact value (x as i128, exact below 2^127; i64 needs -2^63 <= x < 2^63, u64 needs 0 <= x < 2^64, -0
+  giving "0"). Work on an internal value enum, not on serde_json::Value directly: R5 produces numbers serde cannot hold
+  (NaN, the infinities, -0 from a num tag), a distinct INTEGER kind (bigint tag; f64 and json reject it, i64/u64 accept
+  it by range — a decimal too long for i128 is out of range), the ABSENT value, and ESCAPED maps (a flag on the map
+  node: its "__t" / "__throw" / "__threw" members are data at that node only).
+ENVELOPE narrowing: serde_json::Value holds no NaN, infinities or -0 in the argument (the tooling narrows such vectors
+  away; the same values built by a num tag ARE in this envelope), no top-level absent value, no byte strings, no keyed
+  collections and no unpaired surrogates — so bytes accepts nothing here and the js-extension vectors are outside.
+  R13's refuse side is never graded here: the shared oracle's codec refuses an argument past depth 100, so those
+  vectors ride the js extension; the shared vectors reach the accept side up to 49 list / 33 map levels (a deeper
+  value's result nests past the codec cap and is carried by no oracle). Implement the cap anyway, exactly (depth 0 at the call, + 1 per child value, unchanged through a union alternative, the json position
+  and a tag; panic past 100).
+MECHANISM RENDER (R12) is ECMA-262 Number::toString. Handle NaN, the infinities and -0 first; 0 renders "0". Take the
+  digit COUNT k from format!("{:e}", x.abs()) (Rust's shortest round-trip), then the DIGITS d1..dk and exponent e from
+  format!("{:.*e}", k - 1, x.abs()) — the correctly rounded k-digit form, i.e. the closest to x; Rust's shortest form
+  alone picks a different last digit when several k-digit strings round-trip (-1928372706752270.2 in JS, ...270.3 from
+  {:e}). With n = e + 1, lay out as: k <= n <= 21 -> the digits then n-k zeros; 0 < n <= 21 -> the first n digits, ".",
+  the rest; -6 < n <= 0 -> "0." then -n zeros then the digits; otherwise d1, then "." and d2..dk when k > 1, then "e",
+  "+" or "-", |n-1|; a "-" prefix for negatives. Never use Display or ryu output directly (Rust prints 1e21 as
+  1000000000000000000000 and 1e-7 as 0.0000001). BITS = format!("{:016x}", x.to_bits()), NaN as 7ff8000000000000.
+MECHANISM R1 is a hand-written recursive-descent reader over the type text: whitespace is exactly ' ', '\t', '\r', '\n'
+  (never str::trim or char::is_whitespace), skipped before every token, the '[' after a keyword included; a NAME is an
+  ASCII letter or '_' then ASCII alphanumerics or '_', read greedily; after the TYPE only whitespace may remain. Parse to
+  a type enum; R2 compares a canonical key per type (a union's alternative keys sorted, a record's "name:key" field
+  strings sorted, other composites in order — never a derived PartialEq, which is order-sensitive), each later
+  alternative against every earlier one; COVERS (R2 a-d) is a recursive predicate over the type enum. Count composite
+  depth while descending and panic when it reaches 17, checked before descending (the text must never decide the stack
+  depth).
+MECHANISM R5 num: the four special spellings, else check the json number-literal grammar by hand, then str::parse::<f64>
+  (correctly rounded); panic when the result is infinite ("1e999"), when x == 0.0 (either sign) and the mantissa (the
+  text before any 'e'/'E') holds a digit '1'..='9' ("1e-400", "-1e-400"), or when it is -0 ("-0.0"). bigint: the canonical decimal grammar by hand ("0" or optional '-' then 1-9 then digits; "-0"
+  and leading zeros panic), then i128 (out of range when it does not fit). obj: v must be an Object -> its entries;
+  anything else (Array, String, Number, Bool, Null, missing) panics. The new map carries the ESCAPED flag; its entry
+  values are ordinary. A marker or tag member counts only when its value is a String; a throw marker only on an Object of exactly one
+  entry; serde_json objects have no
+  prototype, so every Object is a plain map.
+MECHANISM order. R9 compares sort keys as 16-bit code units: a.encode_utf16().cmp(b.encode_utf16()) — NOT str's Ord
+  (byte / code-point order puts characters above the surrogate range after astral ones). serde_json::Map iteration
+  order is not the input order and does not matter: always sort (a stable sort; keys of a json object are distinct).
+  Record fields read the object's own key (get(name)), missing = absent; a record or map position over an Array
+  panics. CANON per the primary's R11 and TABLE ESC (equivalently serde_json::to_string of a String, minus its quotes).
+DEPENDS-ON serde_json (crate, version 1) — the SIG's value type and the result type; nothing else
+PROVENANCE rederive@7b348e351c9f cli/sir/canon.mjs (unchanged since bb8ded84fa50). Language file revised 2026-10-27 (round 5c) with the primary; the ABI
+  follows the lab's rust driver (harness generated from the abstract SIG, json crossing as serde_json::Value, a panic as
+  a throw).

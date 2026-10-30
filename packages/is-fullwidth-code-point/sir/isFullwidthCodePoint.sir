@@ -1,0 +1,142 @@
+UNIT isFullwidthCodePoint
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isFullwidthCodePoint(codePoint: number) -> boolean
+DEPENDS-ON none
+# Zero runtime dependencies. Uses only the global Number.isNaN.
+
+BEHAVIOR
+# Pure total function of one argument. No seam (no clock/RNG/io/net). No state.
+# The function is the package's DEFAULT export. In CJS the source assigns BOTH:
+#   module.exports = isFullwidthCodePoint
+#   module.exports.default = isFullwidthCodePoint   # the same function object
+# The blind re-emitter targets ESM: `export default <fn>` (see SCOPE / ENVELOPE).
+#
+# Comparisons in the body are RAW JS relational operators (>= <= === !==) applied
+# directly to `codePoint`. There is NO Math.floor / integer truncation / |0. A
+# non-integer float is therefore tested literally against the numeric bounds (a
+# fractional value strictly inside a range returns true; one between ranges returns
+# false). This is load-bearing — see edge cases below.
+#
+# ORDERED PIPELINE:
+#
+# NODE 1 (NaN guard):
+#   if Number.isNaN(codePoint) is true -> return false   # short-circuit, before any range test
+#   NB: Number.isNaN (NOT the global isNaN) — no coercion. Only an actual NaN
+#       number value triggers this. (undefined/null/strings do NOT reach here as NaN;
+#       they fall through to NODE 2 and are out-of-envelope — see ENVELOPE.)
+#
+# NODE 2 (outer guard + range disjunction):
+#   return true  IFF  ( codePoint >= 0x1100 ) AND ( ANY of the range clauses below holds );
+#   otherwise (NODE 3) return false.
+#
+#   The outer guard `codePoint >= 0x1100` gates the ENTIRE disjunction. Everything
+#   strictly below 0x1100 (4352) is false regardless of the clauses — including
+#   ASCII, 0, negatives. (No clause matches below 0x1100 anyway, but the guard makes
+#   it an explicit early exit.)
+#
+#   RANGE CLAUSES (the disjunction; `cp` = codePoint). A clause is satisfied per
+#   ordinary JS relational comparison:
+#
+#     R1  Hangul Jamo:                  cp <= 0x115F                     # given cp>=0x1100, i.e. [0x1100, 0x115F]
+#     S1  singleton:                    cp === 0x2329                    # LEFT-POINTING ANGLE BRACKET
+#     S2  singleton:                    cp === 0x232A                    # RIGHT-POINTING ANGLE BRACKET
+#     R2  CJK Radicals Supp .. Encl:    0x2E80 <= cp <= 0x3247  AND  cp !== 0x303F
+#     R3  Encl CJK .. Ext A:            0x3250 <= cp <= 0x4DBF
+#     R4  CJK Unified .. Yi Radicals:   0x4E00 <= cp <= 0xA4C6
+#     R5  Hangul Jamo Extended-A:       0xA960 <= cp <= 0xA97C
+#     R6  Hangul Syllables:             0xAC00 <= cp <= 0xD7A3
+#     R7  CJK Compat Ideographs:        0xF900 <= cp <= 0xFAFF
+#     R8  Vertical Forms:               0xFE10 <= cp <= 0xFE19
+#     R9  CJK Compat Forms .. Small:    0xFE30 <= cp <= 0xFE6B
+#     R10 Halfwidth/Fullwidth Forms:    0xFF01 <= cp <= 0xFF60          # !!! LOWER BOUND IS 0xFF01, NOT 0xFF00 !!!
+#     R11 (Fullwidth signs):            0xFFE0 <= cp <= 0xFFE6
+#     R12 Kana Supplement:              0x1B000 <= cp <= 0x1B001
+#     R13 Enclosed Ideographic Supp:    0x1F200 <= cp <= 0x1F251
+#     R14 CJK Ext B .. Tertiary Ideo:   0x20000 <= cp <= 0x3FFFD
+#
+# NODE 3 (default): return false.
+#
+# CRITICAL EXACTNESS NOTES (verified by running the real package — see PROVENANCE):
+#   * R10 LOWER BOUND IS 0xFF01 (65281), NOT 0xFF00. VERIFIED:
+#       isFullwidthCodePoint(0xFF00) === false
+#       isFullwidthCodePoint(0xFF01) === true
+#     A blind engineer who writes 0xFF00 WILL DIVERGE at 0xFF00. The source line is:
+#       (0xFF01 <= codePoint && codePoint <= 0xFF60)
+#   * R2 EXCLUDES exactly 0x303F (12351): inside [0x2E80, 0x3247] but masked out by
+#       `cp !== 0x303F`. VERIFIED: f(0x303E)=true, f(0x303F)=false, f(0x3040)=true.
+#       The !== is a strict equality, so a NON-integer like 0x303F+0.5 (12351.5) is
+#       NOT equal to 0x303F and (being in [0x2E80,0x3247]) returns true.
+#   * The gap [0x3248, 0x324F] is NOT covered (R2 ends 0x3247, R3 starts 0x3250):
+#       f(0x3248)=false, f(0x3249..0x324F)=false, f(0x3250)=true.
+#   * The gap [0x4DC0, 0x4DFF] is NOT covered (R3 ends 0x4DBF, R4 starts 0x4E00).
+#   * The gap (0xFF60, 0xFFE0) is NOT covered: f(0xFF61)=false.
+#   * Return type is a real boolean (typeof === "boolean"), never truthy/falsy other.
+#
+# FULL BOUNDARY TRUTH TABLE (every range edge +/- 1, verified against real pkg):
+#   0x10FF F | 0x1100 T | 0x115F T | 0x1160 F
+#   0x2328 F | 0x2329 T | 0x232A T | 0x232B F
+#   0x2E7F F | 0x2E80 T | 0x303E T | 0x303F F | 0x3040 T | 0x3247 T | 0x3248 F
+#   0x324F F | 0x3250 T | 0x4DBF T | 0x4DC0 F
+#   0x4DFF F | 0x4E00 T | 0xA4C6 T | 0xA4C7 F
+#   0xA95F F | 0xA960 T | 0xA97C T | 0xA97D F
+#   0xABFF F | 0xAC00 T | 0xD7A3 T | 0xD7A4 F
+#   0xF8FF F | 0xF900 T | 0xFAFF T | 0xFB00 F
+#   0xFE0F F | 0xFE10 T | 0xFE19 T | 0xFE1A F
+#   0xFE2F F | 0xFE30 T | 0xFE6B T | 0xFE6C F
+#   0xFF00 F | 0xFF01 T | 0xFF60 T | 0xFF61 F
+#   0xFFDF F | 0xFFE0 T | 0xFFE6 T | 0xFFE7 F
+#   0x1AFFF F | 0x1B000 T | 0x1B001 T | 0x1B002 F
+#   0x1F1FF F | 0x1F200 T | 0x1F251 T | 0x1F252 F
+#   0x1FFFF F | 0x20000 T | 0x3FFFD T | 0x3FFFE F
+#   NaN F | -1 F | -0x1100 F | 65('A') F | 0 F | Infinity F | -Infinity F
+#   4352.5 T (in R1) | 4447.5 F (=0x115F+0.5, between R1 and R2) | 1e9 F (> 0x3FFFD)
+#   12350.5 T | 12351.5 T (0x303F +/-0.5, !==0x303F, in R2)
+
+ORACLE value -> oracle.json
+# Deterministic value oracle: expected = real isFullwidthCodePoint(codePoint), a boolean.
+
+SCOPE
+# ALL behavior is IN-CONTRACT LOGIC — reproduce exactly. The function is pure.
+# There is NO CARRIED DATA: the range bounds are 14 ranges + 2 singletons + 1
+# exclusion, written inline in the SIR above in full (not a large literal table that
+# must be extracted byte-exact). A blind engineer reproduces them verbatim from this
+# SIR. Therefore NO carried.json is emitted.
+# There is NO OUT-OF-CONTRACT behavior (no mutators, no side APIs).
+#
+# INPUT/OUTPUT ENVELOPE (the contract type is `number` per index.d.ts):
+#   IN-ENVELOPE arg values (all round-trip the oracle codec and are emitted by genInputs):
+#     - any finite number: integers AND non-integer floats (raw comparisons, no flooring)
+#     - negatives, 0
+#     - NaN            (codec round-trips NaN; NODE 1 returns false)
+#     - +Infinity      (>= 0x1100 true, but no range clause holds -> false)
+#     - -Infinity      (>= 0x1100 false -> false)
+#     - -0             (codec round-trips -0; behaves as 0 -> false)
+#     Huge magnitudes beyond 0x3FFFD -> false (no clause). VERIFIED 1e9 -> false.
+#
+#   OUT-OF-ENVELOPE / DOCUMENT-AS-OUT (NOT emitted by genInputs; behavior noted for completeness):
+#     - non-number arguments (string, null, undefined, boolean, object): the .d.ts
+#       types codePoint as `number`. Passing a non-number relies on JS coercion in the
+#       relational operators and is OUTSIDE the contract. (Observed: undefined->false,
+#       null->false, "5000"->false, but this is incidental coercion, not contract.)
+#       These are EXCLUDED from genInputs.
+#     - functions and Symbols as arguments: NON-ROUND-TRIPPABLE through the oracle
+#       codec (JSON.stringify(encode(args)) corrupts them) AND out-of-contract. A
+#       Symbol arg additionally THROWS on relational coercion. EXCLUDED from genInputs;
+#       a blind re-emitter still reconstructs the spec without them.
+#     - boxed Number (new Number(0x1100)): out-of-contract object; identity does not
+#       survive the codec. EXCLUDED from genInputs.
+
+PROVENANCE
+# package: is-fullwidth-code-point@3.0.0
+# author:  Sindre Sorhus
+# repo:    sindresorhus/is-fullwidth-code-point
+# license: MIT
+# source file (read-only): node_modules/is-fullwidth-code-point/index.js (49-line CJS)
+# code-point source of truth (upstream of the literal ranges, per source comment):
+#   http://www.unix.org/Public/UNIDATA/EastAsianWidth.txt  (East Asian Width, "F"/"W")
+# VERIFICATION: every range bound +/-1, the 0x303F exclusion (+/-0.5), the two
+#   singletons (+/-1), the >=0x1100 outer guard, NaN/Inf/-Inf/negatives/floats/0, and
+#   the typeof===boolean return were all executed against the REAL installed package via
+#   `node -e 'require("./index.js")(...)'`. The R10 lower bound was confirmed 0xFF01
+#   (f(0xFF00)===false), correcting the task paraphrase which stated 0xFF00.

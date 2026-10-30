@@ -1,0 +1,217 @@
+UNIT leftPad
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG leftPad(str: any, len: any, ch?: any) -> string
+    # Default/main export: `module.exports = leftPad`. A pure value-mode string utility.
+    # Re-emit as a DEFAULT export (see SCOPE / re-emitter note). Zero dependencies.
+DEPENDS-ON none
+
+# ----------------------------------------------------------------------------
+# PURITY
+# ----------------------------------------------------------------------------
+# leftPad NEVER mutates any argument. str/len/ch are only read and coerced into
+# locals. Verified: passing an array [1,2,3] or object {a:1} as `str` leaves the
+# input object unchanged. No deep clone is required by a re-emitter.
+# Return value is ALWAYS a primitive string (typeof === "string"), in every path
+# including all early returns.
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (exact ordered pipeline — mirrors index.js lines 22-52, all VERIFIED
+#            by executing left-pad@1.3.0 on Node v24)
+# ----------------------------------------------------------------------------
+#
+# There is a module-level constant `cache`, an array of 10 strings indexed 0..9,
+# each being a run of that many SPACE (0x20) characters:
+#     cache = [ "", " ", "  ", "   ", "    ", "     ", "      ",
+#               "       ", "        ", "         " ]
+# i.e. cache[k] === " ".repeat(k) for k in 0..9. (Small table; in-contract logic,
+# NOT carried data — a re-emitter constructs it trivially.)
+#
+# NODE 1 — coerce str to string:
+#     str = str + ''
+#   Uses JS string concatenation (the "+ ''" idiom == String(str) for all
+#   codec-faithful inputs here). Observed coercions (VERIFIED):
+#     number 0          -> "0"          number 17    -> "17"
+#     true              -> "true"       false        -> "false"
+#     null              -> "null"       undefined    -> "undefined"
+#     NaN               -> "NaN"        Infinity     -> "Infinity"
+#     -Infinity         -> "-Infinity"
+#     ""                -> ""           "foo"        -> "foo"
+#     bigint 255n       -> "255"        bigint 10n   -> "10"
+#     [1,2,3]  (array)  -> "1,2,3"      (Array.prototype.toString = join(","))
+#     {a:1}    (object) -> "[object Object]"
+#     Uint8Array[1,2,3] -> "1,2,3"      Buffer<41 42> -> "AB" (Buffer.toString())
+#     new Map([["a",1]])-> "[object Map]"   new Set([1,2]) -> "[object Set]"
+#     RegExp /ab+c/g    -> "/ab+c/g"
+#   From this point `str` is a string; let S = str and L0 = S.length.
+#
+# NODE 2 — turn len into the PAD width (gap):
+#     len = len - str.length
+#   `len` is whatever was passed; the subtraction applies JS numeric coercion to
+#   the ORIGINAL len operand, then subtracts L0. Let G = Number(len_original) - L0.
+#   Observed len coercions feeding the subtraction (VERIFIED):
+#     number 5          -> 5            "5" (numeric string) -> 5
+#     5.9 / "5.9"       -> 5.9          true  -> 1      null -> 0
+#     undefined         -> NaN          NaN   -> NaN
+#     "abc" (non-num)   -> NaN          Infinity -> Infinity   -Infinity -> -Infinity
+#   So G is a JS number that MAY be non-integer, NaN, or +/-Infinity.
+#
+# NODE 3 — BRANCH "no padding needed":
+#     if (len <= 0) return str
+#   If G <= 0  -> return S (the coerced string) unchanged. NaN <= 0 is FALSE in JS,
+#   so a NaN gap does NOT take this branch (it falls through; see NODE 6 outcome).
+#   VERIFIED early-returns: leftPad("foobar",6)="foobar"; ("foobar",5)="foobar";
+#   ("foobar",-1)="foobar"; ("",0)="".
+#
+# NODE 4 — default ch to space, with the strict-zero exception:
+#     if (!ch && ch !== 0) ch = ' '
+#   Evaluate on the ORIGINAL ch argument (before any string coercion). ch becomes
+#   a single space " " WHEN  (!ch) AND (ch !== 0)  is true. Otherwise ch is kept.
+#   VERIFIED truth table for ch:
+#     ch omitted/undefined -> " "      ch null   -> " "      ch NaN -> " "
+#     ch false             -> " "      ch ""     -> " "
+#     ch 0    (number)     -> KEPT (0)  because (ch !== 0) is FALSE -> condition false
+#     ch 0n   (bigint)     -> " "       because 0n !== 0 is TRUE (bigint!==number)
+#                                       AND !0n is true -> condition TRUE -> defaults
+#     ch "0"  (string)     -> KEPT ("0")
+#     ch "a"  / "*" / "-"  -> KEPT
+#     any nonzero number   -> KEPT (e.g. 5, 12, -7, 3.14)
+#     ch "" empty string   -> " " (defaulted, since !"" is true and ""!==0)
+#   NOTE the asymmetry a re-emitter MUST honor: numeric literal 0 is preserved as a
+#   pad of "0"s; bigint 0n is NOT preserved (becomes space) due to strict !==.
+#
+# NODE 5 — coerce ch to string:
+#     ch = ch + ''
+#   Same "+ ''" string coercion as NODE 1, applied to whatever ch now is.
+#     number 0  -> "0"     number 12 -> "12" (TWO chars!)   number 5  -> "5"
+#     number -7 -> "-7"    number 3.14 -> "3.14"
+#     " " (space) stays " ";  "0" stays "0";  "ab" stays "ab".
+#   IMPORTANT: ch may be MULTI-CHARACTER (e.g. numeric 12 -> "12", or an explicit
+#   multi-char string "ab"/"abc"). The README notes ch "should be a single char"
+#   but the module does NOT enforce it (see NODE 7 semantics).
+#   Let C = the resulting ch string. Let G be the integer-ish gap from NODE 2/3
+#   (G > 0 and not yet otherwise constrained; may be float/Infinity).
+#
+# NODE 6 — BRANCH cache fast-path:
+#     if (ch === ' ' && len < 10) return cache[len] + str
+#   Taken ONLY when C is exactly a single space AND G < 10. Returns cache[G] + S.
+#     - For integer G in 1..9: cache[G] is G spaces -> returns G spaces + S. VERIFIED.
+#     - DEGENERATE: if G is a NON-INTEGER in (0,10) (e.g. gap 2.9 from len 5.9),
+#       cache[2.9] is `undefined` (array index miss) and the result is the STRING
+#       "undefined" + S. VERIFIED: leftPad("foo",5.9) -> "undefinedfoo";
+#       leftPad("foo",4.5) -> "undefinedfoo"; leftPad("foo",12.5) (gap 9.5) ->
+#       "undefinedfoo". This is a genuine quirk of the real module and MUST be
+#       reproduced for non-integer gaps that land in the space+(<10) fast path.
+#       (Non-integer gap >= 10 with default space, e.g. gap 10.9, skips this branch
+#       and goes to NODE 7 instead — see NODE 7's float handling.)
+#   If NOT taken (C != " ", or C == " " but G >= 10, or G is NaN/Infinity), fall to
+#   NODE 7.
+#
+# NODE 7 — doubling/repeat loop (builds `pad`, then returns pad + str):
+#     var pad = '';
+#     while (true) {
+#       if (len & 1) pad += ch;     # if low bit of len set, append one copy of C
+#       len >>= 1;                  # arithmetic shift right by 1 (floor halve)
+#       if (len) ch += ch;          # double the unit string C
+#       else break;                 # len reached 0 -> stop
+#     }
+#     return pad + str;
+#   This is exponentiation-by-doubling over string concat: it appends C to `pad`
+#   exactly G_int times where G_int = ToInt32(G) treated via JS bitwise ops, then
+#   returns pad + S. NET EFFECT (VERIFIED): pad === C repeated G_int times, i.e.
+#   the unit string C is repeated `gap` times (NOT truncated to `gap` total
+#   characters). So when C is multi-char the OUTPUT IS LONGER THAN `len`:
+#     leftPad("x",4,12)   -> "121212x"   (gap 3, "12" x3)
+#     leftPad("x",4,"ab") -> "abababx"   (gap 3, "ab" x3)
+#     leftPad("x",6,"abc")-> "abcabcabcabcabcx" (gap 5, "abc" x5)
+#     leftPad("",3,"xyz") -> "xyzxyzxyz" (gap 3)
+#     leftPad("x",4,-7)   -> "-7-7-7x"
+#     leftPad("x",5,3.14) -> "3.143.143.143.14x"
+#   Single-char C behaves as ordinary left-pad:
+#     leftPad("foo",103,"*") -> 100 "*" + "foo"
+#     leftPad("x",15,"*")    -> 14 "*" + "x"
+#     leftPad("x",11," ")    -> 10 spaces + "x" (explicit space, gap>=10 -> loop)
+#
+#   BITWISE/FLOAT DETAILS the re-emitter must honor (the gap G enters this loop and
+#   is processed by JS `&`/`>>=`, which coerce to a 32-bit signed integer EACH op):
+#     - `len & 1`  and  `len >>= 1` apply ToInt32 to len first.
+#     - A FLOAT gap is effectively FLOORED toward zero for the loop (its fractional
+#       part is dropped by ToInt32). VERIFIED: gap 10.9 with ch "*" pads 10 stars
+#       (leftPad("x",11.9,"*") -> "**********x"); gap 11.9 -> 11 stars.
+#       For DEFAULT space + non-integer gap >= 10 the loop runs on the floored gap:
+#       leftPad("x",13.9) (gap 12.9, default space, >=10 so skips cache) -> 12
+#       spaces + "x" (loop floors 12.9 -> 12). (Contrast NODE 6's "undefined"
+#       quirk, which only happens for
+#       non-integer gaps < 10 with default space.)
+#     - An Infinity gap: ToInt32(Infinity) === 0, so `len & 1` is 0 and the FIRST
+#       `len >>= 1` makes len 0 -> `if(len)` false -> break with pad "" ->
+#       returns S unchanged. VERIFIED: leftPad("foo",Infinity) -> "foo".
+#     - A NaN gap (e.g. len undefined/NaN/"abc"): G <= 0 in NODE 3 is FALSE, so it
+#       reaches here; ToInt32(NaN) === 0 -> same as Infinity -> returns S unchanged.
+#       VERIFIED: leftPad("foo",undefined)="foo"; ("foo",NaN)="foo"; ("foo","abc")="foo".
+#       (i.e. any gap that ToInt32's to 0 yields NO padding.)
+#
+# RETURN: always a string. The three exit points are NODE 3 (return str), NODE 6
+# (return cache[len]+str), NODE 7 (return pad+str).
+
+# ----------------------------------------------------------------------------
+# ERROR / THROW behavior
+# ----------------------------------------------------------------------------
+# leftPad itself contains no `throw`. The only throws are HOST allocation limits:
+# building a pad string longer than V8's max string length throws
+#     RangeError: Invalid string length
+# This is reached only for absurdly large gaps. VERIFIED boundary is
+# allocation-driven, NOT a clean numeric constant: leftPad("foo",1e21) throws (gap
+# 1e21 floored by ToInt32 wraps, but the doubling overshoots allocation);
+# leftPad("x",2**31+1) throws; whereas leftPad("x",1e8,"*") SUCCEEDS producing a
+# 100,000,000-char string. Such giant-`len` inputs are OUT-OF-ENVELOPE: a blind
+# re-emitter reproduces the algorithm, but genInputs MUST NOT emit them (they are
+# environment/allocation dependent, not a stable behavioral contract). genInputs
+# keeps len within small bounds.
+
+# ----------------------------------------------------------------------------
+# SELF-CONSISTENCY CROSS-CHECK  (SIR <-> genInputs, both directions)
+# ----------------------------------------------------------------------------
+# Every value class genInputs emits is mapped above:
+#   - str: number, "", string, true, false, null, undefined, NaN, Infinity,
+#     -Infinity, bigint, plain object, array, Uint8Array, Buffer, Map, Set, RegExp
+#     -> NODE 1 coercion table.
+#   - len: positive int (gap>0, gap=0, gap<0 via short/equal/long str), 0, negative,
+#     numeric string, float (both <10 "undefined" path and >=10 floor path), null,
+#     undefined, NaN, true, non-numeric string, Infinity -> NODES 2/3/6/7.
+#   - ch: omitted, " ", custom single char ("*","-","0","a"), multi-char ("ab",
+#     "abc"), numeric 0, nonzero number (5, 12 multi-digit, -7, 3.14), false, "",
+#     null, undefined, NaN, bigint 0n -> NODES 4/5/6/7.
+# Conversely genInputs emits NO value whose behavior is left undefined here, and NO
+# non-codec-faithful value (no functions, no Symbols, no NaN/Infinity/undefined as
+# a `str` ARRAY ELEMENT — they appear only as top-level scalar args where the codec
+# round-trips them; see generator notes). Giant-len throw inputs are excluded.
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline NODES 1-7, the `cache`
+#   table (10 space-runs, constructed by the re-emitter — small in-contract constant,
+#   NOT carried data), the ch falsy/strict-zero rule, the multi-char repeat
+#   semantics, the float "undefined" quirk, and the ToInt32 floor/zero behavior.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT: none (pure, no side effects, no ambient seam — ORACLE-CLASS
+#   deterministic). Host allocation RangeError on giant pads is environment-bound
+#   and out-of-envelope (documented above, not exercised).
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs): functions / Symbols as
+#   any arg (not codec-faithful and Symbol throws on "+''"); inputs producing pads
+#   beyond V8 max string length (RangeError); objects with stateful/mutating
+#   toString/valueOf (non-reproducible).
+#
+# RE-EMITTER OUTPUT SHAPE: leftPad is the module's DEFAULT/main export
+#   (module.exports = leftPad). The blind re-emitter MUST expose it as an ES module
+#   DEFAULT export:  `export default leftPad;`  (NOT a named export). The generator
+#   sets exportName = null and importKind = 'default' accordingly.
+
+# ----------------------------------------------------------------------------
+# PROVENANCE
+# ----------------------------------------------------------------------------
+# left-pad@1.3.0  (npm), repo git@github.com:stevemao/left-pad.git,
+# license WTFPL (Do What The Fuck You Want To Public License, v2).
+# Source file: index.js (module.exports = leftPad). Author azer.
+# Behaviors VERIFIED by executing the installed package on Node v24.16.0.

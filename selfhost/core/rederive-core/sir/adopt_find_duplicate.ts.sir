@@ -1,0 +1,22 @@
+UNIT adopt_find_duplicate
+LANG ts
+PRIMARY-SHA256 d92ba17c1f41c9434c07dff6d66f23e4ea1a2fbe39dde677bc2319c24017bc41
+SIG export default function adopt_find_duplicate(existing: string, section: string): { heading: string; startLine: number; endLine: number } | null
+ABI TypeScript compiles to the js runtime: text = string (UTF-16; lengths are .length); i64 = number (a non-negative
+  integer far below 2^53); record = an object type with exactly heading, startLine, endLine; none = null. STRICT: the
+  artifact type-checks under `strict: true` with no `any`, no non-null assertions (`!`), no `@ts-ignore` /
+  `@ts-expect-error`. A regex match result (and its index) is possibly null/undefined and must be tested, not asserted.
+MECHANISM (restated from js — language files are self-contained) WHITESPACE = the ECMAScript \s class, exactly the
+  pinned set; trimming = String.prototype.trim. BREAK-CHAR = the characters "." does not match. LINES (R1) =
+  split("\n") then drop one trailing "\r" per piece. Lowercase (R4) = String.prototype.toLowerCase. WORD-CHAR = the
+  non-unicode \w, so the boundary after "begin" is \b.
+PINNED regex HEADING = /^(#{1,6})\s+(.+)$/ CITED R3 — no m and no s flag
+PINNED regex FENCE = /^\s*(?:```|~~~)/ CITED R2 — a fence line when it matches AND ONE-LINE-FENCE does not hold
+PINNED regex ONE-LINE-FENCE = /^\s*```.*```\s*$/ CITED R2 — tested on the line, AND String.prototype.trim of the line has .length > 6; "." refuses CR/U+2028/U+2029
+PINNED regex FENCE-RUN = /^\s*(`{3,}|~{3,})/ CITED R2 — group 1 is the RUN (greedy); a line closes the fence when its RUN is non-empty, RUN[0] equals the opener RUN[0], RUN.length >= the opener RUN.length, and line.trim().slice(RUN.length).trim() is empty
+PINNED regex TRAILING-PAREN = /\s*\([^)]*\)\s*$/ CITED R4 (1) — first (leftmost) match only
+PINNED regex BEGIN-MENTION = /<!--\s*rederive:begin\b/ CITED R6 — tested on the raw existing text
+PINNED regex BEGIN-MARKER = /<!--\s*rederive:begin\b(?:(?!<!--)[\s\S])*?-->/ CITED R7 — no g flag: the first match only; lazy, may cross LF, never past a "<!--"
+PINNED regex END-MARKER = /<!--\s*rederive:end\s*-->/ CITED R7 — first occurrence only
+DEPENDS-ON none
+PROVENANCE rederive@7b348e351c9f cli/lib/adopt.mts (TypeScript source, type-stripped); round-5c delta re-cut 2026-10-27.

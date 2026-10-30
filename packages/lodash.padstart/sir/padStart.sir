@@ -1,0 +1,247 @@
+UNIT padStart
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG padStart(string='', length=0, chars=' ') -> string
+DEPENDS-ON none   # self-contained; all lodash internals are inlined into the unit
+
+# ============================================================================
+# EXPORT SHAPE  (load-bearing for the blind re-emitter)
+# ============================================================================
+# Source ships as CommonJS:  module.exports = padStart  (the bare function;
+# there is NO `.default` property). Emissions run as .mjs via dynamic import,
+# so the blind re-emitter MUST expose the function as the ES default export:
+#     export default function padStart(string, length, chars) { ... }
+# The harness will call the default export with the argument-tuple.
+
+# ============================================================================
+# PURPOSE
+# ============================================================================
+# Pads `string` on the LEFT so its (unicode-aware) symbol-count reaches
+# `length`. The pad fill is `chars` (default a single space), repeated and
+# then truncated (unicode-aware) to exactly fill the gap. If the string's
+# symbol-count is already >= length (or length coerces to <= 0 / NaN), the
+# string is returned unchanged (after string-coercion). PURE, deterministic,
+# no seam, no carried data.
+
+# ============================================================================
+# CONSTANTS (exact)
+# ============================================================================
+INFINITY          = 1 / 0
+MAX_SAFE_INTEGER  = 9007199254740991            # 2^53 - 1
+MAX_INTEGER       = 1.7976931348623157e+308     # Number.MAX_VALUE
+NAN               = 0 / 0
+symbolTag         = '[object Symbol]'
+
+# Regexes (verbatim — required for coercion & unicode behavior to converge):
+reTrim     = /^\s+|\s+$/g
+reIsBadHex = /^[-+]0x[0-9a-f]+$/i
+reIsBinary = /^0b[01]+$/i
+reIsOctal  = /^0o[0-7]+$/i
+
+# Unicode character-class fragments (string literals composed into regexes):
+rsAstralRange       = '\ud800-\udfff'
+rsComboMarksRange   = '̀-ͯ︠-︣'
+rsComboSymbolsRange = '⃐-⃰'
+rsVarRange          = '︎️'
+rsAstral   = '[' + rsAstralRange + ']'
+rsCombo    = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+rsFitz     = '\ud83c[\udffb-\udfff]'
+rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+rsNonAstral= '[^' + rsAstralRange + ']'
+rsRegional = '(?:\ud83c[\udde6-\uddff]){2}'
+rsSurrPair = '[\ud800-\udbff][\udc00-\udfff]'
+rsZWJ      = '‍'
+reOptMod   = rsModifier + '?'
+rsOptVar   = '[' + rsVarRange + ']?'
+rsOptJoin  = '(?:' + rsZWJ + '(?:' + join('|', [rsNonAstral, rsRegional, rsSurrPair]) + ')' + rsOptVar + reOptMod + ')*'
+rsSeq      = rsOptVar + reOptMod + rsOptJoin
+rsSymbol   = '(?:' + join('|', [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral]) + ')'
+
+# reUnicode matches ONE unicode "symbol" (grapheme-ish cluster) per match, GLOBAL flag:
+reUnicode    = RegExp( rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq , 'g')
+# reHasUnicode is TRUE iff the string contains any ZWJ / astral-range code unit /
+# combining mark / variation selector (a single-char class membership test):
+reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange + rsComboMarksRange + rsComboSymbolsRange + rsVarRange + ']')
+
+# ============================================================================
+# HELPER SEMANTICS (exact — these are the inlined lodash internals)
+# ============================================================================
+
+# hasUnicode(string): reHasUnicode.test(string)  -> boolean.
+#   TRUE when the string contains at least one code unit in the union ranges
+#   above (any astral-plane code unit incl. a LONE surrogate, any combining
+#   mark in U+0300..U+036F / U+FE20..U+FE23 / U+20D0..U+20F0, ZWJ U+200D, or a
+#   variation selector U+FE0E/U+FE0F). Plain ASCII and precomposed Latin like
+#   U+00E1 ('a-acute' as a single code unit) are NOT unicode -> FALSE.
+
+# unicodeSize(string): count of matches of reUnicode over the WHOLE string
+#   (reset lastIndex to 0, then repeatedly .test until no more). Counts unicode
+#   SYMBOLS (grapheme clusters per reUnicode), so a surrogate pair counts 1, a
+#   base+combining-mark counts 1, a 2-regional-indicator flag (e.g. 'US' flag,
+#   4 code units) counts 1, a lone surrogate counts 1.
+
+# asciiSize(string): string.length  (number of UTF-16 CODE UNITS).
+
+# stringSize(string): hasUnicode(string) ? unicodeSize(string) : asciiSize(string).
+#   -> code POINTS/symbols when unicode is present, else code UNITS.
+
+# asciiToArray(string): string.split('')  -> array of single code units.
+# unicodeToArray(string): string.match(reUnicode) || []  -> array of symbols.
+# stringToArray(string): hasUnicode(string) ? unicodeToArray(string) : asciiToArray(string).
+
+# baseRepeat(string, n) -> repeats `string` n times (n is a NUMBER, possibly
+#   fractional from callers, but callers pass integer counts here):
+#     result = ''
+#     if (!string OR n < 1 OR n > MAX_SAFE_INTEGER) return ''     # <-- key guard
+#     do { if (n % 2) result += string; n = floor(n / 2); if (n) string += string } while (n)
+#     return result
+#   NOTE the guard `n > MAX_SAFE_INTEGER` returns '' for super-huge n. For n in
+#   [1, MAX_SAFE_INTEGER] it actually attempts the build -> can throw the host's
+#   "Invalid string length" RangeError if the result would exceed the engine's
+#   max string length (see OUT-OF-ENVELOPE).
+
+# baseSlice(array, start, end) -> standard lodash array slice with negative
+#   normalization. As CALLED here start is always 0 and end >= 0, so it reduces
+#   to: take elements [0, end) of the array (end clamped to array.length).
+#     index=-1; length=array.length
+#     if (start<0) start = (-start>length)?0:(length+start)
+#     end = end>length ? length : end
+#     if (end<0) end += length
+#     length = start>end ? 0 : ((end-start) >>> 0)
+#     start >>>= 0
+#     result=Array(length); while(++index<length) result[index]=array[index+start]; return result
+
+# castSlice(array, start, end): if end===undefined end=array.length;
+#   return (!start && end>=array.length) ? array : baseSlice(array, start, end).
+#   (As called: start=0, end=length -> no-op when length>=array.length, else slice.)
+
+# isObjectLike(v): !!v && typeof v == 'object'
+# isObject(v): t=typeof v; !!v && (t=='object' || t=='function')
+# isSymbol(v): typeof v=='symbol' || (isObjectLike(v) && objectToString.call(v)=='[object Symbol]')
+
+# baseToString(value) -> string, WITHOUT nullish->'' (that's toString's job):
+#     if typeof value=='string' return value
+#     if isSymbol(value) return value.toString()        # e.g. Symbol('p') -> 'Symbol(p)'
+#     result = (value + '')                              # default JS coercion
+#     return (result=='0' && (1/value)==-INFINITY) ? '-0' : result   # preserve -0
+#   Examples: 123->'123', true->'true', null->'null', [1,2,3]->'1,2,3',
+#             {}->'[object Object]', -0->'-0', 0->'0'.
+
+# toString(value): value==null ? '' : baseToString(value).
+#   (null AND undefined -> ''; everything else via baseToString.)
+
+# toNumber(value) -> number:
+#     if typeof value=='number' return value
+#     if isSymbol(value) return NAN
+#     if isObject(value): other = (typeof value.valueOf=='function') ? value.valueOf() : value;
+#                         value = isObject(other) ? (other+'') : other
+#     if typeof value != 'string' return value===0 ? value : +value
+#     value = value.replace(reTrim, '')                          # trim leading/trailing whitespace
+#     isBinary = reIsBinary.test(value)
+#     return (isBinary || reIsOctal.test(value))
+#              ? parseInt(value.slice(2), isBinary ? 2 : 8)      # '0b101'->5, '0o17'->15
+#              : (reIsBadHex.test(value) ? NAN : +value)         # '-0x10'->NAN; '0x10'->16 (valid via +)
+#   So: '5'->5, '5.9'->5.9, '  5  '->5, '+3'->3, '-2'->-2, ''->0, ' '->0,
+#       'abc'->NaN, '0x10'->16, '-0x10'->NaN, '0b101'->5, '0o17'->15.
+
+# toFinite(value):
+#     if (!value) return value===0 ? value : 0      # falsy (0,'',null,undefined,false,NaN) -> 0 (0 kept)
+#     value = toNumber(value)
+#     if (value===INFINITY || value===-INFINITY) { sign=value<0?-1:1; return sign*MAX_INTEGER }
+#     return value===value ? value : 0              # NaN -> 0
+
+# toInteger(value):
+#     result = toFinite(value); remainder = result % 1
+#     return result===result ? (remainder ? result - remainder : result) : 0
+#   -> truncate toward zero (3.9->3, -2.x->-2), NaN/Infinity handled by toFinite.
+#      Infinity -> MAX_INTEGER (1.7976931348623157e+308), a finite huge float.
+
+# createPadding(length, chars) -> string of EXACTLY `length` symbols (when chars
+#   is non-empty), the pad fill:
+#     chars = (chars === undefined) ? ' ' : baseToString(chars)   # ONLY undefined -> ' '
+#     charsLength = chars.length                                  # CODE UNITS
+#     if (charsLength < 2) return charsLength ? baseRepeat(chars, length) : chars
+#         # charsLength==0 (empty chars, incl. coerced ''): return '' (NO padding)
+#         # charsLength==1 (single code unit, incl. a lone surrogate): baseRepeat(chars, length)
+#     result = baseRepeat(chars, ceil(length / stringSize(chars)))
+#     return hasUnicode(chars)
+#              ? castSlice(stringToArray(result), 0, length).join('')   # UNICODE-AWARE truncation
+#              : result.slice(0, length)                                # code-unit slice
+#   Decision is on chars.length (CODE UNITS) for the <2 branch, but the repeat
+#   count uses stringSize(chars) (SYMBOLS) and the final truncation length is in
+#   SYMBOLS when hasUnicode(chars), else in CODE UNITS.
+
+# ============================================================================
+# BEHAVIOR  (the unit — exact ordered pipeline)
+# ============================================================================
+# padStart(string, length, chars):
+#   1. string = toString(string)              # null/undefined -> ''; symbol/number/array/etc coerced
+#   2. length = toInteger(length)             # coerce; truncate toward zero; NaN/<=0 possible
+#   3. strLength = length ? stringSize(string) : 0
+#        # SHORT-CIRCUIT: if length is falsy (0 or NaN-becomes-0 -> 0), strLength=0
+#        #   and stringSize(string) is NOT evaluated.
+#   4. return (length && strLength < length)
+#               ? createPadding(length - strLength, chars) + string   # LEFT pad: padding FIRST, then string
+#               : string                                              # unchanged
+#
+# OBSERVABLE INVARIANTS / EDGE TABLE (all VERIFIED by executing the real pkg):
+#   - length <= 0 (incl. negative, NaN->0, false->0, undefined->0, ''->0, 'abc'->0,
+#     '-2'->-2): returns toString(string) unchanged. NO padding.
+#   - strLength >= length: returns string unchanged (e.g. padStart('abc',2)->'abc',
+#     padStart('abc',3)->'abc', padStart('😀',1)->'😀' since stringSize('😀')=1).
+#   - Padding is prepended (LEFT pad): result = padding + string.
+#   - Gap is measured in SYMBOLS: gap = length - stringSize(string). The created
+#     padding has exactly `gap` symbols (unicode-aware) when chars non-empty.
+#   - chars default: ONLY `chars===undefined` -> ' '. `null` -> baseToString(null)
+#     -> 'null' (a 4-char pad, NOT a space). Verified: padStart('x',5,null)->'nullx'.
+#   - chars==='' (or coerces to '', e.g. [] -> '') -> charsLength 0 -> padding ''
+#     -> string returned unchanged. Verified: padStart('abc',6,'')->'abc'.
+#   - Multi-char chars repeated then truncated to EXACTLY the gap:
+#       ascii:   padStart('x',6,'ab')   -> 'ababax'   (gap5: 'ababab' sliced to 5)
+#       astral:  padStart('x',6,'😀🎉') -> '😀🎉😀🎉😀x'  (gap5 symbols: surrogate pairs kept intact)
+#       astral:  padStart('x',7,'😀🎉') -> '😀🎉😀🎉😀🎉x' (gap6 = exactly 3 reps)
+#       combo:   padStart('x',4,'á')   -> 'áááx'      (á = a+U+0301; unicode; gap3 symbols)
+#       flag:    padStart('x',4,'🇺🇸') -> '🇺🇸🇺🇸🇺🇸x' (flag = 1 symbol; gap3 flags)
+#   - Unicode SOURCE: stringSize counts symbols, so padStart('😀',3)->'  😀'
+#     (gap = 3-1 = 2 spaces), padStart('🇺🇸',3)->'  🇺🇸' (flag counts 1).
+#   - Symbol source/chars: coerced via baseToString -> 'Symbol(desc)'
+#     (padStart(Symbol('s'),8)->'Symbol(s)'); symbol length -> toInteger -> 0.
+#     [Symbols are OUT-OF-ENVELOPE for the generator — not codec-round-trippable —
+#      but the coercion rule is specified here so a blind engine reconstructs it.]
+#   - -0 source -> '-0' (baseToString preserves -0). padStart(-0,6)->'    -0'.
+#
+# OUT-OF-ENVELOPE (specified, but NOT emitted by genInputs):
+#   - HUGE finite length where gap is in [1, MAX_SAFE_INTEGER] and the padding
+#     would exceed the engine max string length: baseRepeat attempts the build
+#     and THROWS host RangeError "Invalid string length" (e.g. length=2^53,
+#     i.e. 9007199254740992, gap=MAX_SAFE_INTEGER for a 1-symbol source). This
+#     is an engine OOM/limit, not a clean lodash throw; it crashes/aborts and is
+#     NOT codec-stable, so it is excluded from genInputs.
+#   - length=Infinity -> toInteger=MAX_INTEGER (1.79e308); gap ~1.79e308 >
+#     MAX_SAFE_INTEGER -> baseRepeat guard returns '' -> string UNCHANGED.
+#     Verified: padStart('a',Infinity)->'a'. (This case IS safe and is emitted.)
+#   - Symbol args (string/chars/length): coercion specified above; excluded from
+#     genInputs because Symbols are not codec-round-trippable.
+
+# ============================================================================
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — toString,
+    toInteger (via toFinite/toNumber), stringSize/hasUnicode/unicodeSize,
+    createPadding (baseRepeat + ceil + stringToArray + castSlice/baseSlice +
+    code-unit/symbol truncation), and the left-pad assembly. All regex/constant
+    literals are verbatim above. No option is omitted.
+  CARRIED DATA: none. (Zero literal tables; the regexes/constants are small and
+    transcribed in full above.)
+  OUT-OF-CONTRACT: none (pure; no side effects, no ambient reads, no seam).
+
+PROVENANCE
+  package: lodash.padstart@4.6.1  (npm)
+  repo:    lodash/lodash  (Custom Build: `lodash modularize exports="npm" -o ./`)
+  license: MIT (jQuery Foundation and other contributors; Underscore.js 1.8.3)
+  source:  node_modules/lodash.padstart/index.js  (module.exports = padStart)
+  verified-against: the real installed package, executed via node (20000-case
+    differential fuzz vs a spec reimplementation: 0 mismatches; plus targeted
+    edge probes for coercion, unicode sizing, truncation, empty/null chars,
+    Infinity, and the MAX_SAFE_INTEGER throw boundary).

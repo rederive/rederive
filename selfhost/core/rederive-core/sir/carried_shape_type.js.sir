@@ -1,0 +1,24 @@
+UNIT carried_shape_type
+LANG js
+PRIMARY-SHA256 ae3eb92884f1cf9748eec04427b895efcd25660f5114e7aa89ba40b83692debe
+SIG carried_shape_type(shape: string): Json
+NOTE default export
+ABI text = string (UTF-16). The result is the TREE node as a fresh plain value: a node = a plain object with own string
+  keys (k, item, key, val, items, alts, fields; key order immaterial), a list = an Array, a record field = a two-element
+  Array [name, node]. A throw (R2 empty or arrow-led K, R3, R5–R8) is a thrown Error; the message is not graded. The
+  artifact is an ES module default-exporting the function and imports nothing.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM R1 = shape.split(';')[0]. WS (R2, R4, R5) is space, tab, CR and LF only: NOT String.prototype.trim and NOT
+  \s, which also strip or match U+00A0, U+000B, U+000C, U+3000, U+FEFF and more. The pinned TRIM and ARROW regexes realize
+  R2: the s flag lets . cross line breaks, and the lazy (.+?) is what makes K end at the FIRST arrow. R4 = the pinned WIDEN
+  replace (global, no m flag: ^ and $ are the ends of the whole text) on the whole normalized text, keeping the matched
+  left context and writing the sign letter followed by 64. The reader (R5–R8) is a hand scan over the text with the same
+  WS. Read a word as a whole IDENT run, then classify it.
+DEPENDS-ON none
+PINNED regex TRIM = /^[ \t\r\n]+|[ \t\r\n]+$/g CITED R2 — replaced by the empty text
+PINNED regex ARROW = /^map[ \t\r\n]+(.+?)[ \t\r\n]*->[ \t\r\n]*(.+)$/s CITED R2 — groups 1 and 2 are K and V
+PINNED regex WIDEN = /(^|[[,|:][ \t\r\n]*)([ui])(8|16|32)(?=[ \t\r\n]*(?:[\],|]|$))/g CITED R4 — group 1 kept, then group 2, then 64
+PINNED regex IDENT = /^[A-Za-z_][A-Za-z0-9_]*/ CITED GRAMMAR IDENT
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs carriedShapeType + cli/sir/canon.mjs reader. Language file re-cut
+  2026-10-27 (round 5, delta 5b: one WS set, no > left context) with the primary, before any blind
+  re-emission.

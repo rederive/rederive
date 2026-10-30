@@ -1,0 +1,33 @@
+UNIT wire_line
+LANG ts
+PRIMARY-SHA256 dceecb49554e9bcc4cdf9017a3bf90c2cbfc2d054f6a9690ad621a1daa7cf4f9
+SIG export default function wireLine(args: unknown, sig: { args: { name: string; type?: TypeNode | null; rest?: boolean }[] }): string | { __narrowed: string }
+ABI TypeScript compiles to the js runtime; values cross exactly as in js: args = an Array of decoded-native values (null,
+  undefined, bigint, Uint8Array, Buffer, number, string, boolean, Array with holes, plain object, Map, Set, RegExp, boxed
+  primitives) or, out of shape, any value; sig = the plain object parseSig returns, TypeNode = { k?: string; item?:
+  TypeNode; items?: TypeNode[]; key?: TypeNode; val?: TypeNode; fields?: [string, TypeNode][]; alts?: TypeNode[] }
+  declared in the module. Result: a string, or NARROWED = { __narrowed: REASON }. STRICT: the artifact must type-check
+  under `strict: true`, with no `any`, no non-null assertions (`!`), and no `@ts-ignore` / `@ts-expect-error`. Narrowing
+  from `unknown` is by typeof / Array.isArray / Object.getPrototypeOf; own property reads by Object.hasOwn then a read
+  through `Record<string, unknown>`.
+ENVELOPE ts WIDENS the primary's json envelope exactly as js does (the same runtime): bigint, Uint8Array, Buffer, undefined,
+  sparse Arrays, strings with lone surrogates, Map, Set, RegExp, boxed primitives, hand-built sig trees.
+MECHANISM (restated from js — language files are self-contained) R1/R2 = nFixed from sig.args.filter(a => !a.rest).length,
+  then REST from sig.args.find(a => a.rest)?.type ?? null, both before args is examined (the only uncaught throws). Lone
+  surrogate = !s.isWellFormed(). Plain map = a non-null non-Array object whose prototype is Object.prototype or null.
+  Hole = !(i in v) (args, a list or a tuple value: scanned before any element is wired). i64/u64 accept a Number.isSafeInteger number or a bigint, compared as BigInt against the bounds.
+MECHANISM R5 = a try/catch around each top-level argument's wiring; reason 'wire: ' + the caught Error's message. The
+  MALFORMED messages are V8's for these exact reads (keep them as real property reads on the node, typed so the compiler
+  permits them, never pre-checked): for an undefined value only, t.k and (for a union) t.alts.filter(...) FIRST, in the
+  absent test v === undefined && !(t.k === 'none' || optionOf(t)); then null/undefined -> 'null' with no read; then t.k;
+  t.alts.filter(...) in the option test; for a tuple, the hole scan, then t.items.length in both the length test and the
+  'not a <n>-tuple' reason (a non-Array value reads it too); t.fields.map(...) only once the value is a plain map; t.item per element. Wire every
+  element/item/field before picking the first non-string wire.
+MECHANISM f64 bits (R8) = a DataView over an 8-byte ArrayBuffer: setFloat64(0, v), getBigUint64(0), toString(16)
+  .padStart(16, '0'), NaN replaced by 0x7ff8000000000000n; quoted with JSON.stringify. CARRY TAG =
+  Object.prototype.toString.call(v).slice(8, -1). PLAIN = bigint toString; Array join; plain map over Object.keys with
+  JSON.stringify keys; else JSON.stringify. HOST KEY ORDER is Object.keys' order.
+DEPENDS-ON none
+PROVENANCE rederive@f68cca701417 cli/lang/rust.mjs wireLine (lines 279-289). Blind ts re-emissions are graded by the
+  verifier-owned driver (tsc --strict --noEmit + the any-ban lint, then the js grading path including the js envelope
+  extension oracles/wire_line.js.json).

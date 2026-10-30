@@ -1,0 +1,13 @@
+UNIT f64_from_bits
+LANG js
+PRIMARY-SHA256 280dbe363c44f78c8429c754e288658426d2993eb5e176c5eab0af7485e4f4a4
+SIG export function f64_from_bits(bits: string): number
+ABI text=string (UTF-16; an accepted text is 16 ASCII code units, so code-unit and scalar views agree); f64=number.
+  A throw is any thrown Error; its type and message are not graded.
+MECHANISM R1 = the pinned regex, tested WITHOUT the m flag: in ECMAScript an unflagged $ matches only at the very end
+  of the text, so a trailing line feed is rejected (unlike dialects where $ also matches before a final newline).
+  R2 = parse the digits as a BigInt with a "0x" prefix, store with DataView.setBigUint64, read back with getFloat64
+  (big-endian on both sides); or any equivalent (two 32-bit halves through setUint32).
+DEPENDS-ON none
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R1 — no i flag, no m flag
+PROVENANCE rederive@b15b56613f9d cli/sir/canon.mjs f64fromBits (the js baseline is the real code's own runtime).

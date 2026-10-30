@@ -1,0 +1,296 @@
+UNIT arrUnion
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG arrUnion(init, ...rest) -> Array    # implemented via `arguments`, NOT real rest params; see BEHAVIOR.N1
+
+DEPENDS-ON none
+
+# ============================================================================
+# OVERVIEW
+# ----------------------------------------------------------------------------
+# arr-union combines a list of arrays into the FIRST array, IN PLACE, keeping
+# only values not already present, preserving order of first appearance. It
+# MUTATES and RETURNS the first argument. Several behaviors diverge from the
+# naive "set union of arrays" mental model; all are in-contract and MUST be
+# reproduced exactly.
+#
+# THE WHOLE FUNCTION IS 27 LINES. The dedup predicate is ONE expression and is
+# quoted verbatim in N4c below — read it; do not infer it. The most important
+# subtleties, each pinned to source + empirics:
+#   - the first argument is NEVER deduped against itself; its pre-existing
+#     duplicates are kept and DO participate in subsequent indexOf scans;
+#   - a falsy WHOLE rest-argument is skipped (`if (!arg) continue`); a truthy
+#     non-array rest-argument is WRAPPED into a 1-element array (`arg = [arg]`),
+#     not coerced/spread;
+#   - dedup is EXACTLY `init.indexOf(ele) >= 0` — Array.prototype.indexOf, i.e.
+#     the SameValueZero-WITHOUT-NaN comparison that indexOf uses (strict ===
+#     for everything, EXCEPT it treats +0 and -0 as equal, and NEVER matches
+#     NaN). Consequences that are LOAD-BEARING and have BOTH burned a round:
+#       * +0 and -0 dedup against each other (first inserted wins, sign kept);
+#       * NaN is NEVER found by indexOf, so EVERY NaN element is PUSHED — there
+#         is NO NaN dedup. arrUnion([NaN,NaN],[NaN]) === [NaN,NaN,NaN] (len 3),
+#         VERIFIED against arr-union@3.1.0 (see N4c table). A prior oracle slot
+#         claiming [NaN,NaN] (len 2) for that input was a CORRUPT stamp, not
+#         the real behavior; do NOT special-case NaN.
+#   - objects/arrays/Set/Map/Buffer/RegExp dedup by REFERENCE identity (===),
+#     NOT structurally: two DISTINCT {a:1} literals are BOTH kept. The ONLY way
+#     to get a skip on a non-primitive is the SAME reference appearing twice.
+#     This reference-identity skip is OUT-OF-ENVELOPE for grading (see SCOPE)
+#     because the JSON-class oracle codec turns two same-reference positions
+#     into two distinct objects; the generator therefore NEVER emits it.
+#   - no flattening: nested arrays are pushed as elements, not flattened.
+# ============================================================================
+
+BEHAVIOR    # ordered pipeline / BRANCH nodes — exact + complete
+
+  N1 SIGNATURE / VARIADIC SHAPE
+     Source: `module.exports = function union(init) { ... arguments ... }`.
+     Only `init` is a named formal; ALL further arguments are read positionally
+     through the live `arguments` object via `var len = arguments.length` and a
+     `while (++i < len)` loop starting at i=1. The unit is variadic. A re-emitter
+     MAY model it as `union(init, ...rest)` PROVIDED the observable behavior
+     below is preserved. The harness calls it as `fn.apply(null, argsArray)`
+     where argsArray = [init, rest0, rest1, ...]: element 0 is `init`, elements
+     1..k are the rest arguments in positional order.
+
+  N2 BRANCH: first-argument type guard  (executes FIRST, before any work)
+     Source:
+         if (!Array.isArray(init)) {
+           throw new TypeError('arr-union expects the first argument to be an array.');
+         }
+     IF NOT Array.isArray(init):
+         THROW  TypeError  with EXACT message (byte-for-byte):
+             "arr-union expects the first argument to be an array."
+     This fires for: a non-array `init` (number, string, plain object, boolean,
+     null), `init === undefined`, AND the zero-argument call `arrUnion()` (where
+     `init` is undefined). VERIFIED: arrUnion() and arrUnion(5,[1]) both throw
+     this exact TypeError (the guard precedes any rest handling). The message
+     string is part of the contract. (Recorded by the oracle as {__throw}.)
+
+  N3 INITIALIZE
+     The result accumulator IS `init` itself (same reference). No copy is made.
+     `init` is NEVER deduplicated against itself: any duplicate values already
+     present in `init` are LEFT IN PLACE and remain in the returned array, and
+     they DO participate in the indexOf scan for later elements.
+     VERIFIED: arrUnion([1,1,2]) -> [1,1,2]; arrUnion([0,0]) -> [0,0];
+               arrUnion([NaN,NaN]) -> [NaN,NaN] (the two pre-existing NaN kept).
+
+  N4 ITERATE REST ARGUMENTS  (i from 1 to arguments.length-1, in order)
+     Source loop body, per rest argument `arg` (in positional order):
+
+     N4a BRANCH: falsy-whole-argument skip
+         Source: `if (!arg) continue;`
+         IF `arg` is FALSY (JS falsiness of the WHOLE argument value) -> skip
+         this ENTIRE argument. The falsy set that is skipped:
+             0, -0, "", false, null, undefined, NaN
+         ALL skipped entirely. NOTE the asymmetry that has tripped people:
+            - an empty array []  is TRUTHY -> NOT skipped; it is iterated and
+              simply contributes zero elements (result unchanged);
+            - the string "0"     is truthy -> NOT skipped (wrapped, N4b);
+            - a NaN passed AS A WHOLE ARG  is falsy -> SKIPPED here (N4a);
+              a NaN that is an ELEMENT inside an array arg is NOT skipped — it
+              reaches N4c and is pushed (see N4c NaN rule). These two NaN paths
+              are DIFFERENT; keep them straight.
+         VERIFIED: arrUnion([1],NaN) -> [1] (whole-arg NaN skipped);
+                   arrUnion([1],[NaN]) -> [1,NaN] (element NaN pushed).
+
+     N4b BRANCH: non-array wrap  (only reached when `arg` is truthy)
+         Source: `if (!Array.isArray(arg)) { arg = [arg]; }`
+         IF NOT Array.isArray(arg):  arg <- [arg]   # WRAP, do not coerce/spread
+         Consequences:
+            - a truthy number 5     becomes [5]    -> processes the single 5
+            - a string "ab"         becomes ["ab"] -> processes the WHOLE string
+              "ab" as ONE element (NOT the chars 'a','b')
+            - the string "0"        becomes ["0"]  -> processes "0"
+            - an object {a:1}       becomes [{a:1}]-> processes that object ref
+            - boolean true          becomes [true] -> processes true
+            - a bigint 7n           becomes [7n]   -> processes 7n
+            - a Set/Map/Buffer ref  becomes [ref]  -> processes that ref
+         VERIFIED: arrUnion([1],"ab") -> [1,"ab"]; arrUnion([1],5) -> [1,5];
+                   arrUnion([1],true) -> [1,true]; arrUnion([1],7n) -> [1,7n].
+
+     N4c INNER LOOP: for each element `ele` of `arg` (index j ascending):
+         Source:
+             for (var j = 0; j < arg.length; j++) {
+               var ele = arg[j];
+               if (init.indexOf(ele) >= 0) { continue; }
+               init.push(ele);
+             }
+         THE DEDUP PREDICATE IS EXACTLY:  `init.indexOf(ele) >= 0`
+         i.e. Array.prototype.indexOf over the CURRENT state of `init` (which
+         GROWS as elements are pushed, so an element pushed from an earlier rest
+         arg dedups a matching element from a later rest arg, AND a value already
+         in `init` from N3 dedups it). indexOf's comparison rule (this is the
+         WHOLE of the dedup semantics — there is no helper, no `includes`, no
+         `union` util, no custom loop):
+
+           indexOf uses strict-equality (===) scanning, with these properties:
+            * NUMBERS (finite), STRINGS, BOOLEANS, null, bigint:
+                dedup by value under === (first-seen kept). E.g. 7n === 7n.
+            * +0 vs -0:
+                indexOf treats them as EQUAL (=== holds: +0 === -0). First
+                inserted wins; the STORED sign is whichever was inserted first.
+                VERIFIED: arrUnion([0],[-0]) -> [0]; arrUnion([-0],[0]) -> [-0];
+                          arrUnion([0],[-0],[0]) -> [0].
+            * NaN  (THE pinned, twice-burned case):
+                indexOf NEVER matches NaN (NaN !== NaN, and indexOf does NOT use
+                SameValueZero), so init.indexOf(NaN) is ALWAYS -1 -> EVERY NaN
+                element encountered is PUSHED. There is NO NaN dedup whatsoever.
+                COMPLETE VERIFIED TABLE (arr-union@3.1.0, this exact build):
+                    arrUnion([NaN],[NaN])         -> [NaN,NaN]        (len 2)
+                    arrUnion([NaN,NaN])           -> [NaN,NaN]        (len 2)
+                    arrUnion([NaN],[NaN],[NaN])   -> [NaN,NaN,NaN]    (len 3)
+                    arrUnion([NaN,NaN],[NaN])     -> [NaN,NaN,NaN]    (len 3)
+                    arrUnion([NaN],[NaN,NaN])     -> [NaN,NaN,NaN]    (len 3)
+                    arrUnion([1],[NaN,NaN,NaN])   -> [1,NaN,NaN,NaN]  (len 4)
+                The element count of NaN in the result EQUALS the total count of
+                NaN elements seen across init + all (non-skipped) rest args. Do
+                NOT collapse NaN. (The previously failing held-out slot v28
+                asserting [NaN,NaN] for arrUnion([NaN,NaN],[NaN]) was a corrupt
+                stamp; the correct value is [NaN,NaN,NaN], reproduced above.)
+            * OBJECTS / ARRAYS / Set / Map / Buffer / RegExp (any non-primitive):
+                dedup by REFERENCE identity (===), NOT structurally. Two
+                DISTINCT structurally-equal literals are BOTH kept; only the
+                SAME reference appearing again is skipped.
+                VERIFIED: with o1={a:1}, o2={a:1} (distinct):
+                    arrUnion([1,o1],o2) -> [1,{a:1},{a:1}]  (len 3, both kept)
+                  with o={a:1} (same ref in two positions):
+                    arrUnion([1,o],o)   -> [1,{a:1}]        (len 2, ref dedup)
+                The SAME-reference skip is OUT-OF-ENVELOPE for grading (SCOPE).
+            * FALSY ELEMENTS inside an array (0, null, "", false, undefined, NaN)
+                are pushed/deduped normally — the falsy guard in N4a is on the
+                WHOLE argument, NOT on elements. (NaN elements follow the NaN
+                rule above; an undefined element pushes/dedups by === as usual.)
+                VERIFIED: arrUnion([1],[0,null,"",false,NaN]) ->
+                          [1,0,null,"",false,NaN].
+         NO FLATTENING: if `ele` is itself an array (e.g. arg = [[2,3]]), the
+         element [2,3] is pushed AS A SINGLE element. Exactly one level of
+         iteration occurs (the iteration of `arg`); nested arrays are values.
+         VERIFIED: arrUnion([1],[[2,3]]) -> [1,[2,3]];
+                   arrUnion([1],[[2],[3]]) -> [1,[2],[3]].
+
+  N5 RETURN
+     Source: `return init;`
+     Return `init` (the SAME reference passed in as the first argument). The
+     first argument has been mutated in place; return === init.
+
+# ----------------------------------------------------------------------------
+# WORKED EXAMPLES (all VERIFIED against arr-union@3.1.0, this exact build)
+# ----------------------------------------------------------------------------
+#   arrUnion([1,2,3], [3,4,5])              -> [1,2,3,4,5]
+#   arrUnion([1,1,2])                       -> [1,1,2]       (first arg not deduped)
+#   arrUnion([0,0])                         -> [0,0]         (first arg not deduped)
+#   arrUnion([1], 0)                        -> [1]           (falsy whole-arg skipped)
+#   arrUnion([1], -0)                       -> [1]           (-0 falsy whole-arg skipped)
+#   arrUnion([1], false)                    -> [1]
+#   arrUnion([1], null)                     -> [1]
+#   arrUnion([1], "")                       -> [1]
+#   arrUnion([1], NaN)                      -> [1]           (whole-arg NaN skipped)
+#   arrUnion([1], 5)                        -> [1,5]         (wrap)
+#   arrUnion([1], "ab")                     -> [1,"ab"]      (string wrapped WHOLE)
+#   arrUnion([1], "0")                      -> [1,"0"]       ("0" truthy, wrapped)
+#   arrUnion([1], true)                     -> [1,true]
+#   arrUnion([1], 7n)                       -> [1,7n]
+#   arrUnion([1,7n], 7n)                    -> [1,7n]        (bigint value dedup)
+#   arrUnion([1], [])                       -> [1]           ([] truthy, 0 elems)
+#   arrUnion([1], [[2,3]])                  -> [1,[2,3]]     (no flatten)
+#   arrUnion([0], [-0])                     -> [0]           (+0/-0 dedup, first wins)
+#   arrUnion([-0], [0])                     -> [-0]          (first wins, sign kept)
+#   arrUnion([NaN], [NaN])                  -> [NaN, NaN]    (NaN never deduped)
+#   arrUnion([NaN,NaN], [NaN])              -> [NaN,NaN,NaN] (NaN never deduped; PINNED)
+#   arrUnion([1], [0,null,"",false,NaN])    -> [1,0,null,"",false,NaN]
+#   arrUnion([1,1], [1])                    -> [1,1]
+#   arrUnion([], [5], [5])                  -> [5]           (cross-rest dedup)
+#   arrUnion(["a","b"], ["b","c"], "a", "d")-> ["a","b","c","d"]
+#   arrUnion(5)                             -> THROW TypeError "arr-union expects the first argument to be an array."
+#   arrUnion()                              -> THROW TypeError (same message)
+#   arrUnion(null)                          -> THROW TypeError (same message)
+# ----------------------------------------------------------------------------
+
+ORACLE value -> oracle.json
+   # Pure deterministic value oracle. No seam (no clock/RNG/io/net). The oracle
+   # records the RETURNED array for each variadic input tuple, and {__throw}
+   # (TypeError + the exact message) for the N2 guard path.
+   #
+   # MUTATION + IDENTITY NOTE for the comparison:
+   #   The function mutates its first argument and returns that same reference.
+   #   The oracle compares the RETURNED value (which, being === the first arg,
+   #   also captures the post-mutation state). A re-emitter that builds a fresh
+   #   result array and returns it (instead of mutating+returning the input) is
+   #   still value-equivalent on the RETURNED-array contract, which is what the
+   #   oracle grades; return-identity (N5) is documented for faithfulness but is
+   #   not separately asserted by the value oracle. Reproduce N5 to be safe.
+   #
+   # ORACLE-INTEGRITY NOTE (why round-1 failed):
+   #   Round 1's held-out slot v28 carried args [[NaN,NaN],[NaN]] with a stored
+   #   expected of [NaN,NaN] (len 2). That expected is WRONG for the real
+   #   package (the real result is [NaN,NaN,NaN], len 3 — verified). All three
+   #   blind emitters correctly produced len 3 and were graded against a corrupt
+   #   stamp. The corruption is a stamp-time in-place-mutation/shared-reference
+   #   artifact (arr-union mutates its first arg), NOT a SIR ambiguity. The
+   #   generator (companion file) is now hardened to emit ONLY deeply-fresh,
+   #   fully reference-disjoint literals so the stamper cannot alias init with a
+   #   rest arg or with any other tuple, guaranteeing each stored expected is
+   #   reproducible from its own args. The SIR's NaN rule (N4c) was correct and
+   #   is now pinned with the full empirical table so it cannot be misread.
+
+SCOPE
+   IN-CONTRACT LOGIC (reproduce exactly):
+     - The whole pipeline N1..N5: variadic `arguments` iteration, the first-arg
+       Array.isArray guard + exact TypeError message (N2), the falsy-whole-arg
+       skip `if (!arg) continue` (N4a), the truthy-non-array wrap `arg=[arg]`
+       (N4b), the `init.indexOf(ele) >= 0` dedup against the GROWING `init`
+       (N4c) — including +0/-0 equality, the NaN-NEVER-deduped behavior (every
+       NaN pushed), value dedup for numbers/strings/booleans/null/bigint, the
+       no-flatten one-level iteration, first-arg-not-self-deduped (N3), and the
+       mutate-and-return-first-arg identity (N5).
+   CARRIED DATA: none. This unit has NO large literal tables; no carried.json.
+   OUT-OF-ENVELOPE (faithfulness-documented, NOT graded by the generator):
+     - REFERENCE-IDENTITY dedup of non-primitives. The source dedups objects/
+       arrays/Set/Map/Buffer/RegExp by === (reference). A "skip" of such a value
+       requires the SAME reference to appear twice across argument positions.
+       The JSON-class oracle codec serializes each position independently, so
+       two same-reference positions DECODE into two DISTINCT objects -> a blind
+       emitter working from decoded data correctly keeps BOTH, while a live
+       stamp on the shared reference would skip one. This case has NO
+       codec-stable correct answer and is therefore NEVER emitted by the
+       generator. Distinct-but-structurally-equal non-primitives in different
+       positions ARE codec-stable (both always kept) and MAY be emitted.
+       (This is exactly the round-1 v19 class: args [[1,{a:1}],{a:1}] is only a
+       "skip" if both {a:1} are the same reference — which the codec destroys.)
+   OUT-OF-CONTRACT: none. The mutation of the first argument is the unit's
+     defined behavior (in-contract), captured by the value oracle via the
+     returned reference; it is not an external side effect.
+
+# ----------------------------------------------------------------------------
+# SELF-CONSISTENCY CROSS-CHECK (SIR <-> generator)
+# ----------------------------------------------------------------------------
+# Every value CLASS the generator emits has its mapping defined above, and the
+# generator emits NOTHING whose correct answer is not codec-stable:
+#   - arrays of finite numbers/strings/booleans/null/bigint  -> N4c value dedup
+#   - duplicates within first arg                            -> N3 (kept)
+#   - duplicates within / across rest arrays                 -> N4c (first wins)
+#   - NaN as an ELEMENT                                      -> N4c NaN rule (never deduped)
+#   - NaN / 0 / -0 / "" / false / null as a WHOLE rest arg   -> N4a (skipped)
+#   - +0 / -0 as ELEMENTS                                    -> N4c (+0/-0 dedup)
+#   - empty arrays in rest                                   -> N4a ([] truthy, 0 elems)
+#   - truthy non-array rest (number,string,"0",true,bigint)  -> N4b (wrapped)
+#   - nested arrays as elements                              -> N4c (no flatten)
+#   - DISTINCT plain-object/array literals in DIFFERENT       -> N4c (both kept; codec-stable
+#       positions (deeply fresh, never shared)                   because reference identity
+#                                                                differs either way)
+#   - non-array / undefined / zero-arg first argument        -> N2 (THROW)
+# The generator emits ONLY codec-round-trippable values and GUARANTEES that no
+# object/array reference is shared across argument positions OR across tuples,
+# AND deep-clones every tuple it returns, so:
+#   (a) no graded case depends on cross-position reference identity (v19 class
+#       excluded — OUT-OF-ENVELOPE above), and
+#   (b) the in-place-mutating stamper cannot alias init with any rest arg or any
+#       other tuple (v28 corruption class excluded).
+# The generator NEVER emits: live functions, Symbols (non-round-trippable), or
+# the same reference in two positions.
+# ----------------------------------------------------------------------------
+
+PROVENANCE arr-union@3.1.0, repo jonschlinkert/arr-union (github.com/jonschlinkert/arr-union),
+           MIT (c) 2014-2016 Jon Schlinkert, source file index.js
+           (default export, module.exports = function union; 27 lines, zero deps).

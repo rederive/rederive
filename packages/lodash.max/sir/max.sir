@@ -1,0 +1,215 @@
+UNIT max
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG max(array) -> *        # default export; single positional arg `array`; returns the maximum element (any type) or undefined
+
+DEPENDS-ON none            # zero runtime deps; all helpers (baseExtremum, baseGt, isSymbol, isObjectLike, identity) are inlined in the same file. NO carried data.
+
+# ============================================================================
+# BEHAVIOR  (exact, ordered; derived from lodash.max@4.0.1/index.js and verified
+#            by running the real package — observed outputs cited inline)
+# ============================================================================
+#
+# This unit computes the maximum element of an array using a STRICT `>` comparison
+# (baseGt), the IDENTITY iteratee (each element compared as-is, no transform), and
+# a special first-element selection rule. It is NOT `Math.max`: it never coerces
+# elements to Number, it works on strings/bigints/dates/booleans via JS `>`, it
+# skips null/undefined elements, it has NaN- and Symbol-specific behavior, and it
+# keeps the FIRST element on ties.
+#
+# ---------------------------------------------------------------------------
+# NODE 0 — guard (the `max` wrapper):
+#   IF NOT (array AND array.length)  ->  return undefined
+#     i.e. return undefined when `array` is falsy (null, undefined, missing arg,
+#     0, false, "", NaN) OR when `array.length` is falsy (absent / 0 / NaN).
+#     Observed: max([]) => undefined ; max(null) => undefined ;
+#               max(undefined) => undefined ; max() => undefined ;
+#               max(5) => undefined ; max(0) => undefined ; max("") => undefined ;
+#               max({length:0}) => undefined.
+#     NOTE: `array` need not be a real Array — any value with a TRUTHY numeric
+#     `.length` and integer-indexed elements is iterated (array-like). A non-empty
+#     STRING is such a value: max("hello") => "o" (iterates the chars, lexicographic
+#     max). An array-like object works too: max({0:5,1:9,length:2}) => 9.
+#   ELSE -> proceed to NODE 1 (baseExtremum with iteratee=identity, comparator=baseGt).
+#
+# ---------------------------------------------------------------------------
+# NODE 1 — baseExtremum(array, identity, baseGt):
+#   Initialize:  result = undefined (var, never assigned unless a value qualifies)
+#                computed = undefined (var, hoisted; sentinel meaning "nothing
+#                                      selected yet")
+#   FOR index = 0 .. array.length-1   (ascending; reads array[index]; a sparse
+#                                      HOLE reads as undefined and is skipped):
+#       value   = array[index]
+#       current = identity(value) = value        # iteratee is identity: no transform
+#
+#       # ---- The selection test (EXACT, this is the heart of the unit) ----
+#       IF current != null            # LOOSE !=  ->  skips BOTH null AND undefined,
+#                                      #   but NOT 0/false/""/NaN (those are != null).
+#          AND (
+#               IF computed === undefined:                      # FIRST-CANDIDATE branch
+#                     ( current === current  AND  NOT isSymbol(current) )
+#                     # current === current  is FALSE only for NaN  -> NaN never
+#                     #   becomes the first candidate (skipped even when first).
+#                     # !isSymbol(current)   -> a Symbol never becomes the first
+#                     #   candidate (skipped). isSymbol = typeof==='symbol' OR
+#                     #   (objectLike AND Object.prototype.toString === '[object Symbol]').
+#               ELSE:                                           # SUBSEQUENT branch
+#                     baseGt(current, computed)  ==  ( current > computed )
+#                     # STRICT JS `>`. No Number coercion. Works on numbers,
+#                     #   strings (lexicographic), bigints, booleans, dates
+#                     #   (via valueOf). For a Symbol `current` here this THROWS
+#                     #   (see NODE 2). NaN here: NaN > x is false -> not selected.
+#                     #   On a TIE (current > computed is false) the existing
+#                     #   computed/result is KEPT -> FIRST element wins ties.
+#              )
+#       THEN:
+#            computed = current
+#            result   = value
+#
+#   return result      # undefined if no element ever qualified.
+#
+# ---------------------------------------------------------------------------
+# NODE 2 — THROW path (in-contract, gradable as {__throw}):
+#   When a non-Symbol candidate has already been selected (computed !== undefined)
+#   and a later element is a Symbol, the SUBSEQUENT branch evaluates
+#   baseGt(symbol, computed) = (symbol > computed), and JS throws
+#       TypeError: "Cannot convert a Symbol value to a number".
+#   Observed: max([1, Symbol(), 2]) THROWS TypeError ;
+#             max([1, 2, Symbol()]) THROWS TypeError.
+#   (Contrast: a Symbol that appears BEFORE any non-symbol selection is skipped by
+#    the !isSymbol guard — max([Symbol(), 1]) => 1 ; max([Symbol()]) => undefined.)
+#   NOTE: Symbols (and functions) are NOT emitted by the generator because they do
+#   not survive the persistence codec; this throw path is documented OUT-OF-ENVELOPE
+#   for the generator but is part of the contract a blind re-emitter must reproduce.
+#
+# ============================================================================
+# VERIFIED OBSERVED OUTPUTS (from running lodash.max@4.0.1)
+# ============================================================================
+#   Empty / falsey args:
+#     max([])            => undefined
+#     max(null)          => undefined
+#     max(undefined)     => undefined
+#     max()              => undefined
+#     max(5)             => undefined      # number has no truthy .length
+#     max(0)             => undefined
+#     max("")            => undefined      # empty string: length 0
+#     max({length:0})    => undefined
+#
+#   Basic numbers:
+#     max([5])           => 5              # single element returned as-is
+#     max([-5])          => -5
+#     max([4,2,8,6])     => 8
+#     max([-1,-5,-3])    => -1             # negatives
+#     max([3,3,3])       => 3
+#
+#   Infinity:
+#     max([Infinity, 1])      => Infinity
+#     max([-Infinity, 1])     => 1
+#     max([1, -Infinity])     => 1
+#     max([5, -Infinity])     => 5         # -Infinity not selected (5 > -Inf kept)
+#     max([Infinity, -Infinity]) => Infinity
+#     max([-Infinity, -Infinity]) => -Infinity   # first -Infinity selected (it's a
+#                                                 # finite-distinct? no: it IS selected
+#                                                 # as first candidate because
+#                                                 # -Infinity === -Infinity is true and
+#                                                 # it's not a Symbol)
+#
+#   NaN  (NEVER selected, even as the only/first element — because NaN === NaN is false):
+#     max([NaN])          => undefined
+#     max([NaN, NaN])     => undefined
+#     max([NaN, 1, 2])    => 2
+#     max([1, NaN, 2])    => 2
+#     max([1, 2, NaN])    => 2
+#     max([NaN, NaN, 1])  => 1
+#
+#   null / undefined ELEMENTS (skipped via `current != null` loose guard):
+#     max([undefined])              => undefined
+#     max([undefined, 1, 2])        => 2
+#     max([1, undefined, 2])        => 2
+#     max([1, 2, undefined])        => 2
+#     max([undefined, undefined])   => undefined
+#     max([null])                   => undefined
+#     max([null, 1, 2])             => 2
+#     max([1, null, 2])             => 2
+#     max([undefined, null, 5])     => 5
+#     max([null, undefined])        => undefined
+#     max([null, null, undefined])  => undefined
+#     max([,,3])  (sparse: 2 holes) => 3   # holes read as undefined -> skipped
+#
+#   Falsy-but-not-null ELEMENTS (NOT skipped — they participate):
+#     max([0])              => 0
+#     max([false])          => false
+#     max([""])             => "" (empty string)
+#     max([0, false, ""])   => 0           # first wins on ties (none > 0)
+#
+#   Strings (lexicographic JS `>` by UTF-16 code unit):
+#     max(["b","a","c"])        => "c"
+#     max(["apple","Banana"])   => "apple"   # 'a'(0x61) > 'B'(0x42)
+#     max(["10","9"])           => "9"       # '9'(0x39) > '1'(0x31)
+#     max(["", "a"])            => "a"
+#
+#   Booleans (JS `>` coerces to 0/1):
+#     max([true, false])  => true
+#     max([false, true])  => true
+#
+#   Mixed types (JS `>`; may compare across types without throwing):
+#     max([1, "2", 3])    => 3
+#     max([5, "abc"])     => 5     # 5 > "abc"? "abc"->NaN, comparison false; 5 kept
+#     max(["abc", 5])     => "abc" # 5 > "abc" false; first ("abc") kept
+#     max([1n, 2, 3n])    => 3n    # bigint/number mix compares fine
+#     max([2, 1n])        => 2
+#     max([1n, 2n, 3n])   => 3n
+#     max([3n, 1n])       => 3n
+#
+#   Dates (object-like, `>` via valueOf):
+#     max([Date(2000), Date(2020)]) => Date(2020)
+#
+#   Ties keep FIRST (strict `>`):
+#     equal-valued objects [a,b] => a (the first)
+#     max([0,-0])  => +0   (Object.is +0)   # 0 > -0 is false -> first (0) kept
+#     max([-0,0])  => -0   (Object.is -0)   # -0 > 0 is false -> first (-0) kept
+#     max([-1,-0]) => -0                    # -0 selected then never beaten
+#
+#   Symbol path:
+#     max([Symbol()])         => undefined  # skipped by !isSymbol in first-candidate branch
+#     max([Symbol(),Symbol()])=> undefined
+#     max([Symbol(), 1, 2])   => 2          # symbol skipped, then 1,2 selected
+#     max([Symbol(), 1])      => 1
+#     max([1, Symbol(), 2])   => THROW TypeError (Symbol > number)
+#     max([1, 2, Symbol()])   => THROW TypeError
+#
+# ============================================================================
+ORACLE value -> oracle.json
+#   Pure deterministic function. Each generator input is a single-element args
+#   array [arg] (arg = the `array` argument or null/non-array). Oracle records the
+#   return value, or {__throw} for the Symbol-after-selection TypeError path.
+#   (The generator does not emit Symbols, so the captured oracle is value-mode for
+#   all emitted inputs.)
+
+# ============================================================================
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly):
+#     - The NODE 0 truthiness guard `array && array.length`.
+#     - The NODE 1 ascending scan with iteratee=identity.
+#     - The `current != null` LOOSE-inequality skip (null & undefined only).
+#     - The first-candidate branch `computed === undefined ? (current === current
+#       && !isSymbol(current)) : (current > computed)`.
+#     - isSymbol semantics (typeof 'symbol' OR objectToString tag '[object Symbol]').
+#     - STRICT `>` comparison (no Number coercion) for the subsequent branch.
+#     - First-element-wins-on-tie (strict >, including -0/+0 distinction preserved
+#       by returning the original element reference/value).
+#     - The Symbol-after-selection TypeError throw (NODE 2).
+#   CARRIED DATA: none. (No tables; the only literal is the string '[object Symbol]'
+#     used inside isSymbol, which is reproduced inline as in-contract logic.)
+#   OUT-OF-CONTRACT: none (pure, read-only, no side effects, no ambient seam — no
+#     clock/RNG/env/io/network). ORACLE-CLASS deterministic.
+
+# ============================================================================
+# RE-EMITTER DIRECTIVE
+#   The unit is the DEFAULT export. The blind re-emitter MUST emit a module whose
+#   default export is a single function taking the array argument:
+#       export default function max(array) { ... }
+#   (Loaded by the harness via dynamic import(); called as `mod.default(arg)`.)
+# ============================================================================
+
+PROVENANCE lodash.max@4.0.1 ; repo lodash/lodash ; MIT license ; source file index.js (module.exports = max; inlines baseExtremum, baseGt, isObjectLike, isSymbol, identity)

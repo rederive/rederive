@@ -1,0 +1,169 @@
+UNIT gt
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure relational comparison. No clock/RNG/env/fs/net seam. No state. No side effects.
+
+SIG gt(value: any, other: any) -> boolean
+
+DEPENDS-ON none
+# Self-contained. Internally uses only language built-ins (parseInt, Object.prototype.toString,
+# RegExp, unary +). No external module is required. No embedded data table (no carried.json).
+
+# ===========================================================================================
+# EMISSION / INTERFACE  (blind re-emitter MUST follow exactly)
+# ===========================================================================================
+# The real package is CommonJS `module.exports = gt`. The frozen oracle imports the unit as the
+# DEFAULT export. Therefore the re-emitter MUST ship a single default-exported function:
+#
+#     function gt(value, other) { ... }
+#     export default gt;          # ES module form the harness loads
+#
+# (Equivalently `module.exports = gt` for a CJS emission, but the oracle import is `default`.)
+# The function takes EXACTLY two positional args and returns a primitive `boolean` (true/false).
+# It is `gt` = createRelationalOperation(baseGt) where baseGt(a,b) = (a > b).
+
+# ===========================================================================================
+# BEHAVIOR  (exact pipeline — order matters)
+# ===========================================================================================
+#
+# gt(value, other):
+#
+# NODE 1 — STRING-PAIR GUARD (the single branch that governs coercion):
+#   IF (typeof value === 'string' AND typeof other === 'string'):
+#       # BOTH operands are string primitives -> NO coercion of any kind.
+#       # Leave value and other UNCHANGED. No trimming. No numeric parsing.
+#       (skip NODE 2)
+#   ELSE:
+#       # At least one operand is NOT a string primitive ->
+#       value = toNumber(value)        # see toNumber pipeline below
+#       other = toNumber(other)        # applied to BOTH operands, even the one already a number/string
+#
+# NODE 2 — COMPARE (baseGt):
+#   RETURN (value > other)
+#   # This is the JavaScript built-in relational `>` operator applied to the (possibly coerced) pair.
+#   # - If BOTH are strings (NODE 1 true branch): `>` is LEXICOGRAPHIC by UTF-16 code unit,
+#   #   comparing char-by-char. No locale. No case folding. e.g. 'b' > 'a' = true,
+#   #   '10' > '2' = false ( '1'(0x31) < '2'(0x32) ), 'a' > '' = true, '' > '' = false.
+#   #   IMPORTANT: in this branch ' 5' is NOT trimmed; ' 5' > '2' = false (leading space 0x20 < '2').
+#   # - Otherwise both are numbers (NODE 1 else branch): standard IEEE-754 numeric `>`.
+#   #   NaN on EITHER side => false (NaN is unordered). -0 and +0 compare EQUAL => -0 > 0 = false,
+#   #   0 > -0 = false. +Infinity > x (x != +Inf) = true; x > -Infinity (x != -Inf) = true;
+#   #   Infinity > Infinity = false; -Infinity > anything-but--Inf = false.
+#
+# ---- toNumber(value)  (the coercion used by NODE 1 else-branch; verbatim semantics) --------
+# toNumber(value):
+#   T1. IF typeof value === 'number':            RETURN value
+#       # numbers pass through UNCHANGED — this preserves NaN, +/-Infinity, and -0 exactly.
+#   T2. IF isSymbol(value):                       RETURN NaN
+#       # isSymbol = (typeof value === 'symbol') OR
+#       #            (value is object-like AND Object.prototype.toString.call(value) === '[object Symbol]').
+#       # object-like := value != null AND typeof value === 'object'.
+#       # (Symbol primitives/objects never throw here; they map to NaN.)
+#   T3. IF isObject(value):                        # isObject := value is truthy AND typeof in {'object','function'}
+#       other := (typeof value.valueOf === 'function') ? value.valueOf() : value
+#       value := isObject(other) ? (other + '') : other
+#       # i.e. call .valueOf(); if it returns another object, stringify via `other + ''`
+#       #      (String concat coercion, which calls toString); else keep the valueOf() result.
+#       # Examples:
+#       #   []        -> valueOf()=[] (object) -> '' (=[]+'')        -> later +'' = 0
+#       #   [5]       -> valueOf()=[5] (object) -> '5'               -> later +'5' = 5
+#       #   [1,2]     -> valueOf()=[1,2] (object) -> '1,2'           -> later +'1,2' = NaN
+#       #   {}        -> valueOf()={} (object) -> '[object Object]'  -> later NaN
+#       #   new Number(5) -> valueOf()=5 (primitive number)         -> 5 (falls to T4/T5: returns 5)
+#       #   new String('5') -> valueOf()='5' (primitive string)     -> '5' (falls to STRING parse below)
+#       #   Date      -> valueOf()=epoch ms (number)                -> that number
+#       #   {valueOf:()=>7} -> 7
+#   T4. IF typeof value !== 'string':              # after T3, value may be number/boolean/null/undefined/bigint/etc.
+#       RETURN (value === 0) ? value : (+value)
+#       # `value === 0 ? value : +value` — the `=== 0` special-case preserves an exact 0 / -0
+#       #  identity (avoids +(-0) churn); for everything else apply unary `+`:
+#       #     true -> 1, false -> 0, null -> 0, undefined -> NaN, '' handled below as string.
+#       #  *** bigint: +value THROWS TypeError ("Cannot convert a BigInt value to a number"). ***
+#       #      => any bigint operand that reaches T4 makes gt THROW. (See SCOPE / OUT-OF-ENVELOPE.)
+#   T5. # value is a string here (primitive string, possibly via boxed-String valueOf in T3):
+#       value := value.replace(/^\s+|\s+$/g, '')          # TRIM leading+trailing whitespace
+#       isBinary := /^0b[01]+$/i.test(value)
+#       IF (isBinary OR /^0o[0-7]+$/i.test(value)):
+#           RETURN parseInt(value.slice(2), isBinary ? 2 : 8)   # parse 0b.. base2 / 0o.. base8
+#       ELSE:
+#           RETURN /^[-+]0x[0-9a-f]+$/i.test(value) ? NaN : (+value)
+#           # SIGNED bad-hex guard: a string matching /^[-+]0x[0-9a-f]+$/i (e.g. '-0x1','+0x10')
+#           #   -> NaN (JS unary + would also give NaN for these, lodash makes it explicit).
+#           # An UNSIGNED hex like '0x10' does NOT match (no leading sign) -> +'0x10' = 16.
+#           # Everything else: unary +  ('' -> 0, '  5  '->trim->'5'->5, 'abc'->NaN, '3.2'->3.2,
+#           #   '1e3'->1000, '  ' -> trim '' -> 0).
+#
+# ===========================================================================================
+# WORKED ORACLE FACTS (verified against lodash.gt@3.9.2 — every one observed live)
+# ===========================================================================================
+#   gt(3,1)=true   gt(3,3)=false   gt(1,3)=false   gt(-1,-2)=true
+#   gt(NaN,1)=false  gt(1,NaN)=false  gt(NaN,NaN)=false
+#   gt(Infinity,1)=true  gt(1,Infinity)=false  gt(Infinity,Infinity)=false
+#   gt(-Infinity,1)=false  gt(Infinity,-Infinity)=true
+#   gt(-0,0)=false  gt(0,-0)=false  gt(-0,-0)=false  gt(0.0001,-0)=true
+#   # BOTH-STRING (raw lexicographic, NO trim):
+#   gt('b','a')=true  gt('a','b')=false  gt('10','9')=false  gt('2','10')=true
+#   gt('10','2')=false  gt('Z','a')=false  gt('apple','Apple')=true  gt('a','')=true  gt('','')=false
+#   gt(' 5','2')=false   # leading space NOT trimmed in both-string path
+#   gt('5','  5')=true
+#   # STRING-vs-NUMBER (toNumber both, so string IS trimmed+parsed):
+#   gt('10',9)=true  gt('5',5)=false  gt(9,'10')=false  gt('abc',1)=false  gt(100,'5')=true
+#   gt('  5  ',2)=true  gt('',-1)=true  gt('  ',-1)=true
+#   gt('0x10',1)=true  gt('+0x10',1)=false  gt('0xff',254)=true  gt('0Xff',1)=true
+#   gt('0b11',1)=true  gt('0B11',1)=true  gt('0o17',1)=true  gt('0O17',1)=true  gt('-0x1',1)=false
+#   # null / undefined:
+#   gt(null,-1)=true  gt(null,0)=false  gt(null,null)=false
+#   gt(undefined,1)=false  gt(1,undefined)=false  gt(undefined,null)=false  gt(undefined,undefined)=false
+#   # booleans:
+#   gt(true,0)=true  gt(false,-1)=true
+#   # boxed / objects:
+#   gt(new Number(5),3)=true  gt(new Number(NaN),1)=false  gt(new String('5'),3)=true
+#   gt([],-1)=true  gt([5],1)=true  gt([1,2],1)=false  gt([2],[1])=true  gt({},1)=false
+#   gt(new Date(100),new Date(50))=true  gt({valueOf:()=>7},3)=true
+#   # symbols => NaN, never throw:
+#   gt(Symbol('x'),1)=false  gt(1,Symbol('x'))=false
+#   # bigint => THROWS TypeError (reaches +value at T4):
+#   gt(10n,5n) THROWS  gt(10n,5) THROWS  gt(5,10n) THROWS
+
+ORACLE value -> oracle.json
+# Oracle compares the returned boolean by value. Throw-paths (bigint operands) are recorded by the
+# harness as {__throw} and are gradable. Result is always a primitive boolean (or a thrown TypeError).
+
+# ===========================================================================================
+# SCOPE
+# ===========================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire NODE 1/NODE 2 pipeline above, including the
+#   toNumber coercion sub-pipeline (string-pair guard, valueOf/stringify, trim, binary/octal parse,
+#   signed-bad-hex -> NaN, `=== 0` -0 preservation, unary +). This is ALL of the unit. No carried data.
+#
+# CARRIED DATA: NONE. The unit contains only small inline constants/regexes that are part of the
+#   in-contract logic and are transcribed verbatim in BEHAVIOR above:
+#     reTrim     = /^\s+|\s+$/g
+#     reIsBadHex = /^[-+]0x[0-9a-f]+$/i
+#     reIsBinary = /^0b[01]+$/i
+#     reIsOctal  = /^0o[0-7]+$/i
+#     symbolTag  = '[object Symbol]'    NAN = 0/0
+#   No large literal table -> NO carried.json file is emitted.
+#
+# OUT-OF-CONTRACT: none (no stateful mutators, no side APIs, no ambient reads).
+#
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they do not survive the oracle codec
+# round-trip, OR they are a throw the codec can record):
+#   - bigint operand reaching toNumber's T4 -> gt THROWS TypeError. bigint round-trips the codec, so
+#     this IS gradable as {__throw}; however it is documented here rather than relied on for coverage.
+#     A blind re-emitter reconstructs it from BEHAVIOR T4 (`+value` on a bigint throws).
+#   - Symbol primitive operand: NON-round-trippable (codec cannot persist a Symbol) -> DO NOT emit.
+#     Behavior is fully specified: isSymbol -> toNumber returns NaN -> result false (unless the other
+#     operand path also yields NaN; NaN `>` anything is false). e.g. gt(Symbol(),1)=false.
+#   - function operand: NON-round-trippable -> DO NOT emit. Behavior: isObject true (typeof 'function'),
+#     valueOf returns the function itself (object) -> stringified via (fn+'') to its source text ->
+#     +<source-string> = NaN -> false. Reconstructable from BEHAVIOR T3/T5.
+#   - NaN / +/-Infinity / -0 / boxed Number/String DO round-trip the harness codec and ARE emitted.
+
+PROVENANCE lodash.gt@3.9.2  (npm)
+#   repo: https://github.com/lodash/lodash (modularized "lodash.gt" build)
+#   license: MIT
+#   source file: node_modules/lodash.gt/index.js  (single file, 221 lines)
+#   NOTE: although versioned 3.9.2, the shipped toNumber is the lodash-4.x style implementation
+#   (isSymbol + binary/octal/signed-bad-hex handling) — the SIR follows the ACTUAL shipped source,
+#   not the historical 3.x toNumber. Verified live.

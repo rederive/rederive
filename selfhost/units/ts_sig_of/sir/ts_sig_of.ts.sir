@@ -1,0 +1,25 @@
+UNIT ts_sig_of
+LANG ts
+PRIMARY-SHA256 4a45cda772a4dd1f2eb7e95ebef5fad3180eff927793e041bd127916194064bf
+SIG export default function ts_sig_of(sig: string): { exportName: string | null; fnType: string }
+ABI TypeScript compiles to the js runtime and is driven exactly as js: text = string (UTF-16); none = null; the record = a
+  fresh plain object with exactly the own keys exportName and fnType. STRICT: the artifact type-checks under strict: true
+  with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. A refusal (R10) is a thrown Error. ES
+  module default export; imports nothing.
+MECHANISM (restated from js) BLANK trims (R1, R7, R9) are explicit [ \t] scans or regexes — NOT String.prototype.trim and
+  NOT \s. R9's emptiness test alone is String.prototype.trim, exactly the WS pin. NAME's classes are ASCII ([A-Za-z_$]
+  then [\w$], no u flag). The bracket counts (R6, R8) are index scans over the masked string; a RegExpMatchArray group
+  read is string | undefined — test the default group against undefined, never assert it with !.
+MECHANISM ONE_DECL, ANY_NEVER and NO_VALUE_TYPE are built as new RegExp("...") from a STRING literal (no flags), exactly as
+  pinned, never as /.../ literals: the any-ban gate lexes a regex-literal body as code (rederive #148, fail-closed), so the
+  literal's ?:any reads as `: any` (round 1, all three emissions) and a (?! is a ! in code; string text is not lexed. Each
+  string's backslashes are doubled so its .source equals the authority's regex byte-for-byte.
+MECHANISM R4's T is one left-to-right pass over the mask (a depth counter clamped at zero with Math.max; a ";" seen at depth
+  above zero becomes " "); ONE_DECL is tested on T, while ANY_NEVER and NO_VALUE_TYPE stay on the mask itself.
+DEPENDS-ON none
+PINNED regex HEAD = /^export[ \t]+(default[ \t]+)?function[ \t]+([A-Za-z_$][\w$]*)[ \t]*/ CITED R2 — matched against S; the match length is C
+PINNED regex LITERAL = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g CITED R3 — global replace on S; "." excludes the four line terminators, which is R3's backslash rule
+PINNED regex ONE_DECL = new RegExp("[;`\\r\\n\\u2028\\u2029]|\\/\\/|\\/\\*|\\*\\/|=(?!>)") CITED R4 — tested on T (the mask with in-brace ";" blanked)
+PINNED regex ANY_NEVER = new RegExp("(?:^|[^\\w$.])(?:any|never)(?![\\w$])") CITED R5 — tested on the mask
+PINNED regex NO_VALUE_TYPE = new RegExp("(?:^|[^\\w$.])(?:typeof|import|infer)(?![\\w$])") CITED R5 — tested on the mask
+PROVENANCE rederive@7f015c4d1023 cli/lang-ts.mts sigOf; language file re-cut 2026-10-27 (round 5k delta, #158) with the primary.

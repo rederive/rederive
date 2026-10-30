@@ -1,0 +1,213 @@
+UNIT xor
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# lodash.xor @ 4.5.0 — default export. A PURE function. No seam, no carried
+# data, no side effects, no I/O. The result is fully determined by the inputs.
+# ----------------------------------------------------------------------------
+
+SIG xor(...arrays) -> Array
+    # Variadic. Re-emit as a single default-exported function:  export default function xor(...arrays) {...}
+    # Each argument may be ANYTHING (array, array-like object, string, null,
+    # number, object, function, typed array, Set, Map, undefined, ...).
+    # Returns a NEW real Array (never an input reference; inputs are NEVER mutated).
+
+DEPENDS-ON none
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline — exact + complete)
+# ============================================================================
+#
+# Conceptually xor computes the SYMMETRIC DIFFERENCE of the given arrays:
+# the set of values present in an ODD number of the (array-like) arguments,
+# with SameValueZero equality, deduplicated, in a specific order. But the
+# EXACT order and the exact dedup behavior are defined operationally by the
+# fold below — re-emit the OPERATION, not a paraphrase, to converge on order.
+#
+# STEP 0 — COLLECT ARGS
+#   `arrays` = the full list of positional arguments, in order. Zero args -> [].
+#
+# STEP 1 — FILTER to array-like-objects  (predicate isArrayLikeObject, below)
+#   Keep only arguments for which isArrayLikeObject(arg) is TRUE, preserving
+#   their original left-to-right order. Call the surviving list `lists`.
+#   Everything else (strings, null, undefined, numbers, booleans, symbols,
+#   plain objects without a valid .length, functions, Set, Map, boxed
+#   primitives, ...) is DROPPED before any computation.
+#
+#   isArrayLikeObject(value):
+#     return isObjectLike(value) AND isArrayLike(value)
+#   where
+#     isObjectLike(value):  value is truthy AND  typeof value === 'object'
+#                           # NOTE: typeof null === 'object' but null is falsy -> false.
+#                           # Functions have typeof 'function' -> objectLike false -> dropped.
+#                           # Strings have typeof 'string'   -> objectLike false -> dropped.
+#                           # Numbers/booleans/symbols/bigint primitives -> not 'object' -> dropped.
+#     isArrayLike(value):   value != null
+#                           AND isLength(value.length)
+#                           AND  isFunction(value) === false
+#     isLength(v):          typeof v === 'number' AND v > -1 AND v % 1 === 0
+#                           AND v <= 9007199254740991   (Number.MAX_SAFE_INTEGER)
+#                           # => integer in [0, 2^53-1]. Rejects: undefined, NaN,
+#                           #    -1, 1.5, Infinity, '3' (string), negatives, fractions.
+#     isFunction(v):        Object.prototype.toString.call(v) is '[object Function]'
+#                           or '[object GeneratorFunction]'  (only checked when isObject(v)).
+#
+#   CONSEQUENCES (all verified by execution against the real package):
+#     - [1,2,3]                  -> kept (Array, length 3).
+#     - Uint8Array / Buffer      -> kept (typed arrays: object-like, valid integer .length,
+#                                   not a function). Their NUMERIC elements participate.
+#     - { length: 2 }            -> kept; reads indices 0..1 which are absent -> two `undefined`
+#                                   elements.
+#     - { 0:3, 1:9, length: 2 }  -> kept; elements [3, 9] (arguments-like / sparse-object).
+#     - `arguments` object       -> kept.
+#     - { length: 0 }            -> kept but contributes no elements.
+#     - 'abc' (string)           -> DROPPED (typeof 'string', not object-like).
+#     - null, undefined          -> DROPPED.
+#     - 3, true, 5n (primitives) -> DROPPED.
+#     - {} (no .length)          -> DROPPED (length undefined, isLength false).
+#     - { length: -1 | 1.5 | Infinity | NaN | '2' } -> DROPPED (invalid length).
+#     - function(a,b){}          -> DROPPED (isFunction true).
+#     - new Number(5), new String('x') (boxed) -> DROPPED (no valid .length; Number/String
+#                                   box has no own length / String box length is fine? see note).
+#                                   NOTE verified: new Number(5) is dropped (length undefined).
+#     - new Set([...]) , new Map([...]) -> DROPPED (no .length).
+#     - RegExp /re/              -> DROPPED (object but .length undefined).
+#
+# STEP 2 — baseXor FOLD over `lists`  (this defines RESULT VALUES *and* ORDER)
+#   Maintain an accumulator `result` (initially undefined).
+#   For each list `cur` in `lists`, left to right:
+#     if result is still undefined (first surviving list):
+#         result := cur          # taken as-is, NOT yet deduplicated.
+#     else:
+#         result := arrayPush( baseDifference(result, cur),
+#                              baseDifference(cur, result) )
+#         # i.e. (elements of result NOT in cur), followed by
+#         #      (elements of cur    NOT in result), concatenated in that order.
+#   After the loop:
+#     if result is undefined OR result.length === 0:  the fold yields [] and
+#         STEP 3 is skipped — return [].
+#     else: pass result to STEP 3 (baseUniq).
+#
+#   baseDifference(array, values) -> NEW array of the elements of `array`,
+#   IN ORDER, that are NOT SameValueZero-equal to any element of `values`:
+#     result := []
+#     if array.length === 0: return []          # length read as a uint32
+#     for index = 0 .. array.length-1:
+#         value    := array[index]
+#         computed := value
+#         value    := (value !== 0) ? value : 0   # NORMALIZE -0 to +0 in the emitted element
+#         if computed === computed (i.e. value is NOT NaN):
+#             include value iff NO element of `values` is `=== computed`
+#             # (strict ===; for non-NaN that is SameValueZero. -0 === 0 is true,
+#             #  so a -0 in `values` cancels a 0 in `array` and vice-versa.)
+#         else: # computed is NaN
+#             include value (NaN) iff `values` contains NO NaN
+#             # (NaN matches NaN under SameValueZero.)
+#     return result
+#     # The large-array fast path (values.length >= 200 uses a hash SetCache)
+#     # changes performance ONLY; membership semantics are identical
+#     # (verified differentially across the 200-element boundary).
+#
+#   arrayPush(dst, src): append every element of src (indices 0..src.length-1)
+#   onto dst, in order; return dst.
+#
+# STEP 3 — baseUniq(result)  (final dedup, preserving FIRST occurrence + order)
+#   Produce a NEW array containing each distinct value of `result` exactly once,
+#   keeping the FIRST occurrence's position, SameValueZero equality:
+#     out := []
+#     for index = 0 .. result.length-1:
+#         value    := result[index]
+#         computed := value
+#         value    := (value !== 0) ? value : 0     # NORMALIZE -0 -> +0 in output
+#         if computed === computed (not NaN):
+#             push value to out iff NO existing element of out is `=== computed`
+#         else: # NaN
+#             push value (NaN) iff out contains NO NaN
+#     return out
+#     # Large-array path (>=200) uses a hash set for membership; semantics identical.
+#   RETURN out.
+#
+# NET EQUIVALENT RULE (proven equal to the fold for the result SET; order still
+# defined by the fold, see ORDER below):
+#   For each distinct value v (SameValueZero), let k = the number of input
+#   LISTS that contain v at least once (per-list membership, NOT per-occurrence).
+#   v is in the result  iff  k is ODD.
+#   => Duplicates WITHIN a single list collapse to one membership.
+#      Verified: xor([1,1],[1]) -> []         (1 is in 2 lists -> even -> absent)
+#                xor([1,1])      -> [1]        (1 in 1 list  -> odd  -> present, single-list deduped)
+#                xor([1],[1],[1])-> [1]        (1 in 3 lists -> odd)
+#                xor([1],[1],[1],[1]) -> []    (4 lists -> even)
+#                xor([2,1],[2,3],[3,4]) -> [1,4]
+#                xor([1,2,3],[2,3,4],[3,4,5]) -> [1,3,5]
+#
+# ----------------------------------------------------------------------------
+# ORDER (load-bearing — independent emitters MUST reproduce this exactly):
+#   The output order is NOT "order of first appearance across the concatenated
+#   inputs". It is the order produced by the baseXor FOLD followed by baseUniq.
+#   Re-emit the literal fold above; do not substitute a first-seen ordering.
+#   Verified counter-examples that break the naive first-seen model:
+#     xor([1,2],[1],[2,3,1])      -> [3,1]   (NOT [1,3])
+#     xor([9],[1,9],[9])          -> [1,9]   (NOT [9,1])
+#   Verified order-preserving cases:
+#     xor([3,1,2],[5,4])          -> [3,1,2,5,4]
+#     xor([5,4],[3,1,2])          -> [5,4,3,1,2]
+#     xor([1,2,3,4],[2,4])        -> [1,3]
+#     xor([2,4],[1,2,3,4])        -> [1,3]
+# ----------------------------------------------------------------------------
+#
+# EQUALITY (SameValueZero), points to pin:
+#   - NaN is equal to NaN:        xor([NaN],[NaN]) -> []     ; xor([NaN,1],[1]) -> [NaN]
+#                                 xor([NaN,NaN],[NaN]) -> [] ; xor([NaN],[NaN],[NaN]) -> [NaN]
+#   - +0 and -0 are EQUAL:        xor([0],[-0]) -> []
+#   - -0 is NORMALIZED to +0 in every emitted element (Object.is(out[i],-0) is FALSE):
+#                                 xor([-0,1],[1]) -> [0]  (a +0, not -0)
+#                                 xor([-0]) -> [0]        (single-arg path also normalizes)
+#   - bigint vs number are DISTINCT: 1n !== 1  -> xor([1n],[1]) -> [1n, 1]
+#   - strings/booleans/bigints compared by ===; objects/arrays/functions by REFERENCE identity:
+#                                 xor([o],[o]) -> [] (same ref); xor([{a:1}],[{a:1}]) -> 2 distinct objs.
+#   - `undefined` is a normal value: xor([1,,3],[3]) -> [1, undefined]  (hole reads as undefined);
+#                                    xor([1,,3],[undefined]) -> [1,3]   (the hole/undefined cancels).
+#
+# RETURN-VALUE INVARIANTS:
+#   - Always returns a freshly-allocated real Array (Array.isArray === true).
+#   - Never the same reference as any input (even the single-array / single-arg case).
+#   - Never mutates any argument.
+#   - No surviving array-like-objects -> [].  Zero args -> [].
+#
+# ERROR / THROW behavior:
+#   - There is NO throw path reachable from codec-faithful inputs. Non-array-like
+#     args are silently filtered; missing args yield []. (Pathological getters on a
+#     hostile object's .length could throw, but such objects are out of envelope.)
+
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function: the harness records the returned Array per input
+# tuple and grades by value. -0 is normalized to +0 by the unit, so emitted
+# elements are codec-stable. (Inputs themselves may contain -0/NaN/undefined/
+# bigint/typed-arrays — all codec round-trip per the harness codec.)
+
+# ============================================================================
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#     isArrayLikeObject filter (with isObjectLike/isArrayLike/isLength/isFunction),
+#     the baseXor fold, baseDifference, arrayPush, baseUniq, SameValueZero equality,
+#     -0 normalization, and the fold-defined ORDER. No constants beyond
+#     MAX_SAFE_INTEGER (9007199254740991) and LARGE_ARRAY_SIZE (200, perf-only).
+#   CARRIED DATA: none.
+#   OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#     - Function-typed ELEMENTS and Symbol-typed ELEMENTS: behaviorally they
+#       compare by reference/identity like any object, but they do NOT survive
+#       the harness JSON codec, so genInputs must not emit them. (An array
+#       ARGUMENT whose ELEMENTS are functions/symbols is excluded from generation.)
+#     - Boxed primitives as elements (new Number/new String) and class instances
+#       whose identity matters: not codec-faithful as elements -> excluded.
+#     - Hostile objects with throwing `.length` getters: out of envelope.
+#     - Very-large arrays beyond a few hundred elements: semantics identical to
+#       small path (verified across the 200 boundary); genInputs keeps sizes
+#       modest for cost, with a couple of >200 cases to exercise the fast path.
+
+PROVENANCE lodash.xor@4.5.0 (lodash Custom Build, modularized export of _.xor),
+           repo lodash/lodash, MIT license,
+           source file: node_modules/lodash.xor/index.js
+           (module.exports = xor; xor = baseRest(arrays => baseXor(arrayFilter(arrays, isArrayLikeObject)))).

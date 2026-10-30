@@ -1,0 +1,8 @@
+UNIT boundedMap
+KIND FUNCTIONAL
+FIDELITY spec
+SIG boundedMap(input, concurrency, gate) -> Promise<Array>
+# Maps over the input with a concurrency bound; completions arrive through the injected gate.
+PAR the per-item mappings are independent sub-traces
+INVARIANT output is keyed by INPUT position — invariant under interleaving
+INVARIANT at most min(concurrency, n) items are in flight at any instant

@@ -1,0 +1,165 @@
+UNIT pick
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# --------------------------------------------------------------------------
+# Reconstruction contract for the blind re-emitter:
+#   - DEFAULT EXPORT:  export default function pick(obj, keys) { ... }
+#   - SELF-CONTAINED:  inline the isObject predicate (below). NO `require`,
+#     NO `import`. The isobject@3.0.1 logic is reproduced verbatim in BEHAVIOR.
+# --------------------------------------------------------------------------
+
+SIG  pick(obj: any, keys: string | string[]) -> object
+     # Returns a NEW plain object ({}) containing only those `keys` that EXIST
+     # on `obj` (existence tested with the JS `in` operator). The original
+     # `obj` is never mutated. The return is ALWAYS a freshly-allocated object
+     # literal, even on the guard / empty paths.
+
+DEPENDS-ON  isobject@3.0.1 (INLINED — see BEHAVIOR node B1; do not require it)
+
+BEHAVIOR
+  # Ordered pipeline, transcribed from object.pick@1.3.0/index.js.
+  # ----------------------------------------------------------------------
+  # B0. isObject predicate (inlined from isobject@3.0.1):
+  #     isObject(val)  ==  ( val != null
+  #                          && typeof val === 'object'
+  #                          && Array.isArray(val) === false )
+  #     VERIFIED against the real isobject@3.0.1:
+  #       isObject({})        -> true
+  #       isObject([])        -> false   (arrays are EXCLUDED)
+  #       isObject(null)      -> false
+  #       isObject(undefined) -> false
+  #       isObject(1)         -> false
+  #       isObject("s")       -> false
+  #       isObject(true)      -> false
+  #       isObject(function(){}) -> false   (typeof function !== 'object')
+  #
+  # B1. GUARD (line 13):  if ( !isObject(obj) && typeof obj !== 'function' )
+  #         return {};
+  #     i.e. proceed only when obj is a plain non-array object OR a function.
+  #     - Plain object / plain-object-like (typeof 'object', non-null,
+  #       non-array)  -> PROCEED.
+  #     - function    -> PROCEED (functions have own/inherited props pickable).
+  #     - ARRAY       -> return {}  (isObject false, typeof 'object' not 'function').
+  #     - null        -> return {}.
+  #     - undefined   -> return {}.
+  #     - number / string / boolean / bigint / symbol primitive -> return {}.
+  #     The returned {} is a fresh empty object.
+  #
+  # B2. Initialize  res = {}  (fresh object literal).
+  #
+  # B3. BRANCH on keys type:
+  #     ----------------------------------------------------------------
+  #     B3a. STRING form:  if ( typeof keys === 'string' )
+  #             if ( keys in obj )         # `in` operator — see NOTE-IN below
+  #                 res[keys] = obj[keys];
+  #             return res;                # single-key path always returns here
+  #          NOTE the empty string '' is a valid string key:
+  #             pick({'':9, a:1}, '')  ->  res has own key '' = 9.
+  #          A string key not present (own OR inherited) is skipped -> res stays {}.
+  #     ----------------------------------------------------------------
+  #     B3b. ARRAY (and array-like fall-through) form:
+  #             len = keys.length;  idx = -1;
+  #             while ( ++idx < len ) {
+  #                 key = keys[idx];
+  #                 if ( key in obj )      # `in` operator
+  #                     res[key] = obj[key];
+  #             }
+  #             return res;
+  #          - Iterates positions 0..len-1 (pre-increment: first key is keys[0]).
+  #          - Each present key copied; missing keys skipped.
+  #          - DUPLICATE keys in the array are idempotent (same slot reassigned):
+  #               pick({a:1}, ['a','a','a']) -> {a:1}.
+  #          - keys[idx] is coerced to a property key when used in `in`/index
+  #            (e.g. numeric array entries stringify).
+  #
+  # NOTE-IN (KEY-EXISTENCE OPERATOR — VERIFIED): the unit uses the JS `in`
+  #   operator, NOT hasOwnProperty and NOT a truthiness check. Consequences:
+  #   * `in` walks the PROTOTYPE CHAIN. So inherited keys are considered
+  #     "present" and ARE copied onto res:
+  #       pick({a:1}, 'toString')  copies res.toString = (inherited Object#toString).
+  #       pick({a:1}, ['toString','constructor','hasOwnProperty','valueOf','a'])
+  #         -> res own keys = [toString, constructor, hasOwnProperty, valueOf, a]
+  #            (VERIFIED via Object.getOwnPropertyNames on the real result).
+  #   * A key whose VALUE is undefined (but the key exists) IS copied:
+  #       pick({a:undefined}, 'a')  ->  res.a = undefined  (res HAS own key 'a').
+  #   * A key whose value is any falsy value (0, '', false, null) IS copied
+  #     because existence — not truthiness — is the test:
+  #       pick({a:0},'a')->{a:0}  pick({a:''},'a')->{a:''}
+  #       pick({a:false},'a')->{a:false}  pick({a:null},'a')->{a:null}.
+  #
+  # OBSERVABLE-UNDER-JSON (the differential oracle serializes results with
+  #   JSON.stringify; this is part of the contract the blind re-emitter must
+  #   match, and it is satisfied AUTOMATICALLY by any faithful `res[k]=obj[k]`
+  #   re-emitter):
+  #   * A picked key whose value is `undefined` -> the key IS set on res, but
+  #     JSON.stringify DROPS undefined-valued own keys, so the serialized
+  #     result omits it. pick({a:undefined},'a') serializes to {} (yet res.a
+  #     exists in memory). Real package VERIFIED: JSON => {}.
+  #   * A picked key whose value is a FUNCTION (e.g. inherited 'toString',
+  #     'constructor', 'hasOwnProperty', 'valueOf') -> the key IS set on res,
+  #     but JSON.stringify DROPS function-valued own keys, so the serialized
+  #     result omits it. pick({a:1},'toString') serializes to {} (yet
+  #     res.toString is the inherited function). Real package VERIFIED: JSON => {}.
+  #   Because BOTH the real package and any faithful re-emitter set the SAME
+  #   property to the SAME value, their JSON serializations are byte-identical.
+  #   No divergence arises from this — it is documented so the blind engineer
+  #   does NOT "fix" it by switching to hasOwnProperty (which WOULD diverge:
+  #   hasOwnProperty would also omit OWN undefined-valued keys from res, but
+  #   the difference is invisible under JSON for undefined values, AND would
+  #   visibly diverge for an OWN serializable inherited-name key — see the
+  #   curated case pick({toString:'hi',a:1}, ['toString','a']) -> {toString:'hi',a:1},
+  #   which the `in` operator AND hasOwnProperty BOTH pick, but which a
+  #   truthiness or own-only-with-different-semantics impl could get wrong).
+
+ORACLE  value -> oracle.json
+  # Deterministic, pure. No clock / RNG / IO / network seam. No injection
+  # needed. The oracle stores JSON.stringify(encode(args)) inputs and the
+  # JSON-serialized return value.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The isObject guard predicate (B0/B1), inlined (isobject@3.0.1 verbatim).
+    - The function-passes-guard exception (typeof obj === 'function').
+    - The string-vs-array BRANCH (B3a/B3b) and the single-key early return.
+    - The `in`-operator key-existence test (prototype-chain inclusive).
+    - res = obj[key] copy semantics (existence, not truthiness; undefined and
+      function values copied; vanish under JSON).
+    - Fresh-object return on every path ({} on guard / empty / no-match).
+  CARRIED DATA: none. (No literal tables; isobject is 1 inlined expression.)
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented capability boundaries; the
+  oracle does NOT exercise these — they are non-round-trippable or non-string/
+  non-array key types):
+    - keys as a FUNCTION: object.pick@1.3.0 has NO predicate/filter handling
+      (that exists only in LATER major versions). At 1.3.0, a function `keys`
+      fails `typeof keys==='string'`, then `len = keys.length` is the function
+      ARITY and `keys[idx]` are undefined indices, so the loop copies nothing:
+      pick({a:1,b:2}, fn) -> {} for any function fn. VERIFIED. (Functions are
+      not JSON-round-trippable, so excluded from genInputs.)
+    - keys as null or undefined: THROWS TypeError "Cannot read properties of
+      null/undefined (reading 'length')" — the array branch reads keys.length
+      before any guard. VERIFIED. (undefined does not round-trip as a JSON
+      value; excluded from genInputs.)
+    - keys as a number / boolean: typeof not 'string', keys.length is undefined,
+      ++idx < undefined is false -> loop never runs -> returns {}. VERIFIED.
+      (Out-of-envelope: spec is string|string[]; excluded from genInputs.)
+    - keys as a plain array-LIKE object {length:n, 0:..}: iterates like the
+      array branch -> picks. VERIFIED. (Out-of-envelope key type; excluded.)
+    - obj = function with own/inherited props: passes guard, props pickable
+      (pick(fn_with_myprop,'myprop')->{myprop:7}). VERIFIED. (Functions not
+      JSON-round-trippable; excluded from genInputs but documented in-contract
+      for the guard.)
+    - Symbol keys: typeof symbol !== 'string', and Symbols cannot be array
+      members that JSON-round-trip; not exercised. The `in` operator would
+      apply if passed in an array, but Symbols are out-of-envelope for the
+      JSON oracle.
+    - Property VALUES that are functions / undefined / symbols: copied by the
+      logic but invisible under JSON serialization (see OBSERVABLE-UNDER-JSON);
+      genInputs only emits JSON-round-trippable values so the stored expecteds
+      are faithful.
+
+PROVENANCE
+  object.pick@1.3.0  (jonschlinkert/object.pick, MIT)  — index.js
+  inlined dep: isobject@3.0.1 (jonschlinkert/isobject, MIT) — index.js
+  source dir: /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/
+              rdv-orig-object_pick-Fqnarm/node_modules/object.pick

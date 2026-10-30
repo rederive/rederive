@@ -1,0 +1,176 @@
+{
+ "status": "ok",
+ "unit": "lint_leak",
+ "primary": "selfhost/units/lint_leak/sir/lint_leak.sir",
+ "primarySha256": "17c912246c65f299d2dccd7c0b2a03dfe8b411adc1018f8ffcf3daad020be907",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "LINES: the text is cut at every CR LF pair, every lone CR and every lone LF; \"U+2028\" and \"U+2029\" are not breaks. From each line, as cut, every \"U+FEFF\" of its LEADING RUN (the longest prefix made only of spaces, tabs and \"U+FEFF\") is removed and its spaces and tabs are kept in order, so of \"U+FEFF\", space, \"U+FEFF\", \"x\" both marks go and a space then \"x\" remain; a \"U+FEFF\" after the first other character stays. Then any trailing run of spaces and tabs is removed. Lines are numbered from 1 in this cut, blank lines included. The empty text is one empty line; a final break adds an empty last line. Only spaces and tabs are SPACING in this unit: no other whitespace character (no-break space, \"U+3000\", \"U+2028\") indents, separates, trims or blanks anything, except where R6 names the GLUE set.",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "R2",
+   "text": "Per line: INDENT = its leading run of spaces and tabs; CONTENT = the rest. A line whose CONTENT is empty yields nothing. A line is a COMMENT LINE when CONTENT starts with \"#\"; otherwise CONTENT is split by R3.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R3",
+   "text": "TRAILING COMMENT: the first \"#\" of CONTENT that has a space or tab just before it and a space, a tab or the end of CONTENT just after it, and that does not lie inside a QUOTED LITERAL of CONTENT (R5), splits CONTENT: CODE = the text before that \"#\" with its trailing spaces and tabs removed; COMMENT = the text after it with spaces and tabs removed at both ends (possibly empty). With no such \"#\" (a \"#\" glued to text, after another whitespace character, or inside a literal), CODE = CONTENT and there is no COMMENT.",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "R4",
+   "text": "PRIMARY mode (is_primary true). The line's SEGMENTS: for a COMMENT LINE, one segment = CONTENT without its leading run of \"#\". Otherwise: when INDENT is empty, NAME = CODE up to its first space or tab (all of CODE when it has none), less one final \":\" if it ends with one; when that NAME is a NAMESHAPE (an ASCII capital letter followed by zero or more ASCII capitals, ASCII digits or hyphens) other than \"CITED\", it is grammar, not content, and CODE becomes what follows it (from that space or tab on; empty when there is none). This holds for every NAMESHAPE, known or not, except \"CITED\": a column-0 \"CITED\" (or \"CITED:\") is a citation keyword, not a name, and CODE is kept whole. Then BODY = the text of CODE, read with one space put before it (call it ATTRTEXT), up to its first ATTRIBUTE MARK, spaces and tabs removed at both ends; all of it, so trimmed, when it has none. ATTRIBUTE MARK = one or more spaces or tabs, then CITED, EARNED or ANCHOR (upper case), then a space, a tab or the end, whose keyword does not lie inside a QUOTED LITERAL of ATTRTEXT (R5): a keyword inside a literal is data. What follows a mark is a citation and is never read. So a column-0 \"CITED x\" has an empty BODY (its own keyword is the first mark), while \"CITED: x\" has no mark there and its BODY is all of CODE. The SEGMENTS are BODY, then the COMMENT if there is one (the COMMENT is not cut at marks). Each segment is BLANKED (R5) and every row of TABLE DIALECT whose condition holds on the blanked segment yields a hit for this line, labelled with the row's label. Order: segment by segment, rows in table order within a segment; a label already hit on this line is not repeated (one hit per line and label: the two \"JS API name\" rows and the two segments share). The hit's text is the DISPLAY of the ORIGINAL line, never of a segment or of the blanked form.",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R5",
+   "text": "QUOTED LITERAL and BLANKING: literals of a text are found left to right and never overlap. A straight double quote OPENS a literal only at a TOKEN START: it is the first character of the text being read, or the character just before it is one of TABLE OPENERS, or it comes directly after the closing quote of a literal just found (so two adjacent literals are two literals). Any other quote (after a letter, a digit, a period, a slash, a backslash, a single quote, a backquote, a \"#\", a no-break space or any character not in TABLE OPENERS) is an ordinary character. An opened literal ends at the next straight double quote that is not the second member of an ESCAPE PAIR. An ESCAPE PAIR is a backslash and the one CODE POINT after it, whatever it is (a quote, a backslash, \"U+2028\", \"U+2029\", a no-break space, a character above \"U+FFFF\"); a backslash that is the last character has nothing to pair with. When an opened literal has no ending quote, that quote and every later quote of the text open nothing (no literal is found from there on). The search for the next opener resumes just after a literal's closing quote. Only the straight double quote delimits (single quotes and backquotes are ordinary). To BLANK a segment, every quoted literal found in that segment (searched afresh, the segment's own first character being a token start) is replaced by an empty pair of straight double quotes; all else is kept. R3 uses the literals found in CONTENT, R4 those found in ATTRTEXT, by the same rule.",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "R6",
+   "text": "LANGUAGE mode (is_primary false): a line yields one hit labelled \"behavior in a language file\" when INDENT is empty, CONTENT does not start with \"#\", and its FIRST TOKEN (CONTENT up to its first space or tab, all of it when there is none) either (a) is a name listed P in TABLE REGISTER or a RULE NAME (\"R\" then one or more ASCII digits), or is such a name followed by one \":\"; or (b) GLUED: its longest leading run of the form NAMESHAPE is a P name or a RULE NAME and is followed directly by a code point of the GLUE set, or by one \":\" and then a code point of the GLUE set (\"R1:\" then \"U+200B\" is glued; \"R1::\" then \"U+200B\" is not); or (c) INVISIBLE LEAD: CONTENT opens with a run of one or more GLUE code points (the LEAD), then the longest NAMESHAPE run N, and N is followed by a space, a tab, a \":\", a GLUE code point or the end of the line; N is a P name or a RULE NAME. Under (c) nothing after that one following character is read: after a lead \"R1:x\", \"R1::\" and \"R1:\" then \"U+200B\" are hits alike. A line opening with a GLUE code point that does not meet (c) yields nothing. Comments, continuation lines, every other name (both-register, language-only, unknown, \"CITED\") and TABLE DIALECT yield nothing. Hits are in line order, at most one per line.",
+   "ambiguity": 0.6
+  },
+  {
+   "id": "R7",
+   "text": "DISPLAY of a line: remove its leading spaces and tabs (no other character), then keep only its first 96 CODE POINTS (a character above \"U+FFFF\" counts as one, as every other character does). The cut never splits a character.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R8",
+   "text": "WORD character = an ASCII letter, an ASCII digit or the underscore; no other character is one. In TABLE DIALECT, \"not preceded by a WORD character\" also holds at the start of the segment, \"not followed\" at its end; STANDALONE = both. Every literal in a condition matches case-sensitively unless its row says otherwise.",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE DIALECT row 1",
+   "text": "\"/^\" occurs, and \"$/\" occurs after it with no \"U+2028\" or \"U+2029\" between them; adjacent counts, as in \"/^$/\" | \"anchored regex literal\"",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "TABLE DIALECT row 2",
+   "text": "a backslash, then one of the letters w s d W S D b B, that letter not followed by a WORD character | \"regex class escape\"",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "TABLE DIALECT row 3",
+   "text": "a backslash, then \"p{\" | \"regex property escape\"",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "TABLE DIALECT row 4",
+   "text": "not preceded by a WORD character: \"Math.\" then a WORD character; or \"String.prototype\", \"parseInt\", \"parseFloat\" or \"BigInt\" not followed by a WORD character; or any of \"Number(\", \"String(\", \"Boolean(\", \"BigInt(\"; or, not preceded by a WORD character OR preceded by \".\": any of \"toLowerCase(\", \"toUpperCase(\", \"charCodeAt(\", \"codePointAt(\", \"localeCompare(\", \"normalize(\", \"padStart(\", \"padEnd(\" | \"JS API name\"",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "TABLE DIALECT row 5",
+   "text": "not preceded by a WORD character: one of \"JSON\", \"Object\", \"Array\", \"Reflect\", \"Symbol\", \"Intl\", \"Number\", \"String\", \"BigInt\", \"Boolean\", \"Date\", \"RegExp\", \"Promise\", then \".\", then an ASCII letter of either case | \"JS API name\"",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "TABLE DIALECT row 6",
+   "text": "not preceded by a WORD character: \"fancy-regex\", \"fancy_regex\" or \"to_lowercase\" not followed by a WORD character; or one of \"f64\", \"u8\", \"u64\", \"i64\", \"usize\", \"String\", \"Vec\", \"char\", \"str\", \"Box\", \"HashMap\", \"BTreeMap\" then \"::\"; or \"Option<\" or \"Vec<\"; anywhere, preceded by anything: \"&str\" not followed by a WORD character | \"Rust API name\"",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE DIALECT row 7",
+   "text": "not preceded by a WORD character: optionally \"new\", then \"line\", then one hyphen, one space or nothing, then \"terminator\"; ASCII letters match in either case and no other letter folds; anything may follow | \"line-terminator mechanism\"",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "TABLE DIALECT row 8",
+   "text": "\"null\" or \"undefined\" STANDALONE | \"JS value name (say none)\"",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "TABLE OPENERS row 1",
+   "text": "\" \" (space), \"U+0009\" (tab) | separators",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE OPENERS row 2",
+   "text": "\"(\" \"[\" \"{\" | open brackets",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE OPENERS row 3",
+   "text": "\",\" \"=\" \":\" \";\" | list and binding punctuation",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE OPENERS row 4",
+   "text": "\"|\" \"<\" \">\" \"!\" \"&\" \"-\" \"~\" | operator punctuation (\"+\" \"*\" \"?\" are not openers)",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE OPENERS row 5",
+   "text": "start of the text being read, or directly after a literal's closing quote | always a token start",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE REGISTER row 1",
+   "text": "SIR KIND FIDELITY VARIANT ANCHOR SRC TRIGGER REACH ORACLE-CLASS TRACE-SEAM SEAM BEHAVIOR INVARIANT TABLE SCOPE | P",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "TABLE REGISTER row 2",
+   "text": "UNGUARDED-PRECONDITION OUT-OF-DOMAIN ORACLE SHAPE CANONICAL-SHA256 AUTHORITY CARRIED-DATA STATE EMIT REQUEST | P",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "TABLE REGISTER row 3",
+   "text": "BRANCH ON-ERROR PAR RING LIFECYCLE EFFECT SURFACE NOTES GUARD-PINNED, and every RULE NAME | P",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "TABLE REGISTER row 4",
+   "text": "UNIT SIG ENVELOPE DEPENDS-ON DESCRIPTION PINNED EARNED NOTE RATIONALE PROVENANCE CARRIED | B, never a hit",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE REGISTER row 5",
+   "text": "LANG PRIMARY-SHA256 ABI MECHANISM | L, never a hit",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE REGISTER row 6",
+   "text": "CITED and any other NAMESHAPE | not a directive here, never a hit",
+   "ambiguity": 0.26
+  }
+ ],
+ "ranked": [
+  "R6",
+  "R5",
+  "TABLE DIALECT row 7",
+  "R1",
+  "TABLE DIALECT row 4",
+  "R4",
+  "R3",
+  "TABLE DIALECT row 6",
+  "TABLE DIALECT row 2",
+  "TABLE DIALECT row 5",
+  "TABLE REGISTER row 1",
+  "TABLE REGISTER row 3",
+  "TABLE DIALECT row 3",
+  "TABLE REGISTER row 2",
+  "TABLE DIALECT row 8",
+  "TABLE DIALECT row 1",
+  "TABLE REGISTER row 6",
+  "R8",
+  "R2",
+  "R7",
+  "TABLE OPENERS row 4",
+  "TABLE OPENERS row 5",
+  "TABLE OPENERS row 2",
+  "TABLE REGISTER row 4",
+  "TABLE OPENERS row 3",
+  "TABLE REGISTER row 5",
+  "TABLE OPENERS row 1"
+ ],
+ "at": "2026-10-28T02:45:38Z"
+}

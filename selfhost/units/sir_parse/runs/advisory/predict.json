@@ -1,0 +1,194 @@
+{
+ "status": "ok",
+ "unit": "sir_parse",
+ "primary": "selfhost/units/sir_parse/sir/sir_parse.sir",
+ "primarySha256": "a178c09173ff36fc585385401897e5dc687527f153f42f720dff1b852f66da00",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "LINES — the same lines canonical_text binds. The text is cut at every CR LF pair, every lone CR and every lone LF; line n (counting from 1) is the n-th piece, so a text ending in a break has a final empty line and the empty text is one empty line. Each line's LEAD is its longest prefix made only of SPACE and BOM characters; remove EVERY BOM from the LEAD, keeping its SPACE characters in their order (so BOM SPACE BOM TAB x becomes SPACE TAB x, and the result begins with no BOM after its SPACE run: one pass is a fixed point); then remove the line's trailing run of SPACE. A BOM after the first character that is neither SPACE nor BOM stays content (NBSP BOM x keeps it). Line numbers in every output are these numbers. CITED canonical_text — the shared splitter",
+   "ambiguity": 0.5
+  },
+  {
+   "id": "R2",
+   "text": "Lines are processed in order against CURRENT, the directive node that receives continuations; CURRENT is none at the start and only R7 changes it. A line that R1 left empty (so a line of only SPACE) is skipped: no node, no diagnostic. Every other line is content, including one made only of NBSP, U+3000, U+2028 or any other non-SPACE whitespace.",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R3",
+   "text": "INDENT = the line's leading run of SPACE; CONTENT = the rest. INDENT empty = column 0.",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R4",
+   "text": "FULL-LINE COMMENT: CONTENT begins with \"#\" (at column 0 or indented) -> warning W_LEGACY_COMMENT, and nothing else happens to the line beyond this: with a CURRENT, its \"comments\" gets CONTENT minus its whole leading run of \"#\" and then minus ONE following SPACE character when there is one; with no CURRENT, a comment node is appended to the ast: \"directive\" and \"name\" \"#\", \"body\" CONTENT, \"args\" \"\", \"attrs\" empty, \"attrList\" empty, \"cont\" empty, \"comments\" [CONTENT], \"line\", \"register\" none, \"kind\" \"comment\". A comment node never becomes CURRENT.",
+   "ambiguity": 0.48
+  },
+  {
+   "id": "R5",
+   "text": "QUOTED SPANS of a text S (the one literal rule; R6 applies it to CONTENT, R11 to its T). A double quote is an OPENER when it starts a token: it is the first character of S, or the character right before it is in the pinned set OPENER-PREV, or it stands directly after the closing quote of a span (so two adjacent literals are two spans). Any other predecessor — a letter, a digit, \"/\", a backslash, \"#\", \".\", \"*\", \"+\", \"?\", a closing bracket, NBSP, a quote that does not close a span — makes it plain text: an inch mark after a digit, a quote inside a slash pattern or after a regex quantifier opens nothing. A closing quote need not end a token: after \"a\"b the next quote follows \"b\" and opens nothing. Scanning left to right, from an opener read on to the next double quote that is not escaped, where an ESCAPE PAIR is a backslash together with the one character (one Unicode scalar value, U+2028 and astral characters included) that follows it. When that closing quote exists the span runs from the opener to it, and the scan resumes after the closing quote; when it does not (the end of S comes first — a final backslash pairs with nothing and also reaches the end) the opener is UNCLOSED, opens no span and protects nothing. A position is INSIDE a span when it lies strictly between its opener and its closing quote. Single quotes and pattern slashes never delimit CITED FIDELITY package",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R6",
+   "text": "TRAILING COMMENT: otherwise, the MARKER is the first \"#\" of CONTENT that is immediately preceded by a SPACE character, immediately followed by a SPACE character or by the end of CONTENT, and not inside a quoted span of CONTENT (R5). With a MARKER: CODE = the CONTENT before the \"#\", its trailing SPACE run removed; COMMENT = the CONTENT after the \"#\" with SPACE trimmed from both ends (possibly empty); warning W_LEGACY_TRAILING_COMMENT (always this line's first diagnostic). Without: CODE = CONTENT and there is no COMMENT.",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R7",
+   "text": "HEAD (column 0 only): NAME = CODE up to its first SPACE character (all of CODE when it has none); REST = the rest of CODE, starting WITH that SPACE character (\"\" when CODE has none). A name is DIRECTIVE-SHAPED when it is an uppercase ASCII letter followed by any number of uppercase ASCII letters, ASCII digits and \"-\". When NAME is directive-shaped followed by one final \":\" and the part before the \":\" is not \"CITED\", the \":\" is dropped from NAME (CODE and REST are unchanged) and warning W_LEGACY_COLON with msg = NAME is reported; \"CITED:\" keeps its colon, is not a directive and draws no W_LEGACY_COLON. The line is a DIRECTIVE line when NAME is now directive-shaped and is not \"CITED\". Its register and kind come from TABLE REGISTRY by exact NAME; a NAME absent from it gets register none, kind \"unknown\", and warning W_UNKNOWN_DIRECTIVE with msg NAME. ATTRS(REST) (R11) gives \"args\" (the body) and the node's attributes, stored in group order (R12); \"cont\" is empty; \"comments\" is [COMMENT] when the line has one, else empty; \"line\" is the line number. The node is appended to the ast and becomes CURRENT. Because REST keeps its leading SPACE, a keyword first on the line IS an attribute (\"SIG CITED x\" has args \"\" and CITED \"x\").",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "R8",
+   "text": "NAME SEPARATOR (column 0, not a directive line; at most one warning W_NAME_SEPARATOR). HEX(c) = \"U+\" then the code point of character c in uppercase hexadecimal padded with leading zeros to at least four digits (five for an astral one). A WORD is an uppercase ASCII letter and the longest following run of uppercase ASCII letters, ASCII digits and \"-\". (a) GLUED: CODE begins with a WORD G, then optionally one \":\", then a character C of the pinned set GLUE -> msg = G, \" is followed by \", HEX(C), \", not a space or tab: not \", then \"an attribute\" when G is \"CITED\", else \"a directive\". (b) INVISIBLE LEAD, only when (a) does not apply: CODE begins with a maximal run of one or more GLUE characters, and the character after the run is \"#\" or begins a WORD W that is itself followed by a SPACE character, a \":\", a GLUE character or the end of CODE -> msg = \"the line starts with \", HEX(the first character of CODE), \" (whitespace or an invisible character) before \", then \"a comment marker: not a comment\" after a \"#\", else \"a directive-shaped name: not \" and \"an attribute\" when W is \"CITED\", else \"a directive\". The line then continues as R9 says, whether or not R8 reported. CITED FIDELITY package",
+   "ambiguity": 0.56
+  },
+  {
+   "id": "R9",
+   "text": "PROSE (column 0, not a directive line): with a CURRENT, CONTINUE(CODE, COMMENT) (R10) and then warning W_UNINDENTED_CONTINUATION — so a column-0 CITED (and \"CITED:\") attaches to the directive above. With no CURRENT: error E_NO_DIRECTIVE, msg = the first 40 characters of CODE (all of it when shorter; a character is one Unicode scalar value, so an emoji counts once and is never cut); the line's COMMENT is discarded.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R10",
+   "text": "INDENTED line (INDENT non-empty, not R4): with no CURRENT -> error E_ORPHAN_CONTINUATION, msg = the first 40 characters of CODE, and nothing is stored. With a CURRENT, CONTINUE(CODE, COMMENT). CONTINUE: ATTRS of the text one space followed by CODE; its attributes are stored into CURRENT (R12); its body is appended to CURRENT's \"cont\" only when non-empty; COMMENT, when present (an empty one too), is appended to CURRENT's \"comments\".",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R11",
+   "text": "ATTRS(T) -> (body, attribute list). A KEYWORD is \"CITED\", \"EARNED\" or \"ANCHOR\". A GROUP is a run of one or more SPACE characters, then a keyword, then a SPACE character or the end of T; groups are found left to right without overlap (the SPACE that ends one group may begin the next). A group whose keyword starts inside a quoted span of T (R5) is data: it is dropped, and only the remaining groups count below. No group -> body = T with SPACE trimmed from both ends, empty list. Otherwise body = the text before the first group, SPACE-trimmed, and the list holds one [keyword, value] per group, in order, where value = the text from the end of its keyword up to the start of the next group (or the end of T), SPACE-trimmed — possibly empty. A keyword next to any other character (NBSP, a letter, a \":\") is plain text.",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "R12",
+   "text": "STORE [k, v] into a node: append [k, v] to its \"attrList\"; then its \"attrs\" entry k = the non-empty values of every [k, …] in \"attrList\" so far, in order, joined by \"; \" (\"\" when none is non-empty; the entry exists from k's first occurrence). So every occurrence is kept in \"attrList\" across the directive line and all its continuations, and \"CITED a; b\" and \"CITED a CITED b\" give the same \"attrs\" but different \"attrList\" CITED FIDELITY package",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R13",
+   "text": "Output: the map {\"ast\", \"errors\", \"warnings\"}. Diagnostics are appended in line order, and within one line in the order R6, R7, R8, R9 state them. Errors come only from R9 and R10: legacy mode raises no other error.",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 1",
+   "text": "W_LEGACY_COMMENT           | warnings | no",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 2",
+   "text": "W_LEGACY_TRAILING_COMMENT  | warnings | no",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 3",
+   "text": "W_LEGACY_COLON             | warnings | yes, the name without its colon",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 4",
+   "text": "W_UNKNOWN_DIRECTIVE        | warnings | yes, the name",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 5",
+   "text": "W_NAME_SEPARATOR           | warnings | yes, the sentence of R8 (a) or (b)",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 6",
+   "text": "W_UNINDENTED_CONTINUATION  | warnings | no",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 7",
+   "text": "E_NO_DIRECTIVE             | errors   | yes, the first 40 characters of CODE",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE DIAGNOSTICS row 8",
+   "text": "E_ORPHAN_CONTINUATION      | errors   | yes, the first 40 characters of CODE",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE REGISTRY row 1",
+   "text": "\"B\" | \"lb\"     | \"UNIT\" \"SIG\" \"ENVELOPE\" \"DEPENDS-ON\" \"PINNED\" \"EARNED\" \"CARRIED\"",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE REGISTRY row 2",
+   "text": "\"B\" | \"pr\"     | \"DESCRIPTION\" \"NOTE\" \"RATIONALE\" \"PROVENANCE\"",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE REGISTRY row 3",
+   "text": "\"P\" | \"lb\"     | \"KIND\" \"FIDELITY\" \"ANCHOR\" \"SRC\" \"TRIGGER\" \"REACH\" \"ORACLE-CLASS\" \"TRACE-SEAM\" \"SEAM\" \"BEHAVIOR\" \"TABLE\"",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "TABLE REGISTRY row 4",
+   "text": "| \"UNGUARDED-PRECONDITION\" \"OUT-OF-DOMAIN\" \"ORACLE\" \"SHAPE\" \"CANONICAL-SHA256\" \"AUTHORITY\" \"STATE\" \"EMIT\"",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE REGISTRY row 5",
+   "text": "| \"REQUEST\" \"BRANCH\" \"ON-ERROR\" \"PAR\" \"RING\" \"LIFECYCLE\" \"EFFECT\" \"SURFACE\", and every NAME that is \"R\"",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "TABLE REGISTRY row 6",
+   "text": "| followed by one or more ASCII digits (\"R0\", \"R12\", \"R007\")",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "TABLE REGISTRY row 7",
+   "text": "\"P\" | \"pr\"     | \"INVARIANT\" \"SCOPE\"",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE REGISTRY row 8",
+   "text": "\"P\" | \"legacy\" | \"SIR\" \"VARIANT\" \"CARRIED-DATA\" \"NOTES\" \"GUARD-PINNED\"",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE REGISTRY row 9",
+   "text": "\"L\" | \"lb\"     | \"LANG\" \"PRIMARY-SHA256\" \"ABI\" \"MECHANISM\"",
+   "ambiguity": 0.18
+  }
+ ],
+ "ranked": [
+  "R5",
+  "R8",
+  "R11",
+  "R1",
+  "R4",
+  "R6",
+  "TABLE REGISTRY row 5",
+  "R7",
+  "TABLE DIAGNOSTICS row 5",
+  "TABLE DIAGNOSTICS row 7",
+  "TABLE REGISTRY row 4",
+  "TABLE REGISTRY row 6",
+  "R9",
+  "TABLE REGISTRY row 3",
+  "R12",
+  "TABLE DIAGNOSTICS row 2",
+  "R10",
+  "TABLE DIAGNOSTICS row 8",
+  "TABLE DIAGNOSTICS row 3",
+  "R13",
+  "R2",
+  "TABLE DIAGNOSTICS row 6",
+  "TABLE REGISTRY row 8",
+  "TABLE REGISTRY row 7",
+  "TABLE DIAGNOSTICS row 4",
+  "TABLE REGISTRY row 9",
+  "TABLE REGISTRY row 2",
+  "R3",
+  "TABLE DIAGNOSTICS row 1",
+  "TABLE REGISTRY row 1"
+ ],
+ "at": "2026-10-28T02:24:27Z"
+}

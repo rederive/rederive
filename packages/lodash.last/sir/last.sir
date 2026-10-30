@@ -1,0 +1,149 @@
+UNIT last
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG last(array) -> any | undefined          # single positional arg; default export
+
+DEPENDS-ON none
+
+# ============================================================================
+# CALLING CONVENTION (for the blind re-emitter)
+# ============================================================================
+# This is the DEFAULT export of the module. The emitted .mjs MUST do:
+#       export default <fn>
+# i.e. a SINGLE default-exported function. The harness invokes it as:
+#       last(input)
+# with exactly ONE positional argument. There are no options and no second arg.
+# The function is PURE: no side effects, no mutation of the argument, no ambient
+# reads (no clock / RNG / env / fs / net). ORACLE-CLASS deterministic, value mode.
+
+# ============================================================================
+# BEHAVIOR  (this is the WHOLE function — reproduce it EXACTLY)
+# ============================================================================
+# The reference implementation is the two-line body below. Re-emit semantically
+# equivalent logic. The exact JS-truthiness and JS-coercion semantics are
+# LOAD-BEARING (see EDGE CASES) — do not "normalize" the length to an integer,
+# do not add an isArrayLike / Array.isArray guard, do not clamp negatives.
+#
+#   STEP 1 (length guard):
+#       length = array ? array.length : 0
+#     - If `array` is FALSY by JS truthiness (null, undefined, false, 0, -0,
+#       NaN, '' empty string, the absent argument), then length := 0.
+#       NOTE: the literal number 0 / -0 and the empty string are falsy here, so
+#       they short-circuit to length 0 WITHOUT ever reading `.length`.
+#     - Otherwise (array is truthy — any object, any non-empty string, any
+#       non-zero number, true, a function, etc.) length := array.length.
+#       `.length` is read as a plain property access: it is `undefined` when the
+#       property is absent (e.g. {} , 42 , true , a Map, a Set), or whatever
+#       value the property holds (it is NOT coerced to a number at this point).
+#
+#   STEP 2 (return):
+#       return length ? array[length - 1] : undefined
+#     - If `length` is FALSY by JS truthiness (0, -0, NaN, undefined, null,
+#       '' , false), return undefined.
+#     - Otherwise return array[length - 1], where:
+#         * `length - 1` is computed with the JS subtraction operator. `length`
+#           is coerced toNumber first (string '3' -> 3, true -> 1, '0' -> 0,
+#           an object -> NaN, etc.), THEN 1 is subtracted. No Math.floor, no
+#           integer truncation, no clamping.
+#         * array[ <that value> ] is a plain indexed property access. A
+#           non-integer index (e.g. 1.9), a negative index (e.g. -1, -2), or a
+#           NaN index reads a property that almost never exists, yielding
+#           `undefined`. A hole in a sparse array also yields `undefined`.
+#     - The returned element is returned BY VALUE/REFERENCE with full fidelity:
+#       -0 stays -0, NaN stays NaN, objects/arrays/Dates/RegExp/typed-arrays are
+#       returned by reference (identity preserved), bigint stays bigint.
+#
+# Equivalent one-liner the re-emitter may mirror:
+#       const length = array ? array.length : 0;
+#       return length ? array[length - 1] : undefined;
+
+# ============================================================================
+# EDGE CASES  (every one VERIFIED by running lodash.last@3.0.0)
+# ============================================================================
+# Each row is `last(INPUT) === EXPECTED`.
+#
+#   ARRAYS
+#     [1,2,3]                 -> 3
+#     [42]                    -> 42                 # single element
+#     []                      -> undefined          # empty array (length 0)
+#     [1, undefined]          -> undefined          # last element is undefined
+#     [1, null]               -> null
+#     [1, -0]                 -> -0                  # negative zero preserved
+#     [1, NaN]                -> NaN                 # NaN preserved
+#     [1n, 2n]                -> 2n                  # bigint preserved
+#     [{},{k:9}]              -> {k:9}               # object by reference
+#     [[1],[2,3]]             -> [2,3]               # array by reference
+#     [/a/, /b/g]             -> /b/g                # RegExp by reference
+#     [Date(0), Date(1000)]   -> Date(1000)          # Date by reference
+#     sparse [,,5]            -> 5                   # length 3, array[2] === 5
+#     sparse [1,,]            -> undefined           # length 2, array[1] is a hole
+#
+#   FALSY / NON-ARRAY-LIKE primitives  (ALL -> undefined via length := 0)
+#     last()    (no arg)      -> undefined
+#     null                    -> undefined
+#     undefined               -> undefined
+#     false                   -> undefined
+#     0                       -> undefined           # number 0 is falsy -> length 0
+#     -0                      -> undefined
+#     NaN                     -> undefined
+#     ''  (empty string)      -> undefined           # falsy -> length 0
+#
+#   STRINGS  (non-empty string is TRUTHY and HAS a .length -> treated array-like)
+#     'abc'                   -> 'c'                  # array-like over chars
+#     'x'                     -> 'x'
+#     ''                      -> undefined            # (also covered above)
+#
+#   TRUTHY-BUT-NO-.length  (array.length is undefined -> length undefined -> undefined)
+#     42  (nonzero number)    -> undefined
+#     true                    -> undefined
+#     {}  (plain obj)         -> undefined
+#     new Map([['a',1]])      -> undefined            # Map has .size, NOT .length
+#     new Set([1,2,3])        -> undefined            # Set has .size, NOT .length
+#
+#   ARRAY-LIKE OBJECTS  ({length: N, <indices>}) and arguments objects
+#     {length:3, 0:'a',1:'b',2:'c'}       -> 'c'      # reads array[2]
+#     {length:0}                          -> undefined # length 0 -> undefined
+#     {length:2}  (no index 1 defined)    -> undefined # array[1] absent
+#     arguments(7,8,9)                    -> 9         # arguments is array-like
+#     arguments()  (empty)                -> undefined
+#     Uint8Array([10,20,30])              -> 30        # typed array has .length
+#     Buffer.from([1,2,3])                -> 3
+#
+#   LENGTH-COERCION SUBTLETIES  (length is used twice: truthiness, then `-1`)
+#     {length:NaN}                        -> undefined # NaN falsy -> undefined
+#     {length:-1}                         -> undefined # -1 truthy; array[-2] absent
+#     {length:'3', 0:'x',1:'y',2:'z'}     -> 'z'       # '3' truthy; '3'-1=2; array[2]
+#     {length:'0', 0:'a'}                 -> undefined # '0' truthy(!); '0'-1=-1; array[-1] absent
+#     {length:2.9, 0:'p',1:'q',2:'r'}     -> undefined # 2.9 truthy; 2.9-1=1.9; array[1.9] absent
+#     {length:true, 0:'a',1:'b'}          -> 'a'       # true truthy; true-1=0; array[0]
+#     {length:{}, 0:'a'}                  -> undefined # {} truthy; {}-1=NaN; array[NaN] absent
+
+# ============================================================================
+# ERROR / THROW BEHAVIOR
+# ============================================================================
+# The function NEVER throws for any of the inputs above. There is no explicit
+# error path. (A pathological getter on `.length` that throws would propagate,
+# but the generator does not emit such inputs and they are OUT-OF-ENVELOPE.)
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC: the entire two-step body (length guard + indexed return)
+#   including the exact JS truthiness of both guards and the JS-coercion of
+#   `length - 1`. Reproduce exactly. There is NO carried data (no large literal
+#   table) and NO out-of-contract side API — the unit is fully pure.
+#
+# OUT-OF-ENVELOPE (documented, NOT emitted by the generator because the factory
+#   codec cannot round-trip them, but a blind re-emitter still reconstructs the
+#   behavior from the spec above):
+#     - elements that are FUNCTIONS or SYMBOLS (returned by reference per spec).
+#     - an input that is itself a function (truthy, .length = arity number; e.g.
+#       (a,b)=>a has length 2 -> would read fn[1], absent -> undefined).
+#     - objects whose `.length` is a throwing getter.
+#   None of these change the algorithm; they are excluded only for codec reasons.
+
+PROVENANCE lodash.last@3.0.0 (lodash 3.0.0 Custom Build, modularized exports="npm"),
+  repo lodash/lodash, MIT license,
+  source file: node_modules/lodash.last/index.js (function `last`, `module.exports = last`).

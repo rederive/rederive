@@ -1,0 +1,188 @@
+{
+ "status": "ok",
+ "unit": "display_value",
+ "primary": "selfhost/units/display_value/sir/display_value.sir",
+ "primarySha256": "591b9b343cbc8fb26f23c7863113229a2bc06db31202e34d28b70950cfdd2746",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "A NODE is a map whose entry t is text. Its display is chosen by t compared exactly (case-sensitive, whole text) against TABLE NODE; entries other than t and the field the row names (v or msg) are ignored (cu, bits, any extra key).",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R2",
+   "text": "A none at a node position — tv itself, an element of a list or tuple, the second item of a record entry, or either item of a map entry — throws. CITED FIDELITY package",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R3",
+   "text": "Anything else that is not a node — text, a number, a bool, a list, a map without a text t — displays \"?\". A node whose t names no row of TABLE NODE (an unknown tag, a differently cased tag) also displays \"?\".",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE NODE row 1",
+   "text": "none        | \"null\"",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE NODE row 2",
+   "text": "\"undefined\" | \"undefined\" (the js extension's present-but-valueless tag)",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE NODE row 3",
+   "text": "text        | v text -> QUOTE(v) (R4); v bool -> \"true\" / \"false\"; v none -> \"null\"; v absent -> ABSENT-MISSING (R5)",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "TABLE NODE row 4",
+   "text": "f64 i64 u64 bytes | v text -> v verbatim, never re-rendered (the f64 bits are not read); v none -> ABSENT-NULL; v absent -> ABSENT-MISSING",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "TABLE NODE row 5",
+   "text": "bigint      | v text -> v followed by \"n\" (v is not checked: \"12\" -> \"12n\", \"\" -> \"n\"); v true / false -> \"truen\" / \"falsen\"; v none -> \"nulln\"; v absent -> \"undefinedn\" (never ABSENT)",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "TABLE NODE row 6",
+   "text": "bool        | v true -> \"true\"; v false -> \"false\"; v text -> v verbatim; v none -> \"null\"; v absent -> \"undefined\"",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE NODE row 7",
+   "text": "throw       | \"throw(\" X \")\" — X = QUOTE(msg) for a text msg; \"true\" / \"false\" for a bool msg; QUOTE of the empty text (two double quotes) when msg is none or absent",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE NODE row 8",
+   "text": "list tuple  | \"[\" the displays of the elements of v, joined by \",\" \"]\"",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "TABLE NODE row 9",
+   "text": "record      | \"{\" for each entry: FIELDNAME of its first item (R11), \":\", the display of its second item; entries joined by \", \" (comma, space) \"}\"",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "TABLE NODE row 10",
+   "text": "map         | \"{\" for each entry: the display of its first item, \":\", the display of its second item; entries joined by \",\" \"}\"",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "R4",
+   "text": "QUOTE(s) = a double quote, s with each character replaced per TABLE ESCAPE, a double quote. Every character not in the table is written as itself — including \"/\", DEL (U+007F), U+0085, U+2028, U+2029 and every non-ASCII scalar. CITED FIDELITY package — the host's JSON string serializer",
+   "ambiguity": 0.6
+  },
+  {
+   "id": "TABLE ESCAPE row 1",
+   "text": "U+0022 quotation mark | \"\\\"\"",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE ESCAPE row 2",
+   "text": "U+005C reverse solidus | \"\\\\\"",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE ESCAPE row 3",
+   "text": "U+0008 | \"\\b\"",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE ESCAPE row 4",
+   "text": "U+000C | \"\\f\"",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE ESCAPE row 5",
+   "text": "U+000A | \"\\n\"",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE ESCAPE row 6",
+   "text": "U+000D | \"\\r\"",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE ESCAPE row 7",
+   "text": "U+0009 | \"\\t\"",
+   "ambiguity": 0.08
+  },
+  {
+   "id": "TABLE ESCAPE row 8",
+   "text": "any other U+0000..U+001F | \"\\u\" then 4 LOWERCASE hex digits (U+001F -> \"\\u001f\")",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R5",
+   "text": "ABSENT. A text node with no v, and an f64/i64/u64/bytes node with no v or a none v, display no text: ABSENT-MISSING (no v) or ABSENT-NULL (v none). Where an ABSENT lands decides what it prints: as tv itself -> the result is none (both kinds); as an element of a list or tuple -> it contributes the empty text between its commas (both kinds: \"[\" ABSENT \"]\" is \"[]\", two ABSENTs are \"[,]\"); as a record entry's second item, or as either item of a map entry -> ABSENT-MISSING prints \"undefined\", ABSENT-NULL prints \"null\". CITED FIDELITY package",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R6",
+   "text": "ENTRIES (record and map). Each element of v is an entry. A list entry supplies its first two items; items beyond the second are ignored. A text entry is read as the list of its Unicode scalar values: its first two items are one-character texts — a record writes the first as its field name through FIELDNAME (R11); every item that is DISPLAYED (a record's second, both of a map's) is a text, so \"?\" by R3. An entry with fewer than two items throws; an entry that is a none, bool, number or map throws. CITED FIDELITY package",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "R7",
+   "text": "The v of a list, tuple, record or map node must be a list: absent, none, text, bool, number or map -> throws.",
+   "ambiguity": 0.5
+  },
+  {
+   "id": "R8",
+   "text": "Order is as stored: elements and entries print in the order v holds them — never sorted, never de-duplicated (a map with two equal keys prints both).",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R9",
+   "text": "No escaping outside QUOTE: the verbatim v of the f64/i64/u64/bytes, bigint and bool rows of TABLE NODE is written raw, so a v holding \",\", \"]\" or a quote is indistinguishable from structure.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R10",
+   "text": "Depth: the display has no nesting cap of its own; every depth the codec admits renders. CITED FIDELITY package",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R11",
+   "text": "FIELDNAME(n) = n written as itself when n is a PLAIN IDENTIFIER, else QUOTE(n) (R4). CITED FIDELITY package — FINDINGS #95",
+   "ambiguity": 0.26
+  }
+ ],
+ "ranked": [
+  "R4",
+  "R10",
+  "R6",
+  "R7",
+  "R2",
+  "TABLE NODE row 10",
+  "TABLE NODE row 9",
+  "R9",
+  "R5",
+  "TABLE NODE row 5",
+  "R8",
+  "TABLE NODE row 4",
+  "TABLE NODE row 8",
+  "TABLE NODE row 3",
+  "TABLE NODE row 7",
+  "TABLE ESCAPE row 8",
+  "R1",
+  "R11",
+  "R3",
+  "TABLE NODE row 6",
+  "TABLE NODE row 2",
+  "TABLE NODE row 1",
+  "TABLE ESCAPE row 3",
+  "TABLE ESCAPE row 1",
+  "TABLE ESCAPE row 2",
+  "TABLE ESCAPE row 4",
+  "TABLE ESCAPE row 5",
+  "TABLE ESCAPE row 6",
+  "TABLE ESCAPE row 7"
+ ],
+ "at": "2026-10-28T02:55:44Z"
+}

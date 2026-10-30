@@ -1,0 +1,263 @@
+# SIR — type-detect default export
+# Comments use '#' only. This is a language-neutral IR, not JavaScript.
+
+UNIT typeDetect
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG typeDetect(obj: any) -> string
+DEPENDS-ON none   # zero runtime deps; uses only host built-ins (Object, Array, RegExp, Map, Set, etc.)
+
+# ----------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ----------------------------------------------------------------------------
+# The unit is the DEFAULT export of an ES module. The blind re-emitter MUST:
+#     export default function typeDetect(obj) { ... }
+# It is a single pure function of one argument, returning a precise type-name
+# STRING. No options, no second argument, no side effects, no throws of its own
+# (it never constructs/throws; it only reads `obj` and consults host built-ins).
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR — ordered pipeline. Evaluate top-to-bottom; FIRST match returns.
+# ----------------------------------------------------------------------------
+# Host-capability flags below are computed ONCE at module load. On any modern
+# JS host (Node >= 4, current browsers) ALL of them are TRUE. The re-emitter
+# may treat them as constant-true; they only differ on ancient hosts that lack
+# Symbol/Map/Set/WeakMap/WeakSet/DataView/Promise. The grading host has them all.
+#   promiseExists            = typeof Promise === 'function'
+#   symbolExists             = typeof Symbol !== 'undefined'
+#   mapExists                = typeof Map !== 'undefined'
+#   setExists                = typeof Set !== 'undefined'
+#   weakMapExists            = typeof WeakMap !== 'undefined'
+#   weakSetExists            = typeof WeakSet !== 'undefined'
+#   dataViewExists           = typeof DataView !== 'undefined'
+#   symbolToStringTagExists  = symbolExists && typeof Symbol.toStringTag !== 'undefined'
+# Iterator-prototype anchors (captured once at load):
+#   mapIteratorPrototype    = Object.getPrototypeOf(new Map().entries())
+#   setIteratorPrototype    = Object.getPrototypeOf(new Set().entries())
+#   arrayIteratorPrototype  = Object.getPrototypeOf([][Symbol.iterator]())
+#   stringIteratorPrototype = Object.getPrototypeOf(''[Symbol.iterator]())
+# Slice constants (exact): toStringLeftSliceLength = 8 ; toStringRightSliceLength = -1
+
+# NODE 1 — PRIMITIVE FAST PATH (the typeof gate)
+#   let typeofObj = typeof obj
+#   IF typeofObj !== 'object': return typeofObj   # i.e. return the typeof string verbatim
+#   This single line handles ALL non-object primitives and functions, returning
+#   the raw `typeof` result string:
+#     number   (incl. NaN, Infinity, -0, integers, floats) -> 'number'
+#     string   (incl. empty string '')                     -> 'string'
+#     boolean  (true / false)                              -> 'boolean'
+#     bigint   (e.g. 10n, 0n) -> 'bigint'   # LOWERCASE. NOT 'BigInt'. typeof of a bigint primitive.
+#     symbol   -> 'symbol'
+#     function (incl. arrow, async, generator functions)   -> 'function'
+#     undefined -> 'undefined'
+#   NOTE: typeof null === 'object', so null does NOT exit here; it reaches NODE 2.
+#   NOTE: bigint PRIMITIVE -> 'bigint'; a BOXED bigint object Object(10n) is NOT a
+#         primitive (typeof === 'object') and resolves later to 'BigInt' (see NODE 9).
+
+# At this point typeofObj === 'object' (obj is null or a real object).
+
+# NODE 2 — NULL
+#   IF obj === null: return 'null'
+
+# NODE 3 — GLOBAL OBJECT
+#   IF obj === globalObject: return 'global'
+#   globalObject is the host global (globalThis). Determined once at load:
+#       if (typeof globalThis === 'object') globalObject = globalThis
+#       else: derived via a temporary getter on Object.prototype named
+#             'typeDetectGlobalObject' that returns `this`, then deleted.
+#   On the grading host globalThis exists, so globalObject === globalThis.
+#   (NOT codec-carriable; documented for fidelity, never emitted by genInputs.)
+
+# NODE 4 — ARRAY
+#   IF Array.isArray(obj) AND (symbolToStringTagExists === false OR NOT (Symbol.toStringTag in obj)):
+#       return 'Array'
+#   Reads: a genuine array WITHOUT an own/inherited Symbol.toStringTag returns 'Array'.
+#   An array that DOES carry a Symbol.toStringTag property falls through past this
+#   node and is resolved by NODE 6 (the toStringTag string) — e.g. an array with
+#   arr[Symbol.toStringTag] = 'Weird' returns 'Weird', NOT 'Array'.
+#   Extra own data properties on an array do NOT affect this: [1]; a.foo='bar' -> 'Array'.
+
+# NODE 5 — BROWSER WINDOW / DOM SPECIAL CASES
+#   IF typeof window === 'object' && window !== null: { ... DOM-specific returns ... }
+#   Detects: window.location -> 'Location'; window.document -> 'Document';
+#            window.navigator.mimeTypes -> 'MimeTypeArray';
+#            window.navigator.plugins -> 'PluginArray';
+#            instanceof window.HTMLElement with tagName 'BLOCKQUOTE'/'TD'/'TH'
+#              -> 'HTMLQuoteElement' / 'HTMLTableDataCellElement' / 'HTMLTableHeaderCellElement'.
+#   On a Node/non-browser host `window` is undefined, so this entire block is SKIPPED.
+#   The grading host is Node => this node never fires. Documented for fidelity only.
+
+# NODE 6 — Symbol.toStringTag STRING OVERRIDE
+#   let stringTag = (symbolToStringTagExists && obj[Symbol.toStringTag])
+#   IF typeof stringTag === 'string': return stringTag
+#   I.e. if obj has a Symbol.toStringTag whose VALUE is a STRING, that string is
+#   returned VERBATIM (after the Array/global/DOM checks above). This applies to
+#   ANY object reaching here, including null-prototype objects.
+#     { [Symbol.toStringTag]: 'Custom' }            -> 'Custom'
+#     Object.create(null) with [Symbol.toStringTag]='NP' -> 'NP'
+#   CRUCIAL: only a STRING tag triggers this. A NON-string toStringTag is IGNORED
+#   and the object falls through:
+#     { [Symbol.toStringTag]: 42 }        -> falls through -> 'Object'  (NODE 11)
+#     { [Symbol.toStringTag]: undefined } -> falls through -> 'Object'  (NODE 11)
+#   (Built-ins like Map/Set/Promise/typed arrays DO expose a string Symbol.toStringTag,
+#   so in practice their result is produced HERE at NODE 6 — e.g. a Map returns 'Map'
+#   because Map.prototype[Symbol.toStringTag] === 'Map'. The prototype-identity nodes
+#   below (NODE 8) are the fallback for hosts lacking toStringTag. The OBSERVABLE
+#   result string is identical either way; the re-emitter need not reproduce which
+#   node fired, only the returned string.)
+
+# NODE 7 — capture objPrototype
+#   let objPrototype = Object.getPrototypeOf(obj)
+#   (Used by NODE 8 and NODE 10.)
+
+# NODE 8 — PROTOTYPE-IDENTITY LADDER (fallback when no string toStringTag matched)
+#   Compare objPrototype by reference identity, in THIS EXACT ORDER, first match returns:
+#     objPrototype === RegExp.prototype                       -> 'RegExp'
+#     objPrototype === Date.prototype                         -> 'Date'
+#     promiseExists && objPrototype === Promise.prototype     -> 'Promise'
+#     setExists     && objPrototype === Set.prototype         -> 'Set'
+#     mapExists     && objPrototype === Map.prototype         -> 'Map'
+#     weakSetExists && objPrototype === WeakSet.prototype     -> 'WeakSet'
+#     weakMapExists && objPrototype === WeakMap.prototype     -> 'WeakMap'
+#     dataViewExists&& objPrototype === DataView.prototype    -> 'DataView'
+#     mapExists     && objPrototype === mapIteratorPrototype  -> 'Map Iterator'
+#     setExists     && objPrototype === setIteratorPrototype  -> 'Set Iterator'
+#     arrayIteratorExists && objPrototype === arrayIteratorPrototype -> 'Array Iterator'
+#     stringIteratorExists&& objPrototype === stringIteratorPrototype-> 'String Iterator'
+#   NOTE these are EXACT prototype-identity checks: a direct `new RegExp` / `/x/`
+#   matches RegExp.prototype; a SUBCLASS instance (whose prototype is the subclass's
+#   prototype, not RegExp.prototype) would NOT match and falls through to NODE 11.
+#   In practice on a modern host these built-ins ALSO carry a string Symbol.toStringTag,
+#   so most already returned at NODE 6 with the SAME string. (RegExp/Date have a
+#   toStringTag too on modern hosts -> NODE 6 fires; the ladder is the legacy path.)
+
+# NODE 9 — (covered above) BOXED PRIMITIVES & misc objects fall to NODE 11.
+#   A boxed Number/String/Boolean/BigInt/Symbol object has objPrototype equal to
+#   Number.prototype etc. (NOT in the NODE-8 ladder) and (on modern hosts) no own
+#   string toStringTag, so it reaches NODE 11 and is named by objectToString:
+#     new Number(5) / Object(5)        -> 'Number'
+#     new String('x') / Object('x')    -> 'String'
+#     new Boolean(true) / Object(true) -> 'Boolean'
+#     Object(10n)                      -> 'BigInt'
+#     Object(Symbol())                 -> 'Symbol'
+#   (These boxed objects are DOCUMENT-as-OUT for genInputs — see SCOPE — because the
+#   JSON codec cannot round-trip a boxed wrapper; it would decode to a primitive.)
+
+# NODE 10 — NULL PROTOTYPE
+#   IF objPrototype === null: return 'Object'
+#   An object with a null prototype (Object.create(null)) AND no string toStringTag
+#   returns 'Object'. (If it HAD a string toStringTag it already returned at NODE 6.)
+
+# NODE 11 — objectToString FALLBACK (the slice)
+#   return Object.prototype.toString.call(obj).slice(8, -1)
+#   Object.prototype.toString.call(obj) yields '[object Xxx]'; slice(8, -1) drops the
+#   leading '[object ' (8 chars) and the trailing ']' (-1), yielding 'Xxx'. Examples
+#   on a modern host (reached here when NODE 6 did not fire, e.g. tag-less or because
+#   the platform string is the only source of the name):
+#     plain {}            -> '[object Object]'    -> 'Object'
+#     {a:1}, frozen {}, nested {a:{b:[...]}} -> 'Object'
+#     class Foo {}; new Foo()                 -> 'Object'   (root proto is Object.prototype)
+#     new Uint8Array(2)   -> '[object Uint8Array]'   -> 'Uint8Array'
+#     new Float64Array()  -> 'Float64Array'
+#     new Int8Array()     -> 'Int8Array'   ; Int16Array/Int32Array similarly
+#     new Uint16Array()   -> 'Uint16Array' ; Uint32Array -> 'Uint32Array'
+#     new Float32Array()  -> 'Float32Array'
+#     new BigInt64Array() -> 'BigInt64Array' ; BigUint64Array -> 'BigUint64Array'
+#     new Uint8ClampedArray() -> 'Uint8ClampedArray'
+#     new ArrayBuffer(8)  -> 'ArrayBuffer'
+#     Node Buffer.from([..]) -> 'Uint8Array'   (Buffer's brand tag is Uint8Array)
+#     arguments object    -> 'Arguments'
+#     Math (the namespace) -> 'Math' ; JSON -> 'JSON'
+#     generator object (gen())            -> 'Generator'
+#     Date / RegExp / Error etc. on legacy hosts -> 'Date'/'RegExp'/'Error'
+#   (On modern hosts the typed arrays, Map/Set, etc. all expose a string toStringTag,
+#   so they actually return at NODE 6 with the SAME name; the observable string is
+#   what matters, and it is identical. Re-emitter: produce the correct string; the
+#   exact node that fires is unobservable.)
+
+# DETERMINISM: pure function of `obj` and the (constant on the grading host) host
+# built-ins. Same input -> same output. No clock/RNG/IO/network seam. ORACLE-CLASS
+# deterministic. No injected collaborators.
+
+ORACLE value -> oracle.json
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the full pipeline above. No carried data.
+#
+# CODEC-CARRIABLE values that genInputs DOES emit, with their EXACT verified return
+# strings (verified by running type-detect@4.1.0 on Node v24.16.0). These survive
+# JSON.stringify(encode(args)) WITHOUT changing typeDetect's result:
+#     number  (finite only; NaN/Infinity excluded — see OUT)    -> 'number'
+#     string  (incl. '')                                        -> 'string'
+#     boolean (true/false)                                      -> 'boolean'
+#     bigint  (e.g. 10n, 0n, large negative)                    -> 'bigint'   # lowercase
+#     null                                                      -> 'null'
+#     array   (no toStringTag), incl. [] and nested             -> 'Array'
+#     plain object {} / {a:1} / nested                          -> 'Object'
+#     RegExp  (/x/ or new RegExp)                               -> 'RegExp'
+#     Map                                                       -> 'Map'
+#     Set                                                       -> 'Set'
+#     Uint8Array                                                -> 'Uint8Array'
+#   These are exactly the JSON-codec round-trippable types (JSON primitives, arrays,
+#   plain objects, RegExp, Set, Map, Uint8Array/Buffer, bigint).
+#
+# DOCUMENT-as-OUT (specified above for fidelity, but genInputs MUST NOT emit them):
+#   * Symbol.toStringTag-carrying objects/arrays (NODE 4 fall-through / NODE 6):
+#       { [Symbol.toStringTag]:'Custom' } -> 'Custom'; an array with
+#       arr[Symbol.toStringTag]='Weird' -> 'Weird'; { [Symbol.toStringTag]:42 } -> 'Object';
+#       { [Symbol.toStringTag]:undefined } -> 'Object'. The tag is a SYMBOL-KEYED
+#       property, which JSON.stringify does NOT preserve. Round-tripped, such an
+#       object decodes to a bare {} (-> 'Object') and the tagged array to a bare []
+#       (-> 'Array'), mismatching the recorded expected. The NODE-6 logic is fully
+#       specified above; it is simply not graded through the random JSON oracle. OUT.
+#   * NaN / +Infinity / -Infinity  : would be 'number', but JSON serializes them to
+#       null, corrupting the stored arg. OUT.
+#   * undefined                    : returns 'undefined', but the codec does NOT
+#       round-trip `undefined` as an arg value (it vanishes / becomes null). OUT.
+#   * Date  -> 'Date'   : codec has no Date tag; a Date collapses to {} -> 'Object',
+#       which would POISON the oracle (expected 'Date', reproduced 'Object'). OUT.
+#   * Error/TypeError -> 'Error'   : no Error tag in codec; collapses to 'Object'. OUT.
+#   * Promise -> 'Promise'         : not codec-serializable; OUT.
+#   * WeakMap -> 'WeakMap', WeakSet -> 'WeakSet' : not enumerable/serializable; OUT.
+#   * symbol  -> 'symbol'          : symbols are not JSON-serializable. OUT.
+#   * function -> 'function' (incl. arrow/async/generator fn) : not serializable. OUT.
+#   * BOXED primitives: new Number(5)/Object(5) -> 'Number'; new String('x') -> 'String';
+#       new Boolean(true) -> 'Boolean'; Object(10n) -> 'BigInt'; Object(Symbol()) -> 'Symbol'.
+#       The codec does NOT round-trip boxed wrappers (they decode to primitives), so
+#       the stored arg would be a primitive and the expected would mismatch. OUT.
+#   * Other typed arrays (Int8/16/32, Uint16/32, Float32/64, BigInt64/BigUint64,
+#       Uint8ClampedArray) -> their '[object X]' name; ArrayBuffer -> 'ArrayBuffer';
+#       DataView -> 'DataView'. The codec only round-trips Uint8Array/Buffer among
+#       these, so ONLY Uint8Array is emitted; the rest are documented OUT.
+#   * Object.create(null) (null-prototype, no tag) -> 'Object' (NODE 10). The JSON
+#       codec reconstructs decoded objects with Object.prototype, not a null prototype,
+#       so the round-trip would not actually exercise the null-proto branch — the
+#       result string is still 'Object' but the input identity is not preserved. OUT
+#       of genInputs; behavior specified at NODE 10 for fidelity.
+#   * Iterators (Map/Set/Array/String Iterator), Generator object, arguments object,
+#       globalThis ('global'), Math/JSON namespaces, class instances by reference,
+#       DOM/window objects : not codec-carriable. Documented OUT.
+#   A blind re-emitter holding ONLY this SIR can still reconstruct every one of these
+#   behaviors from the spec above; they are simply not graded via the random oracle.
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): NONE. typeDetect is read-only/pure;
+#   no mutation of obj, no global state writes, no IO. The temporary
+#   Object.prototype.typeDetectGlobalObject getter is created+deleted ONCE at module
+#   load only on hosts lacking globalThis; on the grading host (globalThis present)
+#   it never runs. No per-call side effects.
+
+# ----------------------------------------------------------------------------
+# PROVENANCE
+# ----------------------------------------------------------------------------
+# Package : type-detect@4.1.0
+# Repo    : github.com/chaijs/type-detect
+# License : MIT (Copyright (c) 2013 Jake Luer)
+# Source  : type-detect.js (UMD published build; main entry per package.json "main").
+#           Logic identical to index.js (ESM source, `export default function typeDetect`).
+# Verified by execution on Node v24.16.0 (real package required and called on
+#   ~50 representative values; every return string in this SIR was observed, not
+#   recalled). Notably CORRECTED vs the task hint: a bigint primitive returns the
+#   LOWERCASE 'bigint' (typeof), NOT 'BigInt'; 'BigInt' is only the result for a
+#   BOXED bigint object Object(10n) (which is OUT for the codec).

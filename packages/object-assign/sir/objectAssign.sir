@@ -1,0 +1,197 @@
+UNIT objectAssign
+KIND STATE                 # MUTATES the first argument (target) in place; returns that same (coerced) object
+ORACLE-CLASS deterministic # pure data transform; no clock/RNG/io/net seam. Fully deterministic given inputs.
+SIG objectAssign(target, ...sources) -> target'   # default export: module.exports = objectAssign
+
+DEPENDS-ON none            # zero runtime deps; uses only ECMAScript intrinsics (Object, hasOwnProperty,
+                           # propertyIsEnumerable, Object.getOwnPropertySymbols)
+
+# ---------------------------------------------------------------------------------------------------
+# OBSERVABLE-BEHAVIOR DEFINITION (this is an ES2015 Object.assign ponyfill)
+# ---------------------------------------------------------------------------------------------------
+# IMPORTANT SOURCE NOTE (do NOT reproduce the feature-detection branch):
+#   The module body is:
+#     module.exports = shouldUseNative() ? Object.assign : <polyfill>
+#   shouldUseNative() is a V8-quirk feature-detection that, on any conforming modern engine, returns
+#   true and delegates to the native Object.assign. The polyfill fallback path is OBSERVABLY IDENTICAL
+#   to native Object.assign for every input in this unit's contract (own-enumerable string keys via
+#   hasOwnProperty filtering on a for..in loop, PLUS own-enumerable symbol keys via
+#   getOwnPropertySymbols + propertyIsEnumerable). The blind re-emitter MUST specify the OBSERVABLE
+#   behavior below — which equals ES2015 Object.assign semantics — NOT the shouldUseNative branch.
+#   A faithful re-emission is literally `export default Object.assign;` OR a polyfill matching the
+#   pipeline below; both converge on every in-contract input. NOTE: the polyfill runs under
+#   'use strict', so its assignment to a read-only target property THROWS (matching native) — see C16.
+#
+# "OBSERVABLE" for this harness means: the RETURNED value, compared by canonical-JSON value-equality
+#   (the grader's eq() is `JSON.stringify(a) === JSON.stringify(b)`). For a plain-object target the
+#   returned object IS the mutated target, so observability = the returned object's own enumerable
+#   STRING-keyed properties and their (shallow) values, in ES2015 own-key order. (Symbol keys are not
+#   observable through JSON — see SCOPE / out-of-codec.) A throw is observed as {__throw}.
+
+BEHAVIOR
+  # ---- NODE 1: coerce target  ----------------------------------------------------------------------
+  N1  to := toObject(target)
+        # toObject(val): if val === null OR val === undefined -> THROW TypeError
+        #                ('Object.assign cannot be called with null or undefined'); else return Object(val).
+        # BRANCH 1a: target is null or undefined -> THROW TypeError. (Recorded as {__throw}.)
+        # BRANCH 1b: target is already an object (plain object, array, Set, Map, typed array, RegExp,
+        #            Date, function, ...) -> Object(val) returns the SAME reference; `to` === target.
+        # BRANCH 1c: target is a primitive (number, string, boolean, bigint, symbol) -> Object(val)
+        #            returns a fresh BOXED WRAPPER object (Number/String/Boolean/BigInt/Symbol wrapper).
+        #            `to` is this NEW wrapper, NOT the original primitive.
+        #              - String wrapper: exposes own ENUMERABLE NON-WRITABLE (read-only) index props
+        #                '0'..'len-1' (each char) plus a non-enumerable non-writable 'length'. Assigning
+        #                a NEW own-enumerable prop adds a key; assigning a COLLIDING read-only index or
+        #                'length' THROWS under strict mode (see C16).
+        #              - Number/Boolean/BigInt/Symbol wrappers: expose NO own enumerable props and NO
+        #                read-only collision props -> any source props assign without throwing.
+
+  # ---- NODE 2: for each source (positional args index 1..N-1), in left-to-right order  -------------
+  N2  for s in 1 .. (arguments.length - 1):
+        from := Object(arguments[s])
+          # BRANCH 2a: arguments[s] is null or undefined -> Object(null)/Object(undefined) yields a
+          #            FRESH EMPTY plain object {} that has NO own enumerable keys -> contributes
+          #            nothing. NET EFFECT: null/undefined sources are SKIPPED (no throw, no-op).
+          # BRANCH 2b: source is a primitive -> boxed wrapper; only a String wrapper exposes own
+          #            enumerable index props (its chars). Number/Boolean/etc. wrappers contribute none.
+          # BRANCH 2c: source is an object -> used as-is.
+        # ---- 2.1 copy own ENUMERABLE STRING keys (hasOwnProperty-filtered) ----
+        for key in (for..in enumeration of `from`):           # for..in walks own+inherited enum string keys
+            if hasOwnProperty.call(from, key):                 # ...but only OWN keys pass the filter
+                to[key] := from[key]                           # shallow copy: value assigned by reference.
+                                                               # If `to[key]` is a READ-ONLY own prop of a
+                                                               # boxed target -> THROWS TypeError (C16).
+        # ---- 2.2 copy own ENUMERABLE SYMBOL keys ----
+        if Object.getOwnPropertySymbols exists:                # always true on modern engines
+            for sym in Object.getOwnPropertySymbols(from):     # own symbol keys (enumerable + not)
+                if propertyIsEnumerable.call(from, sym):       # OWN-ENUMERABLE filter
+                    to[sym] := from[sym]                        # shallow copy
+
+  # ---- NODE 3: return  -----------------------------------------------------------------------------
+  N3  return to
+        # Returns the SAME reference produced by N1 (the coerced target). For an object target,
+        # return === target (identity preserved). For a primitive target, return === the boxed wrapper
+        # created in N1 (NOT the original primitive).
+
+# ---------------------------------------------------------------------------------------------------
+# EXACT SEMANTIC CLAUSES (each verified against object-assign@4.1.1 via node)
+# ---------------------------------------------------------------------------------------------------
+#  C1 OWN-ONLY: inherited enumerable props of a source are NOT copied (hasOwnProperty filter).
+#       oa({}, Object.assign(Object.create({inherited:1}), {own:2})) -> {own:2}
+#  C2 ENUMERABLE-ONLY: non-enumerable own props of a source are NOT copied.
+#       source with defineProperty(...,{enumerable:false}) contributes nothing for that key.
+#  C3 SYMBOL KEYS: own-ENUMERABLE symbol-keyed props ARE copied; non-enumerable symbol props are NOT.
+#       (Real source behavior. NOT exercised by genInputs because symbol KEYS do not survive the
+#        codec/JSON round-trip — see SCOPE out-of-codec. Blind re-emitter must still honor it.)
+#  C4 TARGET COERCION: primitive target is BOXED (Object(target)); the wrapper is mutated & returned.
+#       oa(42,{x:1}) -> Number wrapper w/ valueOf()===42 and own prop x===1.
+#       oa("ab",{y:2}) -> String wrapper w/ chars '0'->'a','1'->'b', length 2, own prop y===2.
+#  C5 NULL/UNDEFINED SOURCES SKIPPED: oa({a:1}, null, undefined, {b:2}) -> {a:1,b:2}. No throw.
+#  C6 NULL/UNDEFINED TARGET THROWS: oa(null,...) and oa(undefined,...) throw TypeError
+#       (message 'Object.assign cannot be called with null or undefined'). Recorded as {__throw}.
+#       NOTE: target null/undefined throws even when zero sources are passed (toObject runs first).
+#  C7 IDENTITY: for an object target, return === target (same reference). The unit MUTATES IN PLACE.
+#  C8 LAST-SOURCE-WINS: overlapping keys -> the rightmost source's value survives.
+#       oa({k:1},{k:2},{k:3}) -> {k:3}.
+#  C9 SHALLOW: object/array values are copied BY REFERENCE (no deep clone); returned[k] === source[k]
+#       for object-valued k.
+#  C10 EMPTY SOURCES: oa(t) with no sources returns Object(t) unchanged (coerced if primitive).
+#  C11 KEY ORDER (ES2015 OrdinaryOwnPropertyKeys, governs observable JSON.stringify order on the result):
+#       integer-index keys ('0','1','2',...) ASCENDING NUMERIC first, then string keys in INSERTION
+#       order. Insertion order across sources is left-to-right; within a source it is that source's own
+#       enumerable order. A key already present on `to` keeps its ORIGINAL position but takes the NEW
+#       value. Examples (verified):
+#         oa({}, {b:1,a:2}, {c:3})            -> keys [b,a,c]
+#         oa({}, {2:"a",1:"b",x:"c",0:"d"})   -> keys [0,1,2,x]
+#  C12 ARRAY/STRING/TYPED-ARRAY SOURCES expose own-enumerable INDEX props (and array's extra own props):
+#       oa({}, [10,20,30]) -> {"0":10,"1":20,"2":30}; (arr with arr.extra="x") -> {...,"extra":"x"}.
+#       oa({}, "hi") -> {"0":"h","1":"i"}.  (array 'length' is non-enumerable -> not copied.)
+#       oa({}, new Uint8Array([5,6,7])) -> {"0":5,"1":6,"2":7}. oa({}, Buffer.from([1,2])) -> {"0":1,"1":2}.
+#  C13 SET/MAP SOURCES expose NO own-enumerable STRING keys -> contribute nothing observable:
+#       oa({a:1}, new Set([1,2,3])) -> {a:1}; oa({a:1}, new Map([["k","v"]])) -> {a:1}.
+#  C14 NUMBER/BOOLEAN SOURCES (boxed) expose no own-enumerable props -> contribute nothing:
+#       oa({a:1}, 42) -> {a:1}; oa({a:1}, true) -> {a:1}.
+#  C15 BIGINT VALUES copied as-is (REAL behavior): oa({}, {n:10n}).n === 10n. A bigint TARGET is
+#       boxed to a BigInt wrapper (oa(7n,{q:4}) -> BigInt wrapper, valueOf()===7n). NOT exercised
+#       by genInputs: any bigint reaching the RETURNED object makes the OBSERVABLE unrepresentable
+#       (the grader's eq() uses JSON.stringify, which THROWS on BigInt). Documented out-of-envelope-
+#       for-observation; a blind re-emitter still implements the copy. See SCOPE.
+#  C16 READ-ONLY TARGET PROPERTY COLLISION -> THROWS (in-contract, strict mode):
+#       When the target is a STRING primitive (boxed to a String wrapper) and a source carries an own-
+#       enumerable key that COLLIDES with one of the wrapper's READ-ONLY own props — i.e. an index key
+#       in range '0'..(len-1), or the 'length' key — assignment throws
+#         TypeError: 'Cannot assign to read only property '<key>' of object '[object String]''.
+#       This matches native Object.assign (always) and the polyfill (under 'use strict'). Recorded {__throw}.
+#       Sub-rules (verified):
+#         - oa("ab", {0:"x"})      -> THROWS (index 0 collides with char 'a')
+#         - oa("ab", {1:"y"})      -> THROWS (index 1 collides)
+#         - oa("ab", {length:9})   -> THROWS (read-only 'length')
+#         - oa("ab", ["p","q"])    -> THROWS (array source supplies colliding index '0')
+#         - oa("ab", {2:"w"})      -> OK -> "ab" (index 2 is OUT OF RANGE >= len -> writable, no collide)
+#         - oa("ab", {5:"z"})      -> OK -> "ab" (out of range)
+#         - oa("ab", {y:2})        -> OK -> "ab" (non-index key, no collision)
+#         - oa("", {0:"x"})        -> OK -> ""  (empty string has NO index props -> '0' is out of range)
+#       NOTE: Number/Boolean/BigInt targets NEVER hit C16 (their wrappers have no read-only enumerable
+#       index props), so e.g. oa(42,{0:"x"}) -> 42 (no throw). The collision-throw is SPECIFIC to the
+#       STRING-target case where the colliding index < string length, or the 'length' key.
+
+# ---------------------------------------------------------------------------------------------------
+# OBSERVABILITY OF BOXED-TARGET RESULTS (precise; deterministic across faithful re-emissions)
+# ---------------------------------------------------------------------------------------------------
+#  The grader observes the RETURN value via canonical JSON (JSON.stringify). Wrapper objects serialize
+#  by their primitive coercion, which DROPS added own props for Number/Boolean/BigInt targets:
+#     JSON.stringify(oa(42,{x:1}))      === "42"     (Number wrapper -> primitive; added x dropped)
+#     JSON.stringify(oa(true,{z:1}))    === "true"   (Boolean wrapper -> primitive)
+#  For a String target, JSON.stringify serializes the wrapper as its string value (added props dropped,
+#  index chars are the string content):
+#     JSON.stringify(oa("ab",{y:2}))    === "\"ab\""
+#  These are spec-determined and identical for `export default Object.assign` and any faithful polyfill,
+#  so they converge. (genInputs primitive-target cases are therefore graded on the wrapper's primitive
+#  JSON form — still a valid, deterministic, convergent oracle point.)
+
+ORACLE value -> oracle.json
+        # The generator deep-clones each tuple per materialization (see SCOPE / generator contract);
+        # the harness runs the REAL fn on the fresh graph and records the RETURNED value (and {__throw}
+        # for the null/undefined-target path C6 and the read-only-collision path C16). For a fresh {}
+        # target, returned === mutated target, so the post-mutation state is faithfully observed.
+
+# ---------------------------------------------------------------------------------------------------
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The whole N1..N3 pipeline: target coercion (incl. primitive boxing + null/undefined throw),
+      own-enumerable-only copy of string keys (hasOwnProperty + for..in), own-enumerable symbol-key
+      copy (getOwnPropertySymbols + propertyIsEnumerable), null/undefined source skip, last-source-wins,
+      shallow copy, return-identity (return === coerced target), ES2015 own-key ordering on the result,
+      and the strict-mode read-only-collision throw on a string target (C16).
+    - Demonstrated in-scope value classes (self-consistent with genInputs):
+        targets: {} ; non-empty plain object ; array ; primitive number ; primitive string (incl. '') ;
+                 primitive boolean (true/false) ; (and null/undefined -> throw path C6).
+        sources: plain objects (incl. overlapping keys across multiple sources, numeric+string keys,
+                 nested object/array values copied by reference) ; arrays ; strings (boxed) ; number /
+                 boolean primitives (no-op) ; Set / Map (no-op observable) ; Uint8Array / Buffer ; null ;
+                 undefined ; ZERO sources ; and string-target + colliding-index source (throw path C16).
+        NOTE: bigint is NOT in the demonstrated set — see OUT-OF-CONTRACT/OUT-OF-ENVELOPE below. The
+        unit's bigint-copy/coercion behavior (C15) is real and the blind re-emitter must implement it,
+        but it cannot be observed through the JSON grader, so genInputs emits no bigint.
+  CARRIED DATA: none (no literal tables / constants).
+  OUT-OF-CONTRACT / OUT-OF-CODEC (documented, NOT emitted by genInputs):
+    - SYMBOL KEYS: own-enumerable symbol-keyed copy (C3) is REAL source behavior, but symbol KEYS cannot
+      survive the JSON/codec round-trip, so they are not emitted as test tuples. A blind re-emitter must
+      still implement C3.
+    - FUNCTION values / function sources: functions do not round-trip the codec; not emitted. (A function
+      source would copy its own enumerable props; a function value would be copied by reference. Documented,
+      not tested.)
+    - STATEFUL COERCION: sources with getters/Proxy traps that have observable side effects are NEVER
+      emitted (would make the oracle non-deterministic / order-sensitive on read side effects).
+    - BIGINT (OUT-OF-ENVELOPE-FOR-OBSERVATION): the unit copies/boxes bigint correctly (C15), but ANY
+      bigint that reaches the RETURNED object (a bigint target -> BigInt wrapper, or a bigint VALUE copied
+      from a source) makes the observable JSON unrepresentable — the grader's eq() (JSON.stringify) THROWS
+      on BigInt. So genInputs emits ZERO bigint (no bigint target, no bigint value). Behavior documented;
+      not tested through the oracle. A blind re-emitter still implements C15.
+    - Boxed-primitive ARGUMENTS (new Number/new String/...) as inputs: not emitted (identity-bearing
+      wrapper instances are not codec-faithful); the primitive-target boxing is exercised via PRIMITIVE
+      targets (number/string/boolean) which the codec carries and whose boxed result is JSON-observable.
+
+PROVENANCE object-assign@4.1.1 (sindresorhus) | repo github.com/sindresorhus/object-assign | MIT |
+        source file: index.js (module.exports = shouldUseNative() ? Object.assign : <polyfill>).
+        Observable behavior == ES2015 Object.assign (ECMA-262 23.1.2.1).

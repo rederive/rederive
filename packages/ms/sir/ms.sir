@@ -1,0 +1,211 @@
+UNIT ms
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+  # Pure value -> value. No clock/RNG/env/fs/net seam. No mutable state. Idempotent.
+
+SIG  ms(val: string | number, options?: { long?: any }) -> number | string | undefined
+  # CJS default export: module.exports = function(val, options) { ... }.
+  # Mode is selected by typeof val (see BEHAVIOR node 2). options is consulted ONLY in number mode,
+  # and ONLY its `long` property (read for truthiness; not validated otherwise).
+  #   - string mode  -> returns number (ms) OR undefined (unparseable / too long)
+  #   - number mode  -> returns string (formatted)
+  #   - anything else -> THROWS Error
+
+DEPENDS-ON none
+  # Self-contained. The only library calls are language built-ins: typeof, isFinite, String(),
+  # RegExp.prototype.exec, parseFloat, String.prototype.toLowerCase, Math.abs, Math.round,
+  # JSON.stringify (used only to build the throw message). No carried data — no large literal table;
+  # the unit constants below are six scalar numbers, transcribed in full.
+
+# ---------------------------------------------------------------------------------------------
+# UNIT CONSTANTS (module-scope, computed at load; transcribed exactly — these are NOT carried data):
+#   s = 1000                         # one second in ms
+#   m = s * 60        = 60000        # one minute
+#   h = m * 60        = 3600000      # one hour
+#   d = h * 24        = 86400000     # one day
+#   w = d * 7         = 604800000    # one week
+#   y = d * 365.25    = 31557600000  # one year  (NOTE: 365.25, the Julian year, NOT 365)
+# ---------------------------------------------------------------------------------------------
+
+BEHAVIOR  # ordered pipeline
+  1. options = options || {}
+       # null / undefined / missing / any falsy options -> {}. A truthy non-object would be used as-is
+       # but only options.long is ever read (undefined on a non-object -> falsy -> short format).
+  2. type = typeof val ; DISPATCH (this exact order, first match wins):
+       BRANCH A  type === 'string' AND val.length > 0   -> return parse(val)          # string mode
+       BRANCH B  type === 'number' AND isFinite(val)     -> return options.long        # number mode
+                                                              ? fmtLong(val)
+                                                              : fmtShort(val)
+       BRANCH C  (everything else)                       -> THROW (node 6)
+     NOTES on the dispatch guard:
+       - Empty string '' has length 0, so it FAILS branch A and falls through to branch C -> THROWS.
+         (This is the ONLY string value that throws; every other string goes to parse and AT WORST
+          returns undefined.)
+       - NaN and +/-Infinity are typeof 'number' but isFinite() is false -> fail branch B -> THROW.
+       - boolean, null, undefined, object, array, function, symbol, bigint -> fail A and B -> THROW.
+       - options.long truthiness: any truthy value (true, 1, 'x', {}) selects long; any falsy value
+         (false, 0, '', null, undefined, missing) selects short.
+
+  # ---- string mode: parse(str) ----
+  3. parse(str):
+       3a. str = String(str)               # already a string here; identity for the dispatched value.
+       3b. if str.length > 100 -> return undefined.
+             # NOTE: returns undefined, it does NOT throw. (A long string is silently unparseable.)
+       3c. match = REGEX.exec(str) where REGEX (exactly, with the /i flag) is:
+             /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i
+           Regex shape, exactly:
+             - ^ ... $            : whole-string anchored (no leading/trailing junk allowed).
+             - group 1 (number)   : -?(?:\d+)?\.?\d+
+                   optional leading '-' (NO '+' allowed); optional integer part; optional '.';
+                   MANDATORY trailing run of >=1 digits. So:
+                     accepted:  "5", "-5", ".5", "-.5", "0.5", "000.5", "01", "100"
+                     rejected:  "1." (no digit after dot), "5..5", "1e3" (no exponent), "+5", ""
+             - between groups     : ' *'  -> ZERO OR MORE ASCII spaces (only U+0020; \t/other WS reject).
+             - group 2 (unit)     : OPTIONAL; one of the alternatives below; case-insensitive (/i).
+                   If absent, defaults to 'ms' (node 3e). A trailing space after a present unit
+                   (e.g. "5 s ") makes the $ anchor fail -> no match.
+       3d. if !match -> return undefined.        # unparseable string -> undefined (NOT NaN, NOT throw)
+       3e. n    = parseFloat(match[1])           # the numeric portion as a float (may be negative/fractional)
+           type = (match[2] || 'ms').toLowerCase()   # missing unit -> 'ms'; case folded for the switch
+       3f. switch(type) -> multiply n by the unit's ms-constant and return:
+             years   | year  | yrs | yr | y                         -> n * y   (n * 31557600000)
+             weeks   | week  | w                                    -> n * w   (n * 604800000)
+             days    | day   | d                                    -> n * d   (n * 86400000)
+             hours   | hour  | hrs | hr | h                         -> n * h   (n * 3600000)
+             minutes | minute| mins| min| m                         -> n * m   (n * 60000)
+             seconds | second| secs| sec| s                         -> n * s   (n * 1000)
+             milliseconds | millisecond | msecs | msec | ms         -> n        (n * 1)
+             default -> return undefined          # UNREACHABLE: the regex only admits the units above.
+           # Returned value is a plain JS number; may be 0, negative, or fractional. Examples (verified):
+           #   "100"->100  "1.5h"->5400000  "-1.5h"->-5400000  ".5s"->500  "1y"->31557600000
+           #   "5MS"->5  "5Y"->157788000000  "5 SeCoNdS"->5000  "5  h"->18000000 (2 spaces OK)
+           # COMPLETE alias roster (all verified, value-1 in ms):
+           #   ms/msec/msecs/millisecond/milliseconds = 1
+           #   s/sec/secs/second/seconds              = 1000
+           #   m/min/mins/minute/minutes              = 60000
+           #   h/hr/hrs/hour/hours                    = 3600000
+           #   d/day/days                             = 86400000   (NO 'dy' / no abbreviation beyond 'd')
+           #   w/week/weeks                           = 604800000  (NO 'wk' abbreviation)
+           #   y/yr/yrs/year/years                    = 31557600000
+
+  # ---- number mode, SHORT: fmtShort(ms) ----  (options.long falsy)
+  4. fmtShort(ms):
+       msAbs = Math.abs(ms)
+       BRANCH if msAbs >= d (86400000) -> return Math.round(ms / d) + 'd'
+       BRANCH if msAbs >= h (3600000)  -> return Math.round(ms / h) + 'h'
+       BRANCH if msAbs >= m (60000)    -> return Math.round(ms / m) + 'm'
+       BRANCH if msAbs >= s (1000)     -> return Math.round(ms / s) + 's'
+       ELSE                            -> return ms + 'ms'     # NO rounding; the raw number stringified
+       NOTES:
+         - Threshold uses ABSOLUTE value; rounding uses the SIGNED value via JS Math.round, which
+           rounds half toward +Infinity (NOT away from zero). This makes negatives asymmetric:
+             Math.round(2.5)  = 3   -> ms(2500)  = "3s"
+             Math.round(-2.5) = -2  -> ms(-2500) = "-2s"
+             Math.round(-1.5) = -1  -> ms(-1500) = "-1s"   (but ms(1500) = "2s")
+         - The 'ms' (else) branch does string concatenation of the raw number, so fractions survive:
+             ms(0)   = "0ms"   ms(1) = "1ms"   ms(0.5) = "0.5ms"   ms(-0.5) = "-0.5ms"   ms(-0) = "0ms"
+             ms(999) = "999ms" ms(-1) = "-1ms"
+         - Boundary examples (verified): ms(1000)="1s"  ms(59999)="60s"  ms(60000)="1m"
+             ms(3600000)="1h"  ms(86400000)="1d"  ms(1.5*d)="2d"  ms(1.4*d)="1d"  ms(-86400000)="-1d"
+
+  # ---- number mode, LONG: fmtLong(ms) ----  (options.long truthy)
+  5. fmtLong(ms):
+       msAbs = Math.abs(ms)
+       BRANCH if msAbs >= d -> return plural(ms, msAbs, d, 'day')
+       BRANCH if msAbs >= h -> return plural(ms, msAbs, h, 'hour')
+       BRANCH if msAbs >= m -> return plural(ms, msAbs, m, 'minute')
+       BRANCH if msAbs >= s -> return plural(ms, msAbs, s, 'second')
+       ELSE                 -> return ms + ' ms'    # note the SPACE; raw number, no rounding
+     plural(ms, msAbs, n, name):
+       isPlural = msAbs >= n * 1.5
+       return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '')
+     NOTES:
+       - The plural 's' is decided ONLY by the magnitude threshold msAbs >= n*1.5; it is INDEPENDENT of
+         the rounded count. So the count and the plural-suffix can disagree:
+           ms(1000, long) = "1 second"          (1000 < 1500 -> singular; round(1)=1)
+           ms(1500, long) = "2 seconds"          (1500 >= 1500 -> plural; round(1.5)=2)
+           ms(1499, long) = "1 second"           (1499 < 1500 -> singular; round(1.499)=1)
+           ms(89999, long)= "1 minute"           (89999 < 90000 -> singular; round(1.4999)=1)
+           ms(90000, long)= "2 minutes"          (90000 >= 90000 -> plural; round(1.5)=2)
+       - Negative-magnitude plural with signed round (asymmetry, verified):
+           ms(-1500, long) = "-1 seconds"        (msAbs 1500 >= 1500 -> plural; round(-1.5) = -1)
+           ms(-1499, long) = "-1 second"         (msAbs 1499 < 1500 -> singular; round(-1.499) = -1)
+           ms(-2500, long) = "-2 seconds"        (plural by magnitude; round(-2.5) = -2)
+       - The 'ms' (else) branch keeps the raw number with a leading-space unit:
+           ms(0, long) = "0 ms"  ms(1, long) = "1 ms"  ms(-1, long) = "-1 ms"  ms(500, long) = "500 ms"
+       - There is NO year/week unit in the formatter: a year of ms formats in days.
+           ms(31557600000, long) = "365 days"    (round(365.25) = 365; the 'd' branch caps it)
+       - Boundary examples (verified): ms(60000, long)="1 minute"  ms(3600000, long)="1 hour"
+           ms(86400000, long)="1 day"  ms(1.5*d, long)="2 days"  ms(1.4*d, long)="1 day"
+           ms(1.5*d - 1, long)="1 day"  ms(-86400000, long)="-1 day"
+
+  # ---- invalid input throw ----
+  6. THROW new Error(
+         'val is not a non-empty string or a valid number. val=' + JSON.stringify(val)
+       )
+     EXACT message construction:
+       - The literal prefix is, byte for byte:  val is not a non-empty string or a valid number. val=
+         (note the period and single space before "val="), then JSON.stringify(val) appended.
+       - JSON.stringify of the offending value:
+           NaN          -> "null"        -> message ends "val=null"
+           Infinity     -> "null"        -> message ends "val=null"
+           -Infinity    -> "null"        -> message ends "val=null"
+           ''           -> '""'          -> message ends 'val=""'
+           true         -> "true"        -> message ends "val=true"
+           false        -> "false"       -> message ends "val=false"
+           null         -> "null"        -> message ends "val=null"
+           undefined    -> (the JS value undefined; the `+` coerces it) -> message ends "val=undefined"
+           missing arg  -> same as undefined -> "val=undefined"
+           function     -> JSON.stringify -> undefined -> coerced -> "val=undefined"
+           {}           -> "{}"          -> message ends "val={}"
+           {a:1}        -> '{"a":1}'      -> message ends 'val={"a":1}'
+           {a:1,b:'x'}  -> '{"a":1,"b":"x"}'
+           []           -> "[]"          -> message ends "val=[]"
+           [1,2]        -> "[1,2]"        -> message ends "val=[1,2]"
+       - The grading oracle compares throw-vs-throw WITHOUT comparing the message text (a throw matches
+         a throw). The exact message is documented here for completeness/fidelity; a re-emitter that
+         throws ANY Error on these inputs satisfies the oracle. But the message above is the real text.
+
+ORACLE value -> oracle.json
+  # Deterministic value oracle. Feed (val, options?) arg-arrays; compare the exact returned value with
+  # structural JSON equality (the harness's eq leaf: JSON.stringify(a) === JSON.stringify(b)).
+  # IMPORTANT return-encoding facts the oracle relies on:
+  #   - A successful parse returns a NUMBER (possibly 0/negative/fractional) -> compared as a number.
+  #   - An unparseable or >100-char string returns the JS value `undefined`. Under the eq leaf,
+  #     JSON.stringify(undefined) === undefined, so undefined matches ONLY another undefined and is
+  #     correctly DISTINCT from null (JSON.stringify(null) === "null"). Re-emitters must return real
+  #     undefined for these, not null and not NaN.
+  #   - A format returns a STRING -> exact string compare.
+  #   - A throw is recorded as {"__throw": <message>}; throw matches throw (message not compared).
+  # SELF-CONSISTENCY: every value ms.inputs.mjs can emit has its behavior fully defined above —
+  #   every unit alias is in node 3f, every format branch + threshold in nodes 4/5, every unparseable
+  #   shape (-> undefined) and every throw shape (-> node 6) is enumerated. Conversely the generator
+  #   emits nothing whose mapping is left to an undescribed table (there is none).
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The typeof/length/isFinite dispatch (node 2) and its first-match ORDER, including the
+      empty-string-throws subtlety and the NaN/Infinity-throws subtlety.
+    - parse(): the >100-char short-circuit to undefined, the EXACT anchored case-insensitive regex
+      (transcribed in node 3c), parseFloat semantics, the lowercased unit switch with ALL 31 aliases
+      and their six unit-constants, and unparseable -> undefined.
+    - fmtShort()/fmtLong(): the four-tier (d/h/m/s) magnitude cascade on Math.abs, the raw-number
+      'ms' fallthrough (with vs without leading space), Math.round half-toward-+Infinity rounding on
+      the SIGNED value, and the plural threshold (msAbs >= n*1.5) decided independently of the count.
+    - The throw message construction (node 6).
+  CARRIED DATA:
+    - NONE. The unit has no large literal table. The six unit-constants (s,m,h,d,w,y) are scalar
+      numbers transcribed in full above; no carried.json is produced.
+  OUT-OF-CONTRACT (stateful mutator / side API):
+    - NONE. The module exports exactly one pure function. No .extend, no globals, no side effects.
+
+PROVENANCE
+  package: ms@2.1.2 (npm)
+  repo:    https://github.com/zeit/ms  (later vercel/ms)
+  license: MIT
+  source:  node_modules/ms/index.js  (main field: "./index"; single function as module.exports)
+  verified-against: live ms@2.1.2 in the provided temp install
+                    (/var/folders/.../rdv-orig-ms-eRObR9/node_modules/ms), probed 2026-06-23.
+                    Behaviors confirmed by execution; NOTE the task hint had two inaccuracies that the
+                    live run corrected: unparseable strings return undefined (NOT NaN), and a >100-char
+                    string returns undefined (NOT a throw). The SIR documents the verified behavior.

@@ -1,0 +1,327 @@
+UNIT nth
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG nth(array, n) -> *            # two positional args; returns the nth element (any type) or undefined
+
+DEPENDS-ON none
+# Zero runtime dependencies. Every internal helper (baseNth, isIndex, toInteger,
+# toFinite, toNumber, isObject, isObjectLike, isSymbol) is defined IN THE SAME
+# source file and is reproduced inline below. None is a carried-data table or an
+# external dependency; all are in-contract logic.
+
+# ---------------------------------------------------------------------------
+# RECONSTRUCTION TARGET (read this first)
+# ---------------------------------------------------------------------------
+# The original is a CommonJS module whose sole export is the function:
+#     module.exports = nth
+# The re-emitter MUST produce an ES module whose DEFAULT export is the function:
+#     export default nth
+# There is exactly ONE public symbol. Do not export baseNth/isIndex/toInteger/
+# toFinite/toNumber/isObject/isObjectLike/isSymbol — they are all private.
+# Arity is 2 (nth.length === 2). The function name is "nth".
+#
+# nth is READ-ONLY: it never mutates `array`, never assigns to it, never reads
+# user-controllable getters more than the trace below. (n's valueOf/toString MAY
+# be invoked once during coercion — see toNumber NODE C.)
+
+# ---------------------------------------------------------------------------
+# CONSTANTS (exact literals from the source; needed for the toNumber regex paths)
+# ---------------------------------------------------------------------------
+#   INFINITY        = 1 / 0                          # +Infinity
+#   MAX_SAFE_INTEGER = 9007199254740991              # 2^53 - 1
+#   MAX_INTEGER     = 1.7976931348623157e+308        # Number.MAX_VALUE
+#   NAN             = 0 / 0                           # NaN
+#   symbolTag       = '[object Symbol]'
+#   reTrim          = /^\s+|\s+$/g                    # leading+trailing whitespace
+#   reIsBadHex      = /^[-+]0x[0-9a-f]+$/i            # signed hex string -> NaN
+#   reIsBinary      = /^0b[01]+$/i                    # binary string literal
+#   reIsOctal       = /^0o[0-7]+$/i                   # octal string literal
+#   reIsUint        = /^(?:0|[1-9]\d*)$/              # unsigned-integer string
+#   freeParseInt    = parseInt
+#   objectToString  = Object.prototype.toString
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact, ordered; verified by executing lodash.nth@4.11.2)
+# ---------------------------------------------------------------------------
+#
+# nth(array, n):
+#   NODE 1 (truthiness gate on array AND its length):
+#       return (array && array.length) ? baseNth(array, toInteger(n)) : undefined
+#     - The guard is `array && array.length` — short-circuit AND.
+#       * If `array` is falsy (null, undefined, 0, -0, NaN, "", false), the AND
+#         short-circuits BEFORE reading `.length`, so NO TypeError. -> undefined.
+#         (nth(null,0), nth(undefined,0), nth(0,0), nth(false,0) -> undefined.)
+#       * Else `array.length` is read. If it is falsy (0, -0, NaN, undefined,
+#         "", null, false — i.e. empty array, or a non-array-like object with no
+#         numeric .length), the whole guard is falsy -> undefined.
+#         (nth([],0) -> undefined ; nth({},0) -> undefined ; nth(42,0) ->
+#          undefined because (42).length is undefined ; nth(new Set([1,2,3]),0)
+#          -> undefined, Set has no .length ; nth(new Map(...),0) -> undefined.)
+#       * Else (array truthy AND array.length truthy) -> delegate.
+#     - n is coerced via toInteger(n) ONLY on this delegate path. If the guard
+#       fails, n is never coerced (and n's valueOf is never invoked).
+#     - NOTE: n defaults to 0 via coercion, not via a default parameter. The
+#       signature has no `=0`; instead nth(array) passes n=undefined, and
+#       toInteger(undefined) === 0 (see toFinite NODE A). So nth(array) behaves
+#       as nth(array, 0). Same for nth(array, null) -> 0.
+#
+# baseNth(array, n):           # n here is ALREADY an integer (toInteger output)
+#       length = array.length
+#       if (!length) return undefined          # redundant given NODE 1 guard,
+#                                               # but present; same falsy test.
+#       n += (n < 0 ? length : 0)              # NEGATIVE n counts from the end:
+#                                               #   n_eff = n + length when n < 0,
+#                                               #   else n unchanged.
+#                                               #   (-0 is NOT < 0, so no add.)
+#       return isIndex(n, length) ? array[n] : undefined
+#     - After the offset, isIndex decides in-range. If in range, return the
+#       ELEMENT BY DIRECT INDEX array[n] (returned by reference for object/array
+#       elements; primitives by value; a sparse-array HOLE or absent own key at
+#       index n reads as `undefined`).
+#     - Out of range (n_eff < 0 after offset, or n_eff >= length, or n_eff not a
+#       valid index) -> undefined.
+#
+# isIndex(value, length):      # value === n_eff, length === array.length
+#       length = (length == null) ? MAX_SAFE_INTEGER : length
+#       return !!length &&
+#              (typeof value == 'number' || reIsUint.test(value)) &&
+#              (value > -1 && value % 1 == 0 && value < length)
+#     - In nth's call path `value` (n_eff) is ALWAYS a JS number (toInteger
+#       always returns a number; adding length keeps it a number), so the
+#       `typeof value == 'number'` disjunct is always true here and the
+#       reIsUint string branch is never exercised FROM nth. (reIsUint exists for
+#       isIndex's general use; document it but it is dead for nth's inputs.)
+#     - The in-range test is the conjunction:
+#         value > -1            # strictly greater than -1, i.e. >= 0 for integers
+#         value % 1 == 0        # integer-valued (always true: n_eff is integral)
+#         value < length        # strictly less than length (so index===length -> out)
+#       length here is array.length (truthy, so the MAX_SAFE_INTEGER default does
+#       not apply on nth's path).
+#     - Net: index is valid iff 0 <= n_eff < length and n_eff is an integer.
+#       n_eff === length is OUT (strict <). n_eff < 0 (after a negative beyond
+#       -length) is OUT (> -1 fails).
+#
+# toInteger(value):            # value === the raw user n
+#       result = toFinite(value)
+#       remainder = result % 1
+#       return (result === result)                  # i.e. not NaN
+#                ? (remainder ? result - remainder : result)   # truncate toward 0
+#                : 0
+#     - TRUNCATES TOWARD ZERO (not floor): subtracting the fractional remainder.
+#         toInteger(3.2)  = 3 - 0.2  = 3
+#         toInteger(2.5)  = 2 - 0.5  = 2          # -> nth(a,2.5) returns a[2]
+#         toInteger(-1.9) = -1.9 - (-0.9)= -1     # -> nth(a,-1.9): n=-1 -> a[len-1]
+#         toInteger(-0.5) = -0.5 - (-0.5)= 0      # -> nth(a,-0.5) returns a[0]
+#         toInteger(-4.9) = -4.9 - (-0.9)= -4     # (floating remainder
+#                                                 #  -4.9 % 1 = -0.9000000000004,
+#                                                 #  but result-remainder = -4)
+#       (result-remainder, not Math.trunc; for the in-range float magnitudes here
+#        the two agree, but reproduce the SUBTRACTION exactly.)
+#     - result === result guards NaN: toInteger(NaN-producing input) -> 0.
+#
+# toFinite(value):
+#       NODE A: if (!value) return (value === 0 ? value : 0)
+#         - Falsy value short-circuits: 0/-0/'' /false/null/undefined/NaN AND
+#           the falsy bigint 0n (and -0n, which === 0n). toNumber is NOT called
+#           on the falsy path, so 0n NEVER reaches the bigint `+value` throw.
+#           Returns `value` itself only when value === 0, else 0. Since the
+#           comparison is strict `=== 0`:
+#             toFinite(0)   -> 0      toFinite(-0)  -> -0   (-0 === 0 true, returns value)
+#             toFinite('')  -> 0      toFinite(false)-> 0
+#             toFinite(null)-> 0      toFinite(undefined)-> 0
+#             toFinite(NaN) -> 0      (NaN is falsy -> short-circuit -> 0)
+#             toFinite(0n)  -> 0      (0n === 0 is FALSE -> returns literal 0,
+#                                      NOT the bigint; and crucially: NO THROW)
+#             toFinite(-0n) -> 0      (-0n === 0n, also falsy -> 0, no throw)
+#       NODE B: value = toNumber(value)
+#       NODE C: if (value === INFINITY || value === -INFINITY)
+#                 return (value < 0 ? -1 : 1) * MAX_INTEGER
+#         - +Infinity -> +MAX_INTEGER (1.797...e308); -Infinity -> -MAX_INTEGER.
+#           Both magnitudes are >>> array.length, so in nth they always fail
+#           isIndex's `value < length` (positive) or `value > -1` (negative):
+#             nth(a, Infinity)  -> undefined
+#             nth(a, -Infinity) -> undefined
+#       NODE D: return (value === value ? value : 0)     # NaN -> 0, else value.
+#
+# toNumber(value):
+#       NODE A: if (typeof value == 'number') return value          # numbers pass through
+#       NODE B: if (isSymbol(value)) return NAN                      # Symbol -> NaN (-> 0)
+#       NODE C: if (isObject(value)) {                               # object/function/array
+#                  other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#                  value = isObject(other) ? (other + '') : other    # if valueOf still
+#                }                                                    #   object -> String(other)
+#         - So for an ARRAY n: [2].valueOf() === [2] (still object) -> '2' (String).
+#           [1,2] -> '1,2'. [] -> ''. {} -> '[object Object]'.
+#           For an object with custom valueOf returning a primitive ({valueOf:()=>2}),
+#           other === 2 (primitive) -> value = 2 -> falls through to NODE E.
+#           Date -> valueOf() returns epoch ms number -> primitive -> NODE E.
+#           Boxed new Number(2) -> valueOf() -> 2 -> NODE E. (boxed primitives are
+#           OUT-OF-ENVELOPE for genInputs — not codec-faithful — but specified here.)
+#       NODE D: if (typeof value != 'string') return (value === 0 ? value : +value)
+#         - Non-string, non-number-not-yet-returned: e.g. boolean -> +true=1,
+#           +false=0; the resolved primitive from NODE C.
+#         - BIGINT reaching here: `value === 0` is false (a bigint is never
+#           strictly === the number 0), so it evaluates `+value`, and unary plus
+#           on a bigint THROWS TypeError ("Cannot convert a BigInt value to a
+#           number"). BUT note this is only reached for a NON-ZERO bigint:
+#           toInteger calls toFinite FIRST, and toFinite NODE A short-circuits on
+#           the falsy bigint 0n/-0n BEFORE toNumber is ever called -> 0, no throw.
+#           So: 0n (and -0n) -> index 0 (no throw); every NON-ZERO bigint -> throw
+#           (when the array guard passes). *** see THROW BEHAVIOR. ***
+#       NODE E (value is a string):
+#           value = value.replace(reTrim, '')                # trim leading/trailing ws
+#           isBinary = reIsBinary.test(value)                # /^0b[01]+$/i
+#           if (isBinary || reIsOctal.test(value))           # /^0o[0-7]+$/i
+#               return freeParseInt(value.slice(2), isBinary ? 2 : 8)
+#           return reIsBadHex.test(value)                    # /^[-+]0x[0-9a-f]+$/i
+#               ? NAN
+#               : +value                                     # otherwise unary plus
+#         - STRING coercion quirks (all verified):
+#             "1"     -> +"1" = 1                "2" -> 2     "-1" -> -1
+#             " 1 "   -> trim -> "1" -> 1        "1e0" -> 1   "+1" -> 1
+#             "1.9"   -> +"1.9" = 1.9 -> toInteger -> 1
+#             "0b10"  -> parseInt("10",2) = 2    "0o3" -> parseInt("3",8) = 3
+#             "0x1"   -> +"0x1" = 1   (NOT bad-hex: reIsBadHex requires a SIGN;
+#                                      unsigned "0x1" passes the unary-plus path)
+#             "-0x1"  -> reIsBadHex matches (has sign) -> NaN -> 0
+#             "abc"   -> +"abc" = NaN -> 0       "" -> NaN-ish: +"" = 0
+#             "  "    -> trim -> "" -> +"" = 0
+#         - So as an n, a non-numeric / signed-hex / empty / whitespace string
+#           all collapse to index 0 (since toInteger(NaN)=0 and toInteger(0)=0).
+#
+# isObject(value):       return !!value && (typeof value == 'object' || type == 'function')
+# isObjectLike(value):   return !!value && typeof value == 'object'
+# isSymbol(value):       return typeof value == 'symbol' ||
+#                          (isObjectLike(value) && objectToString.call(value) == '[object Symbol]')
+#
+# ---------------------------------------------------------------------------
+# WORKED EDGE CASES (all VERIFIED against lodash.nth@4.11.2; a = ['a','b','c','d'])
+# ---------------------------------------------------------------------------
+#   POSITIVE / ZERO index:
+#     nth(a,0)='a'  nth(a,1)='b'  nth(a,3)='d'  nth(a,4)=undefined (==len, OUT)
+#   NEGATIVE index (n + length):
+#     nth(a,-1)='d'  nth(a,-2)='c'  nth(a,-4)='a'  nth(a,-5)=undefined (OUT)
+#   n DEFAULTS to 0 via coercion:
+#     nth(a)= 'a'   nth(a,undefined)='a'   nth(a,null)='a'   nth(a,NaN)='a'
+#     nth(a,-0)='a' (-0 not < 0, no end-offset; isIndex(-0): -0 > -1 true, -0%1==0,
+#                    -0 < len -> 'a')
+#   FLOAT index (truncate toward 0):
+#     nth(a,1.9)='b'  nth(a,1.1)='b'  nth(a,2.5)='c'  nth(a,-1.9)='d'
+#     nth(a,-0.5)='a' nth(a,-4.9)='a' (n=-4 -> +len=0)
+#   INFINITY:
+#     nth(a,Infinity)=undefined   nth(a,-Infinity)=undefined
+#   BIGINT n: nth(a,0n)='a' (0n falsy -> toFinite 0, NO throw)
+#     nth(a,-0n)='a'   nth(a,1n)=THROW   nth(a,2n)=THROW   nth(a,-1n)=THROW
+#   HUGE finite n (>= length): nth(a,1e21)=undefined  nth(a,1e300)=undefined
+#     nth(a, 9007199254740992)=undefined  (>= length -> OUT)
+#   STRING n: nth(a,"1")='b' "2"='c' "-1"='d' " 1 "='b' "1.9"='b' "1e0"='b'
+#     "+1"='b' "0x1"='b' "0b10"='c' "0o3"='d' "-0x1"='a' "abc"='a' ""='a' "  "='a'
+#   ARRAY n (valueOf->self->String): nth(a,[2])='c' nth(a,[])='a' nth(a,[1,2])='a'
+#   OBJECT n: nth(a,{})='a' (String({})='[object Object]'->NaN->0)
+#     nth(a,{valueOf:()=>2})='c'  nth(a,{valueOf:()=>-1})='d'  nth(a,new Date(2))='c'
+#   BOOLEAN n: nth(a,true)='b' (+true=1)   nth(a,false)='a' (+false=0)
+#   ARRAY-LIKE array arg: nth("abc",1)='b'  nth("abc",-1)='c'
+#     nth(Uint8Array[10,20,30],1)=20  nth(Uint8Array[10,20,30],-1)=30
+#     nth(Uint8Array[],0)=undefined (length 0 -> guard fails)
+#     nth({length:3,0:'x',1:'y',2:'z'},1)='y'  nth({length:2,...},-1)='y'
+#     nth({length:0},0)=undefined  nth({length:3,...},3)=undefined (==len)
+#   ELEMENT TYPE FIDELITY (returned by reference / by value, NO coercion of
+#   elements): nth([true,false],0)=true  nth([1.5,2.5],1)=2.5
+#     nth([null,undefined,NaN],1)=undefined  nth([null,undefined,NaN],2)=NaN
+#     nth([{x:1}],0)={x:1} (same ref)  nth([[1],[2]],0)=[1]  nth([1n,2n,3n],1)=2n
+#   NON-ARRAY-LIKE arg (no usable .length) -> undefined:
+#     nth(null,0) nth(undefined,0) nth(42,0) nth({},0) nth(new Set([1,2,3]),0)
+#     nth(new Map([[1,2]]),0)  nth(true,0)  nth(false,0)   all -> undefined
+#
+# ---------------------------------------------------------------------------
+# THROW BEHAVIOR
+# ---------------------------------------------------------------------------
+#   Exactly ONE throw path reachable from codec-faithful inputs:
+#     - n is a NON-ZERO BIGINT and the array guard PASSES (array truthy & length
+#       truthy): toNumber(bigint) reaches NODE D `+value` -> TypeError:
+#           "Cannot convert a BigInt value to a number".
+#       nth(['a','b','c','d'], 2n)  -> THROWS TypeError.
+#       nth(['a','b','c','d'], -1n) -> THROWS TypeError.
+#       This is recorded as a {__throw} expected and IS gradable (bigint
+#       round-trips through the harness codec).
+#       *** EXCEPTION: 0n (and -0n) does NOT throw. 0n is falsy, so toFinite NODE
+#       A short-circuits to 0 BEFORE toNumber/+value is reached. nth(a, 0n) -> a[0]
+#       (= 'a'), nth(a, -0n) -> a[0]. Only NON-ZERO bigints throw. ***
+#     - IMPORTANT: a non-zero bigint n only throws when the guard passes. If the array
+#         guard FAILS FIRST (array falsy or length falsy), n is never coerced and
+#         NO throw occurs -> undefined. nth(null, 2n) -> undefined (no throw);
+#         nth([], 2n) -> undefined (no throw). genInputs exercises BOTH.
+#   No other codec-faithful input throws. (Symbol n does NOT throw -> NaN -> 0,
+#   but Symbol is not codec-faithful; see SCOPE.)
+
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Pure deterministic value function. For each generated [array, n] the oracle is
+# the exact value the real lodash.nth@4.11.2 returns, OR a {__throw} marker for
+# the bigint throw path. Element results compared structurally: undefined encoded
+# distinctly from null (own undefined / returned undefined -> {__t:undef} per the
+# harness codec), NaN distinct from a number, object/array elements by structure.
+# No seam — fully deterministic, no clock/RNG/IO/network.
+
+# ---------------------------------------------------------------------------
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire nth pipeline above —
+#   the `array && array.length` guard, baseNth's negative-offset + isIndex range
+#   test (0 <= n_eff < length, strict), and the FULL toInteger / toFinite /
+#   toNumber coercion chain including: truncate-toward-zero via result-remainder,
+#   the falsy short-circuit returning -0 for -0, Infinity -> +/-MAX_INTEGER,
+#   NaN -> 0, the string regex paths (reTrim trim, reIsBinary/reIsOctal parseInt,
+#   reIsBadHex -> NaN, otherwise unary plus), Symbol -> NaN, object valueOf ->
+#   maybe String, boolean -> unary plus, and NON-ZERO bigint -> +value TypeError
+#   throw (0n/-0n short-circuit in toFinite to 0, no throw).
+#   isIndex's reIsUint string branch is in-contract but DEAD for nth's inputs
+#   (n_eff is always a number); reproduce isIndex faithfully regardless.
+#
+# CARRIED DATA: none. No embedded tables, S-boxes, or charmaps. The five regexes
+#   and the numeric constants are small in-contract literals reproduced above by
+#   value, not a carried-data table.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (behavior FULLY SPECIFIED above so a blind
+#   engineer reconstructs it; EXCLUDED from genInputs only because the value is
+#   not codec-round-trippable as a persisted arg):
+#     - SYMBOL as n (e.g. nth(a, Symbol())): toNumber -> isSymbol -> NaN ->
+#       toInteger 0 -> returns a[0]. NOT emitted: Symbols do not survive
+#       JSON.stringify(encode(args)).
+#     - FUNCTION as n: isObject true; valueOf is Function.prototype.valueOf ->
+#       returns the function itself (still object) -> String(fn) -> +String ->
+#       NaN -> 0 (unless the source text happens to be numeric). NOT emitted:
+#       functions are not codec-faithful.
+#     - BOXED PRIMITIVE as n (new Number(2), new String('1')): valueOf -> the
+#       primitive -> coerces normally (new Number(2) -> index 2 -> 'c'). NOT
+#       emitted: boxed primitives do not round-trip.
+#     - FUNCTION / SYMBOL as an array ELEMENT: returned by reference / value
+#       unchanged (nth does not coerce elements), but not codec-faithful as a
+#       persisted element -> NOT emitted.
+#     - SPARSE-ARRAY HOLE at the selected index: array[n] reads `undefined` for a
+#       genuine hole, and nth returns that undefined. BUT a hole does not survive
+#       JSON persist (collapses to null), so a hole AT the read index is excluded
+#       from genInputs (the revived arg would have null there, not a hole; both
+#       compute consistently only by accident). An EXPLICIT own-undefined element
+#       (e.g. [1, undefined, 3]) IS codec-faithful ({__t:undef}) and IS emitted:
+#       nth([1,undefined,3],1) -> undefined (own undefined preserved).
+#   These are reconstructable from this spec; they are simply not graded.
+#
+#   READ-ONLY / NON-MUTATION: nth never mutates `array`. No mutation-observation
+#   harness needed. (n's valueOf MAY be called once during coercion on the
+#   delegate path; that is a read of n, not a mutation of array.)
+
+# ---------------------------------------------------------------------------
+PROVENANCE lodash.nth@4.11.2
+#   repo: lodash/lodash (custom modularized build, `lodash modularize
+#         exports="npm" -o ./`), tag 4.11.2-npm-packages
+#   license: MIT (Copyright jQuery Foundation and other contributors;
+#            based on Underscore.js 1.8.3)
+#   source file: node_modules/lodash.nth/index.js
+#     - nth                  lines 100-102  (module.exports = nth, line 296)
+#     - baseNth              lines 55-62
+#     - isIndex              lines 72-77
+#     - toInteger            lines 245-250
+#     - toFinite             lines 207-217
+#     - toNumber             lines 275-294
+#     - isObject/isObjectLike/isSymbol  lines 129-182
+#     - constants/regexes    lines 11-45

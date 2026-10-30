@@ -1,0 +1,127 @@
+UNIT wire_line
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@f68cca701417 cli/lang/rust.mjs wireLine with its helpers wireValue, notCarriable, jsonText, optionOf, ownKeys — the rust driver's argument transport after the round-5 rewrite (selfhost #93) and the round-5b narrowings (#119), reproduced exactly, accidents included
+ORACLE-CLASS deterministic
+SIG wire_line(args: list[json], sig: json) -> text | record[__narrowed: text]
+ENVELOPE args is the decoded argument list of one vector; sig is a parsed SIG tree (DESCRIPTION gives its shape). The js
+  widening is the unit's real domain: arguments may hold big integers, byte arrays and host byte buffers, the absent
+  value, lists with holes, text with lone surrogates (values and map keys), keyed collections, sets, regexps and boxed
+  primitives; args may be a map, a text or none; sig may be a hand-built tree that breaks the SIG grammar. Throws are IN
+  scope as observations (R2). OUT: callables and symbols as argument values, accessor properties, proxies, objects with a
+  prototype other than the generic object's (the codec rebuilds every map on the generic prototype), holes in sig's
+  parameter list. HOST KEY ORDER (R15, R17) is graded ONLY through the js extension: the shared oracle carries every map
+  argument as a canonical map, so its shared vectors hold maps whose keys are already in sorted order, and every probe of
+  another creation order is a js-extension vector.
+DEPENDS-ON none
+UNGUARDED-PRECONDITION sig.args assumes a list of parameter maps  DISCHARGE: caller
+UNGUARDED-PRECONDITION every type node reached by a present value assumes a k field and the node fields its kind names  DISCHARGE: unchecked
+DESCRIPTION Turn one vector's decoded argument list into the single line of JSON text the verifier's generated rust harness
+  reads on stdin, walking each argument by its abstract type from the parsed SIG; or answer NARROWED — a fresh record
+  whose one field __narrowed holds a REASON text — when the rust side could not receive the vector exactly as the js side
+  does. A parsed SIG tree is a map: args = a list of parameter maps {name: text, type: NODE, rest: true only on a rest
+  parameter}; name and result are present but never read. A NODE is a map whose k names the kind: text, bytes, bool, none,
+  i64, u64, f64, json (no other field); list with item: NODE; tuple with items: list of NODE; map with key and val: NODE;
+  record with fields: a list of [field name, NODE] pairs in declared order; union with alts: list of NODE in written order.
+  Every rendering below is compact JSON text: no whitespace anywhere outside text literals. REASON texts are quoted below
+  exactly; <n> is a count in decimal digits.
+BEHAVIOR
+R1 Reading the SIG. FIXED = the number of parameters not marked rest. REST = the type of the FIRST parameter marked rest;
+  a rest parameter with no type (absent or none) means there is NO rest. Argument j (0-based) is wired at the type of the
+  j-th entry of the WHOLE parameter list when j < FIXED (whether or not that entry is the rest one), else at REST.
+  CITED FIDELITY package
+R2 Throws, and only these, before any argument is looked at: sig is none or absent, sig has no parameter list (or one that
+  is not a list), or a parameter entry is none. They throw even when args is malformed. Nothing else throws (R5).
+R3 Shape. args not a list -> NARROWED "the args are not a list". No REST and the args count differs from FIXED ->
+  NARROWED "<count> args for a <FIXED>-parameter SIG". With a REST any count passes, fewer than FIXED included (only the
+  arguments present are wired). Then, before any argument is wired, a hole anywhere in args -> NARROWED HOLE_TEXT (it
+  wins over every argument's own result, faults included). CITED FIDELITY package
+R4 Walk. The arguments are wired left to right by WIRE (R6-R16); the FIRST argument whose wire is NARROWED is the result
+  and no later argument is examined. Otherwise the result is "[" + the wires joined by "," + "]"; no arguments -> "[]".
+R5 A host fault while wiring one argument (a malformed type node, TABLE MALFORMED) -> NARROWED "wire: " + the fault
+  message. Inside one list, tuple or record EVERY element / item / field is wired before the first NARROWED among them is
+  chosen, so a fault anywhere inside an argument wins over a NARROWED sibling in it; across arguments R4's order decides.
+R6 None and absent first, at every typed position, any depth. The ABSENT value (an argument, list element or tuple item
+  that is absent, or a declared record field the value lacks or holds as absent) is tested FIRST, by reading the node: at
+  a none node or an OPTION union (R7) it wires "null"; at every other node (json, map, a multi-way union, a scalar, a kind
+  outside the set, a node with no k) -> NARROWED ABSENT_REASON. Then a none value wires "null" before the type is read,
+  whatever the type (malformed included). So on a malformed node absent can fault (TABLE MALFORMED) where none cannot.
+  CITED FIDELITY package
+R7 Union. An OPTION union — exactly two alternatives, exactly one of them not none, in either order — wires the value by
+  that alternative's rule. Every other union (two non-none alternatives, three or more, one, or zero) wires the value by
+  the json rule R15, whatever the alternatives are: the value is never checked against them. CITED FIDELITY package
+R8 f64. A number -> its IEEE-754 binary64 bit pattern as a JSON string of exactly 16 lowercase hex digits, every NaN as
+  7ff8000000000000 (-0 -> "8000000000000000", +Infinity -> "7ff0000000000000"). Anything else (a big integer included)
+  -> NARROWED "not an f64 value".
+R9 text. A text with a lone surrogate -> NARROWED "a lone surrogate has no UTF-8 form"; another text -> TEXT-ESCAPE.
+  Anything else (a boxed text included) -> NARROWED "not a text value".
+R10 bool. true / false -> "true" / "false"; anything else -> NARROWED "not a bool value".
+R11 i64 and u64. Accepted: a big integer, or a number that is an integer of magnitude at most 2^53-1 (-0 counts, and is
+  0); in range [-2^63, 2^63-1] for i64, [0, 2^64-1] for u64 -> its exact decimal digits ("-" when negative). Anything else
+  (a fraction, 2^53 as a number, out of range, non-number) -> NARROWED "not a i64 value" / "not a u64 value".
+  CITED FIDELITY package
+R12 list. Not a list (a byte array, a text, a map: anything but a list) -> NARROWED "not a list value". A list with any
+  hole -> NARROWED HOLE_TEXT (checked before any element is wired). Otherwise each element is wired at the item type;
+  the first NARROWED element is the wire; else "[" + the element wires joined by "," + "]".
+R13 tuple. A list with any hole -> NARROWED HOLE_TEXT, checked first (before the length test and before the node's items
+  are read, so it wins over a wrong length and over a node with no items). Otherwise: not a list, or a list whose length
+  differs from the item count -> NARROWED "not a <items>-tuple"; else item i is wired at item type i, first NARROWED
+  wins, else "[...]" as R12. CITED FIDELITY package
+R14 record. Not a plain map (a list, keyed collection, set, byte array, regexp, boxed value, scalar) -> NARROWED "not a
+  record value". Otherwise each declared field, in declared order, wires the value's OWN property of that name at the
+  field type — a missing one is absent (R6: "null" only at a none or option field; an inherited member such as
+  constructor is never read). First NARROWED field wins; else "{" + each JSON-quoted field name (TEXT-ESCAPE) + ":" +
+  its wire, joined by ",", + "}". Undeclared keys of the value are dropped unchecked.
+R15 json and map (and R7's non-option unions). If the value is NOT CARRIABLE -> NARROWED with the first REASON found by
+  CARRY; otherwise the value's PLAIN rendering. A map position never consults its key or value type: map[text, f64]
+  holding "x" sends "x", a number as decimal (not bits). CARRY, depth first, elements in index order and map entries in
+  HOST KEY ORDER (a key before its value):
+  none, bool -> carriable;
+  a number that is NaN, +Infinity, -Infinity or -0 -> NARROWED_JSON;
+  a whole number of magnitude above 2^53 (2^53 itself passes) -> "a whole number past 2^53 reaches serde_json as a
+  different integer" (whether or not its rendering would be exact);
+  a big integer below -2^63 or above 2^64-1 -> "an integer past i64/u64 has no serde_json form";
+  a text (or a map key) with a lone surrogate -> "a lone surrogate has no UTF-8 form";
+  the absent value (nested) -> ABSENT_REASON;
+  a list hole -> HOLE_TEXT;
+  a plain map -> its entries; a list -> its elements;
+  any other object -> "a <TAG> has no serde_json form", TAG = the host's class name: Uint8Array (a host byte buffer too),
+  Map (keyed collection), Set, RegExp, Number, String, Boolean (boxed). CITED FIDELITY package
+R16 Every other kind (bytes, none, a kind outside the closed set, a node with no k) -> NARROWED "the rust harness has no
+  route for <k>", <k> the kind text as written, or ABSENT_TEXT when the node has no k. CITED FIDELITY package
+R17 PLAIN rendering (only of CARRIABLE values): a big integer -> its decimal digits, unquoted; none -> "null"; bool ->
+  "true" / "false"; a number -> NUMBER-TEXT (CARRY has removed every whole number past 2^53); text -> TEXT-ESCAPE; a
+  list -> "[" + elements PLAIN joined by "," + "]"; a plain map -> "{" + each TEXT-ESCAPE key + ":" + value PLAIN,
+  joined by ",", + "}" in HOST KEY ORDER: keys that are array indices (the canonical decimal spelling of an integer
+  0 .. 2^32-2) first, ascending numerically, then every other key in creation order. CITED FIDELITY package
+TABLE MALFORMED — the fault message R5 reports, for a value that is not none (R6 spares none only); <x> is ABSENT_TEXT when the field is missing, "null" when it is none
+  the type node itself is missing or none, any value but none (absent included)     -> Cannot read properties of <x> (reading 'k')
+  a union node with no alts, any value but none (absent included)                   -> Cannot read properties of <x> (reading 'filter')
+  a list node with no item, at an element that is not none (absent included)        -> Cannot read properties of <x> (reading 'k')
+  a tuple node with no items, a present value that is not a list with a hole        -> Cannot read properties of <x> (reading 'length')
+  a record node with no fields, the value a plain map                               -> Cannot read properties of <x> (reading 'map')
+TABLE TEXT-ESCAPE — the JSON string rendering of a well-formed text (UTF-16 code units, left to right), wrapped in double quotes; ESC = U+005C reverse solidus
+  U+0022 quotation mark                                -> ESC then the quotation mark
+  U+005C reverse solidus                               -> ESC then ESC
+  U+0008 U+0009 U+000A U+000C U+000D                   -> ESC then the letter b, t, n, f, r respectively
+  any other unit below U+0020                          -> ESC, the letter u, "00", two lowercase hex digits
+  everything else (U+007F, U+2028, U+2029, a surrogate pair) -> itself, unescaped
+TABLE NUMBER-TEXT — a finite number other than -0: zero -> "0"; a negative one -> "-" then its magnitude's text; a positive x, written with the fewest significant digits k that read back as x and decimal exponent n (x = digits × 10^(n-k))
+  k <= n <= 21                     -> the digits followed by n-k zeros
+  0 < n <= 21                      -> the first n digits, ".", the rest
+  -6 < n <= 0                      -> "0." then -n zeros then the digits
+  otherwise                        -> d[.ddd] then "e", then "+" or "-", then abs(n-1) (1e+21, 1e-7, 1.5e-7)
+PINNED text ABSENT_TEXT = "undefined" CITED R16 — the host's spelling of a missing field, as R16 and TABLE MALFORMED render it
+PINNED text ABSENT_REASON = "the absent value has no serde_json form" CITED R6 — the reason for the absent value where rust has no null for it
+PINNED text HOLE_TEXT = "an array hole has no serde_json form" CITED R3 — the reason for a hole in args, a list, a tuple or a json list
+PINNED text NARROWED_JSON = "json holds no NaN/Inf/-0 in serde_json::Value" CITED R15 — the driver's exported reason for a non-finite or negative-zero number under json
+INVARIANT every text result begins with "[" and ends with "]" and is valid JSON.
+INVARIANT NARROWED is never sent: it replaces the whole line.
+ORACLE value -> oracles/wire_line.json  CANONICAL-SHA256 4e62fc80375dc0f717e0885958ed1119a8ef8ae61755a7c789ef8289dac9823d
+NOTE No rust variant, by decision: the unit's input is the js host's own decoded values (big integers, byte buffers, the absent
+  value, holes, lone surrogates, keyed collections) and the result depends on host accidents (host key order, class tags,
+  host fault messages). It is the js side of the rust transport; a rust artifact would verify a shadow of it.
+SCOPE IN: wireLine and the helpers it calls (wireValue, notCarriable, jsonText, optionOf, ownKeys, lone, narrowed) over the
+  envelope, R1-R17. OUT: the harness generator, marshalling and parsing on the rust side (harnessMain, parseWire, reshape,
+  batchCaller), and the rest of cli/lang/rust.mjs.
+PROVENANCE rederive@f68cca701417 cli/lang/rust.mjs (wireLine lines 279-289, helpers lines 244-278, NARROWED_JSON line 57), canon.mjs encode for the f64 bits; selfhost seam seams/wire_line.mjs.

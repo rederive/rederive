@@ -1,0 +1,272 @@
+UNIT round
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG round(number: any, precision?: any = 0) -> number
+DEPENDS-ON none   # self-contained, zero runtime deps (all helpers inlined in index.js)
+
+# ============================================================================
+# OVERVIEW
+# ----------------------------------------------------------------------------
+# `round` is the default export (module.exports) of lodash.round@4.0.4.
+# It is built as `round = createRound('round')`, i.e. the rounding primitive is
+# the JS built-in `Math.round`. It rounds `number` to `precision` decimal places
+# using an EXPONENTIAL-SHIFT trick (string-based) to avoid binary float artifacts
+# (so round(1.005, 2) === 1.01, NOT the naive 1.00 that Math.round(1.005*100)/100
+# would give). Pure; deterministic; no seam (no clock/RNG/io/net). Value-mode oracle.
+#
+# EMITTER TARGET: `export default <fn>` where <fn> is the round function value.
+#   importKind = 'default'; the harness calls the default export directly.
+#
+# `Math.round` HALF-ROUNDING DIRECTION (critical, load-bearing): rounds half
+# toward +Infinity (NOT away-from-zero, NOT banker's). Therefore:
+#   Math.round(0.5)=1, Math.round(1.5)=2, Math.round(2.5)=3,
+#   Math.round(-0.5)=-0 (negative zero!), Math.round(-1.5)=-1, Math.round(-2.5)=-2.
+#   The ".5 of a negative" rounds toward 0/+Inf, e.g. -2.5 -> -2, not -3.
+#
+# ============================================================================
+# EXACT ALGORITHM  (transcribed from createRound + helpers; reproduce verbatim)
+# ============================================================================
+#
+# round(number, precision):
+#   func = Math.round                          # the bound primitive
+#   number    = toNumber(number)               # full lodash numeric coercion (below)
+#   precision = nativeMin(toInteger(precision), 292)
+#                                              # nativeMin === Math.min. NOTE: ONLY an
+#                                              # UPPER clamp of 292. There is NO lower
+#                                              # clamp. (The hint's "[-292,292]" is WRONG
+#                                              # on the low side — verified against source.)
+#   if (precision) {                           # JS truthiness: nonzero AND not NaN.
+#                                              #   0 -> falsy, -0 -> falsy, NaN -> falsy.
+#                                              #   (toInteger never returns NaN; it
+#                                              #    returns 0 for NaN inputs — see below.)
+#       # ---- EXPONENTIAL SHIFT (string-based; this is the float-artifact fix) ----
+#       pair  = (toString(number) + 'e').split('e')        # toString = LODASH toString (below)
+#       value = func( pair[0] + 'e' + (+pair[1] + precision) )
+#       pair  = (toString(value) + 'e').split('e')
+#       return +( pair[0] + 'e' + (+pair[1] - precision) )
+#   }
+#   return func(number)                        # precision falsy -> round to integer directly
+#
+# ---- EXP-SHIFT MECHANICS (reproduce EXACTLY; subtle and load-bearing) ----
+# Let S = toString(number)  (lodash toString — see below; for finite numbers this
+# equals the default `String(number)`, EXCEPT -0 stringifies to '-0' not '0').
+#   * `(S + 'e').split('e')` appends a literal 'e' then splits on 'e'.
+#     - If S has NO exponent (e.g. "123.456"):  result = ["123.456", ""]
+#       pair[0]="123.456", pair[1]="" , and (+pair[1]) === +"" === 0.
+#     - If S ALREADY has an exponent (e.g. "1e+21" for 1e21): the appended 'e'
+#       makes "1e+21e", split('e') = ["1","+21",""]; pair[0]="1", pair[1]="+21",
+#       (+pair[1]) === 21. (Only pair[0] and pair[1] are ever read; pair[2] ignored.)
+#       So mantissa = pair[0], decimal-exponent = (+pair[1]).
+#   * value = Math.round( mantissa + 'e' + (exponent + precision) )
+#       i.e. construct the string "<mantissa>e<exponent+precision>", coerce that
+#       string to a Number via Math.round's ToNumber, then Math.round it.
+#       e.g. number=4.006, precision=2 -> "4.006e2" -> 400.6 -> Math.round -> 401.
+#   * Then stringify `value` the same way, and shift back by SUBTRACTING precision
+#       from its exponent: return +("<mantissa2>e<exponent2 - precision>").
+#       e.g. value=401 -> "401" -> ["401",""] -> +("401e-2") -> 4.01.
+#
+# A faithful (verified-equivalent) reference implementation of the shift body:
+#   pair  = (toString(number) + 'e').split('e')
+#   value = Math.round( pair[0] + 'e' + (Number(pair[1]) + precision) )
+#   pair  = (toString(value) + 'e').split('e')
+#   result = Number( pair[0] + 'e' + (Number(pair[1]) - precision) )
+# This was differentially confirmed === the real package on the full curated set.
+#
+# ============================================================================
+# HELPER: toNumber(value)  — coerces `number` (and is also used inside toInteger)
+# ============================================================================
+# Constants:  INFINITY = 1/0 ;  NAN = 0/0 ;  reTrim = /^\s+|\s+$/g
+#   reIsBinary = /^0b[01]+$/i ;  reIsOctal = /^0o[0-7]+$/i ;
+#   reIsBadHex = /^[-+]0x[0-9a-f]+$/i ;  freeParseInt = parseInt
+# Steps:
+#   1. if typeof value == 'number'  -> return value  (NaN, +/-Infinity, -0 pass through unchanged)
+#   2. if isSymbol(value)           -> return NaN     (Symbol primitive or [object Symbol])
+#   3. if isObject(value)  (typeof 'object' or 'function', and truthy):
+#        other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#        value = isObject(other) ? (other + '') : other       # unwrap valueOf, stringify if still object
+#   4. if typeof value != 'string'  -> return (value === 0 ? value : +value)
+#        # this is where booleans/null/arrays-after-unwrap/bigint land:
+#        #   +true=1, +false=0, +null=0, +undefined=NaN, +[5.6] (via step3 unwrap to "5.6")...
+#        #   bigint: `+10n` THROWS TypeError "Cannot convert a BigInt value to a number" (see SCOPE).
+#   5. value is a string:
+#        value = value.replace(reTrim, '')                    # strip leading/trailing whitespace
+#        isBinary = reIsBinary.test(value)
+#        if (isBinary || reIsOctal.test(value))
+#             return freeParseInt(value.slice(2), isBinary ? 2 : 8)   # "0b101"->5, "0o17"->15 (case-insensitive)
+#        else return reIsBadHex.test(value) ? NaN : (+value)
+#             # signed-hex like "+0x20"/"-0x20" -> NaN; everything else -> JS +string
+#             #   (so unsigned "0x1F" -> 31 via native ToNumber; "1e3" -> 1000; "abc" -> NaN; "" -> 0)
+#
+# Demonstrated toNumber cases (self-consistent with genInputs):
+#   "4.006"->4.006 ; "1e3"->1000 ; "  4.6  "->4.6 ; ""->0 ; "  "->0 ; "abc"->NaN ;
+#   "0x1F"->31 ; "  0x1F  "->31 ; "0b101"->5 ; "0B101"->5 ; "0o17"->15 ; "0O17"->15 ;
+#   "+0x20"->NaN ; "-0x20"->NaN ; true->1 ; false->0 ; null->0 ; undefined->NaN ;
+#   []->0 (valueOf->[], +""->0 path: [] toString "" -> 0) ; [5.6]->5.6 ; {}->NaN ;
+#   -0 (number) -> -0 ; Infinity->Infinity ; -Infinity->-Infinity ; NaN->NaN .
+#
+# ============================================================================
+# HELPER: toFinite(value)
+# ============================================================================
+#   if (!value)  return value === 0 ? value : 0          # falsy: 0/-0 kept as-is, NaN/''/null -> 0
+#   value = toNumber(value)
+#   if (value === Infinity || value === -Infinity)
+#       return (value < 0 ? -1 : 1) * MAX_INTEGER         # MAX_INTEGER = 1.7976931348623157e+308
+#   return value === value ? value : 0                    # NaN -> 0
+#
+# HELPER: toInteger(value)  — used to coerce `precision`
+# ============================================================================
+#   result    = toFinite(value)
+#   remainder = result % 1
+#   return result === result ? (remainder ? result - remainder : result) : 0
+#   # i.e. truncate toward zero: 3.2->3, 2.9->2, -2.9->-2, "2"->2, "2.9"->2, true->1,
+#   #   null/""/false/undefined/NaN/{}->0 (NaN->0 via toFinite), [2]->2,
+#   #   Infinity-> +MAX_INTEGER, -Infinity-> -MAX_INTEGER.
+#   # CONSEQUENCE FOR precision = nativeMin(toInteger(precision), 292):
+#   #   precision Infinity     -> toInteger=+MAX_INTEGER -> min(...,292)=292
+#   #   precision -Infinity    -> toInteger=-MAX_INTEGER -> min(...,292)=-MAX_INTEGER (a huge
+#   #                              negative TRUTHY value) -> exp-shift path -> exponent underflow.
+#
+# ============================================================================
+# HELPER: toString(value)  — LODASH toString, used on `number` and on `value`
+# ============================================================================
+#   toString(value): return value == null ? '' : baseToString(value)
+#   baseToString(value):
+#     if typeof value == 'string' return value
+#     if isSymbol(value) return symbolToString.call(value) (or '')   # not reachable here (value is a number)
+#     result = (value + '')                                          # default Number->String
+#     return (result == '0' && (1/value) == -Infinity) ? '-0' : result
+#   *** LOAD-BEARING: this is the ONLY divergence from plain String(number): it maps
+#       NEGATIVE ZERO to the literal '-0' (plain String(-0) gives '0'). This is what
+#       preserves the -0 sign through the exp-shift. Reproduce it EXACTLY.
+#   For all OTHER finite numbers, baseToString === String(number), which means:
+#     - large/small magnitudes use SCIENTIFIC notation exactly as JS String does
+#       (1e21 -> "1e+21", 1.5e-7 -> "1.5e-7"); reproduce via String(), NOT toFixed().
+#     - Infinity -> "Infinity", -Infinity -> "-Infinity", NaN -> "NaN".
+#
+# ============================================================================
+# BEHAVIOR  (ordered pipeline / BRANCH nodes — exact + complete)
+# ============================================================================
+# B0. number = toNumber(number)   [helper above]
+# B1. precision = Math.min(toInteger(precision), 292)   [helpers above]
+# B2. BRANCH on truthiness of precision:
+#     B2a. precision is 0 or -0 or (never NaN — toInteger can't yield NaN):
+#          -> return Math.round(number)
+#          # Math.round(number):  NaN->NaN ; Infinity->Infinity ; -Infinity->-Infinity ;
+#          #   -0->-0 ; 0->0 ; half rounds toward +Inf (0.5->1, -0.5->-0, 2.5->3, -2.5->-2).
+#     B2b. precision is any nonzero number (positive OR negative, incl. huge negatives):
+#          -> EXPONENTIAL SHIFT body (above). Notable derived outcomes:
+#             * number = +/-Infinity with nonzero precision -> "Infinitye<p>"/"-Infinitye<p>"
+#               -> Math.round(NaN) -> NaN -> final result NaN.
+#               (CONTRAST: round(Infinity) with precision 0 -> Infinity. The Infinity behavior
+#                DIFFERS between precision 0 and nonzero precision. Verified.)
+#             * number = NaN with nonzero precision -> "NaNe<p>" -> NaN -> NaN.
+#             * precision negative & large (e.g. <= about -292 for typical magnitudes):
+#               exponent goes very negative; Math.round of an underflow-to-0 value -> 0
+#               (e.g. round(1234.5678,-292)=0, round(...,-300)=0, round(...,-1000)=0).
+#             * precision = -MAX_INTEGER (from precision -Infinity): the exponent string
+#               "<m>e-1.7976931348623157e+308" coerces to NaN -> Math.round(NaN) -> NaN.
+#               (Verified: round(1.234,-Infinity) -> NaN.)
+#             * -0 preservation: round(-0,2) -> -0 ; round(-0.0001,2) -> -0 (intermediate
+#               value is -0, toString gives '-0', shift back yields -0). Verified.
+#
+# ============================================================================
+# VERIFIED EDGE/SAMPLE OUTPUTS (real package, lodash.round@4.0.4) — the oracle truth
+# ============================================================================
+#   round(4.006)            -> 4
+#   round(4.006, 2)         -> 4.01
+#   round(4060, -2)         -> 4100
+#   round(1.005, 2)         -> 1.01     # exp-shift fix (naive Math.round(1.005*100)/100 = 1.00)
+#   round(1.255, 2)         -> 1.26     # exp-shift fix
+#   round(2.005, 2)         -> 2.01
+#   round(123.456, 1)       -> 123.5
+#   round(123.456, -1)      -> 120
+#   round(0.5)              -> 1
+#   round(1.5)              -> 2
+#   round(2.5)              -> 3
+#   round(-0.5)             -> -0       # NEGATIVE ZERO (Math.round half toward +Inf)
+#   round(-1.5)             -> -1
+#   round(-2.5)             -> -2
+#   round(-1.005, 2)        -> -1       # Math.round(-100.4999...) = -100 -> -1 (NOT -1.01)
+#   round(0)               -> 0
+#   round(-0)              -> -0
+#   round(-0.4)            -> -0
+#   round(NaN)             -> NaN
+#   round(Infinity)       -> Infinity
+#   round(-Infinity)      -> -Infinity
+#   round(Infinity, 2)    -> NaN        # nonzero precision => exp-shift => NaN
+#   round(-Infinity, 2)   -> NaN
+#   round(NaN, 2)         -> NaN
+#   round(-0, 2)          -> -0
+#   round(-0.0001, 2)     -> -0
+#   round(1e21, 2)        -> 1e+21
+#   round(1.5e-7, 9)      -> 1.5e-7
+#   round(1.234, Infinity)  -> 1.234    # precision clamped to 292; 1.234 unchanged
+#   round(1.234, -Infinity) -> NaN      # precision = -MAX_INTEGER -> exponent NaN
+#   round(123, 300)       -> 123        # precision clamped to 292
+#   round(1.23456, 293)   -> 1.23456    # precision clamped to 292
+#   round(1234.5678, -292)  -> 0
+#   round(1234.5678, -300)  -> 0
+#   round(1234.5678, -3)    -> 1000
+#   round(2.5, "abc")     -> 3          # precision "abc" -> toInteger 0 -> direct Math.round
+#   round(2.5, "")        -> 3
+#   round(1.2345, "2")    -> 1.23       # precision string -> 2
+#   round(1.2345, "2.9")  -> 1.23       # precision truncates to 2
+#   round(1.2345, 2.9)    -> 1.23
+#   round(1.2345, true)   -> 1.2        # precision true -> 1
+#   round(1.2345, null)   -> 1          # precision null -> 0 -> direct round
+#   round(1.2345, [2])    -> 1.23       # precision [2] -> 2
+#   round(1.2345)         -> 1          # default precision (undefined -> 0)
+#   round("4.006", 2)     -> 4.01
+#   round("0x1F")         -> 31
+#   round("  0x1F  ")     -> 31
+#   round("0b101")        -> 5
+#   round("0o17")         -> 15
+#   round("0B101")        -> 5
+#   round("0O17")         -> 15
+#   round("+0x20")        -> NaN
+#   round("-0x20")        -> NaN
+#   round("  4.6  ")      -> 5
+#   round("1e3")          -> 1000
+#   round("abc")          -> NaN
+#   round("")             -> 0
+#   round(undefined)      -> NaN
+#   round(null)           -> 0
+#   round([])             -> 0
+#   round([5.6])          -> 6
+#   round({})             -> NaN
+#   round(true)           -> 1
+#
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic, pure. The harness records each input's exact returned number
+# (including the sign of -0, NaN, +/-Infinity) as the expected value.
+# Throw-paths (bigint) are recorded as {__throw}; not emitted by genInputs.
+#
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   toNumber/toFinite/toInteger/toString/baseToString helpers, the Math.round
+#   primitive with half-toward-+Infinity, the upper-only 292 precision clamp,
+#   the truthiness branch, and the string-based exponential shift (incl. -0 sign
+#   preservation via lodash toString, scientific-notation stringification, and the
+#   pair[0]/pair[1] split semantics).
+# CARRIED DATA: none. (No literal tables; constants are tiny regexes/numbers fully
+#   transcribed inline above: reTrim, reIsBinary, reIsOctal, reIsBadHex, MAX_INTEGER,
+#   INFINITY, NAN, 292.)
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; documented for the blind
+#   re-emitter so they can still reconstruct behavior):
+#   - Symbol args: toNumber(Symbol) -> NaN (round -> NaN). Symbols are NOT codec-
+#     round-trippable, so not emitted.
+#   - bigint args: toNumber takes the `+value` path and `+<bigint>` THROWS a TypeError
+#     ("Cannot convert a BigInt value to a number"). Although bigint IS codec-faithful,
+#     it is documented here as a THROW path and NOT emitted (the recorded contract would
+#     be {__throw}); a blind re-emitter reproduces it from this note.
+#   - functions as args: codec-non-faithful -> not emitted. (Behaviorally a function is
+#     isObject, valueOf returns itself -> stringified -> NaN, but identity doesn't survive
+#     the codec; out of scope.)
+#   - No statefulness, no side effects, no seam (no clock/RNG/env/fs/net). Nothing to inject.
+#
+# ============================================================================
+PROVENANCE lodash.round@4.0.4 ; repo lodash/lodash (modularized export of _.round) ;
+#   MIT license ; source file: node_modules/lodash.round/index.js (createRound('round'),
+#   module.exports = round). Build: `lodash modularize exports="npm" -o ./`.

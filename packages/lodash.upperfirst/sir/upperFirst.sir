@@ -1,0 +1,229 @@
+UNIT upperFirst
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG upperFirst(string = '') -> string          # default export: module.exports = upperFirst
+DEPENDS-ON none                                # zero runtime deps; all helpers are inlined below
+
+# ============================================================================
+# SUMMARY
+# Uppercases ONLY the first Unicode symbol (grapheme-ish unit) of the coerced
+# input string. Everything after the first symbol is returned BYTE-FOR-BYTE
+# UNCHANGED (the tail is NOT lowercased, NOT normalized). The "first symbol"
+# is the first JS UTF-16 char in the common (ASCII/BMP) case, but is the first
+# full Unicode symbol (astral surrogate pair, base+combining-mark cluster,
+# emoji-with-modifier/ZWJ/variation-selector cluster, regional-indicator pair)
+# when the string contains Unicode of interest. Uppercasing of that first
+# symbol is delegated to JS String.prototype.toUpperCase(), which may EXPAND
+# (e.g. 'ß' -> 'SS') or be a NO-OP (e.g. emoji, astral math letters).
+#
+# upperFirst = createCaseFirst('toUpperCase'); lowerFirst would be the dual.
+# ============================================================================
+
+BEHAVIOR  # ordered pipeline — exact + complete
+
+  # ---- NODE 1: coerce input to a string via toString(value) ----------------
+  # toString(value):
+  #   if value == null  (i.e. value === null OR value === undefined)  -> return ''
+  #   else                                                            -> baseToString(value)
+  #
+  # baseToString(value):
+  #   - if typeof value === 'string'        -> return value unchanged
+  #   - if isSymbol(value)                  -> return symbolToString.call(value)
+  #         # isSymbol: typeof === 'symbol' OR (object-like AND
+  #         #   Object.prototype.toString.call(value) === '[object Symbol]')
+  #         # symbolToString === Symbol.prototype.toString, so a Symbol coerces
+  #         # to its description form e.g. Symbol('foo') -> 'Symbol(foo)'.
+  #         # (Symbols are NOT in the codec-faithful input envelope — see SCOPE
+  #         #  OUT-OF-ENVELOPE; documented here only for completeness.)
+  #   - otherwise:
+  #         result = (value + '')            # JS default ToString coercion
+  #         # negative-zero fix-up: if result === '0' AND (1/value) === -Infinity
+  #         #   -> return '-0'   (so the number -0 stringifies to '-0', not '0')
+  #         return result
+  #
+  #   Coercion examples (verified against the real package):
+  #     null        -> ''            undefined   -> ''
+  #     123         -> '123'         0           -> '0'        -0   -> '-0'
+  #     1.5         -> '1.5'         true        -> 'true'     false-> 'false'
+  #     NaN         -> 'NaN'         Infinity    -> 'Infinity' -Inf -> '-Infinity'
+  #     5n (bigint) -> '5'
+  #     []          -> ''            ['a','b']   -> 'a,b'      [1,2,3] -> '1,2,3'
+  #     [[1],[2]]   -> '1,2'         ['']        -> ''         [null] -> ''  [undefined] -> ''
+  #     {}          -> '[object Object]'   {a:1} -> '[object Object]'
+  #     {toString(){return 'hello'}} -> 'hello'
+  #     new Map([['a',1]]) -> '[object Map]'   new Set([1,2]) -> '[object Set]'
+  #     Uint8Array([104,105]) -> '104,105'     Buffer.from('abc') -> 'abc'
+  #   (All of the above are then fed through NODES 2..5 below.)
+
+  # ---- NODE 2: decide the symbol-split path (BRANCH on hasUnicode) ---------
+  #   strSymbols = hasUnicode(string) ? stringToArray(string) : undefined
+  #
+  # hasUnicode(string) -> boolean. TRUE iff the string contains at least one
+  # code unit in ANY of these ranges (this is the EXACT trigger set):
+  #   reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange + rsComboMarksRange
+  #                              + rsComboSymbolsRange + rsVarRange + ']')
+  #     rsZWJ              = '‍'                       # zero-width joiner
+  #     rsAstralRange      = '\ud800-\udfff'                # ANY surrogate code unit (high OR low, incl. lone)
+  #     rsComboMarksRange  = '̀-ͯ︠-︣'   # combining diacritical marks
+  #     rsComboSymbolsRange= '⃐-⃰'                # combining symbols
+  #     rsVarRange         = '︎️'                 # variation selectors 15/16
+  #   i.e. TRUE if the string contains any surrogate code unit (astral char or
+  #   even a lone surrogate), any combining mark/symbol in those ranges, a ZWJ,
+  #   or a variation selector. Otherwise FALSE.
+  #
+  #   IMPORTANT (path selection vs. uppercasing are independent):
+  #     - hasUnicode is purely a CODE-UNIT range test. Precomposed BMP letters
+  #       like 'é' (U+00E9, NFC), 'ß' (U+00DF), the ligature 'ﬀ' (U+FB00),
+  #       Latin/Greek/Cyrillic letters, digits, space, punctuation, ASCII, etc.
+  #       are NOT in any trigger range -> hasUnicode FALSE -> simple path.
+  #     - A DECOMPOSED 'é' = 'e' + U+0301 (combining acute) IS in the combining
+  #       range -> hasUnicode TRUE -> array path.
+  #
+  # When hasUnicode TRUE: strSymbols = stringToArray(string):
+  #   stringToArray(s) = hasUnicode(s) ? unicodeToArray(s) : asciiToArray(s)
+  #     # (re-checks hasUnicode internally; in this call it is TRUE so:)
+  #   unicodeToArray(s) = s.match(reUnicode) || []
+  #     # reUnicode is the global Unicode-symbol-segmentation regex (below).
+  #     # If match is null (e.g. empty string never reaches here), result is [].
+  #   asciiToArray(s) = s.split('')           # (NOT reached when hasUnicode TRUE)
+  #
+  #   reUnicode (the symbol grammar — group one full user-perceived symbol):
+  #     rsAstral   = '[\ud800-\udfff]'
+  #     rsCombo    = '[̀-ͯ︠-︣⃐-⃰]'
+  #     rsFitz     = '\ud83c[\udffb-\udfff]'                # emoji skin-tone modifier
+  #     rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+  #     rsNonAstral= '[^\ud800-\udfff]'
+  #     rsRegional = '(?:\ud83c[\udde6-\uddff]){2}'         # flag = 2 regional indicators
+  #     rsSurrPair = '[\ud800-\udbff][\udc00-\udfff]'       # astral codepoint
+  #     rsZWJ      = '‍'
+  #     reOptMod   = rsModifier + '?'
+  #     rsOptVar   = '[︎️]?'
+  #     rsOptJoin  = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')'
+  #                        + rsOptVar + reOptMod + ')*'
+  #     rsSeq      = rsOptVar + reOptMod + rsOptJoin
+  #     rsSymbol   = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional,
+  #                           rsSurrPair, rsAstral].join('|') + ')'
+  #     reUnicode  = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+  #   Net effect of this segmentation for upperFirst's purpose: strSymbols[0]
+  #   is the FIRST full user-perceived symbol — an astral surrogate pair stays
+  #   whole, a base char + trailing combining mark(s) stay together, an emoji
+  #   with skin-tone modifier / variation selector / ZWJ-joined sequence stays
+  #   together, a 2-codepoint flag stays together.
+  #
+  # When hasUnicode FALSE: strSymbols = undefined (the simple charAt path).
+
+  # ---- NODE 3: pick the first symbol (chr) ---------------------------------
+  #   chr = strSymbols ? strSymbols[0] : string.charAt(0)
+  #     - array path:  strSymbols[0]  = first full Unicode symbol (may be 1..N JS chars)
+  #     - simple path: string.charAt(0) = first UTF-16 code unit (1 JS char), or
+  #                    '' (empty string) when string is ''.
+  #   NOTE on empty string: '' has hasUnicode FALSE -> strSymbols undefined ->
+  #     chr = ''.charAt(0) = ''. (The array path is never taken for '' because
+  #     '' contains no trigger code unit.)
+
+  # ---- NODE 4: compute the trailing remainder (UNCHANGED) ------------------
+  #   trailing = strSymbols ? castSlice(strSymbols, 1).join('') : string.slice(1)
+  #     - array path:  castSlice(strSymbols, 1) = strSymbols.slice(1) (drop first
+  #         symbol), then .join('') re-concatenates symbols 1..end verbatim.
+  #         (castSlice(array,1): end defaults to array.length; since start=1 is
+  #          truthy it goes through baseSlice -> equivalent to array.slice(1).)
+  #     - simple path: string.slice(1) = the substring from index 1 to end.
+  #   The trailing is returned EXACTLY as-is: NOT lowercased, NOT uppercased,
+  #   NOT normalized. Mixed case in the tail is preserved.
+
+  # ---- NODE 5: combine -----------------------------------------------------
+  #   return chr.toUpperCase() + trailing
+  #     - chr.toUpperCase() uses native JS String.prototype.toUpperCase on the
+  #       first symbol. This is locale-INDEPENDENT (not toLocaleUpperCase):
+  #         'a' -> 'A',  'i' -> 'I' (NOT Turkish dotless),  'ß' -> 'SS',
+  #         'ﬀ' -> 'FF', 'ﬄ' -> 'FFL', combining 'é' -> 'É' (precomposed),
+  #         astral math 'U+1D41A (𝐚)' -> '𝐚' (no-op, no uppercase mapping),
+  #         emoji '😀' -> '😀' (no-op), digit/space/punct -> unchanged.
+  #     - If chr === '' (empty input), ''.toUpperCase() === '' and trailing === '',
+  #       so the result is '' (empty string in -> empty string out).
+
+# ----------------------------------------------------------------------------
+# DEMONSTRATED INPUT/OUTPUT TABLE (verified against lodash.upperfirst@4.3.1)
+# ----------------------------------------------------------------------------
+#   ''                       -> ''
+#   'a'                      -> 'A'
+#   'A'                      -> 'A'
+#   'Apple'                  -> 'Apple'
+#   'apple'                  -> 'Apple'
+#   'ABC'                    -> 'ABC'
+#   'aBC'                    -> 'ABC'            # first 'a'->'A', tail 'BC' kept (NOT lowered)
+#   'aBcDe'                  -> 'ABcDe'          # only index 0 transformed
+#   '1abc'                   -> '1abc'           # leading digit: '1'.toUpperCase()='1'
+#   ' abc'                   -> ' abc'           # leading space unchanged
+#   '-abc'                   -> '-abc'           # leading punctuation unchanged
+#   '   '                    -> '   '            # whitespace-only unchanged
+#   'fred barney'            -> 'Fred barney'    # only first word's first char
+#   'Fred'                   -> 'Fred'           # already correct
+#   'FRED'                   -> 'FRED'           # tail not lowered
+#   'ßnake'                  -> 'SSnake'         # ß expands to SS (BMP simple path)
+#   'ﬀx'                     -> 'FFx'            # ligature expands (BMP simple path)
+#   'ﬄoo'                    -> 'FFLoo'          # ligature expands to 3 chars
+#   'ihello'                 -> 'Ihello'         # 'i'->'I' (ASCII, not locale)
+#   'éllo' (e + U+0301)      -> 'Éllo'           # combining -> array path; first symbol uppercases to precomposed É
+#   '́abc'              -> '́abc'      # lone combining mark first; toUpperCase no-op
+#   '😀abc'                  -> '😀abc'          # astral emoji first symbol; no-op
+#   '𝐀bc' (U+1D400)          -> '𝐀bc'           # astral math A; no uppercase mapping; no-op
+#   '𝐚bc' (U+1D41A)          -> '𝐚bc'           # astral math a; no-op (no uppercase mapping)
+#   '𝓪bc'                    -> '𝓪bc'           # astral script a; no-op
+#   '👨‍👩‍👧abc' (ZWJ family) -> '👨‍👩‍👧abc'      # ZWJ-joined cluster kept whole; no-op
+#   '🇺🇸abc' (flag)          -> '🇺🇸abc'         # regional-indicator pair kept whole; no-op
+#   '👍🏽abc' (fitz)          -> '👍🏽abc'         # emoji+skin-tone kept whole; no-op
+#   '\ud800bc' (lone surrog) -> '\ud800bc'       # lone surrogate triggers unicode path; no-op
+#   123                      -> '123'            # number coercion
+#   -0                       -> '-0'             # negative-zero fix-up
+#   true / false             -> 'True' / 'False'
+#   null / undefined         -> ''
+#   ['a','b']                -> 'A,b'            # array join then upperFirst
+#   [1,2,3]                  -> '1,2,3'
+#   {}                       -> '[object Object]'
+#   Buffer.from('abc')       -> 'Abc'
+
+ORACLE value -> oracle.json
+  # Pure deterministic function. The factory runs the real package over the
+  # generator's inputs and records each return value (or {__throw} for the
+  # throw paths, though no codec-faithful input throws here). No seam.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The full NODE 1..5 pipeline above, including:
+        * toString coercion incl. null/undefined -> '' and the -0 -> '-0' fix-up;
+        * the EXACT hasUnicode trigger set (rsZWJ + astral surrogate range +
+          combining-marks + combining-symbols + variation-selector ranges);
+        * the array-split path (reUnicode symbol segmentation) for first-symbol
+          isolation when hasUnicode is true, vs charAt(0)/slice(1) otherwise;
+        * first-symbol-only uppercasing via native String.prototype.toUpperCase
+          (locale-independent; may expand or no-op), tail returned verbatim.
+    - The reUnicode / reHasUnicode regex source strings are reproduced in this
+      SIR verbatim (NODE 2); a blind re-emitter builds them as literals. These
+      are small inline constants, NOT a carried-data table.
+  CARRIED DATA: none. (No large literal table; the only "constants" are the
+    short regex source fragments, which are transcribed inline above.)
+  OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because not codec-faithful):
+    - Symbol values: upperFirst(Symbol('foo')) === 'Symbol(foo)' (via isSymbol
+      branch -> Symbol.prototype.toString). Symbols do not round-trip the codec.
+    - Functions / objects with identity-significant toString: the coercion is
+      `value + ''` (e.g. {toString(){return 'hello'}} -> 'Hello'); plain JSON
+      objects coerce to '[object Object]'. Class instances whose toString matters
+      are not in-envelope.
+    - NaN / ±Infinity as the DIRECT argument coerce to 'NaN'/'Infinity'/'-Infinity'
+      but are not codec-faithful as bare args, so they are documented here and
+      not emitted; '-0' likewise documented (the codec does not preserve -0).
+  OUT-OF-CONTRACT (side effects / mutation): none. Pure function, no state,
+    no I/O, no RNG, no clock — no seam of any kind.
+
+PROVENANCE
+  package: lodash.upperfirst@4.3.1 (npm)
+  repo:    lodash/lodash (modularized build: `lodash modularize exports="npm"`)
+  license: MIT (Copyright jQuery Foundation and other contributors)
+  source:  node_modules/lodash.upperfirst/index.js
+           (default export: `var upperFirst = createCaseFirst('toUpperCase');
+            module.exports = upperFirst`)
+
+# RE-EMITTER NOTE: this is a DEFAULT export. The reconstructed module MUST
+# `export default <fn>` where <fn> is the upperFirst function value, matching
+# how the factory harness imports it (default import).

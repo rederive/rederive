@@ -1,0 +1,434 @@
+UNIT minimist
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG parseArgs(args: string[], opts?: Options) -> ParsedArgs
+    # DEFAULT EXPORT. The re-emitted module MUST `export default parseArgs`.
+    # Options = {
+    #   string?:  string | string[],
+    #   boolean?: boolean | string | string[],
+    #   alias?:   { [key: string]: string | string[] },
+    #   default?: { [key: string]: any },
+    #   stopEarly?: boolean,
+    #   '--'?:    boolean,
+    #   unknown?: (arg: string) => boolean      # FUNCTION — see SCOPE/out-of-contract
+    # }
+    # ParsedArgs = { _: any[], [flag: string]: any, '--'?: any[] }
+DEPENDS-ON none   # zero runtime deps
+
+# =============================================================================
+# PROVENANCE
+# =============================================================================
+PROVENANCE minimist@1.2.8
+  repo:    git://github.com/minimistjs/minimist  (homepage github.com/minimistjs/minimist)
+  author:  James Halliday (substack); maintained by ljharb
+  license: MIT
+  source:  index.js (the package "main"); single file, 263 lines, 'use strict'
+  All behavior below VERIFIED by executing the real package (node require + JSON.stringify).
+
+# =============================================================================
+# OVERVIEW / CONTRACT NOTES (read first — they govern the whole spec)
+# =============================================================================
+#
+# OUTPUT-EQUALITY IS STRING-BASED. The grader compares JSON.stringify(encode(real))
+#   against JSON.stringify(encode(reemit)). Therefore KEY INSERTION ORDER of the returned
+#   object MATTERS. Reproduce the algorithm's mutation ORDER exactly, and store the result
+#   as a PLAIN JS OBJECT (not Map). JS object key ordering rules then apply automatically:
+#     * INTEGER-INDEX keys (canonical array-index strings: "0","1","2",... non-negative,
+#       no leading zeros, < 2^32-1) are enumerated FIRST in ascending numeric order,
+#       regardless of when inserted.
+#     * All OTHER (string) keys follow, in INSERTION order.
+#   Example: parseArgs(["--5","x","--b","1","--2","y"]) -> {"2":"y","5":"x","_":[],"b":1}
+#   ("_" is inserted first but the integer keys "2","5" float ahead of it). A re-emitter that
+#   builds a normal object via assignment in the order described below gets this for free.
+#
+# PURITY (VERIFIED): parseArgs does NOT mutate `args` or `opts`. The internal
+#   `args = args.slice(...)` on a "--" terminator rebinds the LOCAL parameter only; the
+#   caller's array is untouched (frozen input arrays parse fine). Defaults objects ARE shared
+#   by REFERENCE into the output when a default value is an object (setKey assigns the same
+#   reference); this is read-only w.r.t. parsing and benign for equality.
+#
+# `args` IS REQUIRED. There is NO process.argv fallback. If `args` is undefined/null (or any
+#   value without an `.indexOf`/`.length`/index access), the function THROWS
+#   (e.g. "Cannot read properties of undefined (reading 'indexOf')"). `opts` is optional:
+#   a falsy `opts` is replaced by {}.
+#
+# NUMBER COERCION uses isNumber(val) (defined below). When a value is coerced it becomes
+#   Number(val) (a JS double). Large/duplicate-precision values follow IEEE-754 (e.g.
+#   "99999999999999999999" -> 100000000000000000000). NaN/Infinity strings are NOT numbers
+#   (isNumber returns false) so they stay strings.
+#
+# DETERMINISTIC THROWS ARE PART OF THE CONTRACT. Certain codec-faithful inputs make the REAL
+#   minimist throw a (V8) TypeError; these are deterministic and reproducible by any re-emitter
+#   that follows this algorithm on the same engine. The harness records them as {__throw:<msg>}
+#   and grades them. See the THROW-CONTRACT section near the end.
+
+# =============================================================================
+# HELPERS (exact)
+# =============================================================================
+
+isNumber(x):
+  # VERIFIED regex/logic, byte-exact from source:
+  IF typeof x === 'number' -> return true
+  IF /^0x[0-9a-f]+$/i .test(x)            -> return true     # hex, case-insensitive, REQUIRES >=1 hex digit
+  return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(e[-+]?\d+)?$/ .test(x)
+  # Notes (all VERIFIED):
+  #   "5"->T  "+5"->T  "-3"->T  "1.5"->T  ".5"->T  "5."->T  "1e3"->T  "1.5e-3"->T  "007"->T
+  #   "0xff"->T  "0xFF"->T  "0x"->F (no digits)  ""->F  " 5 "->F (no trim)  "Infinity"->F  "NaN"->F
+  #   The main regex's (e[-+]?\d+) group has NO /i flag and uses lowercase 'e' only, so an UPPERCASE
+  #     'E' is not matched: "1E3" -> the optional group fails on 'E', the trailing "E3" then breaks the
+  #     ^...$ anchor -> "1E3" is NOT a number (stays the string "1E3"). VERIFIED. ("1e3" IS a number.)
+
+isConstructorOrProto(obj, key):
+  return (key === 'constructor' && typeof obj[key] === 'function') || key === '__proto__'
+  # PROTOTYPE-POLLUTION GUARD. Used inside setKey to refuse writing through these keys.
+
+hasKey(obj, keys[]):
+  # walk obj down keys[0..n-2] (each step: o = o[key] || {}); return (lastKey in o)
+  o = obj
+  for key in keys.slice(0, -1): o = o[key] || {}
+  return (keys[last] in o)
+
+# =============================================================================
+# SETUP PHASE (build `flags`, `aliases`, `defaults`; seed booleans)
+# =============================================================================
+
+SETUP:
+  if (!opts) opts = {}
+
+  flags = { bools: {}, strings: {}, unknownFn: null }
+
+  # --- unknown callback ---
+  if typeof opts.unknown === 'function': flags.unknownFn = opts.unknown
+    # opts.unknown is a FUNCTION -> documented OUT-OF-ENVELOPE for the generator (not codec-faithful).
+    # Logic preserved here for completeness; see SCOPE.
+
+  # --- boolean option ---
+  if typeof opts.boolean === 'boolean' AND opts.boolean === true:
+      flags.allBools = true                 # CATCH-ALL: treat every long --flag as boolean (see scan)
+  else:
+      # [].concat(opts.boolean) normalizes string|string[]|undefined -> array; .filter(Boolean)
+      # drops falsy entries ("", null, undefined, 0, false). Each surviving key -> flags.bools[key]=true.
+      for key in [].concat(opts.boolean).filter(Boolean): flags.bools[key] = true
+      # NOTE: opts.boolean === false (a non-true boolean) takes the else branch and concats `false`,
+      # which filter(Boolean) drops -> no bools. Same as omitting it.
+
+  # --- alias normalization -> bidirectional map `aliases` (VERIFIED shape) ---
+  aliases = {}
+  for key in Object.keys(opts.alias || {}):
+      aliases[key] = [].concat(opts.alias[key])          # canonical list for `key`
+      for x in aliases[key]:
+          # each alias target x points back to [key, ...(aliases[key] without x)]
+          aliases[x] = [key].concat( aliases[key].filter(y => x !== y) )
+  # EXAMPLES (VERIFIED):
+  #   alias:{foo:"f"}      -> aliases = { foo:["f"], f:["foo"] }
+  #   alias:{a:["b","c"]}  -> aliases = { a:["b","c"], b:["a","c"], c:["a","b"] }
+  #   alias:{foo:["f","foo"]} (self-listed) -> the key "foo" appears in its own list; on a value set this
+  #       DOUBLE-WRITES foo, yielding foo:[v,v] (a real edge — preserve literally).
+
+  aliasIsBoolean(key):  # used during scan
+      return aliases[key].some(x => flags.bools[x])
+
+  # --- string option (suppresses number coercion AND boolean-ness for these keys) ---
+  for key in [].concat(opts.string).filter(Boolean):
+      flags.strings[key] = true
+      if aliases[key]:
+          for k in [].concat(aliases[key]): flags.strings[k] = true   # propagate string-ness to aliases
+  # Special key "_" : opts.string includes "_" => positionals are NOT number-coerced (kept as strings).
+
+  defaults = opts.default || {}
+
+  argv = { _: [] }          # "_" inserted FIRST (see ordering note)
+
+  # --- BOOLEAN SEED LOOP (runs BEFORE the scan) ---
+  # For each declared boolean key, seed its value from defaults (or false if no default).
+  for key in Object.keys(flags.bools):
+      setArg(key, defaults[key] === undefined ? false : defaults[key])
+      # setArg with no `arg` (3rd param undefined) => no unknown() gating; value passes through
+      # isNumber check (false/<default> not coerced unless it's a numeric value/string).
+      # This seeds bools (and their aliases via setArg) into argv in opts.boolean iteration order.
+
+# =============================================================================
+# argDefined / setKey / setArg (the write path)
+# =============================================================================
+
+argDefined(key, arg):
+  return (flags.allBools && /^--[^=]+$/.test(arg))   # a long --flag (no '=') under catch-all
+      || flags.strings[key]
+      || flags.bools[key]
+      || aliases[key]
+  # Used only to decide whether unknownFn gets to veto. A "defined" key is NEVER vetoed.
+
+setKey(obj, keys[], value):
+  # DOTTED-KEY EXPANSION: keys is key.split('.'); walks/creates nested objects.
+  o = obj
+  for i in 0 .. keys.length-2:                # all but last
+      k = keys[i]
+      if isConstructorOrProto(o, k): RETURN          # pollution guard -> silently drop whole write
+      if o[k] === undefined: o[k] = {}
+      if o[k] === Object.prototype || o[k] === Number.prototype || o[k] === String.prototype: o[k] = {}
+      if o[k] === Array.prototype: o[k] = []
+      o = o[k]                                # NOTE: if o[k] is a SCALAR (string/number/boolean), the
+                                              #   next iteration's `o[k2] = {}` assignment THROWS a
+                                              #   TypeError (cannot create property on a primitive).
+                                              #   See THROW-CONTRACT (dotted-collision).
+  lastKey = keys[last]
+  if isConstructorOrProto(o, lastKey): RETURN
+  if o === Object.prototype || o === Number.prototype || o === String.prototype: o = {}
+  if o === Array.prototype: o = []
+  # ASSIGN / ACCUMULATE at o[lastKey]:
+  if o[lastKey] === undefined OR flags.bools[lastKey] OR typeof o[lastKey] === 'boolean':
+      o[lastKey] = value                              # set (also OVERWRITES an existing boolean)
+  elif Array.isArray(o[lastKey]):
+      o[lastKey].push(value)                          # append to existing array
+  else:
+      o[lastKey] = [o[lastKey], value]                # scalar collision -> wrap into [old, new]
+  # CONSEQUENCES (VERIFIED):
+  #   repeated --x 1 --x 2 --x 3 -> x = [1,2,3]
+  #   dotted --a.b.c 1 -> a = { b: { c: 1 } }
+  #   a key "." (single dot) splits to ["",""] -> nested { "": { "": value } }
+  #   declared-boolean key: a later non-boolean set OVERWRITES (does not array-wrap) because flags.bools test.
+
+setArg(key, val, arg):
+  # 1) unknown() gate (only when `arg` is provided AND a custom unknownFn exists AND key not argDefined):
+  if (arg AND flags.unknownFn AND !argDefined(key, arg)):
+      if flags.unknownFn(arg) === false: RETURN       # veto: drop this key entirely (no alias writes)
+  # 2) number coercion (suppressed by string-ness of THIS key):
+  value = (!flags.strings[key] && isNumber(val)) ? Number(val) : val
+  # 3) write primary key + every alias to the SAME value:
+  setKey(argv, key.split('.'), value)
+  for x in (aliases[key] || []): setKey(argv, x.split('.'), value)
+  # ALIAS PROPAGATION: a single observed flag writes to its key AND all alias names, each via its
+  # own dotted split, with the identical coerced value.
+  # NOTE (THROW): `aliases[key]` is a plain-object lookup; for key === "__proto__" this resolves to
+  #   Object.prototype, whose `.forEach` is undefined -> the `(aliases[key] || []).forEach(...)`
+  #   call THROWS. See THROW-CONTRACT.
+
+Object-prototype sentinel cases inside setKey (Object/Number/String/Array .prototype re-init) are only
+  reachable through crafted polluted state and not via codec-faithful inputs; preserved verbatim above.
+
+# =============================================================================
+# "--" TERMINATOR PRE-SPLIT (before the scan)
+# =============================================================================
+TERMINATOR-SPLIT:
+  if args.indexOf('--') !== -1:                       # FIRST occurrence only
+      notFlags = args.slice(indexOf('--') + 1)         # everything AFTER the first "--"
+      args     = args.slice(0, indexOf('--'))          # scan only the part BEFORE it (local rebind)
+  else:
+      notFlags = []
+  # Disposition of notFlags happens at the very END (see FINALIZE). A SECOND "--" inside notFlags is
+  # just data: parseArgs(["a","--","b","--","c"]) -> _ = ["a","b","--","c"] (default), or
+  # with opts['--']: _=["a"], "--"=["b","--","c"].
+
+# =============================================================================
+# MAIN SCAN  (for i = 0; i < args.length; i++)  — branch order is EXACT
+# =============================================================================
+for i in 0 .. args.length-1:
+  arg = args[i]
+
+  # ---- BRANCH A: long "--key=value"  (regex /^--.+=/ , needs >=1 char before '=') ----
+  if /^--.+=/.test(arg):
+      m = arg.match(/^--([^=]+)=([\s\S]*)$/)           # [\s\S] so value may contain newlines
+      key = m[1]; value = m[2]                          # value is everything after the FIRST '='
+      if flags.bools[key]: value = (value !== 'false')  # declared-boolean: "false"->false else true
+        # NOTE: this is ONLY for keys in flags.bools (explicit list), NOT for flags.allBools.
+        # Under allBools, "--foo=bar" stays the string "bar".
+      setArg(key, value, arg)
+      # Edge: "--=x" does NOT match (/^--.+=/ needs >=1 char before '='; here that char is '=' itself
+      #   at pos 2, nothing before) -> falls to BRANCH C, key="=x", -> "=x": true.
+      # Edge: "--foo=a=b" -> key="foo", value="a=b".  "--foo=" -> key="foo", value="".
+
+  # ---- BRANCH B: long negation "--no-KEY"  (regex /^--no-.+/) ----
+  elif /^--no-.+/.test(arg):
+      key = arg.match(/^--no-(.+)/)[1]
+      setArg(key, false, arg)                           # always sets KEY (not "no-KEY") to false
+
+  # ---- BRANCH C: long "--KEY" (no '=')  (regex /^--.+/) ----
+  elif /^--.+/.test(arg):
+      key  = arg.match(/^--(.+)/)[1]                    # e.g. "---" -> key "-", "--foo" -> "foo"
+      next = args[i+1]
+      if ( next !== undefined
+           AND !/^(-|--)[^-]/.test(next)                # next is NOT another option-looking token
+           AND !flags.bools[key]                        # KEY is not a declared boolean
+           AND !flags.allBools                          # not catch-all boolean mode
+           AND (aliases[key] ? !aliasIsBoolean(key) : true) ):   # KEY (via alias) not boolean
+          setArg(key, next, arg); i += 1                # CONSUME next as the value
+      elif /^(true|false)$/.test(next):
+          setArg(key, next === 'true', arg); i += 1     # explicit boolean literal consumed
+      else:
+          setArg(key, flags.strings[key] ? '' : true, arg)   # bare flag -> true (or "" if string-typed)
+      # LOOKAHEAD GUARD /^(-|--)[^-]/ : matches a token that starts with '-' or '--' followed by a
+      #   NON-dash char. So "-3","--bar","-x" all MATCH (block consumption); but a LONE "-" does NOT
+      #   match (only one char) -> "-" IS consumed as a value:  ["--foo","-"] -> foo:"-".
+      #   ["--foo","-3"] -> foo:true (not consumed), and "-3" then parsed as its own short arg -> "3":true.
+
+  # ---- BRANCH D: short cluster "-XYZ..."  (regex /^-[^-]+/ : leading '-' then >=1 non-dash) ----
+  elif /^-[^-]+/.test(arg):
+      letters = arg.slice(1, -1).split('')              # ALL chars except the leading '-' and the LAST char
+      broken = false
+      for j in 0 .. letters.length-1:
+          next = arg.slice(j + 2)                        # the remainder of arg AFTER letters[j]
+
+          # D1: remainder is exactly "-"  -> set this letter's value to "-", keep clustering
+          if next === '-': setArg(letters[j], '-', arg); continue
+
+          # D2: letter is [A-Za-z] AND remainder starts with '='  -> value = remainder after '='
+          if /[A-Za-z]/.test(letters[j]) AND next[0] === '=':
+              setArg(letters[j], next.slice(1), arg); broken = true; break   # e.g. -a=b -> a:"b"
+
+          # D3: letter is [A-Za-z] AND remainder LOOKS NUMERIC  -> the whole remainder is the value
+          if /[A-Za-z]/.test(letters[j]) AND /-?\d+(\.\d*)?(e-?\d+)?$/.test(next):
+              setArg(letters[j], next, arg); broken = true; break
+              # e.g. -n5 -> n:5 ; -n-3 -> n:-3 ; -n-3.5 -> n:-3.5  (then coerced by setArg/isNumber)
+              # NOTE the regex is UNANCHORED at start (just `$` at end) -> "5", "-3", "3.5" tails match.
+
+          # D4: the NEXT letter (letters[j+1]) is a NON-word char \W  -> take rest of arg as value
+          if letters[j+1] AND letters[j+1].match(/\W/):
+              setArg(letters[j], arg.slice(j + 2), arg); broken = true; break
+              # e.g. -a-b-c : letters=["a","-","b","-"]; at j=0 letters[1]="-" is \W -> a := "-b-c".
+              #      -a.b   : letters=["a","."]; at j=0 letters[1]="." is \W -> a := arg.slice(2)=".b".
+          else:
+              setArg(letters[j], flags.strings[letters[j]] ? '' : true, arg)   # plain bool letter
+
+      # AFTER the cluster loop: handle the LAST char of arg
+      key = arg.slice(-1)[0]
+      if (!broken AND key !== '-'):
+          if ( args[i+1]
+               AND !/^(-|--)[^-]/.test(args[i+1])
+               AND !flags.bools[key]
+               AND (aliases[key] ? !aliasIsBoolean(key) : true) ):
+              setArg(key, args[i+1], arg); i += 1       # last char consumes the NEXT argv token
+          elif args[i+1] AND /^(true|false)$/.test(args[i+1]):
+              setArg(key, args[i+1] === 'true', arg); i += 1
+          else:
+              setArg(key, flags.strings[key] ? '' : true, arg)
+      # VERIFIED short-cluster examples:
+      #   -abc        -> a:true,b:true,c:true
+      #   -abc def    -> a:true,b:true,c:"def"  (last char 'c' consumes "def")
+      #   -n5         -> n:5         -a.b -> a:".b"
+      #   -a=b        -> a:"b"       -1abc -> "1":true,a:true,b:true,c:true  (leading digit is just a slot)
+      #   -.5         -> "5":true, "":{"":true}  (letters=["."], '.' not [A-Za-z], split "." -> ["",""])
+      #   -x.y.z=5    -> x:".y.z=5"  (D4 captures rest at j=0 since letters[1]='.' is \W)
+      #   -a-         -> a:"-"  ;  -ab- -> a:true,b:"-"  ;  -a-b-c -> a:"-b-c"
+
+  # ---- BRANCH E: everything else -> POSITIONAL ----
+  else:
+      if (!flags.unknownFn OR flags.unknownFn(arg) !== false):
+          # push to _, number-coercing UNLESS opts.string includes "_"
+          argv._.push( (flags.strings._ || !isNumber(arg)) ? arg : Number(arg) )
+      if opts.stopEarly:
+          argv._.push(...args.slice(i + 1))             # dump ALL remaining args verbatim (no parsing)
+          break
+      # Reaches here for: plain text, "" (empty string -> _ gets ""), lone "-" (matches NO option regex:
+      #   /^-[^-]+/ needs a char AFTER '-', and "-" has none -> not BRANCH D -> positional "-"),
+      #   pure numbers ("42" -> 42 unless string _).
+      # stopEarly: the FIRST positional triggers the dump; flags BEFORE it parse normally.
+
+# =============================================================================
+# FINALIZE  (after the scan)
+# =============================================================================
+FINALIZE:
+  # 1) apply DEFAULTS for any key still absent (dotted-aware via hasKey):
+  for k in Object.keys(defaults):
+      if !hasKey(argv, k.split('.')):
+          setKey(argv, k.split('.'), defaults[k])
+          for x in (aliases[k] || []): setKey(argv, x.split('.'), defaults[k])
+      # Defaults are applied in opts.default iteration order, AFTER all scanned keys, so they appear
+      # LAST in insertion order (subject to integer-key float). A present key (even if value false/0) is
+      # NOT overwritten. Object-valued defaults are assigned BY REFERENCE (shared with opts.default).
+
+  # 2) dispose of notFlags (the post-"--" tail):
+  if opts['--']:
+      argv['--'] = notFlags.slice()                     # a fresh COPY into a dedicated "--" array
+  else:
+      for k in notFlags: argv._.push(k)                 # appended to positionals (verbatim, unparsed)
+
+  return argv
+
+# =============================================================================
+# CROSS-CUTTING SEMANTICS — quick reference (all VERIFIED)
+# =============================================================================
+# boolean (catch-all true):  every long --flag is boolean; "--foo bar" -> foo:true, "bar" positional;
+#                            "--foo=bar" still keeps string "bar" (the '=' branch ignores allBools).
+# boolean (list):            declared keys seed to false (or their default) up front; "--b value" -> b:true,
+#                            "value" positional; "--b=false" -> b:false ; "--b=anything" -> b:true.
+# string (list):             suppresses number coercion AND turns a bare flag into "" instead of true;
+#                            propagates to aliases; opts.string:["_"] keeps positionals as strings.
+# alias:                     bidirectional; one occurrence writes key + all aliases to the same value;
+#                            boolean/string-ness propagates through aliases; aliasIsBoolean blocks
+#                            value-consumption when ANY alias of the key is a declared boolean.
+# default:                   seeds bools early; fills absent keys (and their aliases) at the end; never
+#                            overwrites a present key; dotted defaults use hasKey for presence.
+# stopEarly:                 on the FIRST positional, remaining args are dumped verbatim into _.
+# '--' (opt true):           post-"--" tail captured in argv['--'] (copy) instead of _.
+# numeric positionals:       coerced via isNumber unless opts.string includes "_".
+# prototype pollution:       setKey refuses to write through "__proto__" or a function-valued
+#                            "constructor"; the whole write is dropped (returns silently).
+
+# =============================================================================
+# THROW-CONTRACT (deterministic throws on codec-faithful inputs — gradable as {__throw})
+# =============================================================================
+# All VERIFIED; messages are stable on a given V8/Node. A re-emitter implementing this algorithm
+# verbatim reproduces both the throw AND its message.
+#
+# (T1) DOTTED-KEY COLLISION onto a non-object value. If a key (or alias) writes a SCALAR
+#      (string / number / boolean) to some path, and a LATER dotted key tries to descend THROUGH that
+#      scalar, setKey's `o[k2] = {}` (or the final assignment) throws a TypeError:
+#        "Cannot create property '<seg>' on <type> '<value>'"
+#      Examples (VERIFIED):
+#        ["--a.b","--a.b.c"]    -> a:=true (BRANCH C bare), then descend into true -> THROW
+#                                  "Cannot create property 'c' on boolean 'true'"
+#        ["--a.b=v","--a.b.c"]  -> "Cannot create property 'c' on string 'v'"
+#        ["-a-","--a.b.c"]      -> a:="-" then descend -> "Cannot create property 'b' on string '-'"
+#      Also reachable when the COLLISION happens at the `in` check inside hasKey during FINALIZE
+#      defaults (e.g. a dotted default whose parent path is a scalar):
+#        "Cannot use 'in' operator to search for '<seg>' in <value>"
+#
+# (T2) "__proto__" AS A BARE LONG KEY. ["--__proto__"] / ["--__proto__","y"] reach setArg with
+#      key="__proto__"; `aliases["__proto__"]` resolves to Object.prototype (not undefined), and
+#      `(Object.prototype).forEach` is undefined -> THROW:
+#        "(aliases[key] || []).forEach is not a function"
+#      (By contrast a DOTTED proto key like "--__proto__.x" is caught by isConstructorOrProto and the
+#       write is dropped -> { _: [] }, no throw. "--constructor.x" likewise dropped.)
+#
+# These throw paths ARE exercised by the curated prefix (a controlled handful) so the oracle pins
+# them; the random fill is shaped to AVOID accidentally over-producing dotted-collision throws (it
+# never mixes a scalar dotted key with a deeper dotted key on the same root), keeping the held-out
+# dominated by the rich non-throwing parsing surface.
+
+# =============================================================================
+# ORACLE
+# =============================================================================
+ORACLE value -> oracle.json
+  # Pure deterministic function. Expecteds are stamped by executing the real minimist@1.2.8 on the
+  # generator's inputs (throwing inputs recorded as {__throw:<msg>}). The returned object is compared
+  # by JSON.stringify(encode(.)) so KEY ORDER is part of the contract (reproduce mutation order +
+  # plain-object semantics as specified above).
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The full setup/scan/finalize pipeline above: isNumber, isConstructorOrProto, hasKey, setKey
+      (dotted expansion + array accumulation + boolean overwrite + pollution guard), setArg
+      (number coercion + alias propagation), argDefined, aliasIsBoolean.
+    - Alias-map normalization (bidirectional), boolean seeding, string-ness propagation, defaults.
+    - All five scan branches A..E with EXACT regexes, lookahead guards, and short-cluster sub-rules.
+    - "--" terminator split and the opts['--'] vs _ disposition; stopEarly dump.
+    - Output object KEY INSERTION ORDER (built as a plain JS object).
+    - The deterministic THROW-CONTRACT (T1, T2).
+
+  CARRIED DATA: none. (No large literal tables; all constants are inline regexes/strings already
+    transcribed above verbatim.)
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+    - opts.unknown is a FUNCTION (predicate (arg)->boolean). Not codec-faithful (functions don't
+      survive JSON round-trip), so the generator NEVER emits opts.unknown. Its behavior is fully
+      specified above (unknownFn gate in setArg + the BRANCH-E positional gate): a custom predicate
+      returning false VETOES an unknown (not argDefined) arg — dropping that key/positional entirely.
+      A blind re-emitter reconstructs this from the spec; it is simply never exercised by the oracle.
+    - Calling with a missing/undefined/null/non-array `args` THROWS (no process.argv fallback). The
+      generator never emits such inputs (always an array first arg). Documented as the throw contract.
+    - Object-valued opts.default sharing by reference into the output (read-only; equality-safe).
+    - Object/Array.prototype sentinel re-init inside setKey: only reachable via crafted polluted state;
+      not reachable through codec-faithful inputs, documented for completeness.

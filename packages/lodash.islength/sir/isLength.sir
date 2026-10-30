@@ -1,0 +1,142 @@
+UNIT isLength
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isLength(value: any) -> boolean
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# Constant (defined inline in the source, NOT carried data):
+#   MAX_SAFE_INTEGER = 9007199254740991        # i.e. 2^53 - 1 (Number.MAX_SAFE_INTEGER)
+# This is a single scalar literal, not a table -> no carried.json.
+# ---------------------------------------------------------------------------
+
+BEHAVIOR
+  # Pure predicate. Returns the boolean conjunction of FOUR clauses, evaluated
+  # left-to-right with JS short-circuit semantics (&&). The exact source body is:
+  #
+  #   return typeof value == 'number' &&
+  #     value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+  #
+  # Clause 1 (TYPE GUARD):  typeof value == 'number'
+  #     true ONLY for the JS Number primitive type. This is `typeof`, so:
+  #       - Number primitives (incl. NaN, +Infinity, -Infinity, -0)  -> passes clause 1
+  #       - bigint (e.g. 5n)  -> typeof is 'bigint'  -> FALSE (short-circuits, result false)
+  #       - boolean true/false -> typeof 'boolean'   -> FALSE
+  #       - string (incl. numeric strings "5", "0")  -> typeof 'string' -> FALSE
+  #       - null -> typeof 'object'                  -> FALSE
+  #       - undefined -> typeof 'undefined'          -> FALSE
+  #       - object/array/{}/[] -> typeof 'object'    -> FALSE
+  #       - function -> typeof 'function'            -> FALSE (OUT-OF-ENVELOPE for genInputs)
+  #       - Symbol -> typeof 'symbol'                -> FALSE (OUT-OF-ENVELOPE for genInputs)
+  #     NOTE: no coercion. boxed `new Number(3)` is typeof 'object' -> FALSE
+  #     (OUT-OF-ENVELOPE for genInputs; documented but not emitted).
+  #
+  # Clause 2 (LOWER BOUND):  value > -1
+  #     Strict greater-than negative one. With value already known to be a Number:
+  #       - NaN > -1  is FALSE  -> NaN result is false
+  #       - -Infinity > -1 is FALSE -> false
+  #       - any value <= -1 (e.g. -1, -2, -1.5) is FALSE -> false
+  #       - 0 > -1 is TRUE; -0 > -1 is TRUE (because -0 === 0 numerically)
+  #       - +Infinity > -1 is TRUE (passes this clause; caught later by clause 4)
+  #     This is `> -1`, NOT `>= 0`. The two are equivalent over the reachable
+  #     domain because the integer test (clause 3) excludes the open interval
+  #     (-1, 0): the only number in (-1, 0] passing `%1==0` is 0 (and -0), and
+  #     0 > -1 holds. So in practice the accepted negatives boundary is "0 and up".
+  #
+  # Clause 3 (INTEGER TEST):  value % 1 == 0
+  #     JS remainder operator. value % 1 is 0 exactly when value has no fractional
+  #     part (an integer-valued float). Loose `==` compares against 0.
+  #       - integers (0, 1, 3, 100, ...) -> 0 == 0 -> TRUE
+  #       - integer-valued floats (0.0, 1e15, 1000000000000000) -> TRUE
+  #       - non-integers (1.5, 0.5, -0.5, Number.MIN_VALUE=5e-324, 1e-7) -> FALSE
+  #       - NaN % 1 is NaN; NaN == 0 is FALSE (also already excluded by clause 2)
+  #       - Infinity % 1 is NaN; NaN == 0 is FALSE (Infinity excluded here AND by clause 4)
+  #       - -0 % 1 is -0 (or 0); 0 == 0 -> TRUE (so -0 passes clause 3)
+  #     IMPORTANT: large integer-valued numbers above MAX_SAFE_INTEGER still satisfy
+  #     `%1==0` (e.g. 9007199254740992 % 1 == 0 is true) -- they are rejected by
+  #     clause 4, NOT by clause 3.
+  #
+  # Clause 4 (UPPER BOUND):  value <= MAX_SAFE_INTEGER  (9007199254740991)
+  #     Less-than-or-equal. Caps the accepted range at 2^53 - 1 inclusive.
+  #       - 9007199254740991 (== MAX_SAFE) -> TRUE (inclusive)
+  #       - 9007199254740990 (< MAX_SAFE)  -> TRUE
+  #       - 9007199254740992 (== 2^53, MAX_SAFE+1) -> FALSE
+  #       - 1e16, 1e21 -> FALSE
+  #       - +Infinity -> FALSE  (Infinity <= MAX_SAFE is false; also fails clause 3)
+  #
+  # RESULT: true  iff  value is a Number primitive that is a non-negative
+  #         integer-valued number in the closed range [0, 9007199254740991].
+  #         Else false. The function NEVER throws for any input (it only reads
+  #         typeof and applies numeric operators that yield NaN/false rather
+  #         than throwing). It has NO side effects.
+  #
+  # WORKED EDGE CASES (verified against the real package @4.0.1):
+  #   isLength(0)                    -> true
+  #   isLength(1)                    -> true
+  #   isLength(3)                    -> true
+  #   isLength(100)                  -> true
+  #   isLength(0.0)                  -> true     # integer-valued float
+  #   isLength(1e15)                 -> true     # 1000000000000000, integer-valued, <= MAX_SAFE
+  #   isLength(9007199254740990)     -> true
+  #   isLength(9007199254740991)     -> true     # == MAX_SAFE, inclusive
+  #   isLength(-0)                   -> true     # -0 > -1, -0 % 1 == 0, <= MAX_SAFE
+  #   isLength(9007199254740992)     -> false    # 2^53 > MAX_SAFE (clause 4) despite %1==0
+  #   isLength(1e16)                 -> false    # > MAX_SAFE
+  #   isLength(1e21)                 -> false    # > MAX_SAFE
+  #   isLength(-1)                   -> false    # not > -1
+  #   isLength(-2)                   -> false
+  #   isLength(-9007199254740990)    -> false
+  #   isLength(1.5)                  -> false    # fractional
+  #   isLength(0.5)                  -> false
+  #   isLength(-0.5)                 -> false    # negative AND fractional
+  #   isLength(Number.MIN_VALUE)     -> false    # 5e-324, fractional, not %1==0
+  #   isLength(1e-7)                 -> false
+  #   isLength(NaN)                  -> false    # NaN > -1 is false
+  #   isLength(Infinity)             -> false    # fails clause 3 and clause 4
+  #   isLength(-Infinity)            -> false    # fails clause 2
+  #   isLength("5")                  -> false    # typeof 'string'
+  #   isLength("0")                  -> false    # typeof 'string'
+  #   isLength("")                   -> false    # typeof 'string'
+  #   isLength(null)                 -> false    # typeof 'object'
+  #   isLength(undefined)            -> false    # typeof 'undefined'
+  #   isLength(true)                 -> false    # typeof 'boolean'
+  #   isLength(false)                -> false    # typeof 'boolean'
+  #   isLength({})                   -> false    # typeof 'object'
+  #   isLength([])                   -> false    # typeof 'object'
+  #   isLength(5n)                   -> false    # typeof 'bigint' (NOT 'number')
+
+ORACLE value -> oracle.json
+  # Value-mode: for each generated input tuple [value], expected = isLength(value),
+  # a boolean. Pure + deterministic + no seam. The harness records {result: <bool>}.
+  # No throw paths exist (the function cannot throw on any input).
+
+SCOPE
+  # IN-CONTRACT LOGIC (reproduce exactly): the entire 4-clause predicate above,
+  #   including the inline constant MAX_SAFE_INTEGER = 9007199254740991, the
+  #   `typeof value == 'number'` guard, the `> -1` (strict, NOT `>= 0`) lower
+  #   bound, the `value % 1 == 0` integer test, and the `<= MAX_SAFE_INTEGER`
+  #   (inclusive) upper bound. Short-circuit `&&` order is observable only via
+  #   side effects (none here), so any equivalent total-evaluation is acceptable
+  #   PROVIDED the boolean result matches; the result is fully specified above.
+  #
+  # CARRIED DATA: none. MAX_SAFE_INTEGER is a single scalar literal stated inline
+  #   in this SIR, not a large table -> no carried.json is produced.
+  #
+  # OUT-OF-CONTRACT: none. No stateful mutators, no side APIs, no ambient reads
+  #   (no clock/RNG/env/fs/net) -> no seam. ORACLE-CLASS deterministic.
+  #
+  # OUT-OF-ENVELOPE (behavior fully specified here, but NOT emitted by genInputs
+  #   because the oracle codec cannot round-trip them as args):
+  #     - function values        -> isLength returns false (typeof 'function')
+  #     - Symbol values          -> isLength returns false (typeof 'symbol')
+  #     - boxed new Number(3)     -> isLength returns false (typeof 'object')
+  #   A blind re-emitter reconstructs these from the predicate; the generator
+  #   does not produce them.
+
+PROVENANCE
+  package: lodash.islength@4.0.1
+  repo: lodash/lodash (https://github.com/lodash/lodash)
+  license: MIT
+  source file: node_modules/lodash.islength/index.js (lines 11, 37-42)
+  export: module.exports = isLength  (CommonJS default export)
+  # Re-emitter target: ES module `export default function isLength(value) { ... }`.

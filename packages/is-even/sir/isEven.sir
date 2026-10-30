@@ -1,0 +1,261 @@
+UNIT isEven
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isEven(i: any) -> boolean        # throws TypeError or RangeError on rejected inputs
+
+DEPENDS-ON none
+# This SIR INLINES the full observable behavior of the real transitive chain:
+#   is-even@1.0.0 -> is-odd@0.1.2 -> is-number@3.0.0 -> kind-of@3.2.2 -> is-buffer@1.1.6
+# A blind re-emitter MUST reconstruct a STANDALONE isEven with NO require() of any
+# dependency. All behavior of the chain is captured below as plain logic.
+# There is NO seam (no clock/RNG/io/net); the unit is pure -> ORACLE-CLASS deterministic.
+# A THROW is observable behavior: the oracle compares thrown error class + message
+# against returned values. Reproduce throws EXACTLY (class AND message string).
+
+BEHAVIOR
+
+# ============================================================================
+# TOP LEVEL
+#   isEven(i)  ==  !isOdd(i)
+# So isEven returns the boolean negation of isOdd(i), and PROPAGATES any throw
+# from isOdd unchanged (is-even does not catch). Therefore isEven throws exactly
+# when isOdd throws, with the identical error class and message.
+# ============================================================================
+
+# isOdd(i) is computed as the following pipeline. isEven returns the logical NOT
+# of the boolean it returns; isEven re-throws whatever isOdd throws.
+
+NODE 1  GATE "is it number-like?"  (inlined is-number@3.0.0 over kind-of@3.2.2)
+  Let accepted = isNumberLike(i)   # defined in NODE 1a below
+  IF NOT accepted:
+     THROW TypeError with message exactly: "is-odd expects a number."
+     # (this is the FIRST gate; it runs before the integer gate)
+
+  NODE 1a  isNumberLike(i)  -> boolean   # inlined is-number@3.0.0
+    # Step A: classify the JS runtime type of i (inlined kind-of@3.2.2):
+    #   - 'string'  if typeof i === 'string' OR i instanceof String
+    #   - 'number'  if typeof i === 'number' OR i instanceof Number
+    #   - everything else (undefined, null, boolean, bigint, function, array,
+    #     object, regexp, date, buffer, symbol, Map/Set, typed arrays, ...) is
+    #     classified as some OTHER tag (the exact tag is irrelevant here — all
+    #     that matters is that it is NEITHER 'string' NOR 'number').
+    #   NOTE: kind-of's is-buffer sub-dependency only ever affects the 'buffer'
+    #   classification, which (like all non-string/non-number tags) yields false
+    #   here. So is-buffer has NO effect on any in-envelope behavior of isEven.
+    #
+    # Step B: branch on the classified type:
+    #   IF type === 'string':
+    #        IF i.trim() is the empty string  -> return false
+    #        # (empty string, or whitespace-only string, is NOT number-like)
+    #        ELSE fall through to Step C
+    #   ELSE IF type !== 'number':
+    #        return false        # any non-string non-number value is not number-like
+    #   ELSE (type === 'number'):
+    #        fall through to Step C
+    #
+    # Step C: return the result of the numeric coercion test:
+    #        return (i - i + 1) >= 0
+    #   Semantics of (i - i + 1) >= 0:
+    #     - For a finite number n:  n - n = 0, +1 = 1, 1 >= 0 -> true.
+    #     - For NaN (the number value):  NaN - NaN = NaN, NaN + 1 = NaN,
+    #       NaN >= 0 -> FALSE.  So the number NaN is NOT number-like -> rejected.
+    #     - For +Infinity / -Infinity (number values): Inf - Inf = NaN -> NaN+1 = NaN,
+    #       FALSE.  So Infinity / -Infinity are NOT number-like -> rejected.
+    #     - For a numeric-looking string s that survived Step B (non-empty after trim):
+    #       arithmetic coerces s to a number via JS ToNumber, twice. If ToNumber(s)
+    #       is a FINITE number, (s - s + 1) = 1 >= 0 -> true (string IS number-like).
+    #       If ToNumber(s) is NaN (e.g. "abc") -> false.
+    #       If ToNumber(s) is +/-Infinity (e.g. the string "Infinity") -> Inf-Inf=NaN
+    #       -> false (string "Infinity"/"NaN" are NOT number-like -> rejected at gate).
+    #
+    #   JS ToNumber(string) rules that matter for which strings coerce to a finite
+    #   number (and thus pass this gate):
+    #     - Leading/trailing whitespace (spaces, tabs, newlines) is stripped.
+    #     - Decimal integers and floats: "4", "-4", "+4", "2.5", "2.0", "4.00",
+    #       "5.", ".5", "-0", "007"  -> finite numbers (PASS gate).
+    #     - Scientific notation: "1e2", "3e0"  -> finite (PASS).
+    #     - Hex / binary / octal literals: "0x10", "0b10", "0o17"  -> finite (PASS).
+    #     - "Infinity" / "-Infinity"  -> +/-Infinity  -> coercion test FALSE
+    #       (REJECTED -> TypeError at NODE 1).
+    #     - "NaN" / "abc" / any non-numeric text  -> NaN  -> FALSE (REJECTED -> TypeError).
+    #     - "" or whitespace-only  -> rejected earlier in Step B (return false -> TypeError).
+
+NODE 2  GATE "is it an integer?"  (inlined is-odd@0.1.2 integer check)
+  # Reached only if NODE 1 accepted i (no throw).
+  IF Number(i) !== Math.floor(i):
+     THROW RangeError with message exactly: "is-odd expects an integer."
+  # Number(i): JS ToNumber applied once.
+  # Math.floor(i): JS ToNumber applied internally, then floor.
+  # For values that passed NODE 1, i is either:
+  #   - a finite number, or
+  #   - a string whose ToNumber is a finite number.
+  # The test rejects (throws RangeError) iff the numeric value has a fractional part:
+  #     "2.5" -> 2.5 !== 2 -> RangeError
+  #     2.5   -> RangeError ;  -3.5 -> RangeError ;  1.0000001 -> RangeError ;  ".5" (=0.5) -> RangeError
+  # The test PASSES (no throw) for integer-valued numbers/strings, INCLUDING those
+  # written with a fractional zero or trailing dot:
+  #     2, 2.0, -4, 0, -0, "2", "-4", "2.0", "4.00", "5." (=5), "0x10", "1e2", "007".
+
+NODE 3  COMPUTE parity  ->  return !!(~~i & 1)   (this is isOdd's return value)
+  # Reached only if both gates passed.
+  # ~~i  = JS double-NOT, i.e. ToInt32(i): coerce i to a number (ToNumber), then
+  #        truncate toward zero and wrap into a signed 32-bit integer (mod 2^32,
+  #        interpreted as signed). For numeric STRINGS this coerces the string first.
+  # & 1  = bitwise AND with 1 -> isolates bit 0 (the parity bit).
+  # !!   = coerce to boolean: 1 -> true (ODD), 0 -> false (EVEN).
+  #
+  # KEY INVARIANT (verified against the real package across the 2^31 and 2^32
+  # boundaries): bit 0 of an integer is INVARIANT under ToInt32's 32-bit wrap, so
+  # this returns the TRUE parity of i for every integer that reached NODE 3,
+  # regardless of magnitude (including values > 2^31 and > 2^32, e.g. 3000000001
+  # -> odd, 4294967296 -> even). For values >= 2^53 the float already lost its low
+  # bits before the function was called, so the value seen is an even integer and
+  # parity reflects that already-rounded value (e.g. 9007199254740993 was already
+  # 9007199254740992 -> even). isOdd is faithful to ToInt32 parity in all cases.
+  #
+  # isOdd returns:  true if odd, false if even.
+
+# ----------------------------------------------------------------------------
+# FINAL: isEven returns the negation:
+#   isEven(i) = !isOdd(i)
+#     -> NODE 3 even  (isOdd false) => isEven returns TRUE
+#     -> NODE 3 odd   (isOdd true)  => isEven returns FALSE
+#   Throws from NODE 1 (TypeError) and NODE 2 (RangeError) propagate unchanged.
+# ----------------------------------------------------------------------------
+
+# ============================================================================
+# OBSERVED-TRUTH TABLE (verified by executing the real is-even@1.0.0 chain).
+# Format:  input  =>  RETURN <bool>  |  THROW <Class>: <message>
+# ============================================================================
+#  --- numbers: integers ---
+#   0            => RETURN true
+#   1            => RETURN false
+#   2            => RETURN true
+#   3            => RETURN false
+#   4            => RETURN true
+#   -2           => RETURN true
+#   -3           => RETURN false
+#   -4           => RETURN true
+#   -0           => RETURN true
+#   100          => RETURN true
+#   101          => RETURN false
+#   2147483648   => RETURN true      # 2^31, even, > Int32 positive range
+#   2147483649   => RETURN false     # odd
+#   4294967296   => RETURN true      # 2^32, even
+#   4294967297   => RETURN false     # 2^32+1, odd
+#   3000000000   => RETURN true      # even, > 2^31
+#   3000000001   => RETURN false     # odd, > 2^31
+#   -3000000000  => RETURN true
+#   -3000000001  => RETURN false
+#   9007199254740992 => RETURN true  # 2^53, even
+#  --- numbers: non-integer / special ---
+#   2.5          => THROW RangeError: is-odd expects an integer.
+#   2.0          => RETURN true       # 2.0 === 2, integer-valued
+#   0.0          => RETURN true
+#   -3.5         => THROW RangeError: is-odd expects an integer.
+#   1.0000001    => THROW RangeError: is-odd expects an integer.
+#   0.5          => THROW RangeError: is-odd expects an integer.
+#   NaN          => THROW TypeError: is-odd expects a number.
+#   Infinity     => THROW TypeError: is-odd expects a number.
+#   -Infinity    => THROW TypeError: is-odd expects a number.
+#  --- numeric strings (OLD is-odd@0.1.2 ACCEPTS and COERCES them) ---
+#   "0"          => RETURN true
+#   "1"          => RETURN false
+#   "2"          => RETURN true
+#   "3"          => RETURN false
+#   "-4"         => RETURN true
+#   "-3"         => RETURN false
+#   "+4"         => RETURN true
+#   "-0"         => RETURN true
+#   " 2 "        => RETURN true       # surrounding whitespace stripped by ToNumber
+#   "\t4\n"      => RETURN true       # tab/newline whitespace stripped
+#   "007"        => RETURN false      # =7, odd
+#   "008"        => RETURN true       # =8, even
+#   "2.0"        => RETURN true       # =2, integer-valued -> passes integer gate
+#   "4.00"       => RETURN true       # =4
+#   "3.00"       => RETURN false      # =3
+#   "5."         => RETURN false      # =5, odd
+#   ".5"         => THROW RangeError: is-odd expects an integer.   # =0.5
+#   "2.5"        => THROW RangeError: is-odd expects an integer.
+#   "1e2"        => RETURN true       # =100
+#   "1e1"        => RETURN true       # =10
+#   "3e0"        => RETURN false      # =3
+#   "0x10"       => RETURN true       # =16
+#   "0x11"       => RETURN false      # =17
+#   "0b10"       => RETURN true       # =2
+#   "0o17"       => RETURN false      # =15
+#  --- strings that are NOT number-like (rejected at NODE 1) ---
+#   ""           => THROW TypeError: is-odd expects a number.   # empty after trim
+#   "   "        => THROW TypeError: is-odd expects a number.   # whitespace-only
+#   "abc"        => THROW TypeError: is-odd expects a number.   # ToNumber -> NaN
+#   "Infinity"   => THROW TypeError: is-odd expects a number.   # ToNumber -> Inf -> coercion test false
+#   "NaN"        => THROW TypeError: is-odd expects a number.   # ToNumber -> NaN
+#  --- non-string non-number types (rejected at NODE 1) ---
+#   true         => THROW TypeError: is-odd expects a number.
+#   false        => THROW TypeError: is-odd expects a number.
+#   null         => THROW TypeError: is-odd expects a number.
+#   undefined    => THROW TypeError: is-odd expects a number.
+#   {}           => THROW TypeError: is-odd expects a number.
+#   []           => THROW TypeError: is-odd expects a number.
+#   [2]          => THROW TypeError: is-odd expects a number.
+#   [2,3]        => THROW TypeError: is-odd expects a number.
+#   10n (bigint) => THROW TypeError: is-odd expects a number.
+#   11n (bigint) => THROW TypeError: is-odd expects a number.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The two-gate-then-parity pipeline of NODES 1-3 and the final negation.
+    - Exact throw classes and messages:
+        TypeError("is-odd expects a number.")     -- rejected at number-like gate
+        RangeError("is-odd expects an integer.")  -- rejected at integer gate
+      (Messages retain the literal "is-odd" text and trailing period, even though
+       the public entry point is isEven. Do NOT rename to "is-even".)
+    - Gate ORDER: number-like gate (TypeError) strictly precedes integer gate
+      (RangeError). A value that is both not-number-like and non-integer yields
+      TypeError (the first gate wins).
+    - Numeric STRINGS are ACCEPTED and coerced (this OLD is-odd@0.1.2 does NOT
+      reject strings — distinct from is-odd@3.x). Empty/whitespace-only strings
+      and non-numeric strings throw TypeError; "Infinity"/"NaN" strings throw
+      TypeError (coercion test rejects non-finite).
+    - Parity via ToInt32 (~~i) & 1; correct for all magnitudes because bit 0 is
+      preserved by the 32-bit wrap.
+    - The in-scope value set demonstrated above is SELF-CONSISTENT with
+      isEven.inputs.mjs: every value the generator can emit (integers incl. >2^31,
+      0, negatives; floats; NaN/Infinity; numeric strings incl. whitespace-padded,
+      decimal, scientific, hex/bin/octal, leading-zero; empty/ws-only/non-numeric
+      strings; booleans, null, plain objects, arrays, bigint) has its mapping
+      defined above.
+
+  CARRIED DATA: none. (kind-of@3.2.2 and is-buffer@1.1.6 contribute only type
+    classification; no large literal table is required. is-buffer's classification
+    never changes any in-envelope result, since 'buffer' — like every non-string,
+    non-number tag — is rejected at the number-like gate.)
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by the generator; documented for
+  a blind re-emitter but excluded from oracle data because they are not
+  oracle-codec round-trippable):
+    - Functions and Symbols as the argument: both are classified as neither string
+      nor number and would THROW TypeError("is-odd expects a number."), but they do
+      not survive JSON.stringify(encode(args)), so they are NOT in genInputs.
+    - Boxed primitives `new Number(2)` / `new String("2")`: kind-of classifies
+      these as 'number' / 'string' (via `instanceof Number` / `instanceof String`),
+      so the real chain ACCEPTS them and returns by value (e.g. new Number(2) ->
+      true, new String("2") -> true). These are class instances that do not
+      round-trip through the oracle codec, so they are excluded from genInputs and
+      noted here only for completeness.
+    - No side effects, no ambient reads (no clock/RNG/env/fs/net). No seam exists.
+
+PROVENANCE
+  is-even@1.0.0  (default export `module.exports = function isEven(i)`),
+    repo jonschlinkert/is-even, MIT, source file: is-even/index.js
+  Inlined transitive chain (all read + executed):
+    is-odd@0.1.2     (jonschlinkert/is-odd, MIT)        is-odd/index.js
+    is-number@3.0.0  (jonschlinkert/is-number, MIT)     is-number/index.js
+    kind-of@3.2.2    (jonschlinkert/kind-of, MIT)       kind-of/index.js
+    is-buffer@1.1.6  (feross/is-buffer, MIT)            is-buffer/index.js
+  Node modules root:
+    /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-is_even-5XS2uO/node_modules
+  Behavior locked by executing the real chain (see OBSERVED-TRUTH TABLE above),
+  not by reading alone.

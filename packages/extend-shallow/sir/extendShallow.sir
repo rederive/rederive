@@ -1,0 +1,171 @@
+UNIT extendShallow
+KIND STATE
+ORACLE-CLASS deterministic
+
+SIG extendShallow(target: any, ...sources: any[]) -> object   # mutates & returns target
+
+DEPENDS-ON none
+# The published source declares the dep chain is-extendable -> is-plain-object -> isobject,
+# and assign-symbols. BUT (see BEHAVIOR node 0) that chain is DEAD CODE at runtime:
+# the live export is Object.assign. No dependency need be reconstructed. A blind emitter
+# implements Object.assign semantics directly (or delegates to the host Object.assign).
+
+# ============================================================================
+# BEHAVIOR  (ordered)
+# ============================================================================
+#
+# --- NODE 0 (THE DECISIVE FACT — read carefully) -----------------------------
+# The source file index.js begins:
+#
+#     module.exports = Object.assign || function(obj /*, objects*/) { ...fallback... };
+#
+# `Object.assign` is a builtin present in EVERY environment this unit targets
+# (Node >= 4 / ES2015). Therefore the LEFT operand of `||` is always truthy and
+# THE EXPORTED VALUE IS LITERALLY THE NATIVE `Object.assign` FUNCTION.
+# Verified empirically: `require('extend-shallow') === Object.assign` => true,
+# and `fn.name === 'assign'`.
+#
+# Consequence: the ENTIRE custom fallback function (the is-extendable gating, the
+# isString->toObject string conversion, the manual `for..in`+hasOwn assign loop,
+# and the assign-symbols call) is UNREACHABLE dead code. The OBSERVABLE CONTRACT
+# of this unit is exactly the contract of native Object.assign. A blind emitter
+# MUST reproduce Object.assign behavior, NOT the textual fallback. Where the
+# fallback would have differed from Object.assign (e.g. strings as sources, the
+# is-extendable predicate, symbol copying being conditional), Object.assign WINS.
+#
+# The remaining nodes specify Object.assign(target, ...sources) precisely, as
+# verified against the real package at extend-shallow@3.0.2 on node v24.
+#
+# --- NODE 1: target validity gate -------------------------------------------
+# If `target` (1st arg) is `null` or `undefined` (including the zero-argument
+# call where target is undefined):
+#     THROW TypeError, message exactly: "Cannot convert undefined or null to object"
+# This is the FIRST thing checked; it happens before any source is examined.
+#
+# --- NODE 2: target coercion ------------------------------------------------
+# Let `to = Object(target)`:
+#   - If target is already an object (plain object, array, function, boxed, etc.)
+#     => `to` IS that same object (same reference). Mutations land on it; it is
+#     what gets returned (NODE 5). This is the STATE effect.
+#   - If target is a PRIMITIVE (number / string / boolean / bigint / symbol),
+#     `Object(target)` produces a fresh BOXED WRAPPER object; props are written
+#     onto the wrapper and the WRAPPER is returned. (OUT-OF-ENVELOPE: a boxed
+#     wrapper is not codec-round-trippable; the generator never emits a primitive
+#     target. Documented in SCOPE.)
+#
+# --- NODE 3: iterate sources left-to-right ----------------------------------
+# For each `src` in `sources` (arguments[1..], IN ORDER):
+#   3a. If `src` is `null` or `undefined`  => SKIP it entirely (no throw). This
+#       is true even when a valid object source follows; only this one is skipped.
+#   3b. Otherwise let `from = Object(src)` and copy from it (NODE 4). Note this
+#       coerces primitive sources to wrappers:
+#         - a STRING source => its own-enumerable index props are copied, i.e.
+#           "abc" contributes {"0":"a","1":"b","2":"c"} (length is non-enumerable,
+#           NOT copied). VERIFIED.  <-- this is the key divergence from the dead
+#           fallback, which converted strings via toObject + is-extendable gating;
+#           Object.assign copies them as boxed-String index props.
+#         - a NUMBER / BOOLEAN / BIGINT / SYMBOL source => its boxed wrapper has
+#           NO own-enumerable properties, so it contributes NOTHING (effective
+#           no-op, no throw). VERIFIED: number/boolean sources leave target as-is.
+#         - an ARRAY source => its own-enumerable index props (and any extra
+#           own-enumerable string props set on the array) are copied as plain
+#           keys: ["a","b"] contributes {"0":"a","1":"b"}. `length` is
+#           non-enumerable, NOT copied. VERIFIED.
+#         - a FUNCTION source => its own-enumerable props are copied. Standard
+#           function props (`name`, `length`, `prototype`) are non-enumerable and
+#           are NOT copied; only user-assigned enumerable props are. VERIFIED.
+#         - a plain object / object-with-getters => see NODE 4.
+#
+# --- NODE 4: per-source copy (Object.assign's [[Get]]/[[Set]] semantics) -----
+# For source `from`, enumerate its OWN ENUMERABLE keys (string keys AND symbol
+# keys), in the standard own-property order (integer-index keys ascending first,
+# then string keys in insertion order, then symbol keys in insertion order):
+#   - For each such key K: read value V = from[K] (this INVOKES a getter if K is
+#     an accessor — VERIFIED: `{ get g(){return 7} }` contributes {g:7}); then
+#     assign to[K] = V (this INVOKES a setter on `to` if one exists; for plain
+#     object targets it is a plain data write).
+#   - INHERITED (non-own) properties are NOT copied. VERIFIED.
+#   - NON-ENUMERABLE own properties are NOT copied. VERIFIED.
+#   - The copy is SHALLOW: object/array values are assigned BY REFERENCE, not
+#     cloned. VERIFIED: nested object/array in the result is `===` to the one in
+#     the source. After `extend({}, {a:obj1}, {a:obj2})`, result.a === obj2 (the
+#     later source's reference wins wholesale; no deep merge).
+#   - LAST-WINS: because sources are processed in order and each write overwrites,
+#     a key present in multiple sources ends with the value from the LAST source
+#     that has it. VERIFIED.
+#   - A source key whose value is `undefined` IS still copied (the key becomes
+#     present with value undefined). VERIFIED. (OUT-OF-ENVELOPE for the generator:
+#     `undefined` as an object value does not survive the JSON codec round-trip,
+#     so the generator never emits undefined source VALUES — though SKIP of a
+#     null/undefined SOURCE-ARG itself (NODE 3a) is fully exercised.)
+#   - SYMBOL-KEYED properties (enumerable) ARE copied by Object.assign. This is
+#     OUT OF SCOPE (symbol keys are not codec-round-trippable). The generator
+#     MUST NOT produce any source with symbol keys. Documented OUT in SCOPE.
+#
+# --- NODE 5: return ---------------------------------------------------------
+# Return `to` (NODE 2). For an object target this is the SAME reference passed in,
+# now mutated => `extend(t, ...) === t` for object t. VERIFIED.
+#
+# --- Key-ordering note (for deterministic expected reconstruction) -----------
+# The result object's key order follows JS own-property ordering applied to the
+# accumulated writes: integer-like keys ("1","2","10") sorted ascending numeric
+# FIRST, then non-integer string keys in first-insertion order. VERIFIED:
+# extend({}, {b,"2","a","10","1"}) => keys ["1","2","10","b","a"]. The oracle
+# compares the returned object structurally (JSON), so emitters that delegate to
+# Object.assign or that replicate this ordering both produce the same expected.
+#
+# ============================================================================
+# ORACLE value -> oracle.json
+# ============================================================================
+# The unit is STATE (mutates target) but its OBSERVABLE is the RETURNED, mutated
+# target value, captured by value. Deterministic: no clock/RNG/io/network seam —
+# ORACLE-CLASS deterministic. The throw paths (NODE 1) are gradable: a
+# codec-faithful null/undefined target yields a recorded {__throw} TypeError with
+# the fixed message. The generator DEEP-CLONES each tuple so every emitter run and
+# every replay starts from fresh, independent inputs (no cross-tuple aliasing).
+#
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly = Object.assign(target, ...sources)):
+#   - target null/undefined throw (NODE 1, exact message).
+#   - object target mutate-and-return-same-ref (NODE 2 object branch, NODE 5).
+#   - null/undefined SOURCE arg skipped, no throw (NODE 3a), including mid-list.
+#   - string source -> index props; number/boolean/bigint source -> no-op;
+#     array source -> index+extra-enumerable props; function source ->
+#     user-enumerable props only (NODE 3b).
+#   - own-enumerable string-keyed shallow copy, by-reference nesting, last-wins,
+#     getter invocation, inherited/non-enumerable skip (NODE 4).
+#   - empty source object (no-op), no sources (target returned unchanged).
+#   In-scope demonstrated value set (self-consistent with genInputs): targets are
+#   plain objects and arrays; sources are plain objects (incl. empty, nested
+#   object/array values, numeric-string keys, function-valued data props,
+#   getter-bearing objects), arrays, strings, numbers, booleans, null, undefined.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT exercised by genInputs):
+#   - SYMBOL-KEYED source properties: copied by Object.assign at runtime, but
+#     symbol keys are not codec-round-trippable => OUT. Generator emits none.
+#   - PRIMITIVE target (number/string/boolean/...): returns a boxed wrapper object,
+#     not codec-round-trippable => OUT. Generator emits only object/array targets.
+#   - `undefined` / `NaN` / `+-Infinity` as a source VALUE: copied at runtime but
+#     not codec-round-trippable as object values => OUT. Generator emits none.
+#     (Note: a null/undefined SOURCE ARGUMENT is in-contract and IS exercised; the
+#     exclusion is only undefined/NaN as a property VALUE.)
+#   - The entire textual FALLBACK function (is-extendable / is-plain-object /
+#     isobject / assign-symbols / isString / toObject) is DEAD CODE and not part
+#     of the observable contract (NODE 0). A blind emitter need not reconstruct it;
+#     if it does, it must still yield Object.assign-identical observable behavior.
+#
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+# extend-shallow@3.0.2  (jonschlinkert/extend-shallow), MIT, file: index.js.
+#   module.exports = Object.assign || function(obj){...}  => live export is Object.assign.
+# Declared (dead-code) dep chain, all MIT, all read and confirmed unreachable:
+#   is-extendable@1.0.1 (index.js): isPlainObject(val) || typeof val==='function' || Array.isArray(val)
+#   is-plain-object@2.x (index.js): isObjectObject + constructor/prototype/isPrototypeOf checks
+#   isobject@3.x       (index.js): val != null && typeof val==='object' && !Array.isArray(val)
+#   assign-symbols@1.0.0 (index.js): copies enumerable own SYMBOL keys (OUT of scope).
+# Verified on node v24.16.0: require('extend-shallow') === Object.assign.

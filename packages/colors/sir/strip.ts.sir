@@ -1,0 +1,19 @@
+UNIT strip
+LANG ts
+PRIMARY-SHA256 2749032c7a18955a230232736dc89e388f657fce21c7ee5f08b5a47f9687e5f4
+SIG export function strip(str: unknown): string
+ABI TypeScript compiles to the js runtime and is driven exactly as js, through the named export `strip`. text = string
+  (UTF-16 code units; every character of CODE is one ASCII code unit, so code-unit scanning equals code-point scanning).
+  The parameter is `unknown` because the js widening applies here too. STRICT: the artifact must type-check under
+  `strict: true` against this SIG with no `any`, no non-null assertions (`!`), no `@ts-ignore` / `@ts-expect-error`.
+  The artifact is an ES module that imports nothing.
+ENVELOPE ts WIDENS str to any JS value exactly as js does: coerced by ('' + str) — ToPrimitive with the default hint —
+  then R1-R4 apply (42 -> "42", null -> "null", true -> "true", undefined -> "undefined", an object whose valueOf
+  returns a primitive -> that primitive's string); a symbol THROWS a TypeError.
+MECHANISM (restated from js — language files are self-contained) R1-R4 = ('' + str).replace(CODE_RE, ''); the g flag
+  is R3's leftmost non-overlapping scan and replace's single pass is R4. `'' + str` type-checks on `unknown` under
+  strict as written — no cast is needed. Do NOT use String(str) or a template literal: they use the string hint
+  (toString wins over valueOf) and String(symbol) does not throw.
+DEPENDS-ON none
+PINNED regex CODE_RE = /\x1B\[\d+m/g CITED R2 — the package's own pattern; its accept-set is the grammar CODE
+PROVENANCE colors@1.4.0 lib/colors.js (Marak/colors.js, MIT). Language file cut 2026-10-28 with the primary.

@@ -1,0 +1,157 @@
+UNIT toUpper
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toUpper(value: any) -> string
+DEPENDS-ON none   # self-contained bundle; inlines lodash toString/baseToString/isSymbol/isObjectLike
+
+# =============================================================================
+# BEHAVIOR  (exact, ordered pipeline — reproduce precisely)
+# =============================================================================
+# toUpper coerces `value` to a string with lodash's `toString` semantics, then
+# applies the NATIVE String.prototype.toUpperCase. Formally:
+#
+#     toUpper(value) = baseUpper( lodashToString(value) )
+#
+# where the two stages are:
+#
+# ---------------------------------------------------------------------------
+# STAGE 1 — lodashToString(value)  (the lodash _.toString coercion)
+# ---------------------------------------------------------------------------
+#   NODE 1 (nullish guard):
+#     IF value is `null` OR value is `undefined`  -> "" (empty string). DONE.
+#     # Implemented in source as `value == null` (loose ==), which matches BOTH
+#     # null and undefined and NOTHING else (0, '', false, NaN do NOT match).
+#
+#   ELSE delegate to baseToString(value):
+#
+#     NODE 2 (string fast-path):
+#       IF typeof value === 'string'  -> return value unchanged. (Then Stage 2.)
+#
+#     NODE 3 (symbol path):
+#       IF value is a Symbol (typeof 'symbol', OR an object whose
+#          Object.prototype.toString tag is '[object Symbol]')
+#       -> return String(value), i.e. Symbol.prototype.toString.call(value).
+#          e.g. Symbol('foo') -> "Symbol(foo)", Symbol() -> "Symbol()".
+#       # (Symbols are NOT codec-round-trippable -> documented OUT, not emitted.)
+#
+#     NODE 4 (general coercion):
+#       result = value + ''      # JS string concatenation / ToString
+#       # NEGATIVE-ZERO SPECIAL CASE (applies ONLY to the TOP-LEVEL value here,
+#       # because `value + ''` for a top-level -0 yields "0", losing the sign):
+#       IF result === '0'  AND  (1 / value) === -Infinity
+#            -> return '-0'
+#       ELSE -> return result
+#
+#       # --- coercion outcomes that fall through NODE 4 ---
+#       #   number  ->  String(number):
+#       #       0          -> "0"
+#       #       -0         -> "-0"   (special case above; only at top level)
+#       #       42         -> "42"
+#       #       3.14       -> "3.14"
+#       #       NaN        -> "NaN"        (NOT the -0 case: result is "NaN" != "0")
+#       #       Infinity   -> "Infinity"
+#       #       -Infinity  -> "-Infinity"
+#       #       1e21       -> "1e+21"      (JS exponential notation, lowercase e here)
+#       #   boolean ->  true -> "true",  false -> "false"
+#       #   bigint  ->  String(bigint) EXCEPT the throw case below:
+#       #       1n -> "1", 42n -> "42", -42n -> "-42", 999...n -> "999..."
+#       #       0n  -> *** THROWS TypeError("Cannot mix BigInt and other types,
+#       #              use explicit conversions") ***
+#       #       -0n -> *** THROWS the same TypeError ***
+#       #       WHY: `0n + ''` === "0", so result === '0' is TRUE, so the `&&`
+#       #       evaluates `1 / value` = `1 / 0n`, which mixes BigInt with the
+#       #       Number 1 and throws. For every OTHER bigint, result !== '0',
+#       #       so the `&&` short-circuits and never divides. This throw is a
+#       #       genuine in-contract behavior; reproduce it.
+#       #   array   ->  Array.prototype.toString == NATIVE recursive ','-join:
+#       #       [1,2,3]             -> "1,2,3"
+#       #       [1,[2,3],4]         -> "1,2,3,4"   (nested arrays flatten via join)
+#       #       [1,null,undefined,2]-> "1,,,2"     (null/undefined elems -> "")
+#       #       ["a","b"]           -> "a,b"
+#       #       []                  -> ""          (empty array -> empty string)
+#       #       [-0]                -> "0"  *** NOT "-0" ***  <-- see note A
+#       #       [{}]                -> "[object Object]"
+#       #   plain object -> Object.prototype.toString-ish via "+''":
+#       #       {}     -> "[object Object]"
+#       #       {a:1}  -> "[object Object]"
+#       #       custom { toString(){return 'x'} } -> "x"
+#       #       Date   -> its native Date.prototype.toString string
+#       #       RegExp /aBc/g -> "/aBc/g"
+#       #   boxed primitive (wrapper object) -> via "+''":
+#       #       new String("aBc")  -> "aBc"  (then upper -> "ABC")
+#       #       new Number(-0)     -> "-0"   *** the -0 special case DOES fire:
+#       #             new Number(-0)+'' === "0" AND 1/new Number(-0) === -Infinity
+#       #       new Boolean(true)  -> "true"
+#       #
+#       # NOTE A (CRITICAL, divergence-prone): The `-0 -> "-0"` rule applies ONLY
+#       # when the WHOLE value passed to toUpper is the number -0 (or a boxed -0).
+#       # Inside an array, the join uses NATIVE Array->String, which renders the
+#       # element via String(-0) === "0". lodash's baseToString is NOT re-applied
+#       # per element. So toUpper([-0]) === "0", but toUpper(-0) === "-0".
+#       # Likewise [[-0]] -> "0". Do not apply the -0 rewrite to array elements.
+#
+# ---------------------------------------------------------------------------
+# STAGE 2 — baseUpper(str) = str.toUpperCase()
+# ---------------------------------------------------------------------------
+#   Apply the language-native String.prototype.toUpperCase to the Stage-1 string.
+#   *** Use toUpperCase, NOT toLocaleUpperCase. *** Locale-independent:
+#       "i" -> "I"  (never the Turkish dotted "İ").
+#   This is the standard Unicode default case-mapping, INCLUDING expansions and
+#   special mappings that change string length — reproduced for free by the
+#   native call. Demonstrated in-scope mappings (self-consistent w/ genInputs):
+#       "fooBar"  -> "FOOBAR"
+#       "FOO-BAR" -> "FOO-BAR"   (already upper / non-letters unchanged)
+#       "--foo-bar--" -> "--FOO-BAR--"
+#       "ß"       -> "SS"        (sharp-s expands to two chars)
+#       "straße"  -> "STRASSE"
+#       "ﬁ" (U+FB01 LATIN SMALL LIGATURE FI) -> "FI"  (ligature expands)
+#       "ﬂ" (U+FB02) -> "FL"
+#       "ŉ" (U+0149) -> "ʼN"     (expands to apostrophe + N)
+#       "ǆ" (U+01C6) -> "Ǆ" (U+01C4)  (digraph -> uppercase digraph)
+#       "àéîõü"   -> "ÀÉÎÕÜ"     (accented letters map 1:1)
+#       "i"       -> "I"
+#   A re-emitter MUST delegate to native .toUpperCase() rather than hand-roll a
+#   case table; that guarantees byte-identical Unicode behavior.
+#
+# THROW BEHAVIOR (full enumeration):
+#   - toUpper(0n)  throws TypeError "Cannot mix BigInt and other types, ..."
+#   - toUpper(-0n) throws the same TypeError
+#   - No other in-envelope input throws. (Objects coerce; nothing here calls a
+#     missing method.) An object whose toString throws would propagate, but such
+#     objects are out-of-envelope for the generator.
+#
+# RETURN: the resulting upper-cased string (or the thrown TypeError).
+
+ORACLE value -> oracle.json
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full nullish guard (loose ==null catches null AND undefined only).
+#   - The string fast-path, the Symbol-to-String path, the `value + ''` coercion.
+#   - The top-level -0 -> "-0" special case (and that it does NOT recurse into
+#     array elements).
+#   - The bigint 0n/-0n throw (and that other bigints stringify normally).
+#   - Native recursive array ','-join with null/undefined -> "".
+#   - Stage-2 native String.prototype.toUpperCase (NOT toLocaleUpperCase),
+#     including all Unicode expansions/special-casings.
+#
+# CARRIED DATA: NONE. No literal tables. The Unicode case map belongs to the
+#   language runtime (native toUpperCase), not to this unit — so no carried.json.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because
+# they are not oracle-codec-round-trippable, even though the unit handles them):
+#   - Symbols: toUpper(Symbol('foo')) === "SYMBOL(FOO)" via String(sym). Behavior
+#     is well-defined and reproducible from this spec, but a Symbol cannot survive
+#     JSON.stringify(encode(args)) -> excluded from generated inputs.
+#   - Functions: toUpper(fn) === String(fn).toUpperCase() (source-text upper).
+#     Function identity/source does not round-trip -> excluded.
+#   - These are spec'd here so a blind re-emitter still reconstructs them; the
+#     generator simply does not produce them.
+#   No stateful mutators, no side APIs, no ambient reads (no clock/RNG/io/net):
+#   there is NO seam. Purely deterministic.
+
+PROVENANCE lodash.toupper@4.1.2 (lodash Custom Build, modularize exports="npm");
+  repo https://github.com/lodash/lodash; license MIT;
+  source file: node_modules/lodash.toupper/index.js (module.exports = toUpper).

@@ -1,0 +1,185 @@
+UNIT isDataDescriptor
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure function. No clock / RNG / env / fs / net seam. No injection needed.
+
+SIG isDataDescriptor(obj: any, prop?: any) -> boolean
+# Default (and only) export of the CJS module: module.exports = function isDataDescriptor(obj, prop) {...}
+# Returns true iff `obj` (or, when `prop` is a STRING, the own-property `prop` of `obj`) has the
+# characteristics of a valid JavaScript DATA property descriptor.
+
+DEPENDS-ON none
+# The source `require('hasown')`, but it is INLINED here (see BEHAVIOR node H) so the reconstruction
+# is fully self-contained with NO require / NO import.
+
+EMISSION-CONTRACT
+# - Target is an .mjs ES module whose DEFAULT export is this function:  export default function isDataDescriptor(obj, prop) {...}
+# - Reconstruction MUST be SELF-CONTAINED: inline the hasOwnProperty check (node H). NO require, NO import.
+# - Do NOT import 'hasown' or any package.
+
+BEHAVIOR
+# A language-neutral pipeline. Evaluate the nodes IN THIS EXACT ORDER. The first node that returns
+# decides the result; if no node returns early, the function returns true (node F).
+#
+# Two private constants used below:
+#   data  := an object/dictionary with EXACTLY these three keys mapping to the string 'boolean':
+#               configurable -> 'boolean'
+#               enumerable   -> 'boolean'
+#               writable     -> 'boolean'
+#            (In source it is created with __proto__:null so it has NO inherited keys; what matters
+#             downstream is `hasOwn(data, key)` — true ONLY for the three keys above. 'value', 'get',
+#             'set', and any other key are NOT in `data`.)
+#
+# Helper hasOwn(o, k)  (node H, inlined from the `hasown` package):
+#   hasown@2.0.4 exports  Function.prototype.call.bind(Object.prototype.hasOwnProperty).
+#   So hasOwn(o, k)  ===  Object.prototype.hasOwnProperty.call(o, k)
+#   -> true iff `k` is an OWN (not inherited) property key of `o`. Inline this exact expression; do
+#      NOT call o.hasOwnProperty (which can be shadowed). Use Object.prototype.hasOwnProperty.call.
+#
+# NODE A  (non-object guard):
+#   IF (!obj) OR (typeof obj !== 'object')  ->  return false
+#   Notes:
+#     - `!obj` is JS truthiness: null, undefined, 0, -0, '', false, NaN are all falsy -> false.
+#       (All of those except objects are non-objects anyway; this catches null specifically, since
+#        typeof null === 'object'.)
+#     - typeof of a function is 'function' (not 'object') -> false.
+#     - Arrays ARE typeof 'object' and truthy, so they pass node A and proceed (see node C/D).
+#     - bigint, symbol, boolean, number, string primitives -> typeof !== 'object' -> false.
+#
+# NODE B  (prop-form — ONLY when prop is a STRING):
+#   IF typeof prop === 'string':
+#       val := Object.getOwnPropertyDescriptor(obj, prop)
+#       return (typeof val !== 'undefined')        # i.e. return true iff `obj` has an OWN property named `prop`
+#   Notes:
+#     - This branch is taken ONLY for a STRING prop. A number/undefined/symbol/object prop does NOT
+#       take this branch; it falls through to nodes C..F as if prop were absent.
+#     - getOwnPropertyDescriptor only sees OWN properties: an INHERITED property `prop` -> undefined -> false.
+#     - An empty-string prop '' is still a string -> this branch is taken (own '' property? almost always no -> false).
+#     - The VALUE/shape of obj[prop] is irrelevant here; only own-existence is checked.
+#
+# NODE C  (no-payload / accessor-presence rejection):
+#   IF ( (!('value' in obj) && !('writable' in obj))   # neither value nor writable reachable
+#         OR ('get' in obj)
+#         OR ('set' in obj) )
+#       -> return false
+#   Notes:
+#     - The membership test is the JS `in` operator, which checks OWN **and INHERITED** keys.
+#     - A data descriptor must expose `value` or `writable` (via `in`), and must expose NEITHER
+#       `get` NOR `set`. The presence of `get`/`set` rejects EVEN IF their value is undefined
+#       (it is `'get' in obj`, not a value check). VERIFIED: {value:1, get:undefined} -> false.
+#     - {} -> false (no value/writable). {configurable:true} alone -> false. {enumerable:true} alone -> false.
+#     - Empty array [] and [1,2] -> false (no 'value'/'writable' key, own or inherited).
+#
+# NODE D  (per-key type validation loop):
+#   FOR each key in (for..in over obj)            # for..in enumerates OWN + INHERITED ENUMERABLE string keys
+#       IF (    key !== 'value'
+#            AND hasOwn(obj, key)                  # OWN key only (node H); inherited keys are skipped here
+#            AND hasOwn(data, key)                 # key is one of {configurable, enumerable, writable}
+#            AND typeof obj[key] !== data[key]      # actual typeof differs from required 'boolean'
+#            AND typeof obj[key] !== 'undefined' )  # ...but an `undefined` value is EXEMPT (allowed)
+#           -> return false
+#   Notes / exact short-circuit semantics (ALL five conjuncts must hold to reject):
+#     - 'value' is NEVER type-checked (key !== 'value' is first). obj.value may be any type. VERIFIED.
+#     - Only the three `data` keys (configurable/enumerable/writable) are type-checked. ANY OTHER own
+#       key (e.g. 'foo', 'extra', even an own '__proto__' data property) is NOT in `data`, so it is
+#       NEVER a rejection reason. VERIFIED: {value:1, foo:'bar'} -> TRUE; {value:1, extra:99, writable:false,
+#       configurable:false, enumerable:true} -> TRUE.
+#     - Required type for each of the three keys is 'boolean'. A boolean value passes. A non-boolean
+#       value rejects UNLESS it is `undefined`:
+#           writable: 1            -> typeof 'number'  != 'boolean' and != 'undefined' -> reject (false)
+#           writable: 'yes'        -> reject (false)
+#           configurable: 'yes'    -> reject (false)
+#           enumerable: null       -> typeof null === 'object' != 'boolean' and != 'undefined' -> reject (false)
+#           enumerable: undefined  -> typeof 'undefined' -> EXEMPT -> NOT a rejection (passes). VERIFIED -> true.
+#           writable: undefined    -> EXEMPT -> passes. VERIFIED -> true.
+#     - hasOwn(obj,key): an INHERITED configurable/enumerable/writable of wrong type does NOT reject
+#       (the OWN-key guard fails). VERIFIED.
+#
+# NODE F  (default):
+#   return true
+#
+# SUMMARY OF VERIFIED EXAMPLES (single-arg form; all confirmed against is-data-descriptor@1.0.1):
+#   {value:1}                                  -> true
+#   {value:1, writable:true}                   -> true
+#   {writable:false}                           -> true
+#   {writable:true}                            -> true        # writable alone satisfies node C
+#   {value:undefined}                          -> true        # value not type-checked
+#   {value:1, configurable:true}               -> true
+#   {value:1, configurable:undefined}          -> true        # undefined exempt
+#   {value:1, enumerable:undefined}            -> true
+#   {value:1, writable:undefined}              -> true
+#   {value:1, configurable:true, enumerable:false, writable:true} -> true
+#   {value:1, foo:'bar'}                       -> true        # extra non-data key is allowed (NOT false)
+#   {value:1, writable:false, configurable:false, enumerable:true, extra:99} -> true
+#   {value:fn} / {value:{}}                    -> true        # value of any type is fine
+#   {writable:1}                               -> false       # writable non-bool
+#   {writable:'yes'}                           -> false
+#   {value:1, configurable:1}                  -> false
+#   {value:1, enumerable:1}                    -> false
+#   {value:1, enumerable:null}                 -> false
+#   {value:1, configurable:'yes'}              -> false
+#   {}                                         -> false       # no value/writable
+#   {configurable:true}                        -> false
+#   {enumerable:true}                          -> false
+#   {value:1, get:undefined}                   -> false       # 'get' in obj
+#   {value:1, get:fn}                          -> false
+#   {get:fn}                                   -> false       # also no value/writable -> false at node C
+#   {value:1, set:undefined}                   -> false
+#   5 / 'foo' / true / 10n                     -> false       # non-object
+#   null / undefined                           -> false
+#   []                                         -> false
+#   [1,2]                                      -> false
+#   prop-form:
+#     ({x:{value:1}}, 'x')                     -> true        # own prop 'x' exists
+#     ({x:42}, 'x')                            -> true        # own prop 'x' exists (value shape irrelevant)
+#     ({x:42}, 'y')                            -> false       # no own 'y'
+#     ({}, 'x')                                -> false
+#     ({x:1}, '')                              -> false       # '' is a string -> prop-form -> no own ''
+#     (5, 'x') / (null, 'x')                   -> false       # node A first
+#     ({value:1}, 0)   [prop is NUMBER]        -> true        # NOT prop-form; descriptor logic applies
+#     ({value:1}, undefined)                   -> true        # NOT prop-form; descriptor logic applies
+
+ORACLE value -> oracle.json
+# Pure deterministic boolean (or a thrown error, captured as {__throw} — none of the in-envelope
+# inputs throw). The harness records the return value of isDataDescriptor(...args).
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above (nodes A,B,C,D,F) and the inlined
+#   hasOwn (node H). The `data` table is a tiny in-line literal of 3 entries, fully transcribed in
+#   node BEHAVIOR (configurable/enumerable/writable -> 'boolean'); it is NOT carried data.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT: none (pure, no side effects, no external state).
+#
+# OUT-OF-ENVELOPE (behavior fully specified above, but NOT emitted by genInputs because the values
+# do not survive the JSON/structured clean-room codec round-trip; a blind engineer still reconstructs
+# the rule from BEHAVIOR):
+#   - Accessor descriptors whose get/set are FUNCTIONS (e.g. {get:function(){}}). Functions are not
+#     JSON/structured-clone round-trippable. The get/set REJECTION is exercised instead via
+#     {value:1, get:undefined} and {value:1, set:undefined} (undefined-valued get/set ARE the
+#     accessor-presence test per node C, and undefined here is a literal own key -> 'get' in obj true).
+#     NOTE: a get/set whose value is `undefined` in an object literal IS an own key ('get' in obj),
+#     so these inputs faithfully exercise node C. (`undefined` as an object VALUE does NOT survive the
+#     codec either, so genInputs uses `null` for get/set to assert presence-rejection: {value:1, get:null}
+#     -> 'get' in obj -> false. VERIFIED equivalent for node C.)
+#   - Symbol values (as obj, as prop, or as a property value) — Symbols are not round-trippable.
+#   - `undefined`, NaN, +/-Infinity as object VALUES or array elements — not round-trippable. The
+#     undefined-exemption branch of node D is documented above; genInputs does not emit an undefined
+#     object value (instead the exemption is covered structurally in the spec, and a `null` value at
+#     enumerable/configurable/writable exercises the NON-exempt non-boolean rejection: null is typeof
+#     'object' != 'boolean' and != 'undefined' -> reject).
+#   - Prototype-chain inputs (objects created via Object.create with inherited value/get/writable) —
+#     the inheritance semantics of nodes C ('in') and D (hasOwn-skip) are documented above but a custom
+#     prototype chain is not expressible through the codec, so it is not emitted.
+#   - Function obj, bigint/boolean/number/string primitives as obj: the NON-object cases that ARE
+#     round-trippable (number, string, bigint, boolean, null) ARE emitted (node A). A function obj is
+#     not round-trippable and is left to the spec.
+
+PROVENANCE
+# Package:  is-data-descriptor@1.0.1  (npm), author Jon Schlinkert / Jordan Harband (inspect-js)
+# Repo:     git+https://github.com/inspect-js/is-data-descriptor.git
+# License:  MIT
+# Source:   node_modules/is-data-descriptor/index.js  (CJS, "main": "index.js")
+# Inlined dependency: hasown@2.0.4 (node_modules/hasown/index.js), MIT, inspect-js — exports
+#   Function.prototype.call.bind(Object.prototype.hasOwnProperty); inlined as
+#   Object.prototype.hasOwnProperty.call(o, k) in node H.

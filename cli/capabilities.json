@@ -1,0 +1,215 @@
+{
+  "$comment": [
+    "THE CAPABILITY MODEL (docs/SIR_V04_PLAN.md F.1; moved here from sir-toolkit by",
+    "SIR_V05_PLAN W.0c) — the single source of truth for what the toolchain can",
+    "actually DO. It lives beside rdv because the claim is the verifier's to make.",
+    "Consumers never duplicate it: rdv (what it can verify), sir-factory pack (what",
+    "it may stamp, via cli/features.mjs), and the toolkit prompts (what a decomposer",
+    "may propose).",
+    "",
+    "specVersion remains the COARSE gate: an rdv predating this file ignores it and",
+    "still halts on a version it doesn't know, which must stay true (plan A6). This",
+    "file REFINES that for consumers who understand it — a bundle is verifiable when",
+    "every feature it declares is implemented here, so a partially-built v0.4 is",
+    "usable instead of a cliff.",
+    "",
+    "ADDING A FEATURE HERE IS A CLAIM THAT THE VERIFIER IMPLEMENTS IT. Do not add one",
+    "to unblock generation; that inverts the whole point (the version must track what",
+    "rdv can check, not what the schema has published).",
+    "",
+    "`implemented` and `generable` are DIFFERENT claims and gate different things.",
+    "`implemented`: rdv can check a unit that uses this. `generable`: a decomposer may",
+    "EMIT it, earned only by the Phase 5 gate — cold re-emitters converge on it from",
+    "the SIR alone, with no schema and no prompt fragment. A feature can be verifiable",
+    "and still not safely writable, and shipping that pair backwards produces contracts",
+    "only their author can read."
+  ],
+  "schemaVersion": "1",
+  "toolchain": {
+    "maxSpecVersion": "0.4",
+    "$languages": "The target languages rdv can HARNESS (SIR_V05_PLAN design move 4: feature flags one level down). A bundle carrying a variant in any other language halts, naming the language. Grows only when a verifier-owned driver ships in rdv (Phase 2) — never to unblock generation.",
+    "languages": [
+      "js",
+      "ts",
+      "rust"
+    ],
+    "$toolchains": "What a harnessed language needs on the CONSUMER'S machine. rdv bundles no compiler: a language listed here is harnessed only where its toolchain resolves, and a bundle carrying it halts elsewhere with the hint.",
+    "toolchains": {
+      "ts": { "resolves": "typescript, plus @types/node for an artifact that imports a Node built-in (from the bundle dir, then the working directory)", "hint": "npm i -D typescript @types/node" },
+      "rust": { "resolves": "cargo on PATH", "hint": "install Rust: https://rustup.rs" }
+    },
+    "$languageRegistry": "The CLOSED registry of language ids a <unit>.<lang>.sir file or a lang:<id> variant may use (the lab's registry, sir-lab/v05-lang lib/v05.mjs). A suffix outside it is an error, not a new language.",
+    "languageRegistry": [
+      "js",
+      "ts",
+      "rust",
+      "php",
+      "csharp",
+      "python"
+    ]
+  },
+  "features": {
+    "vectors": {
+      "since": "0.2",
+      "sections": [
+        "§14"
+      ],
+      "implemented": true,
+      "rungs": [
+        "frozen+heldout"
+      ],
+      "detect": "every bundle: the default value-oracle mode",
+      "summary": "frozen + held-out input/output vectors graded by quorum",
+      "generable": true,
+      "generationEvidence": "shipped factory record — the blind-quorum pipeline has emitted units using this feature since before fragments existed (colors, bcryptjs, request and the @rederive/* catalog); its generability is what the factory's whole history tests"
+    },
+    "carried-data": {
+      "since": "0.3",
+      "sections": [
+        "§18"
+      ],
+      "implemented": true,
+      "rungs": [
+        "hash+authority"
+      ],
+      "detect": "manifest.carriedData is non-empty",
+      "summary": "byte-exact constant tables + a re-runnable independent-authority assertion",
+      "generable": true,
+      "generationEvidence": "shipped factory record — the blind-quorum pipeline has emitted units using this feature since before fragments existed (colors, bcryptjs, request and the @rederive/* catalog); its generability is what the factory's whole history tests"
+    },
+    "envelope": {
+      "since": "0.3",
+      "sections": [
+        "§17"
+      ],
+      "implemented": true,
+      "rungs": [
+        "in-scope+boundary"
+      ],
+      "detect": "the SIR declares ENVELOPE",
+      "summary": "the verified input scope is part of the contract",
+      "generable": true,
+      "generationEvidence": "shipped factory record — the blind-quorum pipeline has emitted units using this feature since before fragments existed (colors, bcryptjs, request and the @rederive/* catalog); its generability is what the factory's whole history tests"
+    },
+    "trace-seam": {
+      "since": "0.3",
+      "sections": [
+        "§15",
+        "§16"
+      ],
+      "implemented": true,
+      "rungs": [
+        "ordered-emit+reply"
+      ],
+      "detect": "a unit's oracle mode is \"trace\"",
+      "summary": "effect units verified over an injected boundary the harness owns",
+      "generable": true,
+      "generationEvidence": "shipped factory record — the blind-quorum pipeline has emitted units using this feature since before fragments existed (colors, bcryptjs, request and the @rederive/* catalog); its generability is what the factory's whole history tests"
+    },
+    "scheduler": {
+      "since": "0.4",
+      "sections": [
+        "§20"
+      ],
+      "implemented": true,
+      "rungs": [
+        "virtual-time"
+      ],
+      "detect": "the SIR declares a time.timer / microtask control effect",
+      "summary": "timers + microtasks on virtual time, resolution order deterministic",
+      "evidence": "rederive/experiments/v04-phase1-scheduler — both race branches reachable + replayable (50x each); the real-clock control ran 20/20 one way, never executing the other branch",
+      "generable": true,
+      "generationEvidence": "rederive/experiments/v04-phase5-generation — 3/3 cold re-emitters on the first round; two of the three were BYTE-IDENTICAL. All armed one timer per event up front and broke ties by arm order. Controls rejected: a sort arming no timers (right answer, no scheduling) and a reverse-tie unit that passed the distinct-delay case and failed only on ties"
+    },
+    "lifecycle": {
+      "since": "0.4",
+      "sections": [
+        "§21"
+      ],
+      "implemented": true,
+      "rungs": [
+        "armed-fired-cancelled"
+      ],
+      "detect": "the SIR declares a cancellable resource (timer/handle/subscription)",
+      "summary": "resource lifecycle asserted separately; catches leaks invisible to value+trace",
+      "evidence": "rederive/experiments/v04-phase2-lifecycle — adversarial 3-channel proof + @fixture/lifecycle (correct VERIFIED 2/2, leaky FAILED 0/2 on the lifecycle field alone)",
+      "generable": true,
+      "generationEvidence": "rederive/experiments/v04-phase5-generation — 3/3 cold re-emitters on the first round; every one cleared the timer on the gate-wins path. Controls rejected on the lifecycle channel while returning the CORRECT value: a leaky unit that never cleared, and a lazy unit that armed only after awaiting"
+    },
+    "par-interleaving": {
+      "since": "0.4",
+      "sections": [
+        "§19"
+      ],
+      "implemented": true,
+      "rungs": [
+        "differential-sampled",
+        "sampled",
+        "partial-order-reduction",
+        "exhaustive"
+      ],
+      "detect": "the SIR declares PAR over dependent sub-traces, or a concurrency bound",
+      "summary": "verification over the space of interleavings, with the rung reported honestly",
+      "evidence": "rederive/experiments/v04-phase3-par + v04-phase0-pmap — @fixture/par correct VERIFIED 2/2, completion-order-keyed FAILED 0/2; coverage stamped (8 and 54 schedules, exhaustive)",
+      "generable": true,
+      "generationEvidence": "rederive/experiments/v04-phase5-generation — 3/3 cold re-emitters built it from the SIR alone (no schema, no fragments), position-keyed across all 4/8/54 exhaustive schedules. Round 1 was 1/3, and the 2 misses were NOT about PAR: all three agreed on the concurrency shape and diverged on whether the gate or the unit computed the mapping. Hardening that one sentence fixed it."
+    },
+    "ring": {
+      "since": "0.4",
+      "sections": [
+        "§22"
+      ],
+      "implemented": true,
+      "rungs": [
+        "deterministic-schedule",
+        "refinement-checked",
+        "live"
+      ],
+      "detect": "the SIR declares RING",
+      "summary": "token-coordinated concurrency reduces to a deterministic schedule; checked as a refinement (safety) AND for token loss/duplication (liveness)",
+      "evidence": "rederive/experiments/v04-phase4-ring — R_ring subset R_free checked; recognition (preserving) vs imposition (refinement) distinguished; a fake ring caught. @fixture/ring correct VERIFIED 2/2, broken FAILED 0/2 | LIVENESS (Phase 4b): token channel held->passed|released asserts mutual exclusion + return; generic halt detection; @fixture/ring-live sound VERIFIED 1/1, lost and duplicated both FAILED 0/1 on units whose OUTPUT IS CORRECT",
+      "generable": true,
+      "generationEvidence": "rederive/experiments/v04-phase5-generation — 3/3 cold re-emitters on the first round, no hardening needed: correct take/pass/release path, one holder at any instant, released exactly once, reduced to a single schedule. RING survived the blind test unaided."
+    },
+    "lang-variant": {
+      "since": "0.5",
+      "sections": [
+        "§23"
+      ],
+      "implemented": true,
+      "implementedFor": "the languages in toolchain.languages (js; ts: Phase 2a, cli/lang-ts.mts; rust: Phase 2b, cli/lang/rust.mjs, canonical oracle only). Any other language still halts, by name.",
+      "rungs": [
+        "type-checked",
+        "harness-verified",
+        "cross-verified"
+      ],
+      "detect": "a per-language SIR file sir/<unit>.<lang>.sir, or a manifest variants key lang:<id>",
+      "summary": "a unit shipped in a target language: primary <unit>.sir + <unit>.<lang>.sir, graded against the SAME primary oracle through a verifier-owned per-language harness",
+      "evidence": "sir-lab/v05-lang (Tier A + Tier B, 2026-09-22/23): bytes + slugify VERIFIED js/ts/rust, minimist js/rust; cross-verified 1976-3000/each. Lab-only — no rdv driver yet",
+      "generable": false
+    },
+    "cross-lang-anchor": {
+      "since": "0.5",
+      "sections": [
+        "§12",
+        "§10"
+      ],
+      "implemented": false,
+      "rungs": [
+        "frozen+heldout"
+      ],
+      "detect": "the SIR declares ANCHOR ref(<lang>:…)",
+      "summary": "a fidelity variant anchored to a reference implementation in another language, over the language-neutral vector encoding",
+      "generable": false
+    }
+  },
+  "$rungs": {
+    "$comment": "Verification STRENGTH, weakest first. A bundle records the rung it earned; a feature gates which rungs are AVAILABLE, never whether a unit may ship (plan design move 2).",
+    "order": [
+      "differential-sampled",
+      "sampled",
+      "partial-order-reduction",
+      "exhaustive"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+UNIT divergence_of
+LANG rust
+PRIMARY-SHA256 0ce7a880e772c6442115ba46d2c5225feb139afcaab6b040c501da8eead05955
+SIG pub fn divergence_of(round: i64, artifacts: &[(&str, Option<bool>, Option<&str>, Option<Vec<&str>>, Option<(bool, Option<bool>)>, Option<Vec<(Option<&str>, &str, Vec<&str>, &str)>>)]) -> Option<(i64, String, String, Vec<(String, Vec<String>, String, Vec<String>, i64, i64)>, Option<Vec<(String, Vec<String>, String, Vec<String>, i64, i64)>>)>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn divergence_of), NO dependencies, no main, no I/O, no
+  unsafe. The verifier's generated harness marshals the abstract SIG: every record is a tuple BY VALUE in DECLARED field
+  order — an artifact is (artifact, control, error, rungs, typeCheck, misses), typeCheck is (applicable, ok), a miss is
+  (slice, name, args, expected); the result is (round, quorum, verdict, heldoutDisagree, frozenMissed) and a tally entry is
+  (name, args, expected, failedBy, passedBy, of). text = &str in arguments and String in the result; T | none = Option<T>;
+  a nested list is a Vec. The harness owns all I/O; it serializes the result tuple back by field name. The R5 throws are
+  panics; the message is not graded.
+ENVELOPE as the primary. round within plus or minus 2^53 - 1 fits i64 exactly; nothing narrows.
+MECHANISM control counts only as Some(true); error counts as any Some(s), Some("") included (R3). R4(a) =
+  rungs.iter().any(|r| *r == "harness-verified") — whole-string equality. R4(b) = typeCheck is None, or applicable is
+  false, or ok == Some(true). R4(c) = misses is None or empty. R5: rungs None, or a miss slice that is Some(s) with s not exactly
+  "frozen" / "heldout", panics (a None slice passes and is tallied as "heldout": slice.unwrap_or("heldout")) — checked for every graded artifact before votes and tallies. Grouping (R7): keep a Vec of
+  entries in first-seen order plus a lookup by name (a linear scan or a HashMap from name to index) — never iterate a
+  HashMap or BTreeMap for output order; push the artifact name to failedBy only when it is not already there. passedBy = of
+  as i64 minus failedBy.len() as i64. quorum = format!("{}/{}", votes, graded).
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs divergenceOf. Language file re-cut 2026-10-27 (round 5, delta 5b) with the primary,
+  before any blind re-emission; the ABI follows the lab's rust driver (drivers/rust.mjs: records as declared-order tuples, zero-dep).

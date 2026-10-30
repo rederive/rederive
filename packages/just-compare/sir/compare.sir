@@ -1,0 +1,286 @@
+# =============================================================================
+# SIR — just-compare `compare`  (the default export; CJS index.cjs)
+# =============================================================================
+UNIT compare
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic        # pure value->value predicate; no clock/RNG/io/net seam. N/A injection.
+
+SIG  compare(value1: any, value2: any) -> boolean
+     # Two positional args. Mutually recursive (compare <-> compareArrays / compareObjects).
+     # Returns a STRICT JS boolean (true | false). Read-only; performs NO mutation/IO/global access.
+     # Emitted as a DEFAULT export: the blind re-emitter MUST `export default function compare(value1, value2){...}`.
+     # (Source is `module.exports = compare;` followed by `function compare(value1, value2) {...}`.)
+
+DEPENDS-ON none
+     # No imports. Uses only intrinsics: `===`, `!==`, `!=`, typeof, Array.isArray, Array.from,
+     # Object(), Object.keys, `{}.toString.call(...)` (i.e. Object.prototype.toString),
+     # `.hasOwnProperty`, `.length`, `.toString()`, and recursion on itself.
+     # Zero carried data (NONE — no literal tables).
+
+# =============================================================================
+# BEHAVIOR — EXACT ordered pipeline. Reproduce branch order PRECISELY. The order
+# is LOAD-BEARING (=== before NaN before typeof/tag before primitive-guard before
+# falsy-guard before Array before Set before Object before native-subtype fallback).
+# Evaluate the nodes top-to-bottom; the FIRST node that returns IS the answer.
+# All recursion is into this same `compare`.
+# =============================================================================
+BEHAVIOR
+
+# ---- NODE 0 — identity short-circuit (FIRST line, before anything else) ------
+#   if (value1 === value2) return true;
+# JS strict equality `===`. Consequences (ALL VERIFIED against the real package):
+#   * Equal primitives short-circuit here: 1===1, 'x'==='x', true===true, null===null,
+#     undefined===undefined, 1n===1n, Infinity===Infinity -> return true.
+#   * +0 === -0 is TRUE in JS  ->  compare(0,-0) returns TRUE HERE (NOTE: NOT false). compare(-0,0) true.
+#   * NaN === NaN is FALSE in JS -> NaN does NOT short-circuit here; it is handled at NODE 1.
+#   * Same object reference (value1===value2) -> true here regardless of contents (no recursion).
+#   * Same Symbol reference / same Function reference -> true here.
+#   * bigint: 1n===1n -> true here.
+
+# ---- NODE 1 — both-NaN tail (SECOND; BEFORE the typeof/tag check) ------------
+#   if (value1 !== value1 && value2 !== value2) return true;
+#   `x !== x` is true IFF x is NaN. So this returns TRUE only when BOTH args are NaN.
+#     * compare(NaN, NaN) -> true.  (VERIFIED.)
+#     * compare(NaN, 1) -> false-so-far (only value1 is NaN) -> FALL THROUGH to NODE 2.
+#     * compare(1, NaN) -> value1!==value1 is false -> short-circuit -> FALL THROUGH to NODE 2.
+#   NOTE this is ordered DIFFERENTLY from fast-deep-equal (which puts the NaN tail LAST). Here the
+#   both-NaN check is SECOND, before any type/tag inspection. (Functionally equivalent outcome, but
+#   document the literal source order for a faithful re-emitter.)
+
+# ---- NODE 2 — typeof-mismatch OR tag-mismatch gate ---------------------------
+#   if (typeof value1 != typeof value2 || {}.toString.call(value1) != {}.toString.call(value2)) return false;
+# Two OR'd disqualifiers (loose `!=`, immaterial here since both operands are strings/typeof-strings):
+#   (a) typeof value1 != typeof value2   — rejects primitive-vs-primitive-wrapper and cross-type:
+#         compare(1, '1')   -> number != string -> false.  compare('1', 1) -> false.  (VERIFIED.)
+#         compare(true, 1)  -> boolean != number -> false.  compare(0, false) -> false.
+#         compare(1n, 1)    -> bigint != number -> false.   (VERIFIED.)
+#         compare(null, undefined) -> object != undefined -> false. compare(undefined, null) -> false. (VERIFIED.)
+#         compare(new String('x'), 'x') -> object != string -> false.  compare('x', new String('x')) -> false. (VERIFIED.)
+#   (b) {}.toString.call(value1) != {}.toString.call(value2)  — the Object.prototype.toString TAG.
+#       Even when typeof matches, DIFFERENT TAGS reject. Tags observed (VERIFIED):
+#         plain object -> '[object Object]'   array -> '[object Array]'   Set -> '[object Set]'
+#         Map -> '[object Map]'   RegExp -> '[object RegExp]'   Date -> '[object Date]'
+#         Uint8Array -> '[object Uint8Array]'  Int8Array -> '[object Int8Array]'  (each typed array its own tag)
+#         function -> '[object Function]'   null -> '[object Null]'   undefined -> '[object Undefined]'
+#         boxed: '[object Number]' '[object String]' '[object Boolean]'   Symbol -> '[object Symbol]'
+#       Consequences (VERIFIED):
+#         compare([1], new Set([1])) -> '[object Array]' != '[object Set]' -> false. (and symmetric.)
+#         compare(new Map([['a',1]]), new Set(['a'])) -> Map-tag != Set-tag -> false.
+#         compare(new Uint8Array([1,2]), [1,2]) -> Uint8Array-tag != Array-tag -> false.
+#         compare(new Uint8Array([1,2]), new Int8Array([1,2])) -> Uint8Array-tag != Int8Array-tag -> false.
+#         compare({}, /a/) -> Object-tag != RegExp-tag -> false. (and symmetric.)
+#   If neither (a) nor (b) trips (same typeof AND same tag), continue to NODE 3.
+
+# ---- NODE 3 — non-object primitive guard -------------------------------------
+#   if (value1 !== Object(value1)) return false;
+#   `Object(x) === x` is TRUE iff x is already an object (incl. boxed wrappers, arrays, Set, Map,
+#   RegExp, Date, typed arrays, functions). For a PRIMITIVE (number, string, boolean, bigint, symbol,
+#   null, undefined), `Object(x) !== x` (Object() boxes it into a new wrapper). So:
+#     * Reached only when NODE 0/1/2 did NOT settle. By NODE 3 we know value1 and value2 have the
+#       SAME typeof and SAME tag but are NOT ===.  If value1 is a primitive (so is value2), they are
+#       same-type-but-unequal primitives -> return false.
+#         compare(1, 2) -> number/number, tags equal, 1 !== Object(1) -> false. (VERIFIED.)
+#         compare('x', 'y') -> false.  compare(true, false) -> false.  compare(1n, 2n) -> false.
+#         compare(Infinity, -Infinity) -> false.  compare(NaN, 1) (only one NaN) -> false here.
+#         compare(Symbol('s'), Symbol('s')) -> typeof symbol same, tag '[object Symbol]' same, but
+#           Object(sym) !== sym -> false.  (VERIFIED; Symbol is OUT-OF-CODEC — documented, not emitted.)
+#   If value1 IS an object (value1 === Object(value1)), continue to NODE 4.
+
+# ---- NODE 4 — falsy-object guard ---------------------------------------------
+#   if (!value1) return false;
+#   Guards against a FALSY object reaching the container dispatch. In standard JS the ONLY falsy
+#   object is the legacy `document.all` exotic (browser-only). null/undefined/0/''/false/NaN never
+#   reach here (NODE 0/1/2/3 already settled them; and a primitive falsy value would have been
+#   rejected at NODE 3). For ALL ordinary host objects this guard is effectively DEAD (never trips).
+#   A re-emitter MUST still include the literal `if (!value1) return false;` line for byte-faithfulness,
+#   but no codec-faithful generated input exercises it. If value1 is truthy, continue to NODE 5.
+
+# ---- NODE 5 — Array branch ---------------------------------------------------
+#   if (Array.isArray(value1)) return compareArrays(value1, value2);
+#   By NODE 2, value1 and value2 share the same tag; if value1 is an Array (tag '[object Array]')
+#   then value2 is an Array too. compareArrays(value1, value2):
+#       len = value1.length;
+#       if (len != value2.length) return false;        # `!=` loose; both .length are numbers
+#       for (i = 0; i < len; i++)                       # ASCENDING index order 0..len-1
+#         if (!compare(value1[i], value2[i])) return false;   # recurse per element (positional)
+#       return true;
+#   Consequences (VERIFIED):
+#     * Empty arrays: compare([],[]) -> len 0, loop skipped -> true.
+#     * Length mismatch -> false BEFORE element compare. compare([1,2,3],[1,2]) -> false;
+#       compare([1,2],[1,2,3]) -> false.
+#     * Element ORDER MATTERS (positional). compare([1,2],[2,1]) -> false;
+#       compare([{a:1},{a:2}],[{a:2},{a:1}]) -> false.
+#     * Recursion handles nesting: compare([1,[2,3]],[1,[2,3]]) -> true; ...[2,4] -> false.
+#     * NaN element: compare([NaN],[NaN]) -> recurse compare(NaN,NaN) -> NODE 1 true -> array true.
+#     * +0/-0 element: compare([0],[-0]) -> recurse compare(0,-0) -> NODE 0 true -> array true.
+#     * bigint element: compare([1n],[1n]) -> true; compare([1n],[2n]) -> false.
+#   If value1 is NOT an Array, continue to NODE 6.
+
+# ---- NODE 6 — Set branch (ORDERED via Array.from — NOT set membership) -------
+#   if ({}.toString.call(value1) == '[object Set]') return compareArrays(Array.from(value1), Array.from(value2));
+#   *** HEADLINE NUANCE ***: Sets are compared as ORDERED SEQUENCES. `Array.from(set)` yields the
+#   set's INSERTION-ORDER element list; compareArrays then does a POSITIONAL element-by-element
+#   compare. So a Set comparison is NOT membership-equality; INSERTION ORDER MATTERS.
+#   Consequences (VERIFIED against the real package):
+#     * compare(new Set([1,2]), new Set([1,2])) -> Array.from -> [1,2] vs [1,2] -> true.
+#     * compare(new Set([1,2]), new Set([2,1])) -> [1,2] vs [2,1] -> POSITIONAL mismatch -> FALSE.
+#       (Same members, different insertion order -> FALSE. PIN THIS — it is the Set headline.)
+#     * compare(new Set([1,2]), new Set([1,3])) -> [1,2] vs [1,3] -> false.
+#     * compare(new Set([1,2,3]), new Set()) -> length 3 vs 0 -> false.
+#     * compare(new Set(), new Set()) -> [] vs [] -> true.
+#     * Elements recurse through compare (so a Set of objects/arrays compares structurally,
+#       still positionally): compare(new Set([{a:1}]), new Set([{a:1}])) -> true.
+#   If the tag is not '[object Set]', continue to NODE 7.
+
+# ---- NODE 7 — plain-Object branch --------------------------------------------
+#   if ({}.toString.call(value1) == '[object Object]') return compareObjects(value1, value2);
+#   compareObjects(value1, value2):
+#       keys1 = Object.keys(value1);                    # own ENUMERABLE STRING keys of value1
+#       len = keys1.length;
+#       if (len != Object.keys(value2).length) return false;   # `!=` loose; KEY-COUNT check first
+#       for (i = 0; i < len; i++) {                     # ASCENDING over keys1
+#         key1 = keys1[i];
+#         if (!(value2.hasOwnProperty(key1) && compare(value1[key1], value2[key1]))) return false;
+#       }
+#       return true;
+#   Three sub-steps, IN ORDER: (i) key COUNT of value1 must equal key count of value2; (ii) for each
+#   key of value1, value2 must `hasOwnProperty` it; (iii) recurse compare on the two values. Any
+#   failure -> false; completing all -> true. `Object.keys` excludes symbols, inherited, non-enumerable.
+#   Consequences (VERIFIED):
+#     * compare({},{}) -> 0 keys -> true.  compare({a:1},{a:1}) -> true.
+#     * KEY-ORDER independent: compare({a:2,b:3},{b:3,a:2}) -> count + presence + value match -> true.
+#     * compare({a:1},{a:2}) -> recurse value -> false.
+#     * KEY-COUNT asymmetry (BOTH directions): compare({a:1,b:2},{a:1}) -> 2 != 1 -> false;
+#       compare({a:1},{a:1,b:2}) -> 1 != 2 -> false. (PIN both directions.)
+#     * Same count, missing key: compare({a:1},{b:1}) -> count 1==1 but value2.hasOwnProperty('a')
+#       false -> false. compare({a:1,b:2},{a:1,c:2}) -> count 2==2 but 'b' not own on value2 -> false.
+#     * Nesting via recursion: compare({a:{b:1}},{a:{b:1}}) -> true; ...{b:2} -> false.
+#       compare({a:[1,2]},{a:[1,2]}) -> true; ...{a:[2,1]} -> false (inner array order).
+#     * Nested NaN: compare({a:NaN},{a:NaN}) -> recurse compare(NaN,NaN) -> NODE 1 true -> object true.
+#     * bigint value: compare({a:1n},{a:1n}) -> true.
+#   If the tag is not '[object Object]', continue to NODE 8.
+#   (OUT-OF-CODEC edge: if value2 is a null-prototype object [Object.create(null)], tag is still
+#    '[object Object]', so this branch is taken, but `value2.hasOwnProperty` is undefined ->
+#    THROWS TypeError "value2.hasOwnProperty is not a function". Documented in SCOPE; not emitted.)
+
+# ---- NODE 8 — compareNativeSubtypes fallback (the default tail) --------------
+#   return compareNativeSubtypes(value1, value2);
+#   compareNativeSubtypes(value1, value2): return value1.toString() === value2.toString();
+#   Reached by EVERY same-tag object value that is NOT Array, NOT Set, NOT plain-Object. That set is:
+#   Function, RegExp, Date, MAP, typed arrays (Uint8Array/Int8Array/Float64Array/...), Buffer, and
+#   boxed Number/String/Boolean. Result is `value1.toString() === value2.toString()` (strict string ===).
+#   Consequences (VERIFIED):
+#     * RegExp: toString includes the FLAGS, NORMALIZED to canonical alphabetical order (d,g,i,m,s,u,y).
+#         compare(/a/g, /a/g) -> "/a/g"==="/a/g" -> true.
+#         compare(/a/, /a/g)  -> "/a/"==="/a/g" -> false (flags differ).
+#         compare(/a/, /b/)   -> "/a/"==="/b/" -> false (source differs).
+#         compare(/a/, /a/)   -> true.
+#         compare(/a/gi, /a/ig) -> BOTH toString to "/a/gi" (normalized) -> true. (PIN flag-order normalize.)
+#     * *** MAP IS NOT SPECIAL-CASED *** (no Map branch exists in the source). Map falls HERE; its
+#       toString is ALWAYS the literal string "[object Map]" regardless of entries. So ANY two Maps
+#       compare EQUAL (their toString strings are identical), REGARDLESS of keys/values/size:
+#         compare(new Map([['a',1]]), new Map([['a',1]])) -> "[object Map]"==="[object Map]" -> true.
+#         compare(new Map([['a',1]]), new Map([['a',2]])) -> true   (!! VALUE ignored).
+#         compare(new Map([['a',1]]), new Map([['b',1]])) -> true   (!! KEY ignored).
+#         compare(new Map(), new Map())                   -> true.
+#         compare(new Map([['a',1],['b',2]]), new Map())  -> true   (!! SIZE ignored).
+#       (ALL VERIFIED.) This DIRECTLY CONTRADICTS the package hint's "Map/Set (size + entries)" claim,
+#       which is WRONG for Map. Reproduce the bug-preserving behavior EXACTLY: two same-tag Maps are
+#       ALWAYS equal. (A Map comparison's result is decided ENTIRELY by NODE 2's tag equality + this
+#       constant-toString => true whenever both args are Maps.) NOTE Map-vs-Set is handled earlier at
+#       NODE 2 (tag mismatch -> false), and Map-vs-anything-non-Map likewise.
+#     * Typed arrays: toString is the COMMA-JOINED decimal of stored elements (e.g. Uint8Array([1,2])
+#       -> "1,2"). Element values are AS STORED (after the typed-array's construct-time wrap/clamp,
+#       e.g. Uint8Array([300]) stores 44 -> "44"). So:
+#         compare(new Uint8Array([1,2,3]), new Uint8Array([1,2,3])) -> "1,2,3"==="1,2,3" -> true.
+#         compare(new Uint8Array([1,2]),   new Uint8Array([1,2,3])) -> "1,2"==="1,2,3"   -> false.
+#         compare(new Uint8Array([1,2]),   new Uint8Array([1,3]))   -> "1,2"==="1,3"     -> false.
+#         compare(new Uint8Array([]),      new Uint8Array([]))      -> ""===""           -> true.
+#         compare(new Uint8Array([300]),   new Uint8Array([44]))    -> "44"==="44"       -> true.
+#         (Same-constructor typed arrays only reach here; cross-constructor was rejected at NODE 2.)
+#     * Function (OUT-OF-CODEC; documented, not emitted): toString is the source text. Two functions
+#       with identical source text -> true; differing source -> false; same reference -> NODE 0 true.
+#     * Date (OUT-OF-CODEC; documented, not emitted): just-compare uses Date.prototype.toString (NOT
+#       getTime). Date toString is SECOND-resolution and locale/timezone-formatted.
+#         compare(new Date(0), new Date(0)) -> identical toString -> true.
+#         compare(new Date(0), new Date(t)) where toString differs -> false.
+#         compare(new Date(NaN), new Date(NaN)) -> BOTH toString to "Invalid Date" -> "Invalid Date"
+#           === "Invalid Date" -> TRUE. (NOTE: differs from getTime-based equality where NaN!==NaN.)
+#     * Boxed Number/String/Boolean (OUT-OF-CODEC; documented, not emitted): toString of the wrapped
+#       primitive. compare(new Number(5), new Number(5)) -> "5"==="5" -> true; vs new Number(6) -> false;
+#       compare(new String('x'), new String('x')) -> true; compare(new Boolean(true), new Boolean(true))
+#       -> "true"==="true" -> true.
+#     * Buffer (OUT-OF-CODEC, host/decoding-dependent; documented, not emitted): tag is
+#       '[object Uint8Array]' but Buffer.toString() (no args) DECODES bytes as UTF-8 — LOSSY: distinct
+#       byte sequences that both decode to the Unicode replacement char compare EQUAL
+#       (compare(Buffer.from([0xff]), Buffer.from([0xfe])) -> true). Use Uint8Array for the
+#       lossless comma-join toString path.
+
+ORACLE value -> oracle.json
+     # Pure deterministic predicate. The harness records compare(value1,value2) as the boolean result
+     # (true|false). No seam; no trace; codec-faithful inputs only (see SCOPE).
+
+# =============================================================================
+SCOPE
+# -----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the entire NODE 0..8 pipeline above. All branch
+# conditions, operators (=== vs !== vs !=), the dispatch ORDER (=== then both-NaN then
+# typeof/tag-gate then primitive-guard then falsy-guard then Array then Set then Object then
+# native-subtype fallback), the ascending iteration order, the mutual recursion, and the
+# bug-preserving outcomes (Map always-equal, Set ordered-not-membership, Date(NaN) equal via
+# "Invalid Date" toString, typed-array comma-join, key-COUNT check before per-key, +0/-0 true)
+# are ALL CONTRACT. There are NO options and NO configuration.
+#
+# CARRIED DATA: NONE. (No literal tables; this is a pure structural util.)
+#
+# IN-ENVELOPE VALUE CLASSES (codec-faithful; genInputs DOES emit; SIR fully defines each):
+#   * JSON primitives: number (incl. NaN, +/-Infinity, +0, -0), string, boolean, null.
+#   * undefined — ONLY as a STANDALONE top-level argument (legal: compare(undefined,undefined) ->
+#                 NODE 0 true; compare(null,undefined) -> NODE 2 false; compare(undefined,0) ->
+#                 NODE 2 false). genInputs NEVER buries `undefined` inside an array element / object
+#                 value (the factory codec does not reliably round-trip an undefined hole and it would
+#                 poison the held-out). Its buried behavior is nonetheless defined: an array hole or
+#                 object value of undefined recurses to compare(undefined,undefined) -> NODE 0 true.
+#   * bigint: 1n etc. (primitive; settled by NODE 0, or NODE 2 if mixed with number, or NODE 3 if
+#                 same-type-unequal). Emitted standalone AND as array elements / object values
+#                 (bigint DOES round-trip the codec).
+#   * RegExp: source+flags compared via toString (NODE 8); flags normalized. Emitted.
+#   * Set: ORDERED-sequence compare via Array.from (NODE 6); insertion order matters. Emitted to lock
+#                 the headline (same-members-different-order -> false).
+#   * Map: NOT special-cased -> NODE 8 toString -> ANY two Maps equal regardless of entries/size; a
+#                 Map vs non-Map -> NODE 2 tag-mismatch false. FULLY in-envelope and emitted to lock
+#                 the headline divergence from the package hint.
+#   * Uint8Array (and other typed arrays Int8Array/Int16Array/Float64Array/...): comma-join toString
+#                 path (NODE 8); cross-constructor pairs -> NODE 2 false; vs Array -> NODE 2 false.
+#                 Emitted (lossless toString). NOTE Buffer is NOT emitted (lossy UTF-8 decode; see below).
+#   * Plain objects and arrays, arbitrarily nested with all of the above.
+#
+# OUT-OF-ENVELOPE (DOCUMENTED so a blind engineer reconstructs the behavior; NOT emitted by genInputs
+# because they either do not round-trip the codec or are host/identity-dependent):
+#   * Date: NODE 8 toString path (second-resolution, locale/tz; Date(NaN) pair -> "Invalid Date" ->
+#           TRUE). The factory codec LACKS a Date tag -> Dates NOT emitted (would poison held-out).
+#   * Buffer: NODE 8 toString path but UTF-8 decode is LOSSY (distinct bytes can compare equal).
+#           Host/decoding-dependent -> NOT emitted; use Uint8Array for the lossless comma-join path.
+#   * Boxed Number/String/Boolean (new Number(..) etc.): NODE 8 toString path. Documented; not emitted
+#           (boxed-primitive round-trip is fragile; the toString path is already covered by typed arrays
+#           and RegExp). NOTE boxed-vs-unboxed (new String('x') vs 'x') -> NODE 2 typeof-mismatch false.
+#   * Function: NODE 8 toString (source text) path. Functions don't round-trip the codec -> NOT emitted.
+#   * Symbol: same-tag '[object Symbol]', but NODE 3 primitive-guard (Object(sym)!==sym) -> false unless
+#           same reference (NODE 0). Symbols don't round-trip -> NOT emitted; behavior documented.
+#   * Object.create(null) / null-prototype objects: tag '[object Object]' -> NODE 7, and if the value2
+#           side is null-proto then `value2.hasOwnProperty` is undefined -> THROWS TypeError. Identity/
+#           host edge; NOT emitted; behavior documented.
+#   * Cyclic / self-referential structures: would infinitely recurse (the source has NO cycle guard).
+#           NOT emitted; NOT a defined behavior of the unit (out of contract).
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): NONE — the function performs no mutation, no I/O,
+# no global access. Read-only and pure.
+# =============================================================================
+
+PROVENANCE
+  package: just-compare@2.3.0
+  repo:    https://github.com/angus-c/just  (packages/just-compare)
+  license: MIT
+  source:  node_modules/just-compare/index.cjs  (package.json "main" === "index.cjs";
+           `module.exports = compare;` then `function compare(value1, value2) { ... }`)
+  export:  default (module.exports is the function itself)

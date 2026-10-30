@@ -1,0 +1,29 @@
+UNIT hash_ok
+LANG js
+PRIMARY-SHA256 a7fc3172f82e6f55fca50cd60860c3aa6a8917cada4354fb1d6a6db752da2f0c
+SIG hash_ok(text: string | Uint8Array, want?: string | null): boolean
+NOTE the reconstruction exports a plain function (named export hash_ok); the real code is verdict.hashOk(bytes, want).
+ABI text=string (UTF-16 code units); bool=boolean; none=null. The pin may also arrive as undefined or be omitted.
+MECHANISM check order is fixed and observable: (1) want === undefined or want === null -> true; (2) want not a string,
+  or failing the pin test -> throw an Error; (3) text a string that is not well-formed (String.prototype.isWellFormed
+  false) -> throw an Error; (4) return digest === want. A later step never runs before an earlier one.
+MECHANISM digest (R3) = node:crypto createHash('sha256').update(text).digest('hex') — update on a string encodes it as
+  UTF-8, and digest('hex') is already lowercase. No third-party package.
+PINNED regex PIN = /^[0-9a-f]{64}$/ CITED R2 — no flags; JS `$` without the m flag matches only at the end of input,
+  so a trailing "\n" fails the pin (unlike dialects whose `$` also matches before a final newline).
+MECHANISM throw messages (informational; only the fact of a throw is graded): step 2 `hashOk: a pin is 64 lowercase
+  hex digits (got <JSON.stringify(want) for a string, else typeof want>)`; step 3 `hashOk: text with a lone surrogate
+  has no UTF-8 form of its own`.
+ENVELOPE widening (js extension, verified by the js variant only):
+  missing pin — want undefined or omitted is the same as null -> true, before text is touched.
+  non-string pin — any other non-string want (0, false, true, 0n, an array even if it holds the right hex, an object)
+  throws at step 2, whatever text is. Nothing is coerced.
+  lone surrogates in text — a string with any unpaired surrogate code unit (including a reversed pair "\uDE00\uD83D")
+  throws at step 3, but only once want has passed steps 1 and 2: with a null/undefined want it is true, with a non-pin
+  want the pin error wins.
+  byte input — a Uint8Array (or Buffer) text skips step 3 and is hashed as its raw bytes (invalid UTF-8 included).
+  non-text text — a number, null, boolean, array or plain object as text: step 1 -> true and step 2 -> throws as usual;
+  with a valid pin the digest call throws node's ERR_INVALID_ARG_TYPE TypeError (`The "data" argument must be of type
+  string or an instance of Buffer, TypedArray, or DataView. Received …`).
+DEPENDS-ON none
+PROVENANCE rederive@bb8ded84fa50 cli/verdict.mts:109–119 (hashHex, hashOk).

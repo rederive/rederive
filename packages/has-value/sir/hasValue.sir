@@ -1,0 +1,362 @@
+# =============================================================================
+# SIR: hasValue  (default export of npm has-value@2.0.2, jonschlinkert/has-value)
+# Self-contained: the get-value / has-values / kind-of / isobject dependency
+# chain is FULLY INLINED below. The blind re-emitter reconstructs ONE standalone
+# function with NO require() of any of those packages.
+# =============================================================================
+
+UNIT hasValue
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic        # pure logic, no clock/RNG/io/net seam
+SIG hasValue(obj: any, path?: any, options?: any) -> boolean
+DEPENDS-ON none                   # get-value@3.0.1, has-values@2.0.1, kind-of@6.0.3,
+                                  # isobject@3.0.1 are INLINED, not required.
+
+# -----------------------------------------------------------------------------
+# !! PROMPT-vs-REALITY CORRECTION (load-bearing) !!
+# The task prompt describes the has-value@1.x API: hasValue(value, prop?, noZero?).
+# The INSTALLED package is has-value@2.0.2, whose REAL signature is
+#   hasValue(obj, path, options)
+# There is NO `noZero` flag in 2.0.2. The 3rd argument is `options`, forwarded to
+# the inlined get-value. Consequently, VERIFIED against the real package:
+#   hasValue({a:0}, 'a')         === true     # 0 is a number -> value present
+#   hasValue({a:0}, 'a', true)   === true     # 3rd arg is options, NOT noZero;
+#                                             #   0 is still found -> true
+#   hasValue({a:{b:1}}, 'a.b')   === true
+#   hasValue({}, 'x')            === false
+# Also note: the "no-prop form" (value only) does NOT report emptiness in 2.0.2.
+# Without a string/array `path`, the top guard fails and the result is ALWAYS false:
+#   hasValue({a:1})              === false    # no path -> false
+#   hasValue(42)                 === false
+# Spec below reflects 2.0.2 EXACTLY (the only behavior the oracle will check).
+# -----------------------------------------------------------------------------
+
+# =============================================================================
+# BEHAVIOR  (ordered pipeline; INLINED dependency chain)
+# =============================================================================
+# Top-level (has-value/index.js):
+#
+#   function hasValue(obj, path, options):
+#     if ISOBJECT_LOOSE(obj) AND (typeof path === 'string' OR Array.isArray(path)):
+#         return HAS_VALUES( GET_VALUE(obj, path, options) )
+#     return false
+#
+# Where ISOBJECT_LOOSE is has-value's OWN inline helper (NOT the isobject pkg):
+#
+#   ISOBJECT_LOOSE(val):
+#     return val != null
+#            AND ( typeof val === 'object'
+#                  OR typeof val === 'function'
+#                  OR Array.isArray(val) )
+#
+#   # Consequences of the top guard:
+#   #  - obj must be non-null AND (object OR function OR array). Arrays PASS
+#   #    (treated as objects). Functions PASS. Primitives (number/string/
+#   #    boolean/bigint/symbol) FAIL -> return false regardless of path.
+#   #  - path MUST be a string or a real Array. A number path FAILS the guard
+#   #    (typeof 5 === 'number', not 'string', and not Array) -> false.
+#   #    (NOTE: get-value itself would String()-coerce a number path, but
+#   #     has-value's guard rejects it BEFORE get-value is ever called.)
+#   #  - path === null / undefined / object(non-array) -> guard fails -> false.
+#
+# ---------------------------------------------------------------------------
+# NODE A — GET_VALUE(target, path, options)   [inlined get-value@3.0.1]
+# ---------------------------------------------------------------------------
+# Resolves a (possibly dotted / array) path against `target`, returning the
+# value found, or `options.default` (possibly undefined) when not found.
+# get-value's headline feature: literal keys CONTAINING dots are matched via a
+# greedy left-to-right join, so {"a.b": x} is reachable by path "a.b".
+#
+#   GET_VALUE(target, path, options):
+#     # (1) Normalize options: if options is NOT a plain-object-or-array-or-fn
+#     #     "object" (per ISOBJECT_GV below), wrap the raw value as the default.
+#     if NOT ISOBJECT_GV(options):
+#         options = { default: options }     # e.g. options=true  -> {default:true}
+#                                            #      options=undefined -> {default:undefined}
+#                                            #      options="DEF" -> {default:"DEF"}
+#
+#     # (2) target must itself be a "valid object" to descend into.
+#     if NOT IS_VALID_OBJECT(target):
+#         return (options.default !== undefined) ? options.default : target
+#
+#     # (3) numeric path coercion (UNREACHABLE from hasValue: the top guard
+#     #     already rejected number paths; kept for fidelity of the inlined fn).
+#     if typeof path === 'number': path = String(path)
+#
+#     isArray  = Array.isArray(path)
+#     isString = (typeof path === 'string')
+#     splitChar = options.separator OR '.'     # default '.'
+#     joinChar  = options.joinChar  OR (typeof splitChar === 'string' ? splitChar : '.')
+#
+#     if NOT isString AND NOT isArray:
+#         return target            # (UNREACHABLE from hasValue; guard ensures str|arr)
+#
+#     # (4) FAST PATH: a string path that is itself a literal own/in key.
+#     if isString AND (path in target):       # `in` => own OR inherited, enumerable or not
+#         return IS_VALID(path, target, options) ? target[path] : options.default
+#
+#     # (5) Segment walk.
+#     segs = isArray ? path : SPLIT(path, splitChar, options)   # default: path.split('.')
+#     len  = segs.length
+#     idx  = 0
+#     do:
+#         prop = segs[idx]
+#         if typeof prop === 'number': prop = String(prop)
+#
+#         # (5a) backslash-escape continuation: a segment ending in '\' is joined
+#         #      with the NEXT segment (consumes segs[++idx]); the trailing '\' is
+#         #      dropped first. Lets "a\.b" address the literal key "a.b".
+#         while (prop AND prop.slice(-1) === '\\'):
+#             prop = JOIN([prop.slice(0,-1), segs[++idx] OR ''], joinChar, options)
+#
+#         if (prop in target):
+#             if NOT IS_VALID(prop, target, options): return options.default
+#             target = target[prop]
+#         else:
+#             # (5b) GREEDY JOIN: prop not directly present. Keep appending
+#             #      subsequent segments (joinChar-joined) until a composite key
+#             #      IS present in target. This is how {"a.b":{c:1}} resolves
+#             #      under path "a.b.c": "a" absent, "a.b" present -> descend,
+#             #      then continue from there with "c".
+#             hasProp = false
+#             n = idx + 1
+#             while (n < len):
+#                 prop = JOIN([prop, segs[n++]], joinChar, options)
+#                 if (hasProp = (prop in target)):
+#                     if NOT IS_VALID(prop, target, options): return options.default
+#                     target = target[prop]
+#                     idx = n - 1
+#                     break
+#             if NOT hasProp: return options.default
+#     while (++idx < len AND IS_VALID_OBJECT(target))
+#
+#     if (idx === len): return target
+#     return options.default
+#
+#   # get-value's helper set (all inlined):
+#   ISOBJECT_GV(val):           # the `isobject@3.0.1` package, used for options-shape test
+#       return val != null AND typeof val === 'object' AND Array.isArray(val) === false
+#       # NOTE: a plain {} or a Date/Map/Set IS an object here; an Array is NOT;
+#       #       a function is NOT; null/undefined/primitive is NOT.
+#   IS_VALID_OBJECT(val):       # can we descend into it / index it?
+#       return ISOBJECT_GV(val) OR Array.isArray(val) OR typeof val === 'function'
+#   SPLIT(path, splitChar, options):
+#       return (typeof options.split === 'function') ? options.split(path)
+#                                                     : path.split(splitChar)
+#   JOIN(segs2, joinChar, options):
+#       return (typeof options.join === 'function') ? options.join(segs2)
+#                                                    : segs2[0] + joinChar + segs2[1]
+#   IS_VALID(key, target, options):
+#       return (typeof options.isValid === 'function') ? options.isValid(key, target)
+#                                                       : true
+#
+#   # Path-resolution facts CONFIRMED against the real package (obj forms):
+#   #   GET_VALUE({a:{b:1}}, "a.b")                 -> 1            (nested)
+#   #   GET_VALUE({a:{b:1}}, ["a","b"])             -> 1           (array path)
+#   #   GET_VALUE({a:[10,20]}, "a.1")               -> 20          (array index)
+#   #   GET_VALUE({a:[10,20]}, "a.5")               -> undefined   (oob)
+#   #   GET_VALUE({"a.b":5}, "a.b")                 -> 5           (fast-path literal dotted key)
+#   #   GET_VALUE({"a.b":{c:1}}, "a.b.c")           -> 1           (greedy join)
+#   #   GET_VALUE({a:{"b.c":5}}, "a.b.c")           -> 5           (greedy join mid-path)
+#   #   GET_VALUE({a:{b:1}}, "a.b.c")               -> undefined   (overshoot)
+#   #   GET_VALUE({a:{"":{b:1}}}, "a..b")           -> 1           (empty middle seg)
+#   #   GET_VALUE({a:1}, "")                        -> undefined   (segs=[""], "" not in obj)
+#   #   GET_VALUE({"":9}, "")                       -> 9           (fast-path "" in obj)
+#   #   GET_VALUE({a:1}, [])                        -> undefined   (len 0: prop=undefined absent)
+#   #   GET_VALUE({a:{b:1}}, "a/b", {separator:"/"})-> 1           (separator option)
+#
+# ---------------------------------------------------------------------------
+# NODE B — HAS_VALUES(val)   [inlined has-values@2.0.1, uses KIND_OF]
+# ---------------------------------------------------------------------------
+# Reports whether `val` is "non-empty". Recurses into arrays/objects.
+#
+#   HAS_VALUES(val):
+#     switch KIND_OF(val):
+#       case 'boolean':   return true       # false counts as a value
+#       case 'date':      return true
+#       case 'function':  return true       # generatorfunction does NOT hit this (see note)
+#       case 'null':      return true       # null counts as a value
+#       case 'number':    return true       # 0, NaN all count (no noZero in 2.0.2)
+#       case 'undefined': return false
+#       case 'regexp':    return val.source !== '(?:)' AND val.source !== ''
+#                                           # empty regexp /(?:)/ and new RegExp("") -> false
+#       case 'buffer':    return val.toString() !== ''
+#       case 'error':     return val.message !== ''
+#       case 'string':    return val.length !== 0
+#       case 'arguments': return val.length !== 0
+#       case 'file':      return val.size !== 0
+#       case 'map':       return val.size !== 0
+#       case 'set':       return val.size !== 0
+#       case 'array':                       # recurse: non-empty if ANY own-enumerable
+#       case 'object':                      #   element/value is itself HAS_VALUES-true
+#           for key of Object.keys(val):    # Object.keys = OWN ENUMERABLE only
+#               if HAS_VALUES(val[key]): return true
+#           return false                    # empty {} / [] -> false; {a:undefined} -> false
+#       default:          return true       # EVERYTHING ELSE -> true (see kind list below)
+#
+#   # has-values facts CONFIRMED against the real package:
+#   #   HAS_VALUES(0)               -> true     HAS_VALUES(5)            -> true
+#   #   HAS_VALUES(false)           -> true     HAS_VALUES(null)         -> true
+#   #   HAS_VALUES(undefined)       -> false
+#   #   HAS_VALUES("")              -> false    HAS_VALUES("x")          -> true
+#   #   HAS_VALUES([])              -> false    HAS_VALUES([1])          -> true
+#   #   HAS_VALUES([0])             -> true     HAS_VALUES([[]])         -> false
+#   #   HAS_VALUES({})              -> false    HAS_VALUES({a:1})        -> true
+#   #   HAS_VALUES({a:undefined})   -> false    HAS_VALUES({a:undefined,b:1}) -> true
+#   #   HAS_VALUES({a:{}})          -> false    HAS_VALUES({a:{b:1}})    -> true  (deep recurse)
+#   #   HAS_VALUES(new Map())       -> false    HAS_VALUES(new Map([[1,2]])) -> true
+#   #   HAS_VALUES(new Set())       -> false    HAS_VALUES(new Set([1]))     -> true
+#   #   HAS_VALUES(new Date())      -> true
+#   #   HAS_VALUES(/x/)             -> true     HAS_VALUES(new RegExp("")) -> false
+#   #   HAS_VALUES(Buffer.from(""))     -> false    HAS_VALUES(Buffer.from("a")) -> true
+#   #   HAS_VALUES(new Uint8Array(0))   -> TRUE  (!) kind 'uint8array' is NOT a switch
+#   #                                            case -> hits default -> true (even empty)
+#   #   HAS_VALUES(0n)              -> true   (kind 'bigint' -> default -> true)
+#   #   HAS_VALUES(Symbol())        -> true   (kind 'symbol' -> default -> true)
+#
+# ---------------------------------------------------------------------------
+# NODE C — KIND_OF(val)   [inlined kind-of@6.0.3]   (the type classifier)
+# ---------------------------------------------------------------------------
+# Only the kinds REACHABLE by oracle-codec-faithful inputs matter for grading;
+# the full table is reproduced so the re-emitter can classify anything HAS_VALUES
+# might see. Ordering matters (first match wins).
+#
+#   KIND_OF(val):
+#     if val === undefined: return 'undefined'
+#     if val === null:      return 'null'
+#     t = typeof val
+#     if t === 'boolean':  return 'boolean'
+#     if t === 'string':   return 'string'
+#     if t === 'number':   return 'number'      # includes NaN, Infinity, 0
+#     if t === 'symbol':   return 'symbol'
+#     if t === 'function': return isGeneratorFn(val) ? 'generatorfunction' : 'function'
+#     if Array.isArray(val):    return 'array'
+#     if isBuffer(val):         return 'buffer'        # val.constructor.isBuffer(val)
+#     if isArguments(val):      return 'arguments'     # has numeric .length AND .callee fn
+#     if isDate(val):           return 'date'          # instanceof Date OR duck-typed
+#     if isError(val):          return 'error'         # instanceof Error OR duck-typed
+#     if isRegexp(val):         return 'regexp'        # instanceof RegExp OR duck-typed
+#     switch ctorName(val):     # val.constructor.name
+#       'Symbol'->'symbol'; 'Promise'->'promise';
+#       'WeakMap'->'weakmap'; 'WeakSet'->'weakset'; 'Map'->'map'; 'Set'->'set';
+#       'Int8Array'->'int8array'; 'Uint8Array'->'uint8array';
+#       'Uint8ClampedArray'->'uint8clampedarray';
+#       'Int16Array'->'int16array'; 'Uint16Array'->'uint16array';
+#       'Int32Array'->'int32array'; 'Uint32Array'->'uint32array';
+#       'Float32Array'->'float32array'; 'Float64Array'->'float64array'
+#     if isGeneratorObj(val): return 'generator'      # has .throw/.return/.next fns
+#     s = Object.prototype.toString.call(val)
+#     switch s:
+#       '[object Object]'->'object';
+#       '[object Map Iterator]'->'mapiterator'; '[object Set Iterator]'->'setiterator';
+#       '[object String Iterator]'->'stringiterator'; '[object Array Iterator]'->'arrayiterator'
+#     return s.slice(8,-1).toLowerCase().replace(/\s/g,'')   # fallback
+#
+#   # KIND-OF NOTE relevant to HAS_VALUES grading:
+#   #   bigint: typeof is 'bigint', not matched by any branch above except the
+#   #           final fallback. toString.call(0n) === '[object BigInt]' ->
+#   #           slice -> 'bigint'. 'bigint' is NOT a has-values case -> default -> true.
+#   #   typed arrays (uint8array etc.): NOT has-values cases -> default -> true.
+
+# =============================================================================
+# DEMONSTRATED END-TO-END (hasValue) — all VERIFIED against has-value@2.0.2:
+# =============================================================================
+#   hasValue({a:{b:1}}, "a.b")              -> true
+#   hasValue({a:{b:1}}, ["a","b"])          -> true
+#   hasValue({a:0}, "a")                    -> true        # 0 is a value
+#   hasValue({a:0}, "a", true)              -> true        # 3rd arg = options (NO noZero)
+#   hasValue({a:false}, "a")                -> true
+#   hasValue({a:null}, "a")                 -> true
+#   hasValue({a:undefined}, "a")            -> false
+#   hasValue({a:""}, "a")                   -> false
+#   hasValue({a:[]}, "a")                   -> false
+#   hasValue({a:[1]}, "a")                  -> true
+#   hasValue({a:[0]}, "a")                  -> true
+#   hasValue({a:{}}, "a")                   -> false
+#   hasValue({a:{b:{}}}, "a")               -> false       # deep-empty recurse
+#   hasValue({a:{b:1}}, "a")                -> true
+#   hasValue({}, "x")                       -> false       # missing -> default undefined -> has(undefined)=false
+#   hasValue({}, "x", "DEF")                -> true        # default "DEF" -> has("DEF")=true
+#   hasValue({}, "x", "")                   -> false       # default "" -> has("")=false
+#   hasValue({}, "x", 0)                    -> true        # default 0 -> has(0)=true
+#   hasValue({a:[10,20]}, "a.1")            -> true        # array index
+#   hasValue({a:[10,20]}, "a.5")            -> false       # oob -> undefined -> false
+#   hasValue({list:[{x:0}]}, "list.0.x")    -> true
+#   hasValue({"a.b":5}, "a.b")              -> true        # literal dotted key
+#   hasValue({"a.b":{c:1}}, "a.b.c")        -> true        # greedy join
+#   hasValue({a:{"b.c":5}}, "a.b.c")        -> true        # greedy join mid-path
+#   hasValue({a:{b:1}}, "a.b.c")            -> false       # overshoot
+#   hasValue({a:{b:1}}, "a/b", {separator:"/"}) -> true
+#   hasValue([1,2,3], "0")                  -> true        # array obj, string index
+#   hasValue([1,2,3], ["0"])                -> true
+#   hasValue([1,2,3], 0)                    -> false       # number path -> guard fails
+#   hasValue({a:1}, 5)                      -> false       # number path -> guard fails
+#   hasValue({a:1}, null)                   -> false       # null path -> guard fails
+#   hasValue({a:1}, {})                     -> false       # object path -> guard fails
+#   hasValue({a:1})                         -> false       # NO path -> guard fails
+#   hasValue(42, "x")                       -> false       # non-object obj -> guard fails
+#   hasValue("hi", "0")                     -> false       # string obj -> guard fails (typeof 'string')
+#   hasValue(null, "a")                     -> false
+#   hasValue(undefined, "a")                -> false
+#   hasValue(new Map([["a",1]]), "a")       -> false       # Map: ("a" in map) is false (uses props, not entries)
+#   hasValue(new Map([["a",1]]), "size")    -> ... (see note)  # 'size' resolves but is a getter
+#   hasValue({a:0n}, "a")                   -> true        # bigint -> default -> true
+#   hasValue({a:new Uint8Array(0)}, "a")    -> true        # empty typed array -> default -> true
+
+# =============================================================================
+# ORACLE value -> oracle.json
+#   Pure deterministic function. The harness records the boolean return for each
+#   generated argument-tuple. Throw-paths: NONE are reachable by codec-faithful
+#   inputs (the unit never throws on JSON-faithful args).
+# =============================================================================
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly, all inlined above):
+#   - The top guard (ISOBJECT_LOOSE obj + string|array path).
+#   - get-value path resolution: fast-path literal key, '.'-split, array paths,
+#     numeric-segment string coercion, backslash-escape continuation, GREEDY JOIN
+#     for dotted literal keys, options.{default,separator,joinChar,split,join,isValid}.
+#   - has-values emptiness switch (incl. recursion into array/object via
+#     Object.keys = OWN ENUMERABLE only; inherited & non-enumerable props ignored).
+#   - kind-of type classification (full table inlined; only the kinds reachable by
+#     codec-faithful values affect grading).
+#
+# CARRIED DATA: none. No embedded published tables/constants. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; documented for the
+# blind re-emitter so behavior is still reconstructable, but un-gradable here
+# because they don't survive the oracle codec round-trip
+# JSON.stringify(encode(args)) or depend on host identity):
+#   - `undefined` as an OBJECT/ARRAY VALUE or as the `options.default`/3rd-arg:
+#       has-values DOES distinguish undefined (->false) but `undefined` does not
+#       round-trip through the codec (array element / object value / arg). Behavior
+#       IS specified above (KIND_OF undefined -> 'undefined' -> false); just not
+#       sampled. (NOTE: `{a:undefined}` would serialize as `{}` losing the key, and
+#       a bare `undefined` arg is dropped — so we never emit these.)
+#   - NaN / +-Infinity values: KIND_OF -> 'number' -> HAS_VALUES true, but they do
+#       NOT round-trip (become null in JSON). Specified, not sampled.
+#   - functions, Symbols, generator(fn), Promise, WeakMap/WeakSet, arguments object,
+#       Error, Date, RegExp, Buffer as ARGS: not codec-faithful as identity-bearing
+#       class instances OR not round-trippable. Their KIND_OF + HAS_VALUES behavior is
+#       fully specified above; NOT emitted. (Date/RegExp/Buffer/Map/Set/Uint8Array DO
+#       round-trip per the codec note, but only Map/Set/Uint8Array are emitted because
+#       Date/RegExp/Buffer construction-from-codec is reliable yet adds little branch
+#       coverage; Map/Set/Uint8Array are emitted to exercise size/default cases.)
+#   - options.split / options.join / options.isValid as FUNCTION options: not
+#       codec-faithful (functions). Specified above; NOT emitted. options.separator
+#       and options.default (string/number) ARE emitted.
+#   - Host-identity-dependent kind-of duck typing (e.g. cross-realm Date): N/A here.
+
+# =============================================================================
+# PROVENANCE
+#   has-value@2.0.2   (jonschlinkert/has-value, MIT)  — has-value/index.js
+#   INLINED dependency chain (all MIT, jonschlinkert):
+#     get-value@3.0.1   — get-value/index.js
+#     has-values@2.0.1  — has-values/index.js
+#     kind-of@6.0.3     — kind-of/index.js
+#     isobject@3.0.1    — isobject/index.js   (used by get-value as its object test)
+#   Source root: /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-has_value-zMZEdR/node_modules
+#   Verified with node v24.16.0.
+# =============================================================================

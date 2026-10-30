@@ -1,0 +1,19 @@
+UNIT hash_ok
+LANG rust
+PRIMARY-SHA256 a7fc3172f82e6f55fca50cd60860c3aa6a8917cada4354fb1d6a6db752da2f0c
+SIG pub fn hash_ok(text: &str, want: Option<&str>) -> bool
+ABI crate shape: the artifact is a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn hash_ok`) — no `main`, no
+  I/O, no binary; the verifier supplies the harness crate and owns all I/O. Zero dependencies: `[dependencies]` is empty.
+ABI text=&str (always well-formed UTF-8, so a lone surrogate cannot reach this variant); its bytes ARE R4's bytes
+  (text.as_bytes(), no conversion). none=None. bool=bool. A throw (R2) is a panic.
+MECHANISM R1 = want is None -> true, before anything else. R2 = for Some(w), panic unless w.len() == 64 and every BYTE
+  of w is in b'0'..=b'9' or b'a'..=b'f' (ASCII only: a non-ASCII digit, an uppercase letter, whitespace all fail);
+  checked before hashing.
+MECHANISM digest (R3) = SHA-256 per FIPS 180-4 implemented in the crate (std has no SHA-256): eight u32 initial hash
+  words and the 64 round constants from FIPS 180-4 §5.3.3 / §4.2.2, big-endian message words, padding = one 0x80
+  byte, zeros, then the bit length as a big-endian u64, so a message of 55 bytes fits one block and 56..=63 need two.
+  Use wrapping_add and rotate_right on u32. The length that matters is the BYTE length (text.len()), not chars().count().
+MECHANISM hex (R3) = each digest byte as `{:02x}` (lowercase, zero-padded), 32 bytes -> 64 chars; compare with == on
+  &str (exact).
+DEPENDS-ON none
+PROVENANCE rederive@bb8ded84fa50 cli/verdict.mts:109–119 (hashHex, hashOk); SHA-256 constants from FIPS 180-4.

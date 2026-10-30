@@ -1,0 +1,189 @@
+UNIT sum
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG sum(array) -> value          # default export: module.exports = sum
+                                 # re-emit as: export default <fn>   (DEFAULT export, NOT named)
+DEPENDS-ON none                  # zero deps; baseSum + identity are inlined in the same file
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline — exact, traced from source + verified by running
+#            lodash.sum@4.0.2 against every case below)
+# ============================================================================
+#
+# sum(array):
+#   GUARD:  return (array && array.length) ? baseSum(array, identity) : 0
+#     - The condition is the JS truthiness of `array` AND of `array.length`.
+#     - `array` falsy  (null, undefined, 0, "", false, NaN, ...)        -> 0
+#     - `array.length` falsy (0, undefined, NaN, "", null, false, ...)  -> 0
+#     - `array.length` truthy (any nonzero number incl. negative, any
+#        nonempty string, etc.)  -> call baseSum(array, identity)
+#     NOTE: `array` need NOT be a real Array. ANY value with a truthy
+#           `.length` property enters baseSum (array-like / string). See
+#           "NON-ARRAY INPUTS" below.
+#
+#   identity(value):  returns value unchanged. (The iteratee is identity, so
+#                     baseSum's `iteratee(array[index])` is just `array[index]`.)
+#
+#   baseSum(array, iteratee):
+#       var result;                 # SEED IS `undefined` (no initial 0!)
+#       var index = -1;
+#       var length = array.length;  # read ONCE, coerced to whatever it is
+#       while (++index < length) {  # numeric comparison ++index < length
+#           var current = iteratee(array[index]);   # == array[index]
+#           if (current !== undefined) {            # <-- SKIP undefined values
+#               result = (result === undefined)
+#                          ? current                # FIRST non-undefined: PASS THROUGH unchanged
+#                          : (result + current);    # subsequent: JS `+` operator
+#           }
+#       }
+#       return result;              # may be `undefined` if every visited
+#                                   # element was undefined (or no iterations)
+#
+# ----------------------------------------------------------------------------
+# LOAD-BEARING SUBTLETY #1 — the `undefined` SEED + pass-through:
+#   `result` starts as `undefined`, NOT `0`. The FIRST element whose value is
+#   not `undefined` is assigned to `result` UNCHANGED (no `+`, no numeric
+#   coercion). So the first kept element's RAW value and TYPE survive:
+#     sum(["a"])  -> "a"      (string, returned as-is)
+#     sum([{}])   -> {}       (the SAME object, returned as-is)
+#     sum([null]) -> null     (null !== undefined, so it is kept & passed through)
+#     sum([5])    -> 5
+#   Only from the SECOND kept element onward does `result + current` apply.
+#
+# LOAD-BEARING SUBTLETY #2 — `undefined` ELEMENTS ARE SKIPPED:
+#   The `if (current !== undefined)` guard means any element equal to
+#   `undefined` is NOT accumulated and does NOT occupy the "first" slot:
+#     sum([undefined])            -> undefined   (nothing kept; result stays undefined)
+#     sum([undefined, undefined]) -> undefined
+#     sum([undefined, 2])         -> 2           (undefined skipped; 2 becomes first kept)
+#     sum([1, undefined, 2])      -> 3           (1 + 2; undefined skipped between them)
+#   `null` is NOT undefined, so null elements ARE kept (see #1):
+#     sum([null, null]) -> null + null -> 0      (kept, then `+` coerces to number 0)
+#     sum([1, null, 2]) -> 1 + null + 2 -> 3     (null coerces to 0 under `+`)
+#
+# LOAD-BEARING SUBTLETY #3 — SPARSE-ARRAY HOLES are skipped:
+#   baseSum uses an INDEX loop and reads `array[index]`. A hole reads as
+#   `undefined`, so holes are treated exactly like `undefined` elements (#2):
+#     sum([1, /*hole*/, 3]) -> 4              (hole at index 1 skipped)
+#     sum([/*hole*/, /*hole*/, 5]) -> 5
+#     sum(new Array(3)) -> undefined          (all holes -> nothing kept)
+#     let a=[]; a[2]=7; sum(a) -> 7           (length 3, holes 0&1 skipped)
+#   (Holes are visited by index but yield `undefined`; the guard drops them.)
+#
+# LOAD-BEARING SUBTLETY #4 — the `+` OPERATOR governs accumulation:
+#   From the second kept element on, `result + current` is plain JS `+`:
+#     - number + number  -> numeric add (IEEE-754):
+#         sum([1.5, 2.5]) -> 4 ;  sum([-1,-2,-3]) -> -6
+#     - NaN propagates:   sum([1, NaN, 2]) -> NaN
+#     - +-Infinity:       sum([Infinity, 1]) -> Infinity
+#                         sum([-Infinity, Infinity]) -> NaN
+#                         sum([1e308, 1e308]) -> Infinity   (overflow)
+#     - string operand -> STRING CONCATENATION for the whole rest of the chain:
+#         sum([1, "a", 2]) -> "1a2"   (1+"a"="1a" then "1a"+2="1a2")
+#         sum(["a", 1])    -> "a1"
+#         sum([1, ""])     -> "1"      ("" coerces 1 -> "1")
+#     - booleans coerce to 0/1:  sum([true,false]) -> 1 ; sum([1,true]) -> 2
+#     - objects coerce via String/valueOf under `+`:
+#         sum([{}, {}])   -> "[object Object][object Object]"
+#         sum([[1],[2]])  -> "12"     (array.toString -> "1","2" then concat)
+#         sum([{}, 1, 2]) -> "[object Object]12"
+#
+# LOAD-BEARING SUBTLETY #5 — SIGNED ZERO (-0):
+#   First kept element passes through, so a lone -0 stays -0; `+` follows
+#   IEEE-754 zero-sign rules:
+#     sum([-0])     -> -0    (pass-through, Object.is(result,-0) === true)
+#     sum([-0,-0])  -> -0    (-0 + -0 -> -0)
+#     sum([0,-0])   -> 0     ( 0 + -0 ->  0)
+#     sum([-0, 0])  -> 0     (-0 +  0 ->  0)
+#
+# ----------------------------------------------------------------------------
+# NON-ARRAY / ARRAY-LIKE INPUTS (verified by running the package):
+#   The guard is `array && array.length`, so behavior is driven purely by
+#   truthiness of the value and of its `.length` property:
+#     sum(null)              -> 0     (array falsy)
+#     sum(undefined)         -> 0     (array falsy)
+#     sum(0)                 -> 0     (array falsy)
+#     sum(false)             -> 0     (array falsy)
+#     sum(NaN)               -> 0     (array falsy)
+#     sum("")                -> 0     ("" falsy)
+#     sum(5)                 -> 0     (number has no .length -> undefined -> falsy)
+#     sum(true)              -> 0     (no .length)
+#     sum({})                -> 0     (.length undefined -> falsy)
+#     sum(function(){})      -> 0     (.length is the arity; 0-arg fn -> 0 -> falsy)
+#     sum("abc")             -> "abc" (STRING is array-like! length 3, indexes
+#                                      "a","b","c": "a"+"b"+"c" -> "abc")
+#     sum({length:0})        -> 0     (length falsy)
+#     sum({length:NaN})      -> 0     (NaN falsy)
+#     sum({length:3})        -> undefined  (length truthy; indexes 0,1,2 absent
+#                                           -> all undefined -> nothing kept)
+#     sum({length:-1})       -> undefined  (-1 truthy -> baseSum; loop
+#                                           `++index < -1` never runs -> undefined seed)
+#     sum({length:2,0:10,1:20}) -> 30  (array-like is summed: 10 + 20)
+#
+# ============================================================================
+# RETURN CONTRACT (summary):
+#   - Returns 0 when the guard fails (falsy array OR falsy array.length).
+#   - Returns `undefined` when baseSum runs but keeps NOTHING
+#     (every visited index was undefined/hole, or zero iterations).
+#   - Otherwise returns the accumulated value, whose type may be number,
+#     string, object, null, -0, NaN, or +-Infinity depending on the elements
+#     (see subtleties #1, #4).
+# ============================================================================
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly — all inlined, no external data):
+#   - the guard `(array && array.length) ? baseSum(array, identity) : 0`
+#   - identity (returns its arg unchanged)
+#   - baseSum: undefined seed; index loop to `array.length`; skip `undefined`
+#     (and holes); first-kept pass-through; subsequent `result + current`.
+#
+# CARRIED DATA: none. No literal tables, no constants. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs — the codec
+#   cannot faithfully persist them and/or they throw; a blind re-emitter still
+#   reconstructs the behavior from this spec, but the generator must not emit
+#   them or it would poison the held-out expecteds):
+#
+#   (a) THROW PATHS — codec-faithful arg but the unit throws (these WOULD be
+#       gradable as {__throw} IF they were codec-faithful; bigint/Symbol mixes
+#       are documented here for completeness, but bigint-with-number and any
+#       Symbol are excluded because their inputs do not round-trip — see (b)):
+#         - sum([1, Symbol("x")]) -> THROWS TypeError
+#               "Cannot convert a Symbol value to a number"
+#               (`+` on a kept number with a Symbol coerces Symbol->number)
+#         - sum([1, 2n]) / sum([2n, 1]) -> THROWS TypeError
+#               "Cannot mix BigInt and other types, use explicit conversions"
+#         - sum([1n, 2n]) -> 3n computed internally, but bigint result is fine
+#               numerically; excluded only because bigint args/result do not
+#               JSON-round-trip in this harness (see (b)).
+#
+#   (b) NON-ROUND-TRIPPABLE PASS-THROUGH RESULTS — these compute fine but the
+#       arg and/or the returned value cannot survive JSON.stringify(encode(..)):
+#         - sum([Symbol("x")]) -> the Symbol itself (passthrough). Symbol args
+#           do NOT round-trip; EXCLUDE.
+#         - sum([2n]) -> 2n (bigint passthrough). A LONE bigint element returns
+#           a bigint, which the spec's codec line lists as round-trippable for
+#           bigint values, BUT mixing bigint with number throws (see (a)); to
+#           keep the generator unambiguous and avoid the throw boundary we
+#           EXCLUDE bigint elements entirely.
+#         - sum([function(){}]) -> the function (passthrough). Functions do NOT
+#           round-trip; EXCLUDE. (And sum([1, function(){}]) -> "1function(){}"
+#           depends on the function's source text -> non-portable; EXCLUDE.)
+#       Rationale: these are documented so the behavior is fully specified, but
+#       they are deliberately kept OUT of genInputs because the persisted input
+#       (or expected) would be corrupted, producing a false divergence.
+#
+#   STATEFUL / SIDE-EFFECTS: none. sum is pure & read-only. No seam (no clock,
+#   RNG, env, fs, net). ORACLE-CLASS deterministic; nothing to inject.
+#
+# ============================================================================
+# PROVENANCE
+#   package:  lodash.sum@4.0.2  (Custom Build; lodash modularize exports="npm")
+#   repo:     lodash/lodash
+#   license:  MIT
+#   source:   node_modules/lodash.sum/index.js  (baseSum + identity + sum, 1 file)
+# ============================================================================

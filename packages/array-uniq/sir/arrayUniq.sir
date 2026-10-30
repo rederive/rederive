@@ -1,0 +1,178 @@
+UNIT arrayUniq
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG arrayUniq(arr: Array<any>) -> Array<any>
+# Single positional argument: an array. Returns a NEW array.
+# Default/whole-module export: in source, `module.exports = arrayUniq`.
+# The blind re-emitter MUST `export default <fn>` — a single default-exported
+# function taking one array argument and returning a new array.
+
+DEPENDS-ON none
+# Zero runtime dependencies. No carried data.
+
+# ---------------------------------------------------------------------------
+# PROVENANCE
+# ---------------------------------------------------------------------------
+PROVENANCE
+  package: array-uniq@1.0.3
+  repo: sindresorhus/array-uniq
+  license: MIT (Copyright (c) Sindre Sorhus)
+  source file: index.js
+  module system: CommonJS (module.exports = <fn>)
+
+# ---------------------------------------------------------------------------
+# SEAM CHECK
+# ---------------------------------------------------------------------------
+# No seam. Pure, total function over its single array argument. No clock, RNG,
+# env, fs, or network. ORACLE-CLASS deterministic. No injection required.
+#
+# There IS a LOAD-TIME implementation selection in the source (see SCOPE), but
+# it is feature-detection, not an input seam — on every modern engine (Set with
+# a working forEach) the SAME path is active. The SIR specifies the OBSERVABLE
+# behavior of that active path, not the three implementations.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (observable contract the blind re-emitter MUST satisfy)
+# ---------------------------------------------------------------------------
+BEHAVIOR
+  # The deployed/active path (the one selected on any modern JS engine that has
+  # `Set` whose `Set.prototype.forEach` works) is `uniqSetWithForEach`:
+  #
+  #     function uniqSetWithForEach(arr) {
+  #       var ret = [];
+  #       (new Set(arr)).forEach(function (el) { ret.push(el); });
+  #       return ret;
+  #     }
+  #
+  # The contract below IS this function's observable behavior. A re-emitter that
+  # reproduces these properties exactly will converge. The recommended faithful
+  # re-emission is literally the Set-construction form above, because two of the
+  # properties (NaN-dedup and -0 normalization) are SPECIFICALLY the behavior of
+  # JS `new Set(arr)` and would DIVERGE under an `indexOf`-based or
+  # `Set.add`+`filter`-based implementation (see node-1 / node-2 notes).
+
+  node-0  INPUT
+    Receive `arr`. The unit reads `arr` only (length + element access via the
+    Set constructor's iteration). It is read-only — see ASSERT-no-mutation.
+    Out-of-envelope: `arr` being a non-array (null/undefined/number/etc.) is
+    OUT-OF-SCOPE — not generated and not contracted (the real fn would throw a
+    TypeError when `new Set(<non-iterable>)` is constructed, but blind
+    re-emitters are not asked to reproduce engine TypeError text). genInputs
+    emits ONLY arrays.
+
+  node-1  DEDUP BY SameValueZero, KEEPING FIRST APPEARANCE
+    Produce a new array containing each distinct element ONCE, in the order of
+    its FIRST appearance in `arr`. "Distinct" is decided by the SameValueZero
+    (SVZ) equality relation — exactly the relation used by JS `Set` membership:
+      - Two elements are the SAME entry iff SVZ(a, b).
+      - SVZ is `===` (strict equality) EXCEPT:
+          * SVZ(NaN, NaN) === true        # NaN equals NaN under SVZ
+          * SVZ(+0, -0)  === true         # +0 and -0 are the same key under SVZ
+      - SVZ does NOT coerce types:
+          * 1 (number) and '1' (string) are DISTINCT  -> both kept
+          * true (boolean) and 1 (number) are DISTINCT -> both kept
+          * 1n (bigint) and 1 (number) are DISTINCT    -> both kept
+          * null and undefined are DISTINCT            -> both kept
+      - Objects/arrays/functions/etc. compare by REFERENCE IDENTITY:
+          * the SAME reference appearing twice dedups to one entry
+          * two structurally-equal but DISTINCT references are kept separately
+    # CONTRAST with the inactive `uniqNoSet` (indexOf) path: indexOf uses `===`,
+    # under which NaN !== NaN, so that path would NOT dedup NaN. The ACTIVE path
+    # (Set-based) DOES dedup NaN to one. The contract = the Set-based behavior.
+
+  node-2  ZERO NORMALIZATION  (-0 -> +0 in output)  [verified by execution]
+    Because the active path builds `new Set(arr)`, and a JS Set normalizes the
+    value -0 to +0 on STORAGE, EVERY zero in the output is +0 — even a single,
+    un-duplicated -0 element. Concretely (confirmed by running the package):
+      arrayUniq([0, -0])    -> [+0]        # one zero
+      arrayUniq([-0, 0])    -> [+0]        # one zero, and it is +0 (NOT -0)
+      arrayUniq([-0])       -> [+0]        # lone -0 is normalized to +0
+      arrayUniq([5, -0, 5]) -> [5, +0]
+    So: +0 and -0 collapse to a SINGLE entry, and that entry is observably +0
+    (i.e. `1 / result_zero === +Infinity`).
+    # CONTRAST with the inactive `uniqSet` (Set.add + filter) and `uniqNoSet`
+    # paths: those return the ORIGINAL first-appearance element, so a leading -0
+    # would survive as -0. The ACTIVE path differs — the contract is +0.
+    # CODEC NOTE: the harness persists inputs via JSON.stringify; JSON.stringify
+    # turns a -0 element into +0 ("[0]"). So a generated -0 element is stored as
+    # +0. This does not change the contract: the active-path output is +0 either
+    # way, so the property round-trips faithfully.
+
+  node-3  RETURN
+    Return the freshly-built array `ret`. It is a NEW array object, never the
+    input `arr` (ASSERT-new-array). Element ORDER is first-appearance order
+    (node-1). Empty input -> empty array. Single-element input -> a one-element
+    array holding that element (with -0 normalized to +0 per node-2).
+
+# ---------------------------------------------------------------------------
+# PROPERTIES  (assertions the oracle checks in addition to the value result)
+# ---------------------------------------------------------------------------
+ASSERT-no-mutation
+  After `arrayUniq(arr)` returns, `arr` is element-for-element IDENTICAL to its
+  pre-call contents (same length, same elements in the same positions, same
+  references). The unit never writes to the input array.
+
+ASSERT-new-array
+  The returned array is a DIFFERENT object reference from the input `arr`
+  (result !== arr), ALWAYS — including the empty-input and all-pass-through
+  cases (e.g. arrayUniq([]) returns a brand-new []; arrayUniq([1,2,3]) returns
+  a new [1,2,3], not the input).
+
+ASSERT-first-appearance-order
+  For any input, the output order equals the order of first occurrences in the
+  input. Formally: out = arr filtered to the first index at which each SVZ-class
+  appears, preserving those indices' ascending order.
+
+# ---------------------------------------------------------------------------
+# ORACLE
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# The oracle records the returned array as the value result, plus the two
+# structural assertions (no-mutation: input snapshot equality; new-array:
+# identity inequality). Deterministic; no seam to inject.
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - SameValueZero dedup keeping first appearance (node-1).
+    - -0 -> +0 normalization in output (node-2) — the active Set-construction
+      behavior.
+    - first-appearance ordering (node-3 / ASSERT-first-appearance-order).
+    - no mutation of input (ASSERT-no-mutation).
+    - returns a new array (ASSERT-new-array).
+
+  LOAD-TIME IMPLEMENTATION SELECTION (informational, NOT three contracts):
+    Source defines three functions and picks one at module load by feature
+    detection:
+      * uniqNoSet           : indexOf-based; chosen iff `Set` is NOT in global.
+      * uniqSet             : Set.add + Array.filter; chosen iff Set exists but
+                              forEach is missing/broken (old V8 bug joyent#8449).
+      * uniqSetWithForEach  : `new Set(arr)` + forEach; chosen iff Set exists AND
+                              Set.prototype.forEach is a function AND a probe
+                              `(new Set([true])).forEach` actually yields true.
+    On every modern engine the THIRD path (uniqSetWithForEach) is active —
+    CONFIRMED active on Node v24.16.0 (module export name == "uniqSetWithForEach").
+    The three paths are NOT observationally identical (verified): they differ on
+    NaN-dedup and on -0-first inputs. The deployed behavior == the active path,
+    and THAT is the single contract above. Re-emitters must match the active
+    path; the inactive paths are documented only to explain the design.
+
+  CARRIED DATA: none.
+
+  OUT-OF-SCOPE (documented, NOT generated by genInputs):
+    - Element kinds that do not survive the harness JSON-codec round-trip:
+        * FUNCTION elements (e.g. `() => {}`): not JSON-serializable; identity
+          would be lost on persistence. Behavior would be ref-identity dedup,
+          but un-gradable -> excluded.
+        * SYMBOL elements (e.g. `Symbol('x')`): not JSON-serializable; identity
+          un-reproducible across processes -> excluded.
+      Both are noted here so a blind engineer KNOWS the unit handles them by
+      ref-identity SVZ; the generator simply never emits them.
+    - Non-array `arr` (null / undefined / number / string / object): the real
+      fn throws a TypeError from `new Set(<non-iterable>)` (or iterates a string
+      char-by-char), but this is OUT-OF-ENVELOPE; genInputs emits only arrays.
+    - Sparse arrays / holes: not generated (JSON normalizes holes to null on
+      persistence, so the input would not round-trip as a hole). Excluded.

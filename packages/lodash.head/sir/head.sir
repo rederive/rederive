@@ -1,0 +1,182 @@
+UNIT head
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# lodash.head@4.0.1 -- "Gets the first element of `array`." (alias: `first`)
+# The package is a single function exported as the WHOLE module.
+# ---------------------------------------------------------------------------
+
+SIG head(array) -> *        # returns the first element of `array`, or `undefined`
+
+# EXPORT SHAPE (load-bearing for the blind re-emitter):
+#   The original source ends with `module.exports = head;` (CommonJS default export).
+#   The re-emitter MUST expose the function as the DEFAULT export of an ES module:
+#       export default function head(array) { ... }
+#   There is NO named export, NO options object, NO second parameter.
+
+DEPENDS-ON none        # zero runtime dependencies; pure, self-contained one-liner.
+
+# ===========================================================================
+# BEHAVIOR  --  the ENTIRE function body, verbatim semantics
+# ===========================================================================
+#
+# The original implementation is EXACTLY:
+#
+#     function head(array) {
+#       return (array && array.length) ? array[0] : undefined;
+#     }
+#
+# This is NOT a true "isArrayLike" guard. It is a DOUBLE JS-TRUTHINESS test
+# followed by a single property read. Reproduce it EXACTLY, including all the
+# quirks that fall out of JS truthiness and property access. Do NOT substitute
+# `Array.isArray`, `typeof length === 'number'`, integer/length validation,
+# or any normalization -- those would diverge.
+#
+# PIPELINE (single expression, evaluated left-to-right):
+#
+#   NODE 1  -- guard = (array && array.length)
+#     Evaluate the JS logical-AND chain. The guard is "truthy" iff BOTH:
+#       (a) `array` is itself JS-truthy   (not: null, undefined, false, 0, -0,
+#           NaN, "" empty string), AND
+#       (b) `array.length` is JS-truthy.
+#     Notes that fall out of JS semantics:
+#       * `array.length` is read via normal property access. If `array` is a
+#         primitive (string/number/boolean/bigint), JS boxes it transiently to
+#         read `.length`. Strings have a real `.length`; numbers/booleans/
+#         bigints/symbols have `.length === undefined`.
+#       * The read is an ordinary GET. If `array` has a getter for `length`,
+#           the getter IS invoked (exactly once). Pure read; no mutation.
+#       * `&&` SHORT-CIRCUITS: if `array` is falsy, `array.length` is NOT read.
+#
+#   NODE 2  -- BRANCH on the guard:
+#       IF guard is truthy:  return array[0]
+#           * Ordinary indexed GET of property "0". Returns:
+#               - the element by VALUE/REFERENCE: object/array/RegExp/Map/Set/
+#                 Buffer/typed-array elements are returned BY IDENTITY (===),
+#                 NOT cloned.
+#               - `undefined` if index 0 is a HOLE (sparse array) or simply
+#                 absent (e.g. `{length:2}` with no "0" key, a function whose
+#                 `.length` arity is truthy but `[0]` is absent).
+#               - For a string receiver, `str[0]` is the first UTF-16 code-unit
+#                 as a 1-char string.
+#               - If `array` has a getter for "0", it is invoked (once).
+#       ELSE:                return undefined   # the literal value undefined
+#
+# There is NO throw path. Every codec-faithful input returns a value (the
+# function never throws for any input the JSON codec can produce).
+
+# ===========================================================================
+# CONFIRMED EDGE-CASE TABLE  (verified by running lodash.head@4.0.1)
+# Each row is (input)  ->  (exact return).  These are SELF-CONSISTENT with the
+# generator's curated prefix below -- every value genInputs can emit has its
+# behavior pinned here or by the NODE rules above.
+# ===========================================================================
+#
+#   --- proper arrays ---
+#   [1,2,3]                  -> 1
+#   [42]                     -> 42
+#   []                       -> undefined          # array truthy, length 0 falsy
+#   [0,1]                    -> 0                   # FIRST elem 0 is returned (length 2 truthy)
+#   [false, true]            -> false
+#   [""]                     -> ""                  # empty-string element returned
+#   [null, 2]                -> null                # first element null returned (not skipped)
+#   [undefined, 2]           -> undefined           # first element undefined (NOT codec-roundtrippable; see SCOPE)
+#   ["a","b"]                -> "a"
+#   [[1,2],[3,4]]            -> [1,2]   (=== input[0], by identity)
+#   [{x:1},{y:2}]            -> {x:1}   (=== input[0], by identity)
+#   [/re/g]                  -> /re/g   (=== input[0], by identity)
+#   [10n]                    -> 10n     (bigint element returned)
+#   [Infinity]               -> Infinity            (not JSON-roundtrippable; see SCOPE)
+#   [-Infinity]              -> -Infinity           (not JSON-roundtrippable; see SCOPE)
+#   [NaN]                    -> NaN                  (not JSON-roundtrippable; see SCOPE)
+#   [-0]                     -> -0  (Object.is)      (not JSON-roundtrippable; see SCOPE)
+#   sparse [ <hole>, 2, 3 ]  -> undefined            # index 0 is a hole
+#
+#   --- strings (truthiness + char index) ---
+#   "abc"                    -> "a"                 # string truthy, length 3 truthy, "abc"[0]
+#   "x"                      -> "x"
+#   ""                       -> undefined           # empty string is FALSY at NODE 1
+#
+#   --- array-like plain objects with a `length` property ---
+#   {length:3, 0:"a", 1:"b"} -> "a"                 # object truthy, length 3 truthy, ["0"]="a"
+#   {length:1, 0:"z"}        -> "z"
+#   {length:2}               -> undefined           # length 2 truthy BUT no "0" key
+#   {length:0}               -> undefined           # length 0 is FALSY at NODE 1 (short-circuit, "0" never read)
+#   {length:"3", 0:"q"}      -> "q"                 # length "3" (non-empty string) is TRUTHY
+#   {length:"", 0:"q"}       -> undefined           # length "" is FALSY
+#   {length:-1, 0:"q"}       -> "q"                 # length -1 is TRUTHY (only 0/-0/NaN are falsy numbers)
+#   {length:NaN, 0:"q"}      -> undefined           # NaN falsy
+#   {length:null, 0:"q"}     -> undefined           # null falsy
+#   {} (no length)           -> undefined           # length undefined -> falsy
+#   {a:1} (no length)        -> undefined
+#   arguments(1,2,3)         -> 1                    # arguments object has length
+#
+#   --- typed arrays / Buffer ---
+#   Uint8Array[7,8]          -> 7
+#   Uint8Array (empty)       -> undefined           # length 0 falsy
+#   Buffer[9,10]             -> 9
+#
+#   --- collections WITHOUT a length property ---
+#   new Map([[1,2]])         -> undefined           # Map has `.size`, NOT `.length`
+#   new Set([1,2])           -> undefined           # Set has `.size`, NOT `.length`
+#
+#   --- null / undefined / non-array-like primitives ---
+#   null                     -> undefined
+#   undefined  (or no arg)   -> undefined           # head() -> undefined
+#   0                        -> undefined           # 0 falsy at NODE 1
+#   42                       -> undefined           # 42 truthy, but (42).length === undefined -> falsy
+#   -0                       -> undefined           # -0 falsy
+#   NaN                      -> undefined           # NaN falsy
+#   false                    -> undefined           # false falsy
+#   true                     -> undefined           # true truthy, (true).length undefined -> falsy
+#   123n (bigint)            -> undefined           # bigint truthy, (123n).length undefined -> falsy
+#
+#   --- functions (truthy, .length is arity) ---
+#   function(a,b){}          -> undefined           # fn truthy, fn.length=2 truthy, fn[0] absent -> undefined
+#   (NOTE: functions are NOT codec-roundtrippable; OUT-of-envelope, see SCOPE)
+
+ORACLE value -> oracle.json
+#   Pure deterministic function. The oracle is the exact return value of
+#   `head(...args)` for each generated input tuple. No seam, no clock, no RNG,
+#   no IO -- ORACLE-CLASS deterministic. Object/array/RegExp returns are graded
+#   by the harness's structural codec (identity-by-value is observable as the
+#   round-tripped structure; the SIR additionally documents reference identity
+#   for the deployed wrapper's contract).
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   * The complete function body `(array && array.length) ? array[0] : undefined`.
+#   * JS truthiness at NODE 1 for BOTH operands (the falsy set: undefined, null,
+#     false, 0, -0, NaN, "", plus a missing/undefined `length`).
+#   * Plain indexed read `array[0]` including holes/absent -> undefined.
+#   * Strings handled as receivers (`.length`, `[0]` char index).
+#   * Array-like objects keyed by truthiness of `.length` (NOT integer validity).
+#   * Element return BY IDENTITY (no clone).
+#   * Default-export (`module.exports = head`) -> `export default`.
+#
+# CARRIED DATA: NONE. This unit embeds no literal tables, no S-boxes, no charmaps,
+#   no published-standard constants. NO carried.json is produced.
+#
+# OUT-OF-CONTRACT: NONE. The function is pure -- no side effects, no ambient reads,
+#   no mutation of its argument (reads `.length` and `[0]` only; getters, if any,
+#   are the caller's own and are invoked by ordinary property access).
+#
+# OUT-OF-ENVELOPE (behavior fully specified above, but NOT emitted by genInputs
+#   because the JSON-string codec cannot round-trip them faithfully -- the blind
+#   re-emitter still reconstructs these from the NODE rules + edge table):
+#     * Array elements / inputs that don't survive JSON.stringify(encode(args)):
+#         undefined, NaN, +Infinity, -Infinity, -0  (as a first element OR as the
+#         whole input). Their behavior IS pinned in the edge table; they are simply
+#         not generated. (bigint, Map, Set, Uint8Array, Buffer, RegExp DO round-trip
+#         via the documented codec and ARE exercised.)
+#     * function-valued inputs and Symbol-valued inputs -- not codec-faithful;
+#       documented (functions -> undefined via absent [0]) but not generated.
+
+PROVENANCE lodash.head@4.0.1
+#   repo: lodash/lodash (tag 4.0.1-npm-packages, path lodash.head)
+#   license: MIT (jQuery Foundation; based on Underscore.js 1.8.3)
+#   source file: node_modules/lodash.head/index.js  (function head, line 28-30)
+#   build banner: "lodash 4.0.1 (Custom Build) -- modularize exports=npm -o ./"

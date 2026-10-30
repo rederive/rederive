@@ -1,0 +1,204 @@
+UNIT normalizePath
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# CALLING CONVENTION (for the blind re-emitter)
+# ---------------------------------------------------------------------------
+# The package's only export is the default export:
+#     module.exports = function(path, stripTrailing) { ... }
+# It is a single function (no named members, no properties on it).
+# The re-emitter MUST emit it as the module DEFAULT export, e.g.:
+#     export default function normalizePath(path, stripTrailing) { ... }
+# (exportName is null; importKind is 'default'.)
+# It is a PURE function: no I/O, no clock/RNG/env/fs/net, no mutation of its
+# arguments, no global state. There is NO seam. N/A for effect modeling.
+
+SIG normalizePath(path: any, stripTrailing?: any) -> string   # throws TypeError on non-string path
+DEPENDS-ON none
+
+# ===========================================================================
+# BEHAVIOR  — exact ordered pipeline. Each NODE is evaluated in this order;
+#             the first NODE whose guard holds RETURNS and short-circuits.
+# ===========================================================================
+
+# NODE 1 — TYPE GUARD (runs first, before anything else)
+#   if (typeof path !== 'string')
+#       throw new TypeError('expected path to be a string')
+#   The check is `typeof path !== 'string'`. ONLY a JS string primitive passes.
+#   Everything else throws: number, bigint, boolean, null, undefined (incl. the
+#   no-argument call), arrays, plain objects, Symbols, functions, Buffers,
+#   Date, RegExp, boxed String objects (new String('x') is typeof 'object' ->
+#   THROWS). The thrown error's constructor is TypeError and its .message is
+#   the EXACT literal string:  expected path to be a string
+#   (no path value interpolated, no trailing period).
+
+# NODE 2 — SINGLE-SEPARATOR SHORTCUT (string is exactly one backslash or one slash)
+#   if (path === '\\' || path === '/')  return '/'
+#   i.e. the 1-character string "\" (a single backslash) -> '/'
+#        the 1-character string "/" (a single forward slash) -> '/'
+#   This is checked BEFORE the len<=1 shortcut, so these two specific 1-char
+#   strings normalize to '/' rather than returning themselves.
+
+# NODE 3 — TRIVIAL-LENGTH SHORTCUT
+#   len = path.length
+#   if (len <= 1)  return path   # returned UNCHANGED, verbatim
+#   Reached only when NODE 2 did not fire, so this covers:
+#     ''  (empty string, len 0)        -> ''
+#     any single char that is NOT '/' nor '\\', e.g. 'a' -> 'a', '.' -> '.',
+#       ' ' -> ' ', 'x' -> 'x'
+#   No backslash conversion, no slash collapsing, no trailing strip happens here.
+
+# NODE 4 — WIN32 NAMESPACE PREFIX DETECTION (the subtle UNC branch)
+#   Reached only for len >= 2 (NODE 2/3 did not fire).
+#   prefix = ''
+#   if (len > 4 && path[3] === '\\') {          # len STRICTLY greater than 4
+#       ch = path[2]
+#       if ((ch === '?' || ch === '.') && path.slice(0, 2) === '\\\\') {
+#           path = path.slice(2)                # DROP the first two backslashes
+#           prefix = '//'                       # remember to re-prepend two slashes
+#       }
+#   }
+#   In plain terms: the prefix branch fires ONLY when ALL of these hold:
+#     (a) length > 4, AND
+#     (b) the 4th character (index 3) is a backslash '\', AND
+#     (c) the 3rd character (index 2) is either '?' or '.', AND
+#     (d) the first two characters are both backslashes (the literal "\\").
+#   These together match the Windows namespace forms:  \\?\...  and  \\.\...
+#   When matched: strip the leading "\\" from `path` and set prefix = '//'.
+#   The dropped "\\" is later re-materialized as the literal '//' prefix
+#   (NOT routed through the split), guaranteeing the result keeps a leading '//'.
+#   When NOT matched (any of a-d false), prefix stays '' and `path` is unchanged.
+#
+#   IMPORTANT NON-MATCH CASE — a plain UNC share like the 13-char string
+#   "\\server\share" (two leading backslashes, then a name): index 3 is the
+#   character 'e' (s,e,r,v,...), NOT a backslash, so guard (b) is false and the
+#   prefix branch does NOT fire. The leading "\\" is then COLLAPSED by the split
+#   into a single leading '/'. Hence:
+#       "\\server\share"  ->  "/server/share"   (single leading slash, NOT //)
+#   Only the \\?\ and \\.\ namespace forms keep a doubled leading slash.
+
+# NODE 5 — SPLIT ON SEPARATOR RUNS
+#   segs = path.split(/[/\\]+/)
+#   Regex: one-or-more characters each of which is '/' OR '\'. A maximal RUN of
+#   mixed/duplicate separators is a SINGLE delimiter. This simultaneously:
+#     - converts every backslash to the split boundary (so output uses '/'),
+#     - collapses any run of consecutive separators (//, \\, /\, \/...) to one.
+#   Standard JS String.split semantics on the segment array:
+#     - A leading separator yields a leading '' element (preserved unless it is
+#       also the last element). e.g. '/foo'   -> ['', 'foo']
+#                                    '//foo'  -> ['', 'foo']
+#     - A trailing separator yields a trailing '' element.
+#       e.g. 'foo/bar/' -> ['foo','bar','']
+#     - A string that is ALL separators yields ['', ''] (one leading empty,
+#       one trailing empty). e.g. '////' -> ['',''];  '//' -> ['',''];
+#       the 2-backslash string "\\" (len 2) -> ['',''].
+#     - 'foo//bar///baz' -> ['foo','bar','baz']
+#     - 'foo\bar\baz'    -> ['foo','bar','baz']
+
+# NODE 6 — OPTIONAL TRAILING-EMPTY-SEGMENT STRIP
+#   if (stripTrailing !== false && segs[segs.length - 1] === '')
+#       segs.pop()
+#   The guard on stripTrailing is STRICT inequality against the boolean false.
+#   Therefore the trailing empty segment is STRIPPED for EVERY stripTrailing
+#   value EXCEPT the exact boolean `false`. In particular it is stripped when
+#   stripTrailing is: omitted/undefined, null, 0, '' (empty string), 1, true,
+#   the string 'false', NaN, {}, [] — anything that is not === false.
+#   It is KEPT (not popped) ONLY when stripTrailing === false (boolean).
+#   The pop removes at most ONE element, and only if the LAST element is ''.
+#   (A leading '' is never popped here — only the final element is considered.)
+
+# NODE 7 — JOIN
+#   return prefix + segs.join('/')
+#   Join the surviving segments with single '/', then prepend `prefix`
+#   ('' in the common case, '//' for the \\?\ / \\.\ namespace case).
+
+# ---------------------------------------------------------------------------
+# WORKED EXAMPLES (all verified by executing normalize-path@3.0.0)
+# ---------------------------------------------------------------------------
+#   normalizePath('foo\bar\baz')              -> 'foo/bar/baz'
+#   normalizePath('foo//bar///baz')           -> 'foo/bar/baz'
+#   normalizePath('foo\bar//baz')             -> 'foo/bar/baz'    # mixed seps
+#   normalizePath('foo/bar/baz')              -> 'foo/bar/baz'    # already-normal, unchanged
+#   normalizePath('foo/bar/')                 -> 'foo/bar'        # default strip
+#   normalizePath('foo/bar/', true)           -> 'foo/bar'        # truthy non-false -> strip
+#   normalizePath('foo/bar/', false)          -> 'foo/bar/'       # ONLY false keeps trailing
+#   normalizePath('foo/bar/', 0)              -> 'foo/bar'        # 0 !== false -> strip
+#   normalizePath('foo/bar/', null)           -> 'foo/bar'        # null !== false -> strip
+#   normalizePath('foo/bar/', 'false')        -> 'foo/bar'        # string 'false' !== false -> strip
+#   normalizePath('/')                        -> '/'              # NODE 2
+#   normalizePath('\')   (one backslash)      -> '/'              # NODE 2
+#   normalizePath('')                         -> ''               # NODE 3
+#   normalizePath('a')                        -> 'a'              # NODE 3
+#   normalizePath('.')                        -> '.'              # NODE 3
+#   normalizePath('//')   (len 2)             -> ''               # split ['',''] -> pop -> [''] -> ''
+#   normalizePath('\\')   (2 backslashes)     -> ''               # same as above
+#   normalizePath('////')                     -> ''               # split ['',''] -> pop -> [''] -> ''
+#   normalizePath('/a')                       -> '/a'             # leading empty preserved
+#   normalizePath('//foo')                    -> '/foo'           # run collapses, leading slash kept
+#   normalizePath('a/')                       -> 'a'              # default strip
+#   normalizePath('a/', false)                -> 'a/'             # keep
+#   normalizePath('\\server\share') (UNC)     -> '/server/share'  # NODE4 does NOT fire (path[3]='e')
+#   normalizePath('\\?\x')   (len 5)          -> '//?/x'          # NODE4 fires: prefix '//'
+#   normalizePath('\\.\x')   (len 5)          -> '//./x'          # NODE4 fires: prefix '//'
+#   normalizePath('\\?\C:\foo')               -> '//?/C:/foo'
+#   normalizePath('\\.\C:\foo')               -> '//./C:/foo'
+#   normalizePath('\\?\x\', false)            -> '//?/x/'         # prefix + kept trailing
+#   normalizePath('\\?\x\')        (default)  -> '//?/x'
+#   normalizePath('\?\x')  (len 4, single bs) -> '/?/x'           # len>4 false -> no prefix
+#   normalizePath('\\a\x')                    -> '/a/x'           # path[2]='a' not ?/. -> no prefix
+#   normalizePath('a\?\y')                    -> 'a/?/y'          # slice(0,2)!='\\' -> no prefix
+#   normalizePath('foo bar/baz')              -> 'foo bar/baz'    # spaces preserved
+#   normalizePath('café/x') (accented)  -> 'café/x'         # non-ASCII passes through verbatim
+#   normalizePath(42)                         -> THROW TypeError 'expected path to be a string'
+#   normalizePath(null)                       -> THROW TypeError 'expected path to be a string'
+#   normalizePath(['a','b'])                  -> THROW TypeError 'expected path to be a string'
+#   normalizePath({})                         -> THROW TypeError 'expected path to be a string'
+#   normalizePath(true)                       -> THROW TypeError 'expected path to be a string'
+
+ORACLE value -> oracle.json
+# Differential/quorum oracle: caller invokes normalizePath(...tuple) and records
+# either the returned string OR a thrown error as { __throw: <error.message> }.
+# For every non-string-path tuple emitted by genInputs the recorded outcome is
+# { __throw: 'expected path to be a string' }.
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+# IN-CONTRACT LOGIC (reproduce EXACTLY — all of the above):
+#   - the typeof-string type guard and the exact TypeError message literal;
+#   - the '\\'/'/' single-separator shortcut (-> '/');
+#   - the len<=1 verbatim passthrough;
+#   - the win32 \\?\ / \\.\ namespace prefix branch (exact 4-part guard:
+#     len>4, path[3]==='\\', path[2] in {'?','.'}, path.slice(0,2)==='\\\\');
+#   - the split on /[/\\]+/ (backslash->slash + run collapse, JS split element
+#     semantics including leading/trailing/all-separator empties);
+#   - the STRICT stripTrailing !== false trailing-empty pop;
+#   - the prefix + segs.join('/') assembly.
+#   The split regex is character-class [/\\] (forward slash and backslash) PLUS
+#   the `+` quantifier; there are no other special characters and no flags.
+#
+# CARRIED DATA: none. No tables, no large literals. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs
+# because they cannot survive the oracle's JSON codec round-trip; a blind
+# re-emitter still reconstructs their behavior from the spec above):
+#   - `undefined` path (incl. the zero-argument call normalizePath()):
+#       BEHAVIOR per NODE 1 -> THROW TypeError 'expected path to be a string'.
+#       Not emitted as a tuple: a bare `undefined` array element is persisted
+#       by the codec as `null` (corrupting the recorded arg). The `null` throw
+#       case below is emitted instead and exercises the identical type-guard path.
+#   - Symbol / function as the path argument:
+#       BEHAVIOR per NODE 1 -> THROW TypeError (typeof 'symbol' / 'function').
+#       Not codec-faithful; documented only.
+#   - boxed String object (new String('x')): typeof is 'object' -> THROWS.
+#       Documented only (class-instance identity not codec-faithful).
+#   - A second argument `stripTrailing` of `undefined` is intentionally NOT
+#       emitted as an explicit element (it would persist as `null`); since both
+#       undefined and null are `!== false` they behave identically (strip), the
+#       default-strip behavior is covered by 1-element tuples instead.
+
+PROVENANCE normalize-path@3.0.0
+  repo: jonschlinkert/normalize-path
+  license: MIT (Copyright (c) 2014-2018, Jon Schlinkert)
+  source file: index.js (module.exports = function(path, stripTrailing){...})

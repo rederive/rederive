@@ -1,0 +1,92 @@
+{
+ "status": "ok",
+ "unit": "f64_bits",
+ "primary": "selfhost/units/f64_bits/sir/f64_bits.sir",
+ "primarySha256": "c6667a66d269b295c9a9e05d023b1f91bd541e5e65c8971a537aed79fb8e90f1",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Read x as its 64-bit IEEE-754 binary64 encoding taken as an unsigned integer: bit 63 the sign, bits 62..52 the biased exponent, bits 51..0 the fraction. The result is that integer written in base 16, most significant digit first, with lowercase digits a-f, left-padded with \"0\" to exactly 16 characters.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R2",
+   "text": "Every NaN, whatever its sign bit and whatever its payload (quiet or signaling), yields \"7ff8000000000000\". This is the ONE place the result is not the input's own encoding. CITED FIDELITY package — the NaN rule (SIR_SCHEMA canonical form)",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "R3",
+   "text": "No other value is normalized: -0 and +0 differ, the infinities keep their sign, subnormals keep their exact fraction, and no rounding or tolerance is applied. Two f64 values give the same result exactly when both are NaN or their encodings are identical.",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE SPECIALS row 1",
+   "text": "1  NaN (any sign, any payload)                     -> \"7ff8000000000000\"",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE SPECIALS row 2",
+   "text": "2  +0                                               -> \"0000000000000000\"",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE SPECIALS row 3",
+   "text": "3  -0                                               -> \"8000000000000000\"",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE SPECIALS row 4",
+   "text": "4  +Infinity                                        -> \"7ff0000000000000\"",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE SPECIALS row 5",
+   "text": "5  -Infinity                                        -> \"fff0000000000000\"",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE SPECIALS row 6",
+   "text": "6  smallest positive subnormal (2 to the -1074)     -> \"0000000000000001\"",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE SPECIALS row 7",
+   "text": "7  largest subnormal                                -> \"000fffffffffffff\"",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE SPECIALS row 8",
+   "text": "8  smallest positive normal (2 to the -1022)        -> \"0010000000000000\"",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE SPECIALS row 9",
+   "text": "9  largest finite                                   -> \"7fefffffffffffff\"",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE SPECIALS row 10",
+   "text": "10 1                                                -> \"3ff0000000000000\"",
+   "ambiguity": 0.2
+  }
+ ],
+ "ranked": [
+  "R1",
+  "R2",
+  "TABLE SPECIALS row 1",
+  "TABLE SPECIALS row 10",
+  "R3",
+  "TABLE SPECIALS row 2",
+  "TABLE SPECIALS row 7",
+  "TABLE SPECIALS row 6",
+  "TABLE SPECIALS row 8",
+  "TABLE SPECIALS row 3",
+  "TABLE SPECIALS row 4",
+  "TABLE SPECIALS row 5",
+  "TABLE SPECIALS row 9"
+ ],
+ "at": "2026-10-28T03:42:05Z"
+}

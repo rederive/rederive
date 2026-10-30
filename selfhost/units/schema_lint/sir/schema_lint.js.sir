@@ -1,0 +1,21 @@
+UNIT schema_lint
+LANG js
+PRIMARY-SHA256 8e74cb3dded267ffa91c77fece9986ab50d20be3ad85c2b5ee718a04d26d04bb
+SIG schema_lint(text: string, carried_name: string | null): { hits: { line: number, what: string, text: string }[] }
+NOTE default export
+ABI text = string (UTF-16 code units, well-formed); none = null (an undefined carried_name behaves the same); u64 = number (a
+  positive integer); a record = a plain object with exactly the named own properties; list = Array. The result is a fresh
+  object { hits: [...] }, each entry { line, what, text }. The artifact is an ES module default-exporting the function and
+  imports nothing. Nothing throws inside the envelope.
+MECHANISM R1 is text.split(/\r\n|\r|\n/) (never split('\n') alone, never a split that treats U+2028 as a break). SP is space
+  and tab ONLY: never \s, trim(), trimStart() or trimEnd() (they remove NBSP, U+3000, U+FEFF, U+2028 and more); write every
+  trim as a [ \t] pattern. R10's case-insensitive word is the CARRIED-WORD pin (no u flag: the i flag folds ASCII letters
+  only; its lookarounds are ASCII letters, never \b or \w). A carried_name of exactly "none" builds no name test. R10's name test must read the name literally: either an explicit indexOf scan with the WORD check on both
+  neighbours, or a RegExp over the name with EVERY pattern metacharacter escaped, bracketed by the NAME-EDGES lookarounds;
+  never \b (a name edge that is not WORD needs a non-WORD neighbour, which \b does not express). R11's cut counts code
+  points: Array.from(line).slice(0, 96), never line.slice(0, 96). R8's escape skips a whole code point (two code units for
+  an astral character).
+DEPENDS-ON none
+PINNED regex CARRIED-WORD = /(?<![A-Za-z])carried(?![A-Za-z])/i CITED R10 — no u flag (the i flag folds ASCII letters only)
+PINNED regex NAME-EDGES = /(?<![A-Za-z0-9_])NAME(?![A-Za-z0-9_])/ CITED R10 — NAME is the escaped carried_name
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs schemaLint — this file states the type mapping and the dialect only; no behavior.

@@ -1,0 +1,126 @@
+UNIT any_ban_hits
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@aa3b8dce6ef8 cli/lang-ts.mts anyBanHits, the any-ban lint that gates a ts artifact's type-checked rung
+ORACLE-CLASS deterministic
+SIG any_ban_hits(src: text) -> list[text]
+ENVELOPE any well-formed Unicode text (a TypeScript source file, but nothing is parsed: the text need not be valid
+  TypeScript, and an unterminated literal or comment is not an error). Non-text input is out of the envelope.
+DEPENDS-ON none
+DESCRIPTION Lint a TypeScript source for the constructs the type-checked rung refuses: the word any in code, a postfix
+  "!" (an assertion operator), and a @ts-ignore / @ts-expect-error / @ts-nocheck directive in a comment. ONE left-to-right
+  lexical scan (R1-R9) separates code from what is not code: string literals, template text (a template's interpolation
+  IS code), comments and regex literals. While it scans it keeps a LINE counter and a CONTEXT text, a crude record of the
+  code seen so far on the current line, which decides regex-versus-divide and labels the hits. The result lists one entry
+  "<label>@<line>" per distinct (label, line), in the order first found. The scan is a lexical approximation, not a
+  TypeScript tokenizer; its accidents (what CONTEXT records, where a line is or is not counted) are part of this contract.
+BEHAVIOR
+R1 State. The cursor starts at the first character of src, LINE at 1, CONTEXT empty, DEPTH (a brace depth, may go
+  negative) at 0, and STACK (the template-interpolation stack, of depths) empty. HITS is an empty list. Recording a hit
+  (label, LINE) appends the entry label "@" LINE in decimal, unless that exact entry is already in HITS. At the end of src
+  the result is HITS sorted by line number, ascending and STABLE: entries of one line keep their recording order (R8's REST
+  SCAN records later lines early, so the recording order alone is not line order). In CODE mode the character at the
+  cursor (with the one after it, when the rule needs two) selects the first applicable rule of R2-R9.
+R2 LF (U+000A): LINE increases by 1, CONTEXT becomes empty, the cursor advances one.
+R3 LINE COMMENT "//": the comment runs from the "//" up to, not including, the next LINE BREAK (LF, CR, U+2028 or
+  U+2029), or to the end of src. If it contains a DIRECTIVE (TABLE DIRECTIVE) record ("@ts-ignore", LINE). The cursor moves
+  to that LINE BREAK (or the end); CONTEXT is unchanged. An LF is then R2; a CR, U+2028 or U+2029 is then R9(e):
+  appended to CONTEXT, LINE unchanged (LINE counts LF only, so "// c<CR>x: any" reports line 1).
+R4 BLOCK COMMENT "/*": the comment runs from the "/*" through the first "*/" that begins after the opener's two characters
+  ("/*/" does not close itself); with no such "*/" it runs to the end of src. Let RAW be the comment text, LOW its LOWERED
+  form (TABLE DIRECTIVE), P the code-unit index of the first directive match in RAW and Q that in LOW (none = -1). When
+  either is found, record ("@ts-ignore", L): AT = the larger of P and Q, BASE = RAW when P is found else LOW, and L = LINE
+  at the opener plus the number of LF among the first AT code units of BASE. So a directive is normally reported at its own
+  line, but when both are found and Q > P (a U+0130 before the match lengthens LOW) or P > Q (a U+212A directive before an
+  ASCII one) AT is the later index read in RAW, and may land past an LF CITED FIDELITY package. One record per comment at most. Then LINE increases by the number of LF in the comment; if there was at
+  least one, CONTEXT becomes empty; then one space is appended to CONTEXT. The cursor moves past the comment.
+R5 STRING, at a QUOTATION MARK (U+0022) or APOSTROPHE (U+0027), Q. The body is scanned from the next character: a
+  BACKSLASH (U+005C) followed by CR then LF consumes all three, LINE increases by 1 and CONTEXT is NOT emptied; any other
+  BACKSLASH consumes itself and the one character after it, whatever that is (when it is an LF, LINE increases by 1 but
+  CONTEXT is NOT emptied, as in R7; a BACKSLASH then a lone CR consumes the CR only); any other character is consumed
+  unless it is Q or LF.
+  The scan stops at the first unconsumed Q, an LF, or the end of src. A stopping Q is consumed (the literal is closed); a
+  stopping LF is left for R2. One QUOTATION MARK (U+0022) is appended to CONTEXT, whatever Q was. CR, U+2028 and U+2029 are
+  ordinary body characters.
+R6 TEMPLATE, at a GRAVE ACCENT (U+0060): the cursor moves past it and the scan enters TEXT mode (R7).
+R7 TEXT mode, character by character until it returns to CODE mode: a BACKSLASH consumes itself and the next character; if
+  that next character is LF, LINE increases by 1 but CONTEXT is NOT emptied CITED FIDELITY package. An unescaped LF increases
+  LINE by 1 and empties CONTEXT. A GRAVE ACCENT is consumed, one GRAVE ACCENT is appended to CONTEXT (the template is an operand: it ends no REGEX
+  POSITION and is not in OPERAND END), and CODE mode resumes. The
+  two characters "${" are consumed, the current DEPTH is pushed on STACK, DEPTH increases by 1, one space is appended to
+  CONTEXT, and CODE mode resumes (the interpolation is code). Any other character is consumed and appends nothing. The end
+  of src ends the scan (an unterminated template swallows the rest).
+R8 REGEX, at a SOLIDUS (U+002F) not starting a comment, when CONTEXT is a REGEX POSITION (TABLE REGEX POSITION) AND
+  CONTEXT does not end with "++" or "--" followed by zero or more WS characters ("n++ / 2" divides). The candidate body is scanned from the next character with an in-class flag, initially off: a BACKSLASH skips itself and the
+  next character, whatever it is (so an escaped LF is passed over, uncounted); "[" turns the flag on; "]" turns it off; a
+  SOLIDUS with the flag off ends the body; an unescaped LF or the end of src ends the scan WITHOUT a body end. When the
+  body ends at a SOLIDUS: FIRST, when the regex was GUESSED, i.e. CONTEXT is a REGEX POSITION by the "empty" or the "keyword" row
+  of TABLE REGEX POSITION (a keyword may really be an identifier: "of / b", "o.in / b"), the REST SCAN: the whole rest of
+  src from the character after the opening SOLIDUS (the body, the closing SOLIDUS and everything after it, over all later
+  lines) is run through R1-R9 as a src of its own, with fresh state, and each entry it returns, in its order, is recorded as
+  (its label, LINE + its line - 1). Such a guessed regex may really be a divide whose "closing" SOLIDUS sits in a string or
+  template; the REST SCAN reads the source the other way, and both readings count. After the "punctuator" row the regex is
+  certain and there is NO REST SCAN ("= /\"/; x: any" reports only the ": any" after the regex, once). A REST SCAN result depends only on the
+  suffix it scans, so an implementation should compute each suffix once (keyed by its length or start) and reuse it: nested
+  REST SCANs are otherwise exponential in the number of such slashes. NEXT, the BODY (the text strictly between the two SOLIDUS characters, escaped LF included) is FIRST run
+  through R1-R9 as a src of its own, with fresh state, and each entry it returns is recorded, in its order, as (its label,
+  the LINE at the opening SOLIDUS) — a guessed regex never hides code ("/x: any/" is a ": any" hit, "/any: 1/" is not,
+  "/a!/" records "non-null assertion"); the body's own regexes recurse the same way. Then that SOLIDUS and every directly following ASCII letter (the flags) are consumed with the body,
+  one space is appended to CONTEXT, and the cursor moves past them; an LF the body skipped is NOT counted in LINE CITED FIDELITY package.
+  When no body end is found the SOLIDUS is not a regex and falls through to R9 as an ordinary character.
+R9 Everything else, in this order.
+  (a) "{": DEPTH increases by 1, then as (e).
+  (b) "}": when STACK is not empty and its top equals DEPTH minus 1, the top is popped, DEPTH decreases by 1, the "}" is
+  consumed WITHOUT appending to CONTEXT, and TEXT mode (R7) resumes. Otherwise DEPTH decreases by 1, then as (e).
+  (c) a WORD CHAR: the word is the maximal run of WORD CHAR characters starting there (so "9any", "éany", "any9" and
+  "\u180eany" are not the word any, while "x:\u00a0any", "as\u3000any", "x:\u0085any" and "\u200bany\ufeff" contain it: a WS
+  character, U+0085 or U+200B ends a word). If the word is exactly "any" it is a candidate. It is EXCUSED as a
+  MEMBER when CONTEXT ends with a "." that is not itself directly preceded by "." , then zero or more WS characters ("o.any",
+  "o?.any" excused; "...any" and "..any" are not). It is EXCUSED as a KEY when BOTH the source text directly after the word
+  is zero or more characters each in WS other than LF, CR, U+2028 and U+2029, or U+0085 or U+200B (never a line break),
+  an optional "!" or "?", then ":", AND CONTEXT with its trailing WS characters
+  removed is empty or ends with "{", "(", "," or ";" ("{ any: 1 }", "f(any?: T)" and "{ any\u00a0: 1 }" excused; "c ? any : d" and a line "  any" whose next line starts
+  ": never" are not). A
+  candidate not excused is recorded with the label from TABLE ANY LABEL. The word is appended to
+  CONTEXT (excused or not, any or not) and the cursor moves past it.
+  (d) "!" not directly followed by "=": let B be CONTEXT with every trailing SPACE and TAB removed. Record
+  ("non-null assertion", LINE) when B is not empty, its last character is in OPERAND END, and B does not end with a
+  maximal run of IDENT characters that is one of the PREFIX KEYWORDS. Then as (e).
+  (e) any other character (a "!" before "=", a WS character other than LF, U+0085, U+200B, a SOLIDUS that is not a regex, ASCII
+  punctuation, BACKSLASH): it is appended to CONTEXT and the cursor advances one.
+TABLE ANY LABEL — the first row whose condition holds; CONTEXT is as before the word, AFTER is the source text after the word (R9c)
+  "as any"   | CONTEXT ends with "as", the "a" being at the start of CONTEXT or after a character not in WORD, followed by zero or more WS characters
+  "<any>"    | CONTEXT ends with "<" followed by zero or more WS characters, AND AFTER begins with zero or more WS characters (LF included) then ">"
+  ": any"    | CONTEXT ends with ":" followed by zero or more WS characters
+  "any"      | otherwise
+TABLE REGEX POSITION — CONTEXT with its trailing WS characters removed (call it T) is a regex position when any row holds (R8)
+  empty          | T is empty
+  punctuator     | the last character of T is one of ( , = : [ ! & | ? { } ; + - * % < > ~ ^
+  keyword        | T ends with one of return typeof case do else in of void yield await throw delete new, which is either all of T or preceded by a character not in IDENT
+TABLE DIRECTIVE — a comment's text (both delimiters included) contains a directive when it holds (R3, R4)
+  directive | "@ts-ignore", "@ts-expect-error" or "@ts-nocheck", in any mix of ASCII letter case ("@TS-Ignore"), anywhere in the text, with no boundary on either side ("x@ts-nocheck$", "@ts-ignored", "@ts-expect-errors" all contain one)
+  lowered   | the same test on the LOWERED text: the full, locale-independent Unicode lowercase mapping of the whole text. Of all non-ASCII characters only U+212A KELVIN SIGN lowers to an ASCII letter ("k", so "@ts-nochec\u212a" is a directive) and only U+0130 changes length (to "i" U+0307, two code units, never itself part of a directive); U+017F is still not "s", U+0131 not "i"
+  R3 records when either row holds; R4 uses the first match index of each row
+PINNED charset WS = { U+0009 TAB, U+000A LF, U+000B VT, U+000C FF, U+000D CR, U+0020 SPACE, U+00A0, U+1680, U+2000 through U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF } CITED R8 R9 — exactly these 25 code points; U+0085 NEXT LINE, U+180E and U+200B are NOT in it
+PINNED charset WORD = { A-Z, a-z, 0-9, U+005F LOW LINE } CITED R9 DIRECTIVE — ASCII only, 63 characters
+PINNED charset IDENT = WORD plus U+0024 DOLLAR SIGN CITED R9 REGEX POSITION — 64 characters
+PINNED charset WORD CHAR = IDENT plus every character at or above U+0080 EXCEPT the WS characters, U+0085 NEXT LINE and U+200B ZERO WIDTH SPACE CITED R9 — digits start a word; U+180E IS a word char; U+0085 and U+200B are not word chars yet not WS (they end a word but are not trimmed as space, except by the KEY test)
+PINNED charset OPERAND END = IDENT plus ")" "]" U+0022 QUOTATION MARK plus every character at or above U+0080 CITED R9 — a non-ASCII space such as U+00A0 counts here, unlike in WORD CHAR (only SPACE and TAB are trimmed)
+PINNED charset PREFIX KEYWORDS = { return typeof void in of case delete await yield throw else do instanceof new extends } CITED R9
+INVARIANT every entry is "any", "as any", "<any>", ": any", "non-null assertion" or "@ts-ignore", then "@" and a line
+  number between 1 and (number of LF in src) + 1; line numbers never decrease along the list; no entry repeats.
+INVARIANT the "@ts-ignore" label begins with "@": a consumer splitting an entry must split at its LAST "@".
+ORACLE value -> oracles/any_ban_hits.json  CANONICAL-SHA256 a9a8a6b73e9e0f68dd8c9a0524552fe31c5e0e8b5ff16522b966c4c404393ab9
+SCOPE IN: R1-R9 over any text. OUT: the type-check itself (prepareTs, tsc), the report text built from the hits, and a real
+  TypeScript tokenization (JSX, a regex after ")" or "]", automatic semicolon insertion,
+  unicode escapes in identifiers).
+PROVENANCE rederive@aa3b8dce6ef8 (rederive, MIT), cli/lang-ts.mts: KEYWORDS_BEFORE_PREFIX, REGEX_AFTER and anyBanHits(src).
+  Re-cut 2026-10-27 for REDERIVE_SELF_PLAN round 5 (FINDINGS #87: the three-mask lint became one lexer pass); delta re-cut
+  for round 5b (FINDINGS #112: whole word tokens, the member and key exceptions narrowed, ++/-- and a template end before
+  "/", an escaped LF in a string, a block comment's directive at its own line); delta re-cut for round 5c (FINDINGS #134: word
+  chars exclude WS and U+200B, directives ASCII case-insensitive with no boundary, a line comment ends at CR / U+2028 / U+2029,
+  a backslash before CRLF continues a string); delta re-cut for round 5d (FINDINGS #142: U+0085 ends a word, the LOWERED
+  directive row, the KEY test skips blanks); delta re-cut for round 5f (FINDINGS #148: the line-start check replaced by
+  lexing every regex BODY as code, the KEY test never crosses a line break); delta re-cut for round 5g (FINDINGS #149: the
+  REST SCAN after a regex guessed at an all-blank CONTEXT, and the stable line sort); delta re-cut for round 5h
+  (FINDINGS #150: the REST SCAN after every guessed regex, the keyword row included).

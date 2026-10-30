@@ -1,0 +1,41 @@
+UNIT min_indent
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR min-indent@1.0.1 index.js, reproduced exactly. Its three character facts (INDENT, BLANK, BREAK) are the
+  ECMAScript readings of its pattern, each confirmed by probing the real package over every BMP code unit.
+ORACLE-CLASS deterministic
+SIG min_indent(input: text) -> u64
+ENVELOPE text only: any length (including empty) and any characters, line breaks of every kind, astral characters
+  and an unpaired surrogate half included. Non-text input is outside the envelope (the package throws on it; no
+  oracle vector exercises that).
+DEPENDS-ON none
+DESCRIPTION The smallest indentation among the content lines of a text: the length of the shortest leading run
+  of spaces and tabs over every line that has something other than whitespace after that run. A text with no
+  content line yields 0. One argument, no options.
+BEHAVIOR
+R1 Lines. A line starts at the beginning of the text and immediately after every character in BREAK; a line runs
+  up to (excluding) the next BREAK character or the end of the text. A carriage return followed by a line feed is
+  two breaks with an empty line between them; empty lines are never content (R3), so the pair behaves as one break.
+  Form feed, vertical tab and NEXT LINE (0085) are NOT breaks: they are ordinary characters of their line.
+R2 Indent of a line = the number of characters in its longest prefix made only of characters in INDENT. A space
+  and a tab each count 1; there is no tab expansion.
+R3 A line is a CONTENT line iff the character right after its indent exists and is NOT in BLANK. So a line that is
+  empty, or only spaces and tabs, or whose indent is followed by any other BLANK character (a no-break space, a
+  form feed, a vertical tab, an ideographic space, a byte-order mark, ...) is not a content line and does not take
+  part — even if real content follows later on that line CITED FIDELITY package — oracle v25, v26, v27, v28: the
+  indent class is narrower than the content test, so a space then a no-break space then "a" has no content line and yields 0.
+R4 Every character outside BLANK is content: letters, digits, punctuation, control characters other than those in
+  BLANK, NEXT LINE (0085), MONGOLIAN VOWEL SEPARATOR (180E), ZERO WIDTH SPACE (200B), astral characters, and an unpaired surrogate half.
+R5 Result = the minimum indent (R2) over all content lines (R3). No content line (the empty text, whitespace only)
+  -> 0. What follows the first non-BLANK character of a line (inner or trailing whitespace) never matters.
+PINNED charset INDENT = the code points 0009 0020 (hexadecimal: tab, space) CITED min-indent@1.0.1 pattern class of space and tab; probe: of all 65536 BMP code units c, only these two make the text c followed by "a" yield 1
+PINNED charset BREAK = the code points 000A 000D 2028 2029 (hexadecimal: line feed, carriage return, line separator, paragraph separator) CITED ECMA-262 LineTerminator, where the package's multiline line-start anchor fires; probe: of all BMP code units c, exactly these make "   a" c " b" yield 1
+PINNED charset BLANK = the code points 0009 000A 000B 000C 000D 0020 00A0 1680 2000 to 200A 2028 2029 202F 205F 3000 FEFF (hexadecimal, 25 members) CITED ECMA-262 WhiteSpace and LineTerminator under the runtime's Unicode tables (the complement of the pattern's non-whitespace test); probe: of all BMP code units c, exactly these 25 make " " c yield 0; no astral code point is a member; 180E is NOT a member; this is NOT the Unicode White_Space property: FEFF is in, 0085 (NEL) is out
+INVARIANT the result is 0 or the indent of some content line, and it never exceeds the length of the text.
+INVARIANT prepending the same INDENT run to every line raises the result by that run's length when a content line exists.
+ORACLE value -> oracles/min_indent.json  CANONICAL-SHA256 c16fea5d533fba6de5bab3c86cbc5376ec35426cf83c4e85a35eac8b25d599c2
+NOTE 16 frozen + 13 held-out vectors captured once from the real package; never regenerated.
+SCOPE IN: R1-R5 over any text. OUT: non-text input (the package throws a type error from its first operation),
+  tab-width expansion (none exists), stripping or re-indenting (other packages).
+PROVENANCE min-indent@1.0.1 (jamestalmage/min-indent, MIT), index.js — the whole module is the exported function.
+  Re-cut cold 2026-10-23 into the v0.5 contract register for the SIR v0.5 Phase 1 gate.

@@ -1,0 +1,129 @@
+UNIT arrayUnique
+KIND STATE                 # mutates its argument in place AND returns it (return identity == the same arg ref)
+ORACLE-CLASS deterministic # pure: no clock/RNG/io/net seam. The mutation is the unit; no injection needed.
+
+SIG  unique(arr: Array<any>) -> Array<any>
+     # `unique` is the DEFAULT export: module.exports = function unique(arr).
+     # The unit under test is THIS default-export callable only. See SCOPE for `.immutable`.
+
+DEPENDS-ON none            # zero runtime dependencies.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline; exact + complete)
+# ============================================================================
+#
+# NODE 0 -- TYPE GUARD (first thing, before any work):
+#   IF NOT Array.isArray(arr):
+#       THROW  TypeError with message exactly:  array-unique expects an array.
+#       (error constructor: TypeError; message string is byte-exact, no trailing period beyond
+#        the one shown, no leading/trailing whitespace.)
+#   This guard rejects: strings, null, undefined, numbers, plain objects, and ARRAY-LIKE
+#   objects ({length, 0, 1, ...}) and `arguments`. Only a genuine Array passes.
+#
+# NODE 1 -- DEDUP IN PLACE (only reached for genuine arrays):
+#   Remove duplicate ELEMENTS so that for every value, ONLY THE FIRST OCCURRENCE is kept,
+#   in its original position; all later occurrences that compare EQUAL to an earlier kept
+#   element are removed. Relative order of the kept (first-occurrence) elements is preserved.
+#
+#   COMPARISON is JavaScript STRICT EQUALITY (===). Equivalently: an element at index k is
+#   REMOVED iff some earlier KEPT element e satisfies (e === arr[k]). This is exactly the
+#   semantics of building a result by: "for each element x in input order, push x iff
+#   result.indexOf(x) === -1" (indexOf uses ===). The two formulations are behaviorally
+#   identical (verified by 10,000-case fuzz incl. NaN); a re-emitter MAY implement either.
+#
+#   STRICT-EQUALITY (===) CONSEQUENCES -- these are the load-bearing edge semantics:
+#     * NO TYPE COERCION. Distinct types never collapse:
+#         1 (number) !== "1" (string)        -> both kept
+#         1 (number) !== 1n (bigint)         -> both kept
+#         true (boolean) !== 1 (number)      -> both kept
+#         null !== undefined                 -> both kept
+#       null dedups with null; undefined dedups with undefined; "" dedups with "".
+#     * NaN IS NEVER DEDUPED. Because NaN === NaN is false, NaN never equals anything
+#       (including another NaN). EVERY NaN element is kept; none are removed.
+#         [NaN, NaN, 1, NaN]      -> [NaN, NaN, 1, NaN]   (length unchanged for the NaNs)
+#         [NaN, 1, NaN, 1, NaN]   -> [NaN, 1, NaN, NaN]   (the two extra 1s removed; all 3 NaN kept)
+#     * +0 and -0 ARE deduped together. Because (-0 === 0) is true, a +0 and a -0 are
+#       considered equal; the FIRST occurrence (with its sign) is kept, the rest removed.
+#         [-0, 0, 0]  -> [-0]    (first element -0 is the survivor; Object.is(result[0],-0) === true)
+#         [ 0, -0]    -> [ 0]    (first element +0 is the survivor; Object.is(result[0],-0) === false)
+#       i.e. the SURVIVING zero retains the SIGN of the FIRST zero seen.
+#     * Infinity / -Infinity dedup normally (Infinity === Infinity is true; Infinity !== -Infinity):
+#         [Infinity, Infinity, -Infinity, -Infinity] -> [Infinity, -Infinity]
+#     * OBJECTS / ARRAYS / FUNCTIONS compare BY REFERENCE (identity), never by structure:
+#         let o = {x:1};  [o, o, {x:1}] -> [o, {x:1}]   (the two distinct {x:1} literals are NOT equal)
+#         distinct array/object literals with identical contents are kept separately.
+#     * BIGINT compares by mathematical value among bigints: 1n === 1n is true -> deduped.
+#
+#   SPARSE ARRAYS (holes): a hole reads as `undefined` via element access. The dedup treats
+#   holes as the value `undefined`, so multiple holes (and explicit `undefined`s) collapse to
+#   a single `undefined`, keeping the position of the first. Observable example:
+#       [1, <hole>, 1, <hole>, 2]  -> [1, undefined, 2]   (length 3)
+#   (A re-emitter that reads elements with normal indexing and compares with === reproduces this.)
+#
+# NODE 2 -- RETURN IDENTITY (critical contract):
+#   RETURN the SAME array reference that was passed in (NOT a copy). The function mutates
+#   `arr` in place and returns `arr`. Therefore:  unique(a) === a  is ALWAYS true for a
+#   non-throwing call. The caller's variable and the return value alias the one array.
+#
+# DEGENERATE / EDGE INPUTS (all verified against the real package):
+#   []           -> []            (same ref; empty)
+#   [x]          -> [x]           (same ref; single element, never removed)
+#   [x, x, x]    -> [x]           (all-dupes collapse to one, for non-NaN x)
+#   [a, b, c]    -> [a, b, c]     (no-dupes: unchanged contents, same ref)
+#   [NaN]        -> [NaN]
+#   [NaN, NaN]   -> [NaN, NaN]    (NOT deduped; both kept)
+#
+# ============================================================================
+# THE OBSERVABLE (what the oracle grades)
+# ============================================================================
+# This unit is STATE (mutates+returns its arg). The graded OBSERVABLE is the CONTENTS and
+# ORDER of the RETURNED array. Because the return is the same ref as the (mutated) input,
+# grading the returned array's contents fully captures both the in-place mutation and the
+# return value. Re-emitters need not separately expose the alias to be graded equivalent on
+# the observable, BUT the return-identity contract (unique(a) === a) is part of the spec and
+# MUST be reproduced (a copy-and-return implementation would be observably wrong for callers
+# that read `arr` after the call).
+#
+# THROW PATHS are observable: a codec-faithful non-array input records {__throw} with the
+# TypeError above.
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The type guard + TypeError message.
+#   - The first-occurrence-preserving, strict-equality (===) dedup.
+#   - All === edge semantics: NaN-never-deduped, -0/+0 collapse keeping first sign,
+#     no cross-type coercion, by-reference object/array compare, bigint value compare,
+#     Infinity handling, sparse-hole-as-undefined collapse.
+#   - The in-place mutation + return-same-reference identity contract.
+#
+#   Demonstrated in-scope element subset (self-consistent with genInputs; every value the
+#   generator can emit is covered above):
+#     numbers (incl. 0, -0, NaN, Infinity, -Infinity, integers, floats),
+#     strings (incl. ""), booleans (true/false), null, undefined (explicit + via holes),
+#     bigint, nested arrays and plain objects (compared by reference),
+#     RegExp / Set / Map / Uint8Array values (compared by reference like any object).
+#
+# CARRIED DATA: none. No literal tables; nothing to attest.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - module.exports.immutable (a.k.a. unique.immutable / require('array-unique').immutable):
+#       A SEPARATE callable on the module. Signature uniqueImmutable(arr) -> Array<any>.
+#       Behavior: same type guard (throws the identical TypeError on non-array); then COPIES
+#       the input into a NEW array of the same length (shallow, element-by-element via a
+#       plain for-loop, so holes become explicit `undefined` slots in the copy) and runs the
+#       DEFAULT dedup on the COPY. Consequently: the ORIGINAL array is left UNCHANGED, and the
+#       RETURN is a NEW array reference (unique.immutable(a) !== a). It does NOT dedup NaN
+#       either (same === semantics on the copy). This is part of the module's observable
+#       contract but is NOT the unit under test; the unit is the default export only.
+#   - Element values that do NOT survive the oracle codec round-trip (so they cannot appear in
+#     persisted inputs and are NOT emitted by genInputs): live Function values and Symbol
+#     values. Their dedup behavior is still fully specified by the by-reference/=== rule above
+#     (functions/symbols compare by identity: the same ref dedups, distinct refs do not), so a
+#     blind re-emitter reconstructs it from this spec without a sample input.
+
+PROVENANCE array-unique@0.3.2 (jonschlinkert); repo jonschlinkert/array-unique;
+           MIT License; source file index.js (default export `unique`).

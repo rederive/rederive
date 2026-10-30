@@ -1,0 +1,110 @@
+{
+ "status": "ok",
+ "unit": "check_carried",
+ "primary": "selfhost/units/check_carried/sir/check_carried.sir",
+ "primarySha256": "48345c0139463424c8369a2dd17b8f99b22d5dbe4a32e3f5583cb189c642bc28",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Each of these throws, and a call that throws produces no result (which one is reported is not graded): decl is not a map (none, text, a number, a bool, a list); decl has no assertions entry or its assertions is not a list (none, text and a map included); decl has a sha entry that is PRESENT (R3) and not a PIN; table is not a map (a list, text, a number, a bool, none); table has no CANON (R2); an element of assertions, wherever it stands in the list, is not a map, or lacks an expr entry, or has an expr that is not text or is the empty text, or lacks an equals entry; an element's equals has no CANON. equals none is well-formed; any non-empty expr is well-formed, blank or invisible text (\" \", U+200B) included.",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "R2",
+   "text": "CANON of a json value is compact JSON with no whitespace: a map is \"{\" then its entries joined by \",\" then \"}\", each entry the key as a JSON STRING, \":\", and the value's CANON, the entries ordered by key ascending, keys compared as sequences of UTF-16 code units, at EVERY depth; a list is \"[\" then its elements' CANON joined by \",\" then \"]\", in list order; text is a JSON STRING; true, false and none are the texts \"true\", \"false\" and \"null\"; a number is NUMBER-TEXT; NaN, the infinities and negative zero have NO CANON, nor does any value containing one. sha is the SHA-256 digest (FIPS 180-4) of the UTF-8 bytes of the table's CANON, written as 64 lowercase hex digits.",
+   "ambiguity": 0.61
+  },
+  {
+   "id": "R3",
+   "text": "Let S be decl's sha entry. S is ABSENT when decl has no sha entry or S is none; otherwise it is PRESENT, and a PRESENT S must be a PIN — text of exactly 64 characters, each one of 0-9 or a-f — or the call throws (R1: uppercase hex of the right digest, 63 or 65 digits, a trailing newline or space, the empty text, a bool, a number, a list, a map). hashOk is none when S is ABSENT, and otherwise true exactly when S equals sha.",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "R4",
+   "text": "For each assertion A, in order, GOT is: when A's expr is exactly the text \"count\", the number of entries of the table — even when the table has its own entry named count, which is never read this way CITED FIDELITY package. Otherwise, when the table has an entry keyed by A's expr (any key: __proto__, constructor, toString and the empty text included), GOT is that entry's value; otherwise GOT is ABSENT. Only the table's own entries exist — no key is ever inherited.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R5",
+   "text": "ok is true exactly when GOT is not ABSENT and CANON(GOT) is the same text as CANON(E), E being A's equals (which has a CANON, R1). Equivalently: GOT and E are the same json value — maps by key set and value per key with entry order ignored, lists element by element in order, numbers by value (7 and 7.0 are one number), text by content. An ABSENT GOT fails whatever E is, none included.",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "R6",
+   "text": "Each result record is exactly: expr = A's expr; equals = A's equals; got = GOT (none when ABSENT); ok per R5 — A's other entries (its own got, ok or anything else) are dropped. attested is true exactly when hashOk is true, assertions is non-empty and every ok is true. entries = the number of entries of the table.",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE STATUS row 1",
+   "text": "hashOk is none               | unpinned",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE STATUS row 2",
+   "text": "hashOk is false              | hash-mismatch",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE STATUS row 3",
+   "text": "assertions is empty          | unattested",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE STATUS row 4",
+   "text": "attested is true             | attested",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE STATUS row 5",
+   "text": "otherwise                    | authority-FAIL",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE ESCAPE row 1",
+   "text": "double quote (U+0022)                                   | backslash, double quote",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE ESCAPE row 2",
+   "text": "backslash (U+005C)                                      | two backslashes",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE ESCAPE row 3",
+   "text": "U+0008 / U+0009 / U+000A / U+000C / U+000D              | backslash then b / t / n / f / r",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE ESCAPE row 4",
+   "text": "any other character U+0000 to U+001F                    | backslash, u, then 4 LOWERCASE hex digits of the code point",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE ESCAPE row 5",
+   "text": "every other character (U+007F, U+2028, U+2029, slash, non-ASCII, supplementary) | itself, UTF-8 encoded in the hashed bytes",
+   "ambiguity": 0.41
+  }
+ ],
+ "ranked": [
+  "R2",
+  "R1",
+  "R5",
+  "TABLE ESCAPE row 5",
+  "TABLE ESCAPE row 3",
+  "TABLE ESCAPE row 4",
+  "R6",
+  "R3",
+  "TABLE STATUS row 2",
+  "TABLE STATUS row 1",
+  "TABLE STATUS row 3",
+  "TABLE STATUS row 4",
+  "TABLE STATUS row 5",
+  "TABLE ESCAPE row 1",
+  "TABLE ESCAPE row 2",
+  "R4"
+ ],
+ "at": "2026-10-28T02:53:05Z"
+}

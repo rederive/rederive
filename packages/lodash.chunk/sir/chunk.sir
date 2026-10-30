@@ -1,0 +1,227 @@
+UNIT chunk
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG chunk(array, size = 1, guard?) -> Array<Array>
+    # Default CommonJS export of lodash.chunk@4.2.0 (module.exports = chunk).
+    # The blind re-emitter MUST ship it as `export default <fn>` in an ES module.
+    # `guard` is an internal lodash iteratee-call marker (3rd positional). The oracle generator
+    # emits ONLY 1- and 2-arg calls, so in-scope the unit is effectively chunk(array, size=1).
+    # The `guard` branch is documented under BEHAVIOR for completeness but is OUT-OF-ENVELOPE for inputs.
+
+DEPENDS-ON none
+    # Self-contained single file. Internal-only helpers (baseSlice, toInteger, toFinite, toNumber,
+    # isObject, isSymbol, isIterateeCall, isIndex, isArrayLike, isLength, isFunction, eq, ...) are
+    # private to the unit and reproduced inline by the spec below. Zero npm dependencies.
+
+# ============================================================================
+# BEHAVIOR  (exact ordered pipeline — reproduce verbatim)
+# ============================================================================
+BEHAVIOR
+
+# ---- Constants used by coercion (exact) ----
+#   INFINITY        = 1 / 0                       # +Infinity
+#   MAX_SAFE_INTEGER = 9007199254740991
+#   MAX_INTEGER     = 1.7976931348623157e+308     # Number.MAX_VALUE
+#   NAN             = 0 / 0
+#   reTrim          = /^\s+|\s+$/g                 # leading/trailing whitespace
+#   reIsBadHex      = /^[-+]0x[0-9a-f]+$/i         # signed hex => NaN
+#   reIsBinary      = /^0b[01]+$/i
+#   reIsOctal       = /^0o[0-7]+$/i
+#   nativeCeil = Math.ceil ;  nativeMax = Math.max
+
+# ---- NODE 1: resolve `size` (BRANCH on guard/undefined) ----
+# Pseudo (exact):
+#   if (guard ? isIterateeCall(array, size, guard) : size === undefined) {
+#       size = 1
+#   } else {
+#       size = nativeMax(toInteger(size), 0)
+#   }
+#
+#   BRANCH 1a — guard is falsy (undefined/absent — the IN-SCOPE case) AND size === undefined:
+#       size := 1.   (NOTE: undefined is NOT routed through toInteger; it is set to 1 directly.)
+#   BRANCH 1b — guard is falsy AND size !== undefined:
+#       size := max(toInteger(size), 0).
+#   BRANCH 1c — guard is truthy:
+#       compute isIterateeCall(array, size, guard) (see helper below). If true => size := 1;
+#       else => size := max(toInteger(size), 0).
+#       (guard is OUT-OF-ENVELOPE for the generator; documented so a blind re-emitter reproduces it.)
+
+# ---- NODE 2: compute length ----
+#   length := array ? array.length : 0
+#   (If `array` is null/undefined/0/"" or any falsy value, length := 0. Otherwise array.length,
+#    read once. The unit never checks isArrayLike here — it just reads `.length` of a truthy arg.)
+
+# ---- NODE 3: early-return BRANCH ----
+#   if (!length || size < 1) return []        # a FRESH empty array
+#   (Triggered when: array empty/falsy, OR size coerced to < 1. Covers size 0, negative size,
+#    NaN size, null size, non-numeric-string size, etc. — all of which toInteger maps to 0,
+#    and 0 < 1 is true. Also covers any size in (0,1) like 0.9, since 0.9 floored by toInteger = 0.)
+
+# ---- NODE 4: allocate result + slice loop ----
+#   index := 0 ; resIndex := 0 ; result := Array(nativeCeil(length / size))
+#   while (index < length) {
+#       result[resIndex++] = baseSlice(array, index, (index += size))   # NOTE: index is incremented by size as part of the call's `end` arg, then used as next `start`
+#   }
+#   return result
+#
+#   Effect: result is an array of ceil(length/size) sub-arrays. Sub-array k holds elements
+#   [k*size .. min((k+1)*size, length) ). The LAST sub-array may be shorter than `size`.
+#   Each sub-array is a NEW array; elements are copied by reference (shallow copy).
+
+# ---- HELPER baseSlice(array, start, end) (exact; here start>=0 and end<=length+size always) ----
+#   index := -1 ; length := array.length
+#   if (start < 0) start := (-start > length) ? 0 : (length + start)     # not reached for chunk (start>=0)
+#   if (end > length) end := length
+#   if (end < 0) end += length                                          # not reached for chunk
+#   length := (start > end) ? 0 : ((end - start) >>> 0)                 # >>> 0 = ToUint32
+#   start := start >>> 0
+#   result := Array(length)
+#   while (++index < length) result[index] = array[index + start]
+#   return result
+#   (For chunk's call pattern this yields array.slice(start, min(end,length)) — a shallow copy.)
+
+# ---- HELPER toInteger(value) ----
+#   result := toFinite(value)
+#   remainder := result % 1
+#   return (result === result) ? (remainder ? result - remainder : result) : 0
+#   # Truncates toward zero (drops fractional part). NaN-guard => 0 (but toFinite never returns NaN).
+
+# ---- HELPER toFinite(value) ----
+#   if (!value) return (value === 0) ? value : 0
+#       # FALSY SHORT-CIRCUIT: 0, -0, "", false, null, undefined, NaN, AND 0n(bigint) all hit here.
+#       # value===0 returns value (0 or -0); everything else falsy returns 0.
+#       # *** This is why size = 0n returns [] (toFinite short-circuits to 0) but size = 2n THROWS
+#       #     (truthy bigint reaches toNumber's `+value`). ***
+#   value := toNumber(value)
+#   if (value === INFINITY || value === -INFINITY) {
+#       sign := (value < 0) ? -1 : 1 ; return sign * MAX_INTEGER     # +Inf => 1.7976e308, -Inf => -1.7976e308
+#   }
+#   return (value === value) ? value : 0                              # NaN => 0
+
+# ---- HELPER toNumber(value) ----
+#   if (typeof value == 'number') return value
+#   if (isSymbol(value)) return NAN                                   # Symbol => NaN (Symbols are OUT-OF-ENVELOPE inputs)
+#   if (isObject(value)) {                                            # object/function/array
+#       other := (typeof value.valueOf == 'function') ? value.valueOf() : value
+#       value := isObject(other) ? (other + '') : other              # if valueOf still object, stringify
+#   }
+#   if (typeof value != 'string') return (value === 0) ? value : (+value)
+#       # *** For a truthy bigint reaching here, `+value` THROWS TypeError
+#       #     "Cannot convert a BigInt value to a number". ***
+#   value := value.replace(reTrim, '')                               # strip leading/trailing whitespace
+#   isBinary := reIsBinary.test(value)
+#   if (isBinary || reIsOctal.test(value))
+#       return freeParseInt(value.slice(2), isBinary ? 2 : 8)        # 0b.. => base2, 0o.. => base8
+#   return reIsBadHex.test(value) ? NAN : (+value)                   # signed hex "-0x1" => NaN; else Number(value)
+
+# ---- HELPER isSymbol(value) ----  typeof=='symbol' OR (objectLike && toString=='[object Symbol]')
+# ---- HELPER isObject(value)  ----  !!value && (typeof=='object' || typeof=='function')
+# ---- HELPER isObjectLike    ----  !!value && typeof=='object'
+# ---- HELPER isIterateeCall(value,index,object) (guard path only) ----
+#   if (!isObject(object)) return false
+#   type := typeof index
+#   if (type=='number' ? (isArrayLike(object) && isIndex(index,object.length))
+#                      : (type=='string' && index in object))
+#       return eq(object[index], value)                              # SameValueZero compare
+#   return false
+# ---- HELPER eq(a,b) ----  a===b || (a!==a && b!==b)
+# ---- HELPER isIndex(value,length) ----
+#   length := (length==null) ? MAX_SAFE_INTEGER : length
+#   return !!length && (typeof value=='number' || reIsUint.test(value))
+#          && (value>-1 && value%1==0 && value<length)
+#   (reIsUint = /^(?:0|[1-9]\d*)$/)
+# ---- HELPER isArrayLike/isLength/isFunction ---- standard lodash defs (see SCOPE; not exercised by in-scope inputs)
+
+# ============================================================================
+# CONFIRMED-BY-EXECUTION TRUTH TABLE  (real lodash.chunk@4.2.0; the blind re-emitter
+# MUST reproduce every row exactly)
+# ============================================================================
+#   chunk([])                         => []
+#   chunk([], 2)                      => []
+#   chunk([1,2,3,4,5])                => [[1],[2],[3],[4],[5]]      # default size 1
+#   chunk([1,2,3,4,5], 2)             => [[1,2],[3,4],[5]]          # last chunk shorter
+#   chunk([1,2,3,4,5], 3)             => [[1,2,3],[4,5]]
+#   chunk([1,2,3], 0)                 => []                          # size<1 early return
+#   chunk([1,2,3], 1)                 => [[1],[2],[3]]
+#   chunk([1,2,3], 10)                => [[1,2,3]]                   # size > length: one chunk
+#   chunk([1,2,3,4,5], 2.9)           => [[1,2],[3,4],[5]]           # toInteger floors 2.9 -> 2
+#   chunk([1,2,3,4,5], 2.1)           => [[1,2],[3,4],[5]]
+#   chunk([1,2,3], -1)                => []                          # max(-1,0)=0 -> size<1
+#   chunk([1,2,3], -2.5)              => []
+#   chunk([1,2,3,4,5], "2")           => [[1,2],[3,4],[5]]           # numeric string coerces to 2
+#   chunk([1,2,3,4,5], "3.7")         => [[1,2,3],[4,5]]             # "3.7" -> 3.7 -> floor 3
+#   chunk([1,2,3], null)              => []                          # toFinite(null)=0 -> size<1
+#   chunk([1,2,3], NaN)               => []                          # toInteger(NaN-path)=0 -> size<1
+#   chunk([1,2,3], Infinity)          => [[1,2,3]]                   # size=MAX_INTEGER -> one chunk
+#   chunk([1,2,3], -Infinity)         => []                          # size=-MAX_INTEGER -> max(...,0)=0
+#   chunk([1,2,3], "0x10")            => [[1,2,3]]                   # +"0x10"=16 (valid unsigned hex) -> one chunk
+#   chunk([1,2,3], "0b10")            => [[1,2],[3]]                 # binary "0b10" -> parseInt base2 = 2
+#   chunk([1,2,3], "0o10")            => [[1,2,3]]                   # octal "0o10" -> parseInt base8 = 8 -> one chunk
+#   chunk([1,2,3], "-0x1")            => []                          # bad signed hex -> NaN -> 0
+#   chunk([1,2,3], "  2  ")           => [[1,2],[3]]                 # whitespace trimmed -> 2
+#   chunk([1,2,3], "abc")             => []                          # +"abc"=NaN -> 0
+#   chunk([1,2,3], "1e1")             => [[1,2,3]]                   # +"1e1"=10 -> one chunk
+#   chunk([1,2,3], "+2")              => [[1,2],[3]]                 # +"+2"=2
+#   chunk([1,2,3], "-2")              => []                          # +"-2"=-2 -> max(...,0)=0
+#   chunk([1,2,3], "2.0")            -> for [1,2,3,4,5]: [[1,2],[3,4],[5]]   # "2.0"->2
+#   chunk([1,2,3], "")                => []                          # toFinite("")=0 (falsy short-circuit)
+#   chunk([1,2,3], "  ")              => []                          # trims to "" -> +"" = 0 -> size<1
+#   chunk([1,2,3], true)              => [[1],[2],[3]]               # +true=1
+#   chunk([1,2,3], false)             => []                          # false falsy -> toFinite=0
+#   chunk([1,2,3], [])                => []                          # []+'' valueOf -> "" -> 0
+#   chunk([1,2,3], [2])               => [[1,2],[3]]                 # [2].valueOf()=[2], +[2]=2
+#   chunk([1,2,3,4,5], [3])           => [[1,2,3],[4,5]]
+#   chunk([1,2,3], {})                => []                          # {} -> "[object Object]" -> NaN -> 0
+#   chunk([1,2,3], {valueOf:()=>2})   => [[1,2],[3]]                 # valueOf -> 2
+#   chunk([1,2,3,4,5], 0.9)           => []                          # toInteger(0.9)=0
+#   chunk([1,2,3,4,5], 1.0000001)     => [[1],[2],[3],[4],[5]]       # floors to 1
+#   chunk([42])                       => [[42]]
+#   chunk([1,"a",{x:1},[9]], 2)       => [[1,"a"],[{"x":1},[9]]]     # mixed-type elements, shallow-copied
+#   chunk(null, 2)                    => []                          # array falsy -> length 0
+#   chunk(undefined, 2)               => []
+#   chunk([0,1,2,3,4,5,6,7,8,9], 4)   => [[0,1,2,3],[4,5,6,7],[8,9]] # ceil(10/4)=3
+#   chunk([1,2,3,4,5,6,7], 3)         => [[1,2,3],[4,5,6],[7]]
+#   chunk([1,2,3], 0n)                => []                          # bigint 0n falsy -> toFinite short-circuit -> 0
+#   # OUT-OF-ENVELOPE (NOT emitted by generator; documented for completeness):
+#   chunk([1,2,3], 2n)                => THROWS TypeError "Cannot convert a BigInt value to a number"
+#   chunk([1,2,3], Symbol())          => []   # isSymbol -> toNumber=NaN -> toFinite=0  (Symbol not codec-faithful)
+
+# ============================================================================
+# NON-MUTATION (verified by execution)
+# ============================================================================
+# - The input `array` is NEVER mutated (verified: input unchanged after call).
+# - The returned value is a NEW array, distinct from the input (out !== array).
+# - Each sub-array is a NEW array; element references are shared (SHALLOW copy):
+#   for objects/arrays as elements, identity is preserved (out[0][0] === array[0]).
+# - No global state, no I/O, no clock/RNG/env/fs/net reads. PURE. No seam. ORACLE-CLASS deterministic.
+
+ORACLE value -> oracle.json
+    # Deterministic value oracle: expected = JSON-structural value of chunk(...args).
+    # Throw-paths (e.g. truthy bigint size) recorded as {__throw}. The generator does NOT emit
+    # throw-path inputs; they remain documented OUT-OF-ENVELOPE.
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — size resolution
+#   (undefined->1; else max(toInteger(size),0)), length read, [] early-return on (!length || size<1),
+#   ceil(length/size) allocation, the baseSlice shallow-copy loop, AND the full numeric-coercion
+#   chain toInteger/toFinite/toNumber including: float truncation toward zero, the toFinite falsy
+#   short-circuit, string parsing (decimal/scientific/binary 0b/octal 0o/hex 0x/bad-signed-hex->NaN/
+#   whitespace trim), Infinity->MAX_INTEGER clamp, object valueOf coercion, and bigint behavior
+#   (0n => [] via short-circuit; truthy bigint => THROW). Self-contained; no external table.
+#
+# CARRIED DATA: none. (No large literal table; the only literals are the regexes/number constants
+#   listed under BEHAVIOR, reproduced inline.) No carried.json is shipped.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE inputs (documented above, NOT produced by genInputs because they
+#   are not oracle-codec-faithful or are throw-only):
+#   - `guard` 3rd argument (iteratee-call marker): semantics specified in BEHAVIOR NODE 1c, but the
+#     generator emits only 1-/2-arg calls.
+#   - size = truthy bigint (e.g. 2n) => THROWS; size as a Symbol => coerces to 0 => []  (Symbols/funcs
+#     are not codec-faithful and are excluded from generated inputs).
+#   - array elements that don't survive JSON round-trip (undefined holes, NaN, ±Infinity, functions,
+#     Symbols) are excluded from generated arrays; behavior on them is defined by the inline pipeline
+#     (slice copies the reference; JSON serialization would lossily map them).
+
+PROVENANCE lodash.chunk@4.2.0 (Custom Build of lodash; `lodash modularize exports="npm"`);
+    repo lodash/lodash; MIT license; source file: index.js (module.exports = chunk).

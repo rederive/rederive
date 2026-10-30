@@ -1,0 +1,204 @@
+UNIT ansiRegex
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG ansiRegex({ onlyFirst = false } = {}) -> RegExp
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# SUMMARY
+# ---------------------------------------------------------------------------
+# ansiRegex returns a NEW RegExp on every call. The RegExp matches ANSI
+# escape codes. The regex SOURCE (pattern string) is a FIXED CONSTANT and is
+# IDENTICAL for every call regardless of options. The only thing the option
+# controls is the FLAGS of the returned RegExp:
+#   - default / falsy onlyFirst -> global flag  'g'
+#   - truthy onlyFirst          -> no flags      ''
+#
+# The unit is a pure value-mode utility. No effects, no ambient reads, no
+# clock/RNG/io/net seam. EFFECTS: N/A (read-only / pure). ORACLE-CLASS is
+# plain `deterministic` (no seam to inject).
+#
+# The OUTPUT is a RegExp. The oracle codec round-trips RegExp via its regex
+# tag, comparing { source, flags }. Both source and flags are deterministic
+# and fully specified below, so the output IS gradable.
+
+# ---------------------------------------------------------------------------
+# SIGNATURE / PARAMETER SEMANTICS  (BRANCH-bearing — read exactly)
+# ---------------------------------------------------------------------------
+# The function is an arrow function with a SINGLE parameter that is an object
+# with DEFAULT-DESTRUCTURING:
+#
+#     ({ onlyFirst = false } = {}) => { ... }
+#
+# Two layers of defaulting, in this precise order:
+#
+#  (A) Outer default `= {}`:
+#      The whole argument defaults to `{}` ONLY when the passed value is
+#      `undefined`. This is JS default-parameter semantics: it triggers for
+#      `undefined` (including a missing/no-arg call) but NOT for any other
+#      value (not for null, not for 0, not for '').
+#        - ansiRegex()            -> arg is undefined -> becomes {}   -> OK
+#        - ansiRegex(undefined)   -> arg is undefined -> becomes {}   -> OK
+#        - ansiRegex(null)        -> arg stays null -> destructuring null THROWS
+#                                    a TypeError ("Cannot destructure property
+#                                    'onlyFirst' of null as it is null.").
+#                                    => THROW PATH. (See ERROR / THROW below.)
+#
+#  (B) Inner default `onlyFirst = false`:
+#      After (A), the object is destructured for property `onlyFirst`. If the
+#      property is absent OR explicitly `undefined`, it defaults to `false`.
+#        - ansiRegex({})                 -> onlyFirst = false
+#        - ansiRegex({ onlyFirst: undefined }) -> onlyFirst = false
+#        - any other key(s) are IGNORED (e.g. { foo: 1 } -> onlyFirst = false)
+#
+# `onlyFirst` is then used as a TERNARY CONDITION (truthiness test), NOT a
+# strict `=== true` comparison:
+#
+#     return new RegExp(pattern, onlyFirst ? undefined : 'g');
+#
+#   - onlyFirst TRUTHY  (true, 1, "yes", {}, [], any truthy value)
+#         -> RegExp constructed with flags argument `undefined`
+#         -> resulting RegExp has NO flags -> .flags === ''
+#   - onlyFirst FALSY   (false, 0, "", null-as-value, NaN, undefined)
+#         -> RegExp constructed with flags argument 'g'
+#         -> resulting RegExp has the global flag -> .flags === 'g'
+#
+#   (Note: an explicit `onlyFirst: null` or `onlyFirst: 0` here is FALSY ->
+#    'g'. This is the inner property value being falsy, distinct from the
+#    THROW caused by passing `null` as the WHOLE argument in (A).)
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline)
+# ---------------------------------------------------------------------------
+# node-1  Resolve the argument object via outer default `= {}` (only for
+#         `undefined`). If the argument is `null`, THROW TypeError (node-6).
+# node-2  Destructure `onlyFirst`, defaulting to `false` when absent/undefined.
+# node-3  Build the constant `pattern` string (see PATTERN CONSTANT below).
+#         This string is built by joining a 2-element array with '|':
+#           pattern = [ <PART1>, <PART2> ].join('|')
+#         The joined result is the exact PATTERN CONSTANT below.
+# node-4  Compute flags = onlyFirst ? undefined : 'g'   (truthiness, node BRANCH)
+# node-5  Return `new RegExp(pattern, flags)`.
+#           - flags === undefined -> RegExp with .flags === ''  (no flags)
+#           - flags === 'g'       -> RegExp with .flags === 'g'
+#         A FRESH RegExp object is allocated on every call (NOT a shared
+#         singleton). Two calls produce distinct objects but EQUAL .source
+#         (and equal .flags for the same option). The codec compares by
+#         { source, flags }, so identity does not affect grading.
+# node-6  ERROR / THROW: passing `null` (or any non-undefined primitive on
+#         which property destructuring fails, e.g. ... it only fails for null
+#         and undefined; undefined is handled by the outer default, so in
+#         practice the ONLY throwing primitive-arg is `null`) throws a
+#         TypeError before any RegExp is built. Recorded by the harness as a
+#         {__throw} outcome (TypeError). NOTE: this unit's IN-ENVELOPE inputs
+#         are option objects + the no-arg case; the null-throw is documented
+#         for completeness but is NOT emitted by genInputs (see SELF-CHECK).
+
+# ---------------------------------------------------------------------------
+# PATTERN CONSTANT  (the regex SOURCE — must be reproduced CHARACTER-FOR-
+#                    CHARACTER; this is the #1 divergence risk)
+# ---------------------------------------------------------------------------
+# IMPORTANT TRANSCRIPTION RULE: the following is the LITERAL STRING that is
+# passed to `new RegExp(pattern, flags)` AND is exactly equal to the resulting
+# RegExp's `.source`. It is a 169-character, pure-ASCII string. Every `\` shown
+# below is a LITERAL backslash CHARACTER in the string (e.g. the 6 characters
+# backslash, u, 0, 0, 1, B). It is NOT a JS escape that collapses to one byte.
+# A blind emitter who constructs the RegExp from a STRING must include these
+# backslashes verbatim; if they instead author a /regex literal/ they must
+# preserve the same escaping so that the produced .source is byte-identical.
+#
+# In the original source the pattern is assembled as two alternatives joined
+# by '|'. Reproduced here as a JS source-literal expression (the explanatory
+# prose uses '#'; the code below is the literal content, not a comment):
+#
+#     pattern = [
+#       '[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)',
+#       '(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))'
+#     ].join('|')
+#
+# (Above is rendered as it appears in a JS SINGLE-QUOTED literal: each `\\`
+#  there is one literal backslash in the resulting string. So `\\u001B` in the
+#  literal becomes the 6-char sequence `\u001B` (backslash,u,0,0,1,B) in the string/.source.)
+#
+# The RESULTING .source string (the EXACT characters, verbatim, between the
+# markers; the markers themselves are not part of it):
+#
+# >>>[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~]))<<<
+#
+# Anchors (verified by running the real package @ ansi-regex 5.0.1):
+#   - .source.length === 169
+#   - UTF-8 byte length === 169 (pure ASCII; no multibyte chars)
+#   - .source is IDENTICAL for onlyFirst:false and onlyFirst:true (only flags differ)
+#   - ansiRegex().source.startsWith('[\u001B\u009B]')   # first 14 chars: bracket, backslash-u-001B, backslash-u-009B, bracket
+#   - ansiRegex().source.endsWith('?[\dA-PR-TZcf-ntqry=><~]))')
+#   - The two-part array joined by '|' reconstructs the source exactly
+#     (verified: parts.join('|') === ansiRegex().source -> true).
+#
+# Per-character note on the contained ranges/classes (so the emitter does not
+# misread the dense character classes):
+#   - Outer leading class:  []   (ESC and CSI bytes, as literal \u escapes)
+#   - Next class:           [[\]()#;?]       (note the literal '[' inside, then \] for ']')
+#   - Sub-classes contain:  [-a-zA-Z\d\/#&.:=?%@~_]   (note \/ for '/', \d for digit)
+#   - Final class:          [\dA-PR-TZcf-ntqry=><~]
+#       ranges: \d , A-P , R-T , Z , c , f-n , t , q , r , y , and literals = > < ~
+#   - Quantifiers: *  +  ?  {1,4}  {0,4}
+#   - The  (BEL) terminator is literal backslash-u-0007.
+
+# ---------------------------------------------------------------------------
+# ORACLE
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Output is a RegExp; codec round-trips it via the regex tag => grades on
+# { source, flags }. source is the fixed PATTERN CONSTANT for ALL inputs;
+# flags is 'g' (default / falsy onlyFirst) or '' (truthy onlyFirst).
+# The null-argument throw path is recorded as {__throw: TypeError} if exercised
+# (not emitted by the generator — see SCOPE / SELF-CHECK).
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The default-destructuring `({ onlyFirst = false } = {})` semantics
+#     (outer `= {}` only for undefined; inner `= false` for absent/undefined key).
+#   - The TRUTHINESS-based flags selection `onlyFirst ? undefined : 'g'`.
+#   - The FIXED 169-char PATTERN CONSTANT above (the regex .source), reproduced
+#     byte-identically.
+#   - Returning a fresh `new RegExp(pattern, flags)` each call.
+# CARRIED DATA: none. (The pattern is small in-contract code, not a carried table.)
+# OUT-OF-CONTRACT: none (no effects, no stateful API, no ambient seam).
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - `ansiRegex(null)` -> throws TypeError (destructuring null). Documented at
+#     node-6; not generated because the generator emits only option objects and
+#     the no-arg / undefined case (all codec-round-trippable, all non-throwing).
+#   - Non-round-trippable arg shapes (functions as the arg, Symbols, getters,
+#     boxed primitives) are NOT relevant here and are NOT emitted: every
+#     in-envelope arg is either MISSING (no-arg) or a PLAIN OPTION OBJECT whose
+#     values are JSON-round-trippable booleans/numbers/strings. The behavior is
+#     governed solely by the truthiness of the `onlyFirst` property, which the
+#     SIR fully specifies, so the generator confines itself to such values.
+
+# ---------------------------------------------------------------------------
+# SELF-CONSISTENCY CROSS-CHECK (SIR <-> genInputs)
+# ---------------------------------------------------------------------------
+# genInputs emits ONLY:
+#   - the no-arg call (empty tuple [])                  -> default {} -> 'g'
+#   - [ {} ]                                            -> onlyFirst=false -> 'g'
+#   - [ { onlyFirst: false } ]                          -> 'g'
+#   - [ { onlyFirst: true } ]                           -> '' (no flags)
+#   - [ { onlyFirst: <truthy non-bool> } ]   (e.g. 1, "yes") -> '' (documented truthiness)
+#   - [ { onlyFirst: <falsy non-bool> } ]    (e.g. 0, "")    -> 'g' (documented truthiness)
+#   - [ { foo: <x>, onlyFirst: <bool> } ]    extra keys ignored
+# Every one of those mappings is defined explicitly above (param semantics +
+# truthiness BRANCH + fixed PATTERN CONSTANT). The generator emits no value
+# whose behavior is left unspecified. The null-throw path is documented but NOT
+# generated. SELF-CHECK: PASS.
+
+# ---------------------------------------------------------------------------
+# EMISSION DIRECTIVE
+# ---------------------------------------------------------------------------
+# The original is `module.exports = (fn)` (CommonJS default export). Emissions
+# are .mjs consumed via import(). The blind re-emitter MUST emit:
+#     export default <fn>
+# i.e. a single default export that is the ansiRegex function.
+
+PROVENANCE ansi-regex@5.0.1 (chalk/ansi-regex), MIT license, source file index.js

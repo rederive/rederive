@@ -1,0 +1,3201 @@
+{
+ "unit": "detect_features",
+ "sig": "detect_features(input: json) -> list[text]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "map",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nKIND EFFECT\nPAR {\n  x\n}\nEFFECT a*\"microtask\" b?\"q\"\n",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "par-interleaving",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nENVELOPE text only\nRING token\nCARRIED-DATA \"sbox.json\"\n﻿\t﻿# setTimer\n",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "envelope",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "ring",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nLIFECYCLE timer armed\nDESCRIPTION uses schedule(fn) on virtual time\nCARRIED-DATA none\n  EARNED sbox.json",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nEFFECT time.timer\nDESCRIPTION arm setTimer(5)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nANCHOR ref(python:botocore.auth.SigV4Auth)\n",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nANCHOR ref(lodash:x) ref(js:y)\nCARRIED-DATA ANCHOR sbox.json",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "carriedData",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "map",
+          "v": [
+           [
+            {
+             "t": "text",
+             "v": "name",
+             "cu": "utf8"
+            },
+            {
+             "t": "text",
+             "v": "t",
+             "cu": "utf8"
+            }
+           ]
+          ]
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "mode",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "trace",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "trace-seam",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "carriedData",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": []
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "envelope",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": " \t ",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "mode",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "vectors",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "u.ts.ſir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "u.rust.SiR",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lang-variant",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "envelope",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "　",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "mode",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "par",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "envelope",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "par-interleaving",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "mode",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ring",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "sir/a.sir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "sir/a.ts.sir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "sir/a.inputs.mjs",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "ring",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lang-variant",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "lang:rust",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": []
+          }
+         ],
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "lang",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "js",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lang-variant",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "a.go.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "a.go.sir: 'go' is not in the closed language registry (js, ts, rust, php, csharp, python)"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\n  PAR indented\nPARALLEL x\nPAR-X y\nDESCRIPTION RING and LIFECYCLE in prose\n  ENVELOPE in prose\n PAR\n# PAR in a comment\nNOTE x # setTimer in a trailing comment",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "NOTE we never call \"setTimer\"\nNOTE x CITED virtual time\nNOTE y EARNED schedule(z)\nNOTE w ANCHOR timers.x\nANCHOR setTimer\nANCHOR see \"ref(js:x)\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "NOTE a;\"setTimer\" b|\"schedule(\" c-\"timers.x\" \"x\"\"virtual time\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "Cannot read properties of null (reading 'sirText')"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "UNIT a\nFIDELITY spec ANCHOR ref(ts:x)\nNOTE x CITED ANCHOR ref(js:y)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "CARRIED-DATA  none\nEFFECT 12\" wide # microtask \"q",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT \"a\\ \" # \" microtask\nFIDELITY spec ANCHOR \"a CITED b\" ref(ts:x)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "setTimer(1) schedule(x)\n  PAR\nUNIT a",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "x y.ts.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "x y.ts.sir: \"x y.ts.sir\" — a unit name is letters, digits, _ and -"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "carriedData",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "x",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "envelope",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "e",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "mode",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "trace",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "u.php.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "PAR\nRING\nLIFECYCLE\nDESCRIPTION schedule(\nANCHOR x\n  ref(rust:y)",
+        "cu": "utf8"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "lang:ts",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": []
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "envelope",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "trace-seam",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "par-interleaving",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "ring",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lang-variant",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": " lang:ts",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "u.ts.sir",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant  lang:ts: a variant key is 'package' or 'lang:<id>'"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "DESCRIPTION on virtual\n  time\nNOTE virtual\ttime, virtual  time, virtual timeout\nNOTE x\n  virtual CITED time\nDESCRIPTION a virtual CITED time",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "PAR:\nR1: RING\rUNIT a\r\nTRACE-SEAM http",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "trace-seam",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "par-interleaving",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "﻿PAR\n﻿﻿RING\n﻿# setTimer\n  # schedule(x)\n\t﻿# timers.x",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "par-interleaving",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "ring",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "NOTE x\n ﻿\"setTimer\"\n﻿ ﻿\"schedule(\"\n\t﻿\"a # b\" microtask",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": " # setTimer\nUNIT a PAR\nCARRIED t = x",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "CARRIED-DATA none\nCARRIED-DATA\nCARRIED-DATA none CITED none\nCARRIED-DATA CITED\nCARRIED-DATA\n  none\nCARRIED-DATA\t none \t\nCARRIED-DATA # none\nCARRIED-DATA none # x\nCARRIED-DATA none CITED none EARNED\nCARRIED-DATA\n  ANCHOR none",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "CARRIED-DATA none　\nORACLE-CLASS trace x",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "trace-seam",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "CARRIED-DATA \"none\"\nORACLE-CLASS\n trace",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "trace-seam",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "CARRIED-DATA \"\"\nORACLE-CLASS \"trace\"\nVARIANT v ANCHOR\n  ANCHOR ref(rust:y)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ORACLE-CLASS tracer\nORACLE-CLASS deterministic (trace)\nORACLE-CLASS CITED trace\nORACLE-CLASS  trace\nCARRIED-DATA none\n  more",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "trace-seam",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "CARRIED-DATA none CITED x\nEFFECT x CITED time.timer\nEFFECT timeXtimer\nEFFECT CITED microtask\nEFFECT microtasks\nEFFECT x # microtask\nEFFECT \"a\\ b # microtask",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT \"a \\\" # b\" microtask",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT x \"a CITED b\" microtask",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT x \" microtask\"\nEFFECT y=\"time.timer\"\nEFFECT f(\"microtask\")\nEFFECT \"a\"\"microtask\"\nEFFECT z!\"microtask\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT x-\" # microtask\"\nEFFECT \"a\"\"b # c\" microtask\nEFFECT \"\\😀\" # microtask\nEFFECT  \" # microtask\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT x/\"microtask\"\nNOTE 12\"setTimer\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT \"a\n  microtask\"\nANCHOR \"a\n  ref(js:x) b\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "EFFECT \"a\" \"b # c\" microtask\nNOTE /(?:a|b)+\"/ CITED R5 \"q\" setTimer",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR \"x # y\" ref(js:z)\nNOTE /[\"]/ CITED a \"b\" setTimer",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "FIDELITY spec ANCHOR \"a\n  ANCHOR ref(js:x) b\"",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "FIDELITY spec ANCHOR \"ref(ts:x)\"\nEFFECT \"a # microtask \\",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR \"a\" # ref(ts:b)\nNOTE x CITED ANCHOR ref(js:y)\nUNIT u\n  prose ANCHOR ref(rust:x)\nANCHORS ref(js:x)\nFIDELITY spec CITED ref(js:x)\nFIDELITY spec ANCHOR\nVARIANT x ANCHOR ref(go:y) ANCHOR\nANCHOR xref(js:y) _ref(ts:y) ref(JS:y) ref(js :y) ref(js2:y) ref(js) ref(　js:y) ref( ts:y)\nANCHOR a\n  EARNED ref(js:x)\nANCHOR b\nCITED ref(csharp:y)\nFIDELITY spec \"x ANCHOR ref(js:y)\"\nNOTE a\n  ANCHOR ref(js:q)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR x\nCITED: ref(php:y)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR ANCHOR ref(js:x)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR ref( \tjs:y)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "FIDELITY spec\n  ANCHOR ref(ts:x)",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR éref(js:y)\nNOTE timers.advance and _setTimer",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "ANCHOR: ref(js:y)\nNOTE éschedule( setTimer_\nNOTE x # see CITED setTimer",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "scheduler",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "cross-lang-anchor",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "  orphan setTimer\nCITED virtual time",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lifecycle",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "carriedData",
+        "cu": "utf8"
+       },
+       {
+        "t": "none"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "envelope",
+        "cu": "utf8"
+       },
+       {
+        "t": "none"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "mode",
+        "cu": "utf8"
+       },
+       {
+        "t": "none"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "none"
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "none"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "carriedData",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "none"
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "extra",
+        "cu": "utf8"
+       },
+       {
+        "t": "f64",
+        "v": "1",
+        "bits": "3ff0000000000000"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "carried-data",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "PAR",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirText",
+        "cu": "utf8"
+       },
+       {
+        "t": "none"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "sirText must be text"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "carriedData",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": []
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carriedData must be a list"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "envelope",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": []
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "envelope must be text"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "text",
+        "v": "a.ts.sir",
+        "cu": "utf8"
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "sirFiles must be a list of paths (got string)"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "a.TS.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "a.TS.sir: 'TS' is not in the closed language registry (js, ts, rust, php, csharp, python)"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "a.b.ts.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "a.b.ts.sir: \"a.b.ts.sir\" has 2 dotted segments before .sir — a unit name has no dots, so a SIR file is <unit>.sir or <unit>.<lang>.sir"
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "é.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "é.sir: \"é.sir\" — a unit name is letters, digits, _ and -"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "a.sir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": ".sir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a.ts.sir/",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a.ts",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "x.sir.bak",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a.sir​x",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a.ts.ſir­",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a.json",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a.sir~",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "é.sir~",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "a-b_9.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "sirFiles",
+        "cu": "utf8"
+       },
+       {
+        "t": "list",
+        "v": [
+         {
+          "t": "text",
+          "v": "u.ts.sir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "x/ a.js.sir",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "d\\b.rust.sir ",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": "p.python.sir\t",
+          "cu": "utf8"
+         },
+         {
+          "t": "text",
+          "v": ".ts.sir",
+          "cu": "utf8"
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "lang:js",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "w/u.js.SIR",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ],
+         [
+          {
+           "t": "text",
+           "v": "lang:ts",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": []
+          }
+         ],
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "lang",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "csharp",
+              "cu": "utf8"
+             }
+            ],
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "u.csharp.sir",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "text",
+      "v": "vectors",
+      "cu": "utf8"
+     },
+     {
+      "t": "text",
+      "v": "lang-variant",
+      "cu": "utf8"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "u.txt",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant package: sir must be a path to a .sir file (got \"u.txt\")"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "lang:ts",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "sir/",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant lang:ts: sir must be a path to a .sir file (got \"sir/\")"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "-u.ts.sir",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant package sir: \"-u.ts.sir\" — a unit name is letters, digits, _ and -"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "lang:go",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": []
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant lang:go: 'go' is not in the closed language registry (js, ts, rust, php, csharp, python)"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "lang",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "ts",
+              "cu": "utf8"
+             }
+            ],
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "u.sir",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant package: its sir path \"u.sir\" names no language"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "lang",
+              "cu": "utf8"
+             },
+             {
+              "t": "none"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variant package: lang must be text"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "map",
+     "v": [
+      [
+       {
+        "t": "text",
+        "v": "variants",
+        "cu": "utf8"
+       },
+       {
+        "t": "map",
+        "v": [
+         [
+          {
+           "t": "text",
+           "v": "lang:ts",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "sir",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "u.ts.sir",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ],
+         [
+          {
+           "t": "text",
+           "v": "package",
+           "cu": "utf8"
+          },
+          {
+           "t": "map",
+           "v": [
+            [
+             {
+              "t": "text",
+              "v": "lang",
+              "cu": "utf8"
+             },
+             {
+              "t": "text",
+              "v": "ts",
+              "cu": "utf8"
+             }
+            ]
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "variants package and lang:ts both claim language 'ts'"
+   }
+  }
+ ],
+ "canonicalSha256": "e0f24cac45d17eaa93b0f32853825f98157e62339291f2bf1ff9991f75a4d692"
+}

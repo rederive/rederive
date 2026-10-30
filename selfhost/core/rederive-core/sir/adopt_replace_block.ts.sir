@@ -1,0 +1,19 @@
+UNIT adopt_replace_block
+LANG ts
+PRIMARY-SHA256 e6eeba5909802787e54f046addbade224098d3b0b3de51c2fb1aa0cc6d286cb5
+SIG export default function adopt_replace_block(existing: string, block: { heading: string; startLine: number; endLine: number }, managed: string, kept: string[]): string
+ABI TypeScript compiles to the js runtime: text = string (UTF-16 code units; well-formed inside the envelope); i64 =
+  number, a safe integer; record = an object type with the three named properties; list[text] = string[]. A throw (R2,
+  R3) is a thrown Error; its message is not graded. STRICT: the artifact type-checks under strict: true against this SIG
+  with no any, no non-null assertion (!), no @ts-ignore or @ts-expect-error. It imports nothing.
+MECHANISM (restated from js — language files are self-contained) R1 is split("\n") (lines keep their CR). WS is the
+  String.prototype.trim set: R9 is trim(). R3 and R10 test the VISIBLE pin (u flag: astral CF characters are one code
+  point; \s under u is exactly WS). R4 tests the CRLF pin on the outside lines joined with "\n". R5 is the BLANK pin, R8
+  the CONVERT pin with a global replace, R10's tail strip the KEPT_END pin.
+DEPENDS-ON none
+PINNED regex VISIBLE = /[^\s\p{Cf}]/u CITED R3 R10 — \p{Cf} is the engine's Unicode; the primary's CF pin (Unicode 17.0) is the truth where an older engine differs
+PINNED regex BLANK = /^[ \t\r]*$/ CITED R5 — no m flag; tested on one line
+PINNED regex CRLF = /\r\n/ CITED R4 — tested on lines 0..S-1 and E..N-1 joined with "\n"
+PINNED regex CONVERT = /\r\n|\r|\n/g CITED R8 — each match replaced by EOL; the alternation order makes CR LF one match
+PINNED regex KEPT_END = /[\r\n]+$/ CITED R10 — replaced by the empty text
+PROVENANCE rederive@6199e2cc8b75 cli/lib/adopt.mts — this file states the typed SIG and the dialect only; no behavior.

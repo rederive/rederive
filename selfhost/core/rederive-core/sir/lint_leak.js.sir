@@ -1,0 +1,46 @@
+UNIT lint_leak
+LANG js
+PRIMARY-SHA256 17c912246c65f299d2dccd7c0b2a03dfe8b411adc1018f8ffcf3daad020be907
+SIG lint_leak(text: string, isPrimary: boolean): { hits: Array<{ line: number, what: string, text: string }> }
+NOTE default export
+ABI text=string (UTF-16 code units; well-formed inside the envelope); bool=boolean; json result = a plain object
+  { hits: [...] }, each hit a plain object with own keys line (an integer number), what and text (strings). The real
+  package is driven as leakLint(text, { isPrimary }); the reconstruction exports a plain function of two positional
+  arguments and reads no file and imports no parser: the per-line reading of R1 to R6 is part of the artifact.
+MECHANISM LINES (R1) = text.split on the LINES pin, then the per-line cleanup. SPACING is exactly " " and "\t": no step
+  of this unit uses String.prototype.trim or \s. The GLUE tests of R6(b) and R6(c) are the GLUED and LEAD pins, whose u-flag class
+  is the primary's GLUE pin written out (U+000D cannot occur inside a line); never \p{White_Space} or \p{Cf}, which move
+  with the engine's Unicode version. DISPLAY (R7) = Array.from(line).slice(0, 96).join(""): Array.from walks
+  code points, so a pair is never split; never slice() by UTF-16 units.
+MECHANISM R5: one QUOTED match (below) is a RUN of adjacent literals (a quote directly after a closing quote opens the
+  next, so they chain inside one match). BLANKING = String.prototype.replace of each QUOTED match by that match with every
+  LITERAL replaced by "" (one empty pair per literal). The protected spans = matchAll of QUOTED, one span per run: over
+  CONTENT for R3 (a "#" at index i is protected when start < i < end of a match) and over ATTRTEXT for R4 (a MARK match
+  is dropped when the index of its keyword, match.index + match[0].length - match[1].length, is strictly inside a span;
+  BODY ends at the first MARK match not dropped); a run as one span protects exactly what its literals do, since the
+  only indices it adds are quote characters. [\s\S] after the backslash makes the escape pair take any unit (a pair
+  above U+FFFF is then finished by the plain branch, the same span). An unclosed quote simply fails to match there, and
+  no later quote can match either (every later quote follows a backslash). Run QUOTED afresh on each text read.
+MECHANISM R4 order: collect hits per line into one list, skipping a (line, label) already present; segments in order,
+  then the DIALECT pins in order. Each DIALECT pin is one RegExp.test on the blanked segment, no g flag (no lastIndex).
+  R6: one pass over the lines in order (no sort needed when each line is judged once).
+MECHANISM RE flavor ECMAScript WITHOUT the u flag: \b and \w are ASCII-only (the primary's WORD character), "." excludes
+  LF, CR, U+2028 and U+2029, and the i flag folds only ASCII letters for the letters of LINE-TERM.
+DEPENDS-ON none
+PINNED regex LINES = /\r\n|\r|\n/ CITED R1 — then per line: replace /^[ \t\uFEFF]+/ by that run with every \uFEFF removed, then /[ \t]+$/ with ""
+PINNED regex QUOTED = /(?<=^|[ \t([{,=:;|<>!&\-~])(?:"(?:\\[\s\S]|[^"\\])*")+/g CITED R5 — a run of adjacent literals; its spans equal the package's quotedSpans with touching spans merged, on 1,000,000 seeded strings
+PINNED regex LITERAL = /"(?:\\[\s\S]|[^"\\])*"/g CITED R5 — inside one QUOTED match, each replaced by an empty pair of quotes to blank
+PINNED regex MARK = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R4 — BODY = ATTRTEXT (" " + CODE) before the first match whose keyword is outside every QUOTED span, spaces and tabs trimmed
+PINNED regex NAMESHAPE = /^(?:[A-Z][A-Z0-9-]*|R\d+)$/ CITED R4 — tested on NAME after .replace(/:$/, ""); a NAME equal to "CITED" is never stripped
+PINNED regex GLUED = /^[A-Z][A-Z0-9-]*:?(?=[\u000B-\u000D\u0085\u00A0\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u206F\u3000\uFEFF\uFFF9-\uFFFB\u{110BD}\u{110CD}\u{13430}-\u{1343F}\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0001}\u{E0020}-\u{E007F}])/u CITED R6 — matched on the FIRST TOKEN; the match less one final ":" is the name looked up
+PINNED regex LEAD = /^[\u000B-\u000D\u0085\u00A0\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u206F\u3000\uFEFF\uFFF9-\uFFFB\u{110BD}\u{110CD}\u{13430}-\u{1343F}\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0001}\u{E0020}-\u{E007F}]+([A-Z][A-Z0-9-]*)(?=[ \t:\u000B-\u000D\u0085\u00A0\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u206F\u3000\uFEFF\uFFF9-\uFFFB\u{110BD}\u{110CD}\u{13430}-\u{1343F}\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0001}\u{E0020}-\u{E007F}]|$)/u CITED R6 — R6(c), matched on the whole line (INDENT empty); group 1 is the name looked up
+PINNED regex ANCHORED = /\/\^.*\$\/[gimsuy]*/ CITED TABLE DIALECT row 1
+PINNED regex CLASS-ESC = /\\[wsdWSDbB]\b/ CITED TABLE DIALECT row 2
+PINNED regex PROP-ESC = /\\p\{/ CITED TABLE DIALECT row 3
+PINNED regex JS-API = /\b(?:Math\.\w+|String\.prototype|parseInt|parseFloat|BigInt)\b|\b(?:Number|String|Boolean|BigInt)\(|(?:\.|\b)(?:toLowerCase|toUpperCase|charCodeAt|codePointAt|localeCompare|normalize|padStart|padEnd)\(/ CITED TABLE DIALECT row 4
+PINNED regex JS-NS = /\b(?:JSON|Object|Array|Reflect|Symbol|Intl|Number|String|BigInt|Boolean|Date|RegExp|Promise)\.[A-Za-z]\w*/ CITED TABLE DIALECT row 5
+PINNED regex RUST-API = /\bfancy[-_]regex\b|\b(?:f64|u8|u64|i64|usize|String|Vec|char|str|Box|HashMap|BTreeMap)::|\bOption<|\bVec<|&str\b|\bto_lowercase\b/ CITED TABLE DIALECT row 6
+PINNED regex LINE-TERM = /\b(?:new)?line[- ]?terminator/i CITED TABLE DIALECT row 7
+PINNED regex VALUE-NAME = /\b(null|undefined)\b/ CITED TABLE DIALECT row 8
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs and cli/sir/sir-parse.mjs (MIT): the pins are the package's own literals,
+  copied from the pinned authority snapshot. Round 5, re-cut 2026-10-27 with the primary; delta re-cut on 6199e2cc8b75 (FINDINGS 99, 107).

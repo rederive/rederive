@@ -1,0 +1,248 @@
+UNIT size
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG size(collection: any) -> number
+DEPENDS-ON none   # self-contained bundle; no external module deps; uses only ES built-ins (Object.prototype.toString, Object.keys, Array.isArray, RegExp)
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# `size` is the lodash `_.size` method, exported as the DEFAULT export
+# (`module.exports = size`). It returns the "size" of a collection:
+#   - array-like values (arrays, strings, arguments objects, typed arrays,
+#     Buffers, {length:n} duck-typed objects) -> their .length
+#       EXCEPT strings, which are counted UNICODE-AWARE (code-point / grapheme
+#       -cluster-ish units, NOT UTF-16 .length) -- see STRING SIZE below.
+#   - Map / Set (and subclasses, anything tagged "[object Map]"/"[object Set]")
+#     -> their .size
+#   - everything else (plain objects, boxed Number/Boolean, Date, RegExp,
+#     bigint, WeakMap/WeakSet, etc.) -> count of OWN ENUMERABLE STRING keys
+#   - null / undefined -> 0
+#
+# The unit is PURE and fully deterministic (no clock/RNG/io/net seam).
+# Re-emit as a DEFAULT export:  export default size;   (NOT a named export.)
+
+# ============================================================================
+# BEHAVIOR  (exact ordered pipeline -- branch order is load-bearing)
+# ============================================================================
+BEHAVIOR
+
+# ---- NODE 1: nullish guard ----
+# if (collection == null) return 0
+#   `== null` is the LOOSE equality check: matches BOTH null AND undefined
+#   (and nothing else -- 0, '', false are NOT nullish here).
+#   size(null) -> 0 ; size(undefined) -> 0
+
+# ---- NODE 2: array-like branch ----
+# if (isArrayLike(collection)):
+#       return isString(collection) ? stringSize(collection) : collection.length
+#
+#   isArrayLike(value) :=
+#       value != null  AND  isLength(value.length)  AND  !isFunction(value)
+#
+#   isLength(value) :=  # tests value.length, NOT value
+#       typeof value == 'number'  AND  value > -1  AND  value % 1 == 0
+#       AND value <= MAX_SAFE_INTEGER   (MAX_SAFE_INTEGER = 9007199254740991)
+#     # Therefore a valid length is an integer in [0, 9007199254740991].
+#     # NOTE the boundaries / rejections (verified against real package):
+#     #   length = 0                 -> isLength true
+#     #   length = 9007199254740991  -> isLength true (MAX_SAFE_INTEGER, inclusive)
+#     #   length = -1                -> false  (not > -1)
+#     #   length = -0                -> true   (-0 > -1, -0 % 1 == 0); .length yields -0
+#     #   length = 1.5               -> false  (1.5 % 1 != 0)
+#     #   length = 2**53             -> false  (> MAX_SAFE_INTEGER)
+#     #   length = Infinity          -> false  (> MAX_SAFE_INTEGER; also Infinity%1 is NaN)
+#     #   length = NaN               -> false  (NaN > -1 is false)
+#     #   length = "3" (string)      -> false  (typeof != 'number')
+#
+#   isFunction(value) :=
+#       let tag = isObject(value) ? Object.prototype.toString.call(value) : '';
+#       return tag == '[object Function]' OR tag == '[object GeneratorFunction]'
+#     # (functions and generator functions are NOT array-like even though they
+#     #  may have a .length; arrow/regular functions -> fall through to NODE 4.)
+#
+#   isString(value) :=
+#       typeof value == 'string'
+#       OR (!Array.isArray(value) AND isObjectLike(value)
+#           AND Object.prototype.toString.call(value) == '[object String]')
+#     # i.e. primitive strings AND boxed String objects (new String(...)).
+#   isObjectLike(value) := !!value AND typeof value == 'object'
+#   isObject(value)     := !!value AND (typeof value == 'object' OR 'function')
+#
+#   When the array-like branch is taken and the value is a string (primitive OR
+#   boxed String): return stringSize(value).  Otherwise return value.length
+#   VERBATIM (so {length:-0} -> -0, {length:0} -> 0, {a:1,length:5} -> 5 with the
+#   `a` key NOT counted because this branch wins before NODE 4).
+
+# ---- NODE 3: Map / Set branch ----
+# var tag = getTag(collection)
+# if (tag == '[object Map]' OR tag == '[object Set]') return collection.size
+#
+#   getTag(value) := Object.prototype.toString.call(value)
+#     # The source defines a fallback getTag that re-classifies via
+#     # value.constructor for old engines where native Map/Set/DataView/Promise/
+#     # WeakMap reported the wrong toStringTag. That fallback is installed ONLY IF
+#     # one of those built-ins misreports its tag. On any modern engine
+#     # (Node >= ~6, all evergreen browsers) the native built-ins report correct
+#     # tags, so the fallback is NOT installed and getTag === Object.prototype.
+#     # toString.call.  The blind re-emitter MUST use Object.prototype.toString.
+#     # call(collection) for the tag -- do NOT classify by constructor identity.
+#     #
+#     # Consequence (verified): Map subclass -> '[object Map]' -> uses .size.
+#     # An object literal carrying Symbol.toStringTag === 'Map' would ALSO be
+#     # tagged '[object Map]' and return collection.size (which is `undefined`
+#     # for a plain object) -- but such inputs are symbol-keyed and OUT-OF-
+#     # ENVELOPE (excluded from genInputs; documented under SCOPE).
+#     #
+#     # Note: this branch is reached only AFTER NODE 2 rejected the value, i.e.
+#     # Map/Set have no own numeric `.length`, so they always fall through here.
+#     # size(emptyMap) -> 0 ; size(new Map([['a',1]])) -> 1 ; size(new Set([1,2])) -> 2
+
+# ---- NODE 4: object key-count fallback ----
+# return baseKeys(collection).length
+#
+#   baseKeys(object) := count of OWN ENUMERABLE STRING-keyed properties.
+#     Operationally (matches real behavior on in-envelope inputs):
+#       if object is NOT a prototype object:  Object.keys(Object(object)).length
+#       else (object IS its constructor's .prototype, the rare isPrototype case):
+#            for-in over Object(object), keep keys where hasOwnProperty AND
+#            key != 'constructor'  -> that count.
+#     For all in-envelope inputs this equals Object.keys(collection).length, i.e.
+#     own ENUMERABLE string keys only:
+#       - inherited/prototype keys NOT counted
+#       - non-enumerable own props NOT counted
+#       - SYMBOL keys NOT counted (Object.keys ignores symbols)
+#       - a getter counts as one key
+#     Examples (verified):
+#       {a:1,b:2} -> 2 ; {} -> 0 ; {0:'a',1:'b'} -> 2
+#       new Number(5) -> 0 ; new Boolean(true) -> 0 ; new Date() -> 0
+#       (function(){})/(()=>{}) -> 0 ; /ab/ -> 0 ; /ab/g -> 0
+#       42 -> 0 ; true -> 0 ; 5n (bigint) -> 0
+#       WeakMap -> 0 ; WeakSet -> 0 ; ArrayBuffer(8) -> 0 ; DataView -> 0
+#       {length:-1} -> 1 (length key counted, since NODE 2 rejected it)
+#       {length:1.5} -> 1 ; {length:Infinity} -> 1 ; {length:NaN} -> 1
+#       {length:"3"} -> 1 ; {length:2**53} -> 1
+#       Object.create(null) augmented with one key -> 1 (works without proto)
+
+# ============================================================================
+# STRING SIZE  (the subtle part -- the most likely divergence point)
+# ============================================================================
+# stringSize(s) := hasUnicode(s) ? unicodeSize(s) : asciiSize(s)
+#
+#   asciiSize(s) := s.length   (UTF-16 code-unit count)
+#
+#   hasUnicode(s) := reHasUnicode.test(s)   where reHasUnicode is the
+#   NON-global regex (no /g, .test is a pure membership test):
+#
+#       reHasUnicode = /[‍\ud800-\udfff̀-ͯ︠-︣⃐-⃰︎️]/
+#
+#     i.e. true if the string contains ANY of:
+#       - U+200D                ZERO WIDTH JOINER (ZWJ)
+#       - U+D800..U+DFFF        any surrogate code unit (astral chars, incl. lone surrogates)
+#       - U+0300..U+036F        combining diacritical marks
+#       - U+FE20..U+FE23        combining half marks
+#       - U+20D0..U+20F0        combining diacritical marks for symbols
+#       - U+FE0E, U+FE0F        variation selectors VS15 / VS16
+#     If NONE present -> ASCII path -> s.length. (So precomposed accents like
+#     é=U+00E9, ÿ=U+00FF, and CJK BMP chars like 中=U+4E2D are NOT "unicode"
+#     here and count by .length.  size('café'[precomposed]) -> 4 ; size('中文') -> 2.)
+#
+#   unicodeSize(s): count matches of the GLOBAL regex reUnicode by iterating:
+#       reUnicode.lastIndex = 0
+#       result = 0
+#       while (reUnicode.test(s)) result++    # /g flag advances lastIndex each test
+#       return result
+#     (lastIndex is reset to 0 first because reUnicode is a shared /g regex.)
+#
+#     reUnicode is built from these fragments (reproduce the FINAL source string
+#     EXACTLY -- this regex IS the spec for grapheme counting):
+#
+#       rsAstralRange       = \ud800-\udfff
+#       rsComboMarksRange   = ̀-ͯ︠-︣
+#       rsComboSymbolsRange = ⃐-⃰
+#       rsVarRange          = ︎️
+#       rsAstral    = [\ud800-\udfff]
+#       rsCombo     = [̀-ͯ︠-︣⃐-⃰]
+#       rsFitz      = \ud83c[\udffb-\udfff]
+#       rsModifier  = (?:[̀-ͯ︠-︣⃐-⃰]|\ud83c[\udffb-\udfff])
+#       rsNonAstral = [^\ud800-\udfff]
+#       rsRegional  = (?:\ud83c[\udde6-\uddff]){2}
+#       rsSurrPair  = [\ud800-\udbff][\udc00-\udfff]
+#       rsZWJ       = ‍
+#       reOptMod    = <rsModifier>?
+#       rsOptVar    = [︎️]?
+#       rsOptJoin   = (?:‍(?:<rsNonAstral>|<rsRegional>|<rsSurrPair>)<rsOptVar><reOptMod>)*
+#       rsSeq       = <rsOptVar><reOptMod><rsOptJoin>
+#       rsSymbol    = (?:<rsNonAstral><rsCombo>?|<rsCombo>|<rsRegional>|<rsSurrPair>|<rsAstral>)
+#
+#       reUnicode = RegExp( <rsFitz> + '(?=' + <rsFitz> + ')|' + <rsSymbol> + <rsSeq>, 'g')
+#
+#     The fully-expanded GLOBAL source string (authoritative; copy verbatim):
+#       \ud83c[\udffb-\udfff](?=\ud83c[\udffb-\udfff])|(?:[^\ud800-\udfff][̀-ͯ︠-︣⃐-⃰]?|[̀-ͯ︠-︣⃐-⃰]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff])[︎️]?(?:[̀-ͯ︠-︣⃐-⃰]|\ud83c[\udffb-\udfff])?(?:‍(?:[^\ud800-\udfff]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff])[︎️]?(?:[̀-ͯ︠-︣⃐-⃰]|\ud83c[\udffb-\udfff])?)*
+#
+#     Effect (each counted as ONE unit): a base char + trailing combining marks;
+#     a surrogate-pair astral char + optional variation selector + optional
+#     modifier + a ZWJ-joined run; a pair of regional-indicator surrogates (one
+#     flag); a fitz skin-tone modifier attached to its base. Verified counts:
+#       'café' (e+U+0301 combining)          -> 4   (combining mark folds onto e)
+#       'á' (a+U+0301)                       -> 1
+#       'Å' (A+U+030A)                       -> 1
+#       'à́' (a+U+0300+U+0301, two marks)     -> 1
+#       'abćdef' (c+U+0301 in middle)        -> 6
+#       '😀' (U+1F600 astral)                -> 1
+#       '😀'+U+0301                          -> 1
+#       '🇺🇸' (US flag, 2 regional indicators)-> 1
+#       '🇺🇸🇺🇸🇺🇸' (3 regional indicators)     -> 2   (pairs greedily: 1 flag + 1 flag, lone tail folds)
+#       '👍🏽' (thumbsup+fitz U+1F3FD)         -> 1
+#       '👍🏽👍🏽'                              -> 2
+#       '👩‍👩‍👧‍👦' (ZWJ family, len 11)        -> 1
+#       'e'+U+FE0F (VS16)                    -> 1
+#       '1'+U+FE0F                           -> 1
+#       lone U+200D ZWJ                      -> 1 ;  two ZWJ -> 2
+#       lone high surrogate U+D83C           -> 1 ;  lone low U+DFFF -> 1
+#       lone combining U+0300                -> 1 ;  lone U+20D0 -> 1
+#       lone fitz U+1F3FB (surrogate pair)   -> 1 ;  two lone fitz -> 2
+#       'hi😀there' (mixed)                  -> 8
+#     Boxed strings use the same path: size(new String('abc')) -> 3 ;
+#     size(new String('😀')) -> 1.
+
+# ============================================================================
+# RETURN VALUE NOTES
+# ============================================================================
+# Returns a JS number. Normally a non-negative integer. Two non-integer-ish
+# observable returns from the .length passthrough (NODE 2):
+#   - {length:-0}  -> -0   (negative zero; === 0 but Object.is distinguishes)
+#   - {length:N}   -> N    verbatim for any isLength-valid N (e.g. 9007199254740991)
+# No throws on any in-envelope input (all property reads are guarded).
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the 4-node dispatch (nullish / array-like / Map-Set / key-count) IN ORDER
+    - isArrayLike / isLength / isFunction / isString / isObjectLike / isObject predicates
+    - getTag := Object.prototype.toString.call (modern-engine path; fallback not installed)
+    - baseKeys := own enumerable string-key count (== Object.keys length on in-envelope inputs)
+    - stringSize: hasUnicode dispatch + asciiSize(.length) + unicodeSize(reUnicode /g match count)
+    - the verbatim reHasUnicode and reUnicode regexes (small in-line constants, NOT carried data)
+  CARRIED DATA: none. (The two regexes are short, fully reconstructible string
+    constants reproduced verbatim above -- no large literal table, so no carried.json.)
+  OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they do not
+    round-trip the JSON+codec persistence, yet the spec above still pins them):
+    - functions / arrow functions -> 0 (NODE 4; functions don't JSON-round-trip)
+    - Symbol-keyed-only objects / objects carrying Symbol.toStringTag -> see NODES 3/4
+      (symbols don't round-trip; the toStringTag='Map' quirk yields `undefined`)
+    - boxed primitives new Number/new Boolean -> 0, new String -> stringSize
+      (boxed primitives don't round-trip; behavior still specified in NODES 2/4)
+    - WeakMap/WeakSet/Date/RegExp/Promise/DataView/ArrayBuffer -> 0 (not codec-faithful)
+    - {length:-0}/{length:Infinity}/{length:NaN}/{length:2**53} (the length VALUES
+      -0/Infinity/NaN don't survive JSON round-trip cleanly) -> behavior pinned in NODE 2/4
+  OUT-OF-CONTRACT (stateful mutators / side APIs): none -- the unit is pure and read-only.
+
+PROVENANCE lodash.size@4.2.0 (lodash custom build "modularize exports=npm"),
+  repo lodash/lodash, MIT license, source file index.js (single self-contained bundle).
+  Verified by running the real package on Node v24.16.0; every numeric expected
+  in this SIR was observed from `require('./index.js')`.

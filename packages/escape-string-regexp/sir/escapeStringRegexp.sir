@@ -1,0 +1,118 @@
+UNIT escapeStringRegexp
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+  # Pure value -> value. No clock/RNG/env/fs/net. No seam. No carried data.
+  # Same input string ALWAYS yields the same output string. Throws are deterministic too.
+
+SIG  escapeStringRegexp(str: string) -> string
+  # CommonJS default export: `module.exports = function (str) { ... }`.
+  # exportName is null -> the module's single default function export (CJS module.exports = fn).
+  # Exactly ONE positional parameter is consumed. Extra args are ignored (standard JS arity).
+  # The exported function is anonymous (fn.name === '').
+
+DEPENDS-ON none
+  # Self-contained single file. No imports. No embedded data tables.
+
+BEHAVIOR  # ordered pipeline — exact + complete
+  1. GUARD (type check, runs FIRST):
+       if (typeof str !== 'string')  -> throw new TypeError('Expected a string')
+     - The check is `typeof str !== 'string'`. NO coercion is attempted.
+     - THROWS for: number (incl. NaN, Infinity), bigint, boolean, null, undefined,
+       missing argument (=== undefined), plain object {}, array [] (even ['a.b']),
+       function, Symbol, AND a boxed String object `new String('x')` (its typeof is 'object').
+     - Only a PRIMITIVE string (typeof === 'string') passes. The empty string '' passes.
+     - Error EXACTLY: constructor === TypeError (`err instanceof TypeError` is true),
+       err.message === 'Expected a string' (15 chars, capital E, single spaces, no period).
+  2. TRANSFORM (only reached when str is a primitive string):
+       return str.replace(matchOperatorsRe, '\\$&')
+     where matchOperatorsRe = /[|\\{}()[\]^$+*?.]/g
+     - This is a GLOBAL regex (the /g flag) over a single character class. It matches EACH
+       occurrence of any one of the following 14 ESCAPABLE characters, independently:
+         |   (U+007C  vertical bar / pipe)
+         \   (U+005C  backslash)          # written \\ inside the class
+         {   (U+007B  left brace)
+         }   (U+007D  right brace)
+         (   (U+0028  left paren)
+         )   (U+0029  right paren)
+         [   (U+005B  left bracket)       # the FIRST [ opens the class
+         ]   (U+005D  right bracket)      # written \] inside the class
+         ^   (U+005E  caret)              # NOT first in the class, so it is a literal, not negation
+         $   (U+0024  dollar)
+         +   (U+002B  plus)
+         *   (U+002A  asterisk)
+         ?   (U+003F  question mark)
+         .   (U+002E  period / dot)
+     - For each matched character M, it is replaced by the two-character sequence: a single
+       backslash '\' followed by M. The replacement template is the JS string '\\$&':
+         '\\'  -> one literal backslash
+         '$&'  -> String.prototype.replace's "whole match" token (the matched character M).
+       So replace(/[...]/g, '\\$&') prepends a backslash to every escapable char.
+       (Note: '$&' is the MATCH back-reference of replace(); it is NOT a literal '$&' and is
+        not affected by what characters happen to be in the input.)
+     - Characters NOT in the class are passed through UNCHANGED, including but not limited to:
+         -  (hyphen/dash)         # NOT escaped (this package does not escape '-')
+         /  (forward slash)       # NOT escaped
+         < > = ! @ # ~ % & _ : ; , ' " `  and all other ASCII punctuation not listed above
+         A-Z a-z 0-9
+         whitespace: space, \t (tab), \n (newline), \r (CR), \f, \v
+         ALL non-ASCII / Unicode characters (accents like é, CJK like 日, symbols like ♥),
+           AND emoji: an emoji is a UTF-16 surrogate PAIR; neither surrogate half is in the
+           class, so the emoji passes through intact (e.g. '(😀)' -> '\\(😀\\)').
+     - The matching/replacement is purely left-to-right, character-by-character; there is no
+       ordering subtlety beyond "each escapable char independently gets one leading backslash".
+
+  EDGE / DEGENERATE CASES (all OBSERVED against escape-string-regexp@1.0.5):
+    - ''                         -> ''            (empty string passes the guard, no matches)
+    - 'hello world'              -> 'hello world' (no escapable chars -> identity)
+    - '-'                        -> '-'           (dash is NOT escaped)
+    - '/'                        -> '/'           (slash is NOT escaped)
+    - '.'                        -> '\.'          (single dot)
+    - '....'                     -> '\.\.\.\.'    (each dot independently escaped)
+    - '...***'                   -> '\.\.\.\*\*\*'
+    - '\\'  (one backslash)      -> '\\\\' (i.e. backslash becomes backslash-backslash)
+    - 'a.b*c+d'                  -> 'a\.b\*c\+d'
+    - 'a$&b'                     -> 'a\$&b'        ($ escaped; literal & passes through)
+    - 'how much $ for a unicorn?'-> 'how much \$ for a unicorn\?'   (the README example)
+    - the 14-char string "|\\{}()[]^$+*?."  (all specials, one each) ->
+        each char gets a leading backslash:  "\|\\\{\}\(\)\[\]\^\$\+\*\?\."
+      (as a raw character sequence: backslash-pipe, backslash-backslash, backslash-{, ... backslash-.)
+    - non-string arg (number/null/undefined/object/array/boolean/Symbol/boxed String) -> THROWS
+        TypeError('Expected a string')
+    - NOT idempotent: escaping an already-escaped string escapes the inserted backslashes again
+      (e.g. 'a.b' -> 'a\.b' -> 'a\\\.b'). The oracle treats each call independently.
+
+ORACLE value -> oracle.json
+  # Deterministic value oracle. Feed single-element arg-arrays [str]; compare the EXACT returned
+  # string for the string-typed inputs, and compare the THROW (TypeError + message 'Expected a
+  # string') for the non-string inputs. The harness imports the package's bare default function and
+  # calls fn(str), stamping the observed return-or-throw as the expected.
+  # SELF-CONSISTENCY: every character the input-generator can emit has its mapping fully defined in
+  # BEHAVIOR above — the 14 escapable chars are escaped, everything else (ASCII, whitespace, Unicode,
+  # emoji surrogate halves) passes through unchanged. The generator's non-string fixtures exercise the
+  # exact throw contract. No value the generator emits is left undefined by this SIR.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The type guard and its exact thrown value: `new TypeError('Expected a string')`.
+    - The exact regex /[|\\{}()[\]^$+*?.]/g (the 14-member character class, the /g flag, and the
+      fact that '^' is a literal because it is not the first class element).
+    - The replacement template '\\$&' (one literal backslash + the matched character), applied
+      globally, left-to-right, with non-matching characters passed through verbatim.
+    - JavaScript String.prototype.replace semantics for the '$&' match token and UTF-16 string
+      handling (surrogate halves are not escapable, so astral characters survive intact).
+  CARRIED DATA: none. The unit embeds no large literal table; the only constant is the inline
+    regex literal, which is reproduced verbatim in IN-CONTRACT LOGIC above.
+  OUT-OF-CONTRACT: none. The function is pure with no side effects, no stateful mutation, no
+    auxiliary API surface (no .extend, no options, no static methods).
+
+PROVENANCE
+  package: escape-string-regexp@1.0.5 (npm)
+  repo:    https://github.com/sindresorhus/escape-string-regexp
+  author:  Sindre Sorhus
+  license: MIT
+  source:  node_modules/escape-string-regexp/index.js  (CJS, `module.exports = function (str) {...}`)
+  verified-against: live escape-string-regexp@1.0.5 in the provided temp install (2026-06-23):
+    - confirmed the regex class members and that '-' '/' and non-listed punctuation are NOT escaped;
+    - confirmed replacement is a single leading backslash per escapable char;
+    - confirmed all non-string types (incl. boxed String, Symbol, NaN, missing arg) throw
+      TypeError('Expected a string'); confirmed '' returns ''.

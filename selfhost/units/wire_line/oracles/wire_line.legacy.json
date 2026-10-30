@@ -1,0 +1,2816 @@
+{
+ "mode": "vectors",
+ "unit": "wire_line",
+ "authority": "rederive@f68cca701417",
+ "authorityTreeSha256": "a1c4b88edc0603d95b03d26d49135314dc357955377ff7c4478b43e6cd746082",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    [
+     "hi",
+     true,
+     7
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "bool"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[\"hi\",true,7]"
+  },
+  {
+   "name": "v1",
+   "args": [
+    [
+     1.5,
+     {
+      "__t": "num",
+      "v": "-0"
+     },
+     {
+      "__t": "num",
+      "v": "NaN"
+     },
+     {
+      "__t": "num",
+      "v": "Infinity"
+     },
+     {
+      "__t": "num",
+      "v": "-Infinity"
+     },
+     5e-324
+    ],
+    {
+     "args": [
+      {
+       "name": "x",
+       "rest": true,
+       "type": {
+        "k": "f64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[\"3ff8000000000000\",\"8000000000000000\",\"7ff8000000000000\",\"7ff0000000000000\",\"fff0000000000000\",\"0000000000000001\"]"
+  },
+  {
+   "name": "v2",
+   "args": [
+    [
+     {
+      "a": {
+       "__t": "num",
+       "v": "NaN"
+      }
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    [
+     {
+      "k": [
+       1,
+       {
+        "y": "é😀",
+        "z": 2.5
+       }
+      ],
+      "n": null,
+      "t": true
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"k\":[1,{\"y\":\"é😀\",\"z\":2.5}],\"n\":null,\"t\":true}]"
+  },
+  {
+   "name": "v4",
+   "args": [
+    [
+     {
+      "t": true,
+      "k": [
+       1,
+       {
+        "z": 2.5,
+        "y": "é😀"
+       }
+      ],
+      "n": null,
+      "b": {
+       "__t": "bigint",
+       "v": "9007199254740993"
+      }
+     }
+    ],
+    {
+     "name": "f",
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"t\":true,\"k\":[1,{\"z\":2.5,\"y\":\"é😀\"}],\"n\":null,\"b\":9007199254740993}]"
+  },
+  {
+   "name": "v5",
+   "args": [
+    [
+     {
+      "2": 4,
+      "10": 2,
+      "z": 1,
+      "a": {
+       "__t": "bigint",
+       "v": "3"
+      },
+      "-1": 5
+     },
+     {
+      "b": 1.5,
+      "a": "x"
+     }
+    ],
+    {
+     "name": "f",
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      },
+      {
+       "name": "n",
+       "type": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "f64"
+        }
+       }
+      }
+     ],
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"2\":4,\"10\":2,\"z\":1,\"a\":3,\"-1\":5},{\"b\":1.5,\"a\":\"x\"}]"
+  },
+  {
+   "name": "v6",
+   "args": [
+    [
+     {
+      "b": {
+       "__t": "num",
+       "v": "NaN"
+      },
+      "a": "x\ud800"
+     }
+    ],
+    {
+     "name": "f",
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    [
+     {
+      "a": 1.5,
+      "b": "x"
+     },
+     2
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "f64"
+        }
+       }
+      },
+      {
+       "name": "n",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"a\":1.5,\"b\":\"x\"},2]"
+  },
+  {
+   "name": "v8",
+   "args": [
+    [
+     [
+      1,
+      2,
+      3
+     ],
+     [
+      "a",
+      "b"
+     ],
+     [
+      0.5,
+      {
+       "__t": "num",
+       "v": "NaN"
+      },
+      {
+       "__t": "num",
+       "v": "-0"
+      }
+     ],
+     []
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "k": "i64"
+        },
+        "k": "list"
+       }
+      },
+      {
+       "name": "ys",
+       "type": {
+        "item": {
+         "k": "text"
+        },
+        "k": "list"
+       }
+      },
+      {
+       "name": "zs",
+       "type": {
+        "item": {
+         "k": "f64"
+        },
+        "k": "list"
+       }
+      },
+      {
+       "name": "e",
+       "type": {
+        "item": {
+         "k": "bool"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[[1,2,3],[\"a\",\"b\"],[\"3fe0000000000000\",\"7ff8000000000000\",\"8000000000000000\"],[]]"
+  },
+  {
+   "name": "v9",
+   "args": [
+    [
+     [
+      1,
+      "x",
+      2.5,
+      true
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "text"
+         },
+         {
+          "k": "f64"
+         },
+         {
+          "k": "bool"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[[1,\"x\",\"4004000000000000\",true]]"
+  },
+  {
+   "name": "v10",
+   "args": [
+    [
+     {
+      "name": "n",
+      "score": {
+       "__t": "num",
+       "v": "-0"
+      },
+      "tags": [
+       "a"
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "score",
+          {
+           "k": "f64"
+          }
+         ],
+         [
+          "name",
+          {
+           "k": "text"
+          }
+         ],
+         [
+          "tags",
+          {
+           "item": {
+            "k": "text"
+           },
+           "k": "list"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"score\":\"8000000000000000\",\"name\":\"n\",\"tags\":[\"a\"]}]"
+  },
+  {
+   "name": "v11",
+   "args": [
+    [
+     null,
+     {
+      "__t": "undef"
+     },
+     2.5
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "f64"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "alts": [
+         {
+          "k": "none"
+         },
+         {
+          "k": "f64"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[null,null,\"4004000000000000\"]"
+  },
+  {
+   "name": "v12",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "9007199254740993"
+     },
+     {
+      "__t": "bigint",
+      "v": "18446744073709551615"
+     },
+     {
+      "__t": "bigint",
+      "v": "-9223372036854775808"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "u64"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[9007199254740993,18446744073709551615,-9223372036854775808]"
+  },
+  {
+   "name": "v13",
+   "args": [
+    [
+     "x",
+     1,
+     {
+      "__t": "num",
+      "v": "-0"
+     },
+     {
+      "__t": "num",
+      "v": "NaN"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "rest",
+       "rest": true,
+       "type": {
+        "k": "f64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[\"x\",\"3ff0000000000000\",\"8000000000000000\",\"7ff8000000000000\"]"
+  },
+  {
+   "name": "v14",
+   "args": [
+    [
+     1,
+     2
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "2 args for a 1-parameter SIG"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "a": 1
+    },
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the args are not a list"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    [
+     {
+      "__t": "u8",
+      "bytes": [
+       1,
+       2,
+       255
+      ],
+      "buf": false
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "b",
+       "type": {
+        "k": "bytes"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the rust harness has no route for bytes"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    [
+     {
+      "__t": "num",
+      "v": "NaN"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "x",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "f64"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    [
+     "\ud800"
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a lone surrogate has no UTF-8 form"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    [
+     [
+      1,
+      {
+       "a\udc00": 1
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a lone surrogate has no UTF-8 form"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    [
+     {
+      "__t": "sparse",
+      "length": 3,
+      "entries": [
+       [
+        0,
+        1
+       ],
+       [
+        2,
+        3
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "k": "i64"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    [
+     {
+      "__t": "map",
+      "entries": [
+       [
+        "a",
+        1
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a Map has no serde_json form"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    [
+     {
+      "a": "x"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "a",
+          {
+           "k": "text"
+          }
+         ],
+         [
+          "b",
+          {
+           "alts": [
+            {
+             "k": "text"
+            },
+            {
+             "k": "none"
+            }
+           ],
+           "k": "union"
+          }
+         ],
+         [
+          "c",
+          {
+           "k": "text"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    [
+     {
+      "a": 9007199254740992,
+      "b": 9007199254740994
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "f64"
+        }
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a whole number past 2^53 reaches serde_json as a different integer"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    [],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "r",
+       "rest": true,
+       "type": {
+        "k": "text"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[]"
+  },
+  {
+   "name": "v25",
+   "args": [
+    [
+     [
+      1,
+      2,
+      3
+     ],
+     [
+      "a",
+      "b",
+      "c"
+     ],
+     [
+      {
+       "__t": "undef"
+      },
+      "q"
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      },
+      {
+       "name": "u",
+       "type": {
+        "items": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "text"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "tuple"
+       }
+      },
+      {
+       "name": "w",
+       "type": {
+        "items": [
+         {
+          "alts": [
+           {
+            "k": "f64"
+           },
+           {
+            "k": "none"
+           }
+          ],
+          "k": "union"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a 1-tuple"
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    [
+     {
+      "__t": "sparse",
+      "length": 3,
+      "entries": [
+       [
+        0,
+        1
+       ],
+       [
+        2,
+        3
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         },
+         {
+          "alts": [
+           {
+            "k": "i64"
+           },
+           {
+            "k": "none"
+           }
+          ],
+          "k": "union"
+         },
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "__t": "sparse",
+     "length": 2,
+     "entries": [
+      [
+       1,
+       2
+      ]
+     ]
+    },
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    [
+     {
+      "a": 1,
+      "extra": {
+       "__t": "num",
+       "v": "NaN"
+      }
+     },
+     {}
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "a",
+          {
+           "k": "i64"
+          }
+         ],
+         [
+          "b",
+          {
+           "alts": [
+            {
+             "k": "text"
+            },
+            {
+             "k": "none"
+            }
+           ],
+           "k": "union"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      },
+      {
+       "name": "s",
+       "type": {
+        "fields": [
+         [
+          "__proto__",
+          {
+           "alts": [
+            {
+             "k": "text"
+            },
+            {
+             "k": "none"
+            }
+           ],
+           "k": "union"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"a\":1,\"b\":null},{\"__proto__\":null}]"
+  },
+  {
+   "name": "v29",
+   "args": [
+    [
+     {},
+     {
+      "constructor": "c",
+      "toString": "t"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "constructor",
+          {
+           "alts": [
+            {
+             "k": "text"
+            },
+            {
+             "k": "none"
+            }
+           ],
+           "k": "union"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      },
+      {
+       "name": "s",
+       "type": {
+        "fields": [
+         [
+          "toString",
+          {
+           "k": "text"
+          }
+         ],
+         [
+          "constructor",
+          {
+           "k": "text"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"constructor\":null},{\"toString\":\"t\",\"constructor\":\"c\"}]"
+  },
+  {
+   "name": "v30",
+   "args": [
+    [
+     {
+      "__t": "map",
+      "entries": [
+       [
+        "a",
+        1
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "a",
+          {
+           "k": "i64"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a record value"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    [
+     {
+      "x": {
+       "a": {
+        "__t": "num",
+        "v": "NaN"
+       }
+      }
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "x",
+          {
+           "k": "json"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    [
+     [
+      [
+       {
+        "a": 2
+       },
+       [
+        1
+       ]
+      ],
+      [
+       {},
+       "x"
+      ]
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "items": [
+          {
+           "k": "json"
+          },
+          {
+           "item": {
+            "k": "i64"
+           },
+           "k": "list"
+          }
+         ],
+         "k": "tuple"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a list value"
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    [
+     {
+      "a": {
+       "__t": "num",
+       "v": "NaN"
+      }
+     },
+     "not a list"
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      },
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "k": "i64"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    [
+     {
+      "__t": "u8",
+      "bytes": [
+       7,
+       9
+      ],
+      "buf": false
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "k": "i64"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a list value"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    [
+     [
+      1,
+      2
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "i64"
+         },
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a 3-tuple"
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    [
+     [
+      1,
+      {
+       "__t": "sparse",
+       "length": 3,
+       "entries": [
+        [
+         1,
+         2
+        ],
+        [
+         2,
+         3
+        ]
+       ]
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    [
+     {
+      "__t": "u8",
+      "bytes": [
+       1,
+       2
+      ],
+      "buf": true
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a Uint8Array has no serde_json form"
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    [
+     {
+      "__t": "regex",
+      "source": "ab+",
+      "flags": "g"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a RegExp has no serde_json form"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    [
+     {
+      "__t": "boxed",
+      "k": "Number",
+      "v": 3
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a Number has no serde_json form"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "-9223372036854775809"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an integer past i64/u64 has no serde_json form"
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     },
+     [
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      },
+      {
+       "name": "n",
+       "type": {
+        "item": {
+         "k": "json"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    [
+     [
+      1,
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    [
+     9007199254740992,
+     -9007199254740992,
+     4503599627370495.5,
+     0.1,
+     1e-7,
+     123.456,
+     [
+      {
+       "__t": "bigint",
+       "v": "18446744073709551615"
+      },
+      {
+       "__t": "bigint",
+       "v": "-9223372036854775808"
+      },
+      {
+       "__t": "bigint",
+       "v": "3"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "rest": true,
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[9007199254740992,-9007199254740992,4503599627370495.5,0.1,1e-7,123.456,[18446744073709551615,-9223372036854775808,3]]"
+  },
+  {
+   "name": "v44",
+   "args": [
+    [
+     [
+      1,
+      [
+       -9007199254740994
+      ]
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a whole number past 2^53 reaches serde_json as a different integer"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "9007199254740993"
+     },
+     {
+      "__t": "bigint",
+      "v": "3"
+     },
+     9223372036854776000,
+     4611686018427388000,
+     {
+      "__t": "bigint",
+      "v": "4611686018427387904"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "f64"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "f64"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "u64"
+       }
+      },
+      {
+       "name": "d",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "e",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not an f64 value"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    [
+     {
+      "__t": "boxed",
+      "k": "String",
+      "v": "x"
+     },
+     1,
+     "true"
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "bool"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a text value"
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    [
+     "q\"\\\n\t\b\f\r\u0001\u001f  é😀",
+     ""
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "text"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[\"q\\\"\\\\\\n\\t\\b\\f\\r\\u0001\\u001f  é😀\",\"\"]"
+  },
+  {
+   "name": "v48",
+   "args": [
+    [
+     {
+      "a": 1
+     },
+     {
+      "b": {
+       "__t": "num",
+       "v": "-0"
+      }
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "map",
+          "key": {
+           "k": "text"
+          },
+          "val": {
+           "k": "i64"
+          }
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "k": "map",
+          "key": {
+           "k": "text"
+          },
+          "val": {
+           "k": "f64"
+          }
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "5"
+     },
+     [
+      1,
+      "a"
+     ],
+     1.5,
+     {
+      "a": null,
+      "b": [
+       true
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "item": {
+           "k": "i64"
+          },
+          "k": "list"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "alts": [
+         {
+          "k": "f64"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "d",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "json"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[5,[1,\"a\"],1.5,{\"a\":null,\"b\":[true]}]"
+  },
+  {
+   "name": "v50",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     },
+     null
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "f64"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "k": "bool"
+         },
+         {
+          "k": "f64"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    [
+     {
+      "7": "d",
+      "-1": "a",
+      "01": "b",
+      "4294967295": "c"
+     },
+     {
+      "a\"b": 1,
+      "k\n": 2
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      },
+      {
+       "name": "n",
+       "type": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "i64"
+        }
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"7\":\"d\",\"-1\":\"a\",\"01\":\"b\",\"4294967295\":\"c\"},{\"a\\\"b\":1,\"k\\n\":2}]"
+  },
+  {
+   "name": "v52",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     },
+     [
+      {
+       "__t": "undef"
+      }
+     ],
+     [
+      {
+       "__t": "undef"
+      },
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "none"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "item": {
+         "k": "none"
+        },
+        "k": "list"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "items": [
+         {
+          "k": "none"
+         },
+         {
+          "alts": [
+           {
+            "k": "f64"
+           },
+           {
+            "k": "none"
+           }
+          ],
+          "k": "union"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[null,[null],[null,null]]"
+  },
+  {
+   "name": "v53",
+   "args": [
+    [
+     [
+      "x",
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    [
+     {
+      "__t": "sparse",
+      "length": 3,
+      "entries": [
+       [
+        0,
+        1
+       ],
+       [
+        2,
+        3
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    [
+     -1
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "u64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a u64 value"
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    [
+     2.5
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a i64 value"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "__t": "sparse",
+     "length": 4,
+     "entries": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ]
+     ]
+    },
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "4 args for a 1-parameter SIG"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    null,
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the args are not a list"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    [
+     1
+    ],
+    {}
+   ],
+   "expected": {
+    "__throw": "Cannot read properties of undefined (reading 'filter')"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    [
+     {
+      "__t": "num",
+      "v": "NaN"
+     },
+     2
+    ],
+    {
+     "args": [
+      {
+       "name": "a"
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "f64"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'k')"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    [
+     1,
+     2
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "rest": true,
+       "type": {
+        "k": "f64"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "text"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": "[\"3ff0000000000000\",\"4000000000000000\"]"
+  },
+  {
+   "name": "v62",
+   "args": [
+    [
+     1,
+     2
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "r",
+       "rest": true
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "2 args for a 1-parameter SIG"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    [
+     1
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "r",
+       "rest": true
+      }
+     ]
+    }
+   ],
+   "expected": "[1]"
+  },
+  {
+   "name": "v64",
+   "args": [
+    [
+     {
+      "__t": "num",
+      "v": "NaN"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    [
+     5
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "union"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'filter')"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    [
+     [
+      1
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "list"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'k')"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    [
+     [
+      1
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "tuple"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'length')"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    [
+     {}
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "record"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'map')"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    [
+     {
+      "__t": "num",
+      "v": "NaN"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "zzz"
+       }
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "the rust harness has no route for zzz"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    [
+     1
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {}
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "the rust harness has no route for undefined"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'k')"
+   }
+  }
+ ]
+}

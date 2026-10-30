@@ -1,0 +1,22 @@
+UNIT carried_shape_type
+LANG rust
+PRIMARY-SHA256 ae3eb92884f1cf9748eec04427b895efcd25660f5114e7aa89ba40b83692debe
+SIG pub fn carried_shape_type(shape: &str) -> serde_json::Value
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn carried_shape_type) depending on
+  serde_json only — no main, no I/O, no binary, no unsafe. The verifier generates its own harness crate from the abstract
+  SIG: shape arrives as &str (UTF-8; the envelope's well-formed text), the result is printed as one JSON line. Type mapping
+  of the result: a node = Value::Object (serde_json::Map; key order immaterial, the canonical form sorts), a list =
+  Value::Array, a word or field name = Value::String; a record field = a two-element Value::Array [name, node]. A throw
+  (R2 empty or arrow-led K, R3, R5–R8) is a panic; the message is not graded.
+ENVELOPE as the primary; the 16-deep boundary (R7) is in scope.
+MECHANISM WS (R2, R4, R5) is ' ', '\t', '\r' and '\n' only — NOT char::is_whitespace, NOT str::trim (they also strip
+  U+000B, U+000C, U+00A0, U+0085, U+3000 …): use trim_matches(|c| matches!(c, ' ' | '\t' | '\r' | '\n')). R1 =
+  shape.split(';').next(). The arrow split (R2) = str::find("->") searched from one character past the end of the WS run
+  after map; slice only at offsets returned by find / char_indices, never at a literal byte count past a non-ASCII
+  character. R4 is a scan for the six spellings with the left and right context checks of the primary (skip only WS;
+  start / end of the whole text count). The reader (R5) skips the same WS. No regex crate is needed; every rule is a scan.
+DEPENDS-ON serde_json (crate, version 1)
+PINNED charset WS = U+0020 U+0009 U+000D U+000A CITED R2 R4 R5 — not Rust's White_Space
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs carriedShapeType + cli/sir/canon.mjs reader. Language file re-cut
+  2026-10-27 (round 5, delta 5b: one WS set, no > left context) with the primary, before any blind re-emission; the ABI follows the lab's rust driver (text -> &str,
+  a json result as serde_json::Value).

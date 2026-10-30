@@ -1,0 +1,73 @@
+UNIT adopt_find_duplicate
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@7b348e351c9f cli/lib/adopt.mts findUnmanagedDuplicate (with its helpers sectionSignature, stripMarkers, findHeadings, linesOf, isFence, isOneLineFence, fenceRun, closesFence, normalizeHeadingText) — the code is the truth
+ORACLE-CLASS deterministic
+SIG adopt_find_duplicate(existing: text, section: text) -> record[heading: text, startLine: i64, endLine: i64] | none
+ENVELOPE any two texts of well-formed Unicode (no lone surrogates). Every such pair has a result; nothing throws.
+DEPENDS-ON none
+DESCRIPTION During `rdv init --adopt`: locate the block of an existing CLAUDE.md (existing) that is an unmanaged copy of
+  a profile's section (section), or none. The result names the block's first heading line (heading: that line, R1 form,
+  with WHITESPACE trimmed from both ends) and the half-open line range [startLine, endLine) it spans, lines counted from 0.
+  The block is a contiguous run of sections of existing whose headings match the profile's, confirmed by profile lines
+  found inside the run.
+BEHAVIOR
+R1 LINES. A text's lines are the pieces between LF characters (n LFs give n + 1 lines; a final LF gives an empty last
+  line; empty text is one empty line), each with ONE trailing CR removed when it ends in CR. Any other CR stays in the line
+  ("x" CR CR LF leaves "x" CR).
+R2 FENCES. A line is a ONE-LINE FENCE when, WHITESPACE-trimmed at both ends, it begins with three backticks, ends with three
+  backticks, is at least 7 UTF-16 units long, and contains no BREAK-CHAR ("```x```", "```````" and "``` ```" are; "``````",
+  "```x``` y" and "```x" U+2028 "y```" are not). A line is a FENCE line when, after its leading WHITESPACE, it begins with
+  three backticks or three tildes (longer runs and any following text included) and it is NOT a one-line fence ("~~~x~~~" is
+  a fence line). A line's RUN is the whole run of backticks or of tildes that starts right after its leading WHITESPACE, when
+  that run has at least 3 characters (else it has no run). Reading the lines in order, starting outside a fence: outside, a
+  fence line OPENS a fence and is its OPENER (a one-line fence opens nothing); inside, a line CLOSES the fence exactly when
+  it has a run of the opener's run character, at least as long as the opener's run, and nothing but WHITESPACE after the run
+  (CITED FIDELITY package: CommonMark's closing rule; indentation and trailing whitespace are any WHITESPACE). Every other
+  line inside is content, fence lines included ("```" inside a "~~~" fence, "```" inside "````", "```bash" inside "```" close
+  nothing); an unclosed fence runs to the end of the text. The opener, the closer and every line between are never headings.
+R3 HEADING. Any other line is a heading when it begins with a run of 1 to 6 "#" (the run is the whole leading run of "#";
+  seven or more -> not a heading) and the rest T after that run (a) begins with a WHITESPACE character, (b) has at least 2
+  characters, and (c) every BREAK-CHAR character in T lies inside T's leading WHITESPACE run and is not T's last character.
+  "#x", "# " and "####### x" are not headings; "#  " (two spaces) is a heading (with an empty key).
+R4 HEADING-KEY of a heading's T: (1) if T, after dropping trailing WHITESPACE, ends with ")", and a "(" occurs after the
+  previous ")" (or the start) and before that final ")", cut T at the FIRST such "(" (the trailing parenthetical and
+  everything after it go); (2) lowercase with the full Unicode lowercase mapping; (3) every maximal run of characters
+  other than ASCII a-z and 0-9 becomes one separator; the key is the remaining runs joined by single spaces, with no
+  leading or trailing space (it may be empty). Step (2) yields ASCII letters only from A-Z, U+212A KELVIN SIGN (-> "k")
+  and U+0130 (-> "i" then a separator); every other non-ASCII character becomes a separator.
+  ("Hard rules (a) (b)" -> "hard rules a"; "Hard rules (a (b)" -> "hard rules"; "(draft)" and "---" -> "").
+R5 NORMALIZED line: every maximal run of WHITESPACE becomes one space, then a leading and trailing space are removed.
+  Length is counted in UTF-16 code units (a supplementary-plane character counts 2).
+R6 GUARD. If existing (the raw text, before R1) contains a BEGIN-MENTION anywhere — closed or not, inside a fence, a code
+  span or mid-line — the result is none.
+R7 SECTION BODY. Take the lines of section (R1) joined back with LF. If it contains a BEGIN-MARKER, drop everything up to
+  and including the end of the first one (it may span lines). Then, if what remains contains an END-MARKER, drop the first one and everything
+  after it. Trim WHITESPACE from both ends. Any other HTML comment (even one holding "-->") is ordinary text.
+R8 SIGNATURE. Over the lines of the section body (split at LF only; R2-R4 apply): KEYS = the SET of the non-empty heading
+  keys; if KEYS is empty -> none. The POOL = the SET of DISTINCT normalized (R5) forms of the body lines that are not blank
+  (empty or all WHITESPACE), not headings, not fence lines (R2's per-line test, whatever the fence state), and whose
+  normalized length exceeds 15. Content lines inside a fence are pool candidates, "#" lines inside a fence included; a
+  one-line fence is not a fence line, so it is a candidate too (a closer of 16 or more backticks is one).
+R9 RUNS. Take the headings of existing (R1-R3) in line order; a heading is MATCHED when its key is non-empty and in KEYS.
+  A run is a maximal sequence of consecutive matched headings in that list (any levels; an unmatched heading, an
+  empty-key heading included, ends it). Its range starts at the line of its first heading and ends (exclusive) at the
+  line of the next heading of existing after the run, else at the line count of existing.
+R10 MATCH. A run qualifies when at least 2 POOL entries each equal the normalized form of some line inside its range (any
+  line there: prose, a heading, a fence line, a fenced line). Runs are examined in line order; the first that qualifies
+  is the result (startLine, endLine = its range). No qualifying run -> none.
+PINNED charset WHITESPACE = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000-U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED R1-R8 — the code's one whitespace set; U+0085 (NEL) is NOT in it, U+FEFF is
+PINNED charset BREAK-CHAR = U+000D U+2028 U+2029 CITED R3 (c) — characters a heading's T may not contain past its leading whitespace
+PINNED charset WORD-CHAR = ASCII A-Z a-z 0-9 "_" CITED BEGIN-MENTION BEGIN-MARKER — the word boundary after "begin"
+PINNED grammar BEGIN-MENTION = "<!--" WHITESPACE* "rederive:begin" (end of text | a non-WORD-CHAR char) CITED R6 — nothing after it is required; the WHITESPACE run may span lines
+PINNED grammar BEGIN-MARKER = BEGIN-MENTION's text, then the shortest stretch (any characters, LF included) up to the FIRST following "-->", provided no "<!--" starts inside that stretch CITED R7 — the leftmost "<!--" that completes it; a begin with no later "-->", or with a "<!--" before its first "-->", is not a marker at that "<!--" (a bare "-->", e.g. an arrow "A --> B", does close it)
+PINNED grammar END-MARKER = "<!--" WHITESPACE* "rederive:end" WHITESPACE* "-->" CITED R7 — the whitespace runs may span lines
+INVARIANT a non-none result has 0 <= startLine < endLine <= line count of existing, the line at startLine is a matched heading, and no heading of existing outside a fence lies strictly inside (startLine, endLine) unless it is matched.
+ORACLE value -> oracles/adopt_find_duplicate.json  CANONICAL-SHA256 a450b3c9595e136f369dd440519b6f47d04360cc340a251d1bc1a6648eda855a
+SCOPE IN: R1-R10 — findUnmanagedDuplicate and the helpers it calls. OUT: replaceUnmanagedBlock, extractKeptContent, the
+  caller in cli/init.mts, file I/O.
+PROVENANCE rederive@7b348e351c9f (pinned authority, selfhost/.authority/7b348e351c9f/), cli/lib/adopt.mts lines 22-118.
+  Round-5c delta re-cut 2026-10-27 after FINDINGS #123 (the guard refuses on any begin mention; the stripped begin marker may
+  wrap lines but never crosses another comment) and #135 (CommonMark fence closing). Rules checked against the real code on
+  1,000,000 seeded inputs (generator cases, a character-level, a line-level and a marker-level fuzz), 0 mismatches.
+  Round-5b re-cut after FINDINGS #110; round-5 re-cut after FINDINGS #91.

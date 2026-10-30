@@ -1,0 +1,39 @@
+UNIT legacy_grade
+LANG js
+PRIMARY-SHA256 3f9fa3daa308bb4b158db46e732a824e15811cd3e469aa3651e989e8ae6c997a
+SIG legacy_grade(gots: unknown[], vectors: {name: string, expected: unknown}[]): {pass: number, total: number, full: boolean, miss: string[]}
+NOTE default export
+ABI json: none = null, bool = boolean, a number = number (IEEE-754 double; -0, NaN, ±Infinity are numbers), text = string
+  (UTF-16), list = Array, map = a plain object. Host slice: the absent value = undefined, a big integer = bigint, a regular
+  expression = RegExp, a boxed wrapper = a Number / String / Boolean object, a set = Set, a keyed collection = Map, a byte
+  array = Uint8Array (buffer-flavoured = a Node Buffer, Buffer.isBuffer), a list with holes = a sparse Array. The result is
+  a fresh plain object {pass, total, full, miss} (numbers, boolean, array of the names). A throw (R1) is a thrown Error;
+  the message is not graded. The artifact is an ES module default-exporting the function and imports nothing (Buffer is the
+  Node global).
+ENVELOPE WIDENING (the js-only extension oracle): the HOST SLICE of the primary's ENVELOPE — undefined anywhere, bigint,
+  RegExp, boxed wrappers, Set, Map, Uint8Array, sparse arrays, and plain objects whose own-key order differs between the
+  two sides (R4), plus OUT-OF-DOMAIN 1–3 (gots null, vectors null, a null vector, a vector without expected).
+MECHANISM R4 is realized as JSON.stringify(CANON(got)) === JSON.stringify(CANON(REVIVE(expected))): JSON.stringify walks
+  own keys in the host's own-key order, which IS the primary's KEY ORDER (array-index keys ascending, then insertion
+  order), and CANON never leaves a value JSON would drop or alter (-0, NaN, ±Infinity, undefined and bigint are tagged
+  first). Build every map — CANON's, REVIVE's — with Object.defineProperty(o, k, {value, enumerable, writable,
+  configurable: true}) over Object.keys(src), never o[k] = …, so an own "__proto__" key stays a key.
+MECHANISM TABLE CANON row tests, in this order: v === undefined; typeof v === 'bigint'; Object.is(v, -0); a non-finite
+  number; v instanceof RegExp (source / flags getters are the normalized forms); v instanceof Number, String or Boolean (k =
+  v.constructor.name, payload v.valueOf()); Set; Map; Uint8Array ({bytes: Array.from(v), buf: Buffer.isBuffer(v)}, before the
+  Array test); Array.isArray (a hole = !(i in v) for some i below length); then any non-null object through Object.keys
+  (skip function-valued keys) with the wrap decided by Object.hasOwn on the ORIGINAL map; anything else unchanged.
+MECHANISM THROWN (R2) = x is truthy, typeof object, not an Array, and Object.hasOwn(x, '__throw'). REVIVE reads v.__t by
+  plain property access on a non-null, non-Array object, so a host Set / Map / RegExp / Uint8Array / boxed wrapper in
+  expected falls to the map branch and copies Object.keys(v) (R6). TABLE REVIVE rows: regex = new RegExp(t.source, t.flags);
+  bigint = BigInt(t.v) (R11 is exactly its StringToBigInt / NumberToBigInt grammar); num = an exact membership test of t.v
+  in the four texts, then Number(t.v); boxed = new Number(x) / new String(x) / new Boolean(x) (R7's TO-NUMBER / TO-TEXT /
+  TO-BOOL are the host ToNumber / ToString / ToBoolean); set = new Set((t.values || []).map(REVIVE)); map = new Map((t.entries
+  || []).map(([k, x]) => [REVIVE(k), REVIVE(x)])) (array destructuring is R9's pair read); u8 = t.buf ? Buffer.from(t.bytes) :
+  Uint8Array.from(t.bytes) (R12); sparse = new Array(t.length), then for (const [i, x] of (t.entries || [])) a[i] =
+  REVIVE(x) (R13); obj = refuse null / non-object / Array t.v, else copy its own keys. Set and Map normalize a -0 key to +0
+  themselves (R8).
+DEPENDS-ON none
+PINNED grammar REGEX = the ECMAScript RegExp constructor of the host (Node 24: flags d g i m s u v y, u and v exclusive; source getter = EscapeRegExpPattern) CITED R10 — pattern validity and the normalized source ride on it
+PROVENANCE rederive@978444f3baf3 cli/verdict.mts (grade, vectorPass, threw, eq, enc, revive). Language file cut 2026-10-27
+  with the primary, before any blind re-emission.

@@ -1,0 +1,135 @@
+THE DUMB-AGENT TEST — do the decomposer INSTRUCTIONS work on someone who does not
+already know the answer?
+
+WHY THIS WAS NEEDED
+  Phase 5 tested the CONSUMPTION direction: blind emitters reading a SIR. But I
+  wrote all four cleanroom SIRs myself, knowing exactly what I wanted them to say.
+  That means Phase 5 never tested the instructions at all — the main agent stood in
+  for the decomposer, which is the one step that must not be stood in for. The
+  fragments and the "concurrency keywords are hints" rule had never been run by an
+  agent; payload.mjs had only ever been checked for PRINTING the right text.
+
+SETUP
+  A weak model (Haiku), generic agent type, no SIR expertise, given ONLY:
+  a SIR format primer + the sir-decomposer rule + the derived payload from
+  payload.mjs. Then a plain-English task. It writes the contract; three blind
+  sir-reemitter-cr agents build from ITS contract; a grader that CANNOT presume the
+  answer (I did not write it) reports three independent things:
+
+    CONVERGE  do 3 blind emitters agree — on values AND on the channel protocol?
+              (the real quorum criterion; divergence = an ambiguous contract)
+    CHANNELS  bound respected / token discipline held? (derivable from the
+              construct alone, no contract needed)
+    FAITHFUL  does the agreed behavior match the task as handed to the decomposer?
+
+  The 2x2 those form is the point: converge+unfaithful is a DIFFERENT failure from
+  divergence, and only one of them is visible to the factory's existing gates.
+
+ROUND 1 — BOTH UNITS FAILED, in two different ways
+
+  boundedFilter (PAR) — "return the EVEN integers, at most N in flight"
+    CONVERGE yes · CHANNELS yes · FAITHFUL **NO**
+    The decomposer wrote a flawless, unambiguous, internally consistent contract
+    that defined the result as "the elements for which gate.open resolves truthy",
+    and stated outright: "The unit does not compute evenness itself; that logic
+    lives in the gate function supplied by the caller."
+    All 3 emitters built it identically and returned EVERY element:
+      [1,2,3,4] -> [1,2,3,4]   (task asked for [2,4])
+      [1,3,5]   -> [1,3,5]     (task asked for [])
+    Quorum 3/3. Bound respected. Requirement gone.
+
+    ROOT CAUSE — the PAR fragment never said what `gate.open` RESOLVES WITH. It
+    explained that the gate controls *when* a slot settles and never that it
+    resolves with the value unchanged and computes nothing. With that undefined,
+    "the gate is the predicate" is a legitimate reading. The Phase 5 harden fixed
+    the SIR; it never fixed the FRAGMENT — the instance, not the class.
+
+    WHY THIS ONE MATTERS MOST: quorum measures AGREEMENT, not FIDELITY. Three
+    independent emitters converging is exactly the signal the factory trusts, and
+    here it was unanimous about the wrong thing. Nothing downstream can catch a
+    requirement discarded at the decomposer step. This is the steamroll failure
+    one level up: the contract moved, so every check below it agreed with the move.
+
+  ringLabel (RING) — token-coordinated labeling
+    CONVERGE **NO** (channel only) · CHANNELS yes · FAITHFUL yes
+    The contract said "the token is taken exactly n times (once per actor
+    i=0..n-1)" while its own RING line said actor 0 takes and the rest receive.
+    Emitters split 1-vs-2 on whether later actors also call take():
+      emitter 1: held(0) passed(0->1) passed(1->2) released(2)
+      emitters 2,3: held(0) passed(0->1) held(1) passed(1->2) held(2) released(2)
+    IDENTICAL return values. IDENTICAL outputs. Different protocol. Mutual
+    exclusion still held (a Set dedups), so even the liveness check passed.
+
+    Caught only because the grader compares TOKEN EVENT SEQUENCES across emitters,
+    a check added minutes earlier after reading the contract's contradiction. A
+    value-only quorum sees nothing here.
+
+    ROOT CAUSE — the RING fragment said "every token taken is eventually
+    released", which actively invites the n-takes reading. It never stated the
+    asymmetry: ONE take by the first actor, pass for every handoff, ONE release.
+
+    CONFIRMED FROM BOTH SIDES by the emitters' own reports. They read the same
+    file and each cited it as justification for the opposite protocol:
+
+      rl_2: "gate.token.take(who) is called exactly n times (once per actor, per
+             INVARIANT line 12): actor 0 calls take(0) directly; actor i>0 calls
+             pass(i-1, i) then take(i), enforcing INVARIANT line 14"
+      rl_1: "actor 0 calls gate.token.take(0) ... exactly one take, n-1 pass
+             calls, one release, in strict index order, matching RING and all
+             four INVARIANTs"
+
+    Neither misread anything. The contract genuinely asserted both, and each
+    emitter resolved the contradiction in a defensible direction. That is the
+    signature of an ambiguous contract rather than a weak builder — and note that
+    both were confident, so no "flag your uncertainty" instruction would have
+    surfaced it. Only comparing the emissions did.
+
+    A THIRD ambiguity surfaced in the same contract, unprompted: rl_3 flagged
+    that it built the ring as a sequential await-chain rather than n concurrent
+    actors racing on take(), "rather than depending on unstated blocking
+    semantics inside the gate object", and asked whether the oracle expected
+    genuine concurrent actor tasks. The SIR never said. It happened not to change
+    the observable outcome here, which is precisely why it would have shipped.
+
+THE FIX — the class, not the instances
+  fragments/par-interleaving.md  defines the gate as a COMPLETION SOURCE that
+                                 resolves with its argument unchanged and computes
+                                 nothing, and makes the default non-negotiable:
+                                 the UNIT does all domain work.
+  fragments/ring.md              states the take/pass/release asymmetry outright
+                                 and names the "taken n times" phrasing as the
+                                 common failure.
+  agents/sir-decomposer.md       "name the boundary" -> "name it the RIGHT WAY
+                                 ROUND", with "quorum measures agreement, not
+                                 fidelity" as the reason.
+
+ROUND 2 — BOTH PASS (fresh weak decomposers, regenerated instructions, fresh emitters)
+
+  boundedFilter  CONVERGE yes · CHANNELS yes · FAITHFUL yes
+     [1,2,3,4]     -> [2,4]     (8 schedules)
+     [1,3,5]       -> []        (4 schedules)
+     [1,2,3,4,5,6] -> [2,4,6]   (162 schedules, bound held throughout)
+     Its contract now says: "The UNIT performs all domain work: it determines
+     whether each element is even. The gate only signals timing to the verifier."
+
+  ringLabel      CONVERGE yes · CHANNELS yes · FAITHFUL yes
+     one deterministic schedule per case, all 3 emitters agreeing on values AND
+     on the token event sequence. Its contract now says: "Exactly one take call
+     (by actor 0), exactly N-1 pass calls, and exactly one release call."
+
+VERDICT
+  The Phase 5 instructions did NOT survive contact with a weak model — 0/2 on
+  first run. They do now, 2/2, but only because the test was run. The general
+  lesson is that a gate which never rejected anything proves nothing, and that
+  applies to PROMPTS as much as to graders: an instruction validated only by its
+  author is an instruction that has never been tested.
+
+  Standing item: quorum cannot see a requirement lost at the decomposer step.
+  Convergence is necessary, not sufficient. Anything that grades only emitter
+  agreement is blind to the one failure mode that costs the most.
+
+REPRODUCE
+  node grade-dumb.mjs boundedFilter   # round 1, exits 1 (converge yes, faithful NO)
+  node grade-dumb.mjs ringLabel       # round 1, exits 1 (channel divergence)
+  node grade-r2.mjs   boundedFilter   # round 2, exits 0
+  node grade-r2.mjs   ringLabel       # round 2, exits 0

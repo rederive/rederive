@@ -1,0 +1,56 @@
+{
+ "status": "ok",
+ "unit": "languages_of",
+ "primary": "selfhost/units/languages_of/sir/languages_of.sir",
+ "primarySha256": "05fd6ddaca2f6220ffa46e63262ccd0a720204c407e786983e062989bb37480e",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "input is not a map (none, a list, text, a number or a bool) -> throws. Entries other than sirFiles and variants are ignored.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R2",
+   "text": "FILES = the entry sirFiles: missing -> the empty list; a list -> its elements; anything else (none included) -> throws. An element that is not text -> throws.",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R3",
+   "text": "CLAIM-OF(path) is an id, nothing, or a throw. BASE = the part of path after its last \"/\" or \"\\\" (all of path when it holds neither), with SPACE-TAB characters removed from both ends (only those). A SIR-END is the four characters \".\" then one of SIR-CASE's s S, one of i I, one of r R — an ASCII-only fold. (a) BASE is text that ends with a SIR-END, followed by one or more HIDDEN characters to the very end -> throws. (b) Otherwise, BASE not ending with a SIR-END -> nothing (x.ts.sir.bak, x.ts.sir~, x.ts.sir/, README.md, x.ts.ſir, x.ts.sır). (c) Otherwise STEM = BASE without its last four characters, cut at every \".\" into SEGMENTS; UNIT = the first SEGMENT. UNIT not empty and not a UNIT-NAME -> throws (x y.ts.sir, é.sir, -x.ts.sir, a<LF>b.rust.sir; an empty UNIT is allowed). More than two SEGMENTS -> throws (a.b.ts.sir, x.go.ts.sir, ...sir). One SEGMENT -> nothing (x.sir, .sir, ts.sir). Two: the second empty -> throws (x..sir, ..sir); else the claim is the second exactly as written, no case change or trim (.php.sir claims php; a.b.sir claims b, which R4 refuses).",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R4",
+   "text": "SIGHT(id): id not in REGISTRY (exact, case-sensitive) -> throws; otherwise id is SIGHTED. Each element of FILES with a claim is sighted: x.TS.sir, x.carried.sir and \"x. ts.sir\" throw.",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R5",
+   "text": "VARIANTS = the entry variants: missing or none -> no entries; a map -> its entries; anything else (a list, text, number or bool — false and 0 included) -> throws. Entry order is immaterial: every check below is per entry or over all entries.",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "R6",
+   "text": "For each entry K -> V of VARIANTS: (a) V not a map -> throws. V has an entry lang that is not text (none included) -> throws. V has an entry sir that is not text -> throws. V has a text sir: CLAIM-OF(sir) is taken (it may throw, R3), and BASE of sir (as R3 cuts it) not ending with a SIR-END -> throws (the empty text, \"/\", README.md, x.ts.sir.bak, x.ts.sir/). (b) K is neither exactly package nor exactly lang: followed by a LANG-ID -> throws (Lang:ts, lang:, lang:TS, lang:1ts, \" lang:ts\", default, look-alikes with a Cyrillic letter, a fullwidth colon or an invisible character). The LANG-ID runs to the very end of K: lang:ts followed by a line feed throws. (c) KEYLANG = the LANG-ID of a lang: key (none for package); OWNLANG = V's lang (the empty text included); PATHLANG = CLAIM-OF(V's sir) when V has a sir. NAMED = those present. (d) two members of NAMED differ (exact comparison) -> throws. (e) KEYLANG or OWNLANG present, V has a sir, and PATHLANG is nothing -> throws (lang:ts, or package with lang ts, and sir x.sir). (f) NAMED empty -> the entry contributes nothing (only a package key without lang whose sir is absent or a one-SEGMENT name). (g) otherwise SIGHT(the one id NAMED holds) — so lang:go or an empty lang throws — and that id is claimed by K: two entries claiming one id -> throws. A FILES claim and a variant claim of the same id do not conflict.",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R7",
+   "text": "The result is the SIGHTED ids, each once, in ascending order (every REGISTRY id is ASCII lowercase, so any text order agrees). A throw anywhere is the outcome of the whole call: no partial result.",
+   "ambiguity": 0.24
+  }
+ ],
+ "ranked": [
+  "R3",
+  "R6",
+  "R4",
+  "R1",
+  "R7",
+  "R2",
+  "R5"
+ ],
+ "at": "2026-10-28T02:43:19Z"
+}

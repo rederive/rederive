@@ -1,0 +1,159 @@
+# EXEMPLAR (complex register) — an 82-line parser with five load-bearing regexes, carried data, and a
+# deliberate spec-fidelity correction earns ~155 lines. Every line here is doing contract work: verbatim
+# pinned literals, a mechanism note explaining WHY a lookahead matters, one flagged intentional divergence.
+# PROVEN: 3 blind JS re-emissions + 1 Rust, all 5000/5000 equivalent.
+UNIT get_rgb
+KIND FUNCTIONAL
+FIDELITY spec
+# spec-fidelity anchored to color-string@2.1.4's `cs.get.rgb`, with ONE deliberate
+# correction to the percent-to-byte rounding (see BEHAVIOR node PER and the
+# CORRECTION note). Everything else reproduces the reference parser exactly; the
+# accept/reject envelope rides on regex accidents (lookaheads, separator classes)
+# that are NOT derivable from a prose description, so those regexes are transcribed
+# verbatim below and ARE the contract. The reference implementation the oracle was
+# captured from is index.corrected.js (identical to index.js except the PER rule).
+
+ORACLE-CLASS deterministic
+# Pure function of its single string argument. No clock/RNG/io/seam.
+
+SIG get_rgb(input: string) -> [r, g, b, a] | null
+# Real-package accessor path: `default.get.rgb` (the default export `cs` is an object;
+# the target function is the property `cs.get.rgb`). The reconstruction exports a plain
+# function of this signature; the real side is driven as default.get.rgb(input).
+# Result is a 4-element array [r, g, b, a] of finite numbers, or null.
+#   r,g,b: numbers clamped to [0,255] (NOT integer-rounded except in the PER branch)
+#   a:     number clamped to [0,1], default 1 when no alpha is present
+
+DEPENDS-ON
+#   colorNames  -- the named-color table, CARRIED DATA imported by name from
+#                  ./carried-color-names.js (default export; 148 lowercase name -> [r,g,b] entries,
+#                  extracted byte-exact from the color-name npm package). The unit NEVER
+#                  memorizes this table; it imports it and does own-key lookups against it.
+#   clamp(n,min,max) -> Math.min(Math.max(min, n), max)   # local helper, defined in BEHAVIOR
+
+BEHAVIOR
+# ---------------------------------------------------------------------------------
+# STEP 0 — nullish / empty guard
+#   if (!input) return null
+#   Falsy inputs return null: "" (empty string), and also null/undefined/0/false/NaN.
+#   Within the string envelope the only relevant falsy value is the empty string "".
+#
+# STEP 1 — set default accumulator
+#   rgb = [0, 0, 0, 1]        # default alpha = 1
+#
+# STEP 2 — branch by FIRST-matching pattern, in EXACTLY this order. The first four
+#   patterns are matched against the ORIGINAL input string (all carry the /i flag, so
+#   they are case-insensitive). The KEYWORD pattern is matched against
+#   input.toLowerCase(). First match wins; if none match, return null.
+#
+#   Exact regex literals (load-bearing — reproduce verbatim):
+#     HEX6   = /^#([a-f\d]{6})([a-f\d]{2})?$/i
+#     ABBR   = /^#([a-f\d]{3,4})$/i
+#     RGBA   = /^rgba?\(\s*([+-]?(?:\d*\.)?\d+(?:e\d+)?)(?=[\s,])\s*(?:,\s*)?([+-]?(?:\d*\.)?\d+(?:e\d+)?)(?=[\s,])\s*(?:,\s*)?([+-]?(?:\d*\.)?\d+(?:e\d+)?)\s*(?:[\s,|/]\s*([+-]?(?:\d*\.)?\d+(?:e\d+)?)(%?)\s*)?\)$/i
+#     PER    = /^rgba?\(\s*([+-]?[\d.]+)%\s*,?\s*([+-]?[\d.]+)%\s*,?\s*([+-]?[\d.]+)%\s*(?:[\s,|/]\s*([+-]?[\d.]+)(%?)\s*)?\)$/i
+#     KEYWORD= /^(\w+)$/
+#
+#   All patterns are start-anchored (^) and end-anchored ($). This is the leading/trailing
+#   anchor behavior: leading garbage (" rgb(...)", "x red", "BACON rgb(...)", "x#fff") and
+#   trailing garbage ("rgb(255,0,0)x") never match -> fall through -> null.
+#
+# BRANCH A — HEX6 : input matches HEX6  (exactly 6 hex, optionally +2 hex alpha)
+#     group1 = the 6 hex digits ; group2 = optional 2 hex alpha digits (or undefined)
+#     for i in 0..2:  rgb[i] = parseInt(group1.slice(2*i, 2*i+2), 16)   # two hex chars -> byte
+#     if group2:      rgb[3] = parseInt(group2, 16) / 255
+#     -> continue to STEP 3 (clamp)
+#
+# BRANCH B — ABBR : else if input matches ABBR  (exactly 3 or 4 hex chars)
+#     m = group1 (the captured 3-or-4-char hex string)
+#     hexAlpha = m[3]        # the char at index 3 of m; present ONLY for 4-char forms, else undefined
+#     for i in 0..2:  rgb[i] = parseInt(m[i] + m[i], 16)                # each nibble DOUBLED: "a"->"aa"->170
+#     if hexAlpha:    rgb[3] = parseInt(hexAlpha + hexAlpha, 16) / 255  # e.g. "8"->"88"=136 -> 136/255
+#     -> continue to STEP 3 (clamp)
+#
+# BRANCH C — RGBA numeric : else if input matches RGBA
+#     Numeric channel/alpha sub-pattern: [+-]?(?:\d*\.)?\d+(?:e\d+)?
+#       -> optional sign; optional (zero+ digits then a dot); one+ digits; optional (e + one+ digits,
+#          unsigned exponent, case-insensitive e via /i). Accepts "255", "0.5", ".5", "1e2", "127.5".
+#     Groups: 1,2,3 = r,g,b numbers ; 4 = optional alpha number ; 5 = optional literal "%".
+#     KEY MECHANISM: groups 1 and 2 are each followed by a lookahead (?=[\s,]) requiring the very
+#       next char to be whitespace or comma. Group 3 has NO such lookahead. Consequences:
+#         * percent channels ("50%") FAIL here (next char "%" fails the lookahead) -> fall to PER.
+#         * fewer than 3 channels ("rgb(1,2)") fail (no [\s,] after group2 before ")").
+#       Channel separators are flexible: \s*(?:,\s*)? between channels accepts commas and/or spaces
+#       ("rgb(255,0,0)", "rgb(255 0 0)", "rgb( 255 , 0 , 0 )" all match).
+#       Alpha, if present, is introduced by ONE separator char from [\s,|/] (space, comma, pipe, slash).
+#     for i in 0..2:  rgb[i] = parseFloat(group[i+1])       # parseFloat only — NOT rounded here
+#     if group4:      rgb[3] = group5 ? parseFloat(group4) * 0.01 : parseFloat(group4)
+#                              # "%" alpha (group5 truthy) -> value/100 ; plain -> value as-is
+#     -> continue to STEP 3 (clamp)
+#
+# BRANCH D — PER percent : else if input matches PER
+#     Each of the 3 channels is [+-]?[\d.]+ immediately followed by a literal "%".
+#     Groups: 1,2,3 = percent numbers ; 4 = optional alpha number ; 5 = optional literal "%".
+#     Alpha separator is again one of [\s,|/]; alpha "%" (group5) means value/100, else value as-is.
+#     CORRECTED percent-to-byte rule (this is the ONE deliberate spec divergence):
+#         for i in 0..2:  rgb[i] = Math.round( parseFloat(group[i+1]) * 255 / 100 )
+#     for the alpha:
+#         if group4:      rgb[3] = group5 ? parseFloat(group4) * 0.01 : parseFloat(group4)
+#     -> continue to STEP 3 (clamp)
+#   ### CORRECTION (FIDELITY spec — intentional divergence from the package) ###
+#     The original color-string computes the channel as Math.round(p * 2.55). Because 2.55 is not
+#     exactly representable in IEEE-754 double, p*2.55 lands just below the true half-integer for
+#     p=50 and p=90, so the original yields 50% -> 127 and 90% -> 229. The CONTRACT corrects this to
+#     Math.round(p * 255 / 100), giving the mathematically correct 50% -> 128 and 90% -> 230.
+#     In the integer-percent domain these are the ONLY two values that differ; all other percents
+#     agree with the original. Math.round rounds halves toward +Infinity. The provided oracle already
+#     encodes the corrected values (e.g. rgb(50%,50%,50%) -> [128,128,128,1],
+#     rgb(90%,90%,90%) -> [230,230,230,1], rgb(25%,50%,75%) -> [64,128,191,1]).
+#
+# BRANCH E — KEYWORD : else if input.toLowerCase() matches KEYWORD = /^(\w+)$/
+#     word = group1 (the whole lowercased string; \w = [A-Za-z0-9_], so it must be a single run
+#            of word chars — anything with spaces/parens/"#"/"." never reaches this branch).
+#     (E1) if word === "transparent":  return [0, 0, 0, 0]      # EARLY RETURN, no clamp
+#     (E2) if colorNames does NOT have own-property `word`:  return null
+#          # "transparent" is NOT a key of colorNames; it is handled only by E1.
+#          # Any \w+ that is not a known name (e.g. "xyz", "notacolorname", "1234") -> null here.
+#     (E3) rgb = colorNames[word].slice() ; rgb[3] = 1 ; return rgb   # EARLY RETURN, no clamp
+#          # e.g. "RED"->"red"->[255,0,0] -> [255,0,0,1]; "Grey"->"grey"->[128,128,128] -> [...,1]
+#
+# BRANCH F — none matched:  return null
+#
+# STEP 3 — clamp (reached ONLY from branches A, B, C, D; branches E and F return early)
+#   clamp(n,min,max) = Math.min(Math.max(min, n), max)
+#   for i in 0..2:  rgb[i] = clamp(rgb[i], 0, 255)     # channels clamped to [0,255]
+#   rgb[3] = clamp(rgb[3], 0, 1)                        # alpha clamped to [0,1]
+#   return rgb
+#   Examples: rgb(256,0,0)->[255,0,0,1]; rgb(999,0,0)->[255,0,0,1]; rgb(-1,0,0)->[0,0,0,1];
+#             rgba(255,0,0,2)->[...,1]; rgba(255,0,0,-1)->[...,0]. Non-percent channels are NOT
+#             integer-rounded: rgb(127.5,0,0)->[127.5,0,0,1]; rgb(0.5,0.5,0.5)->[0.5,0.5,0.5,1].
+# ---------------------------------------------------------------------------------
+
+ORACLE value -> oracle.json
+# Provided pre-captured from index.corrected.js: 42 frozen + 21 held-out cases of
+# get_rgb(string) -> [r,g,b,a] | null. Do NOT regenerate. This SIR is verified consistent
+# with all 63 cases (spot-checked: corrected percents 50%/90%/25-50-75, named colors
+# red/blue/white/black/rebeccapurple/grey, transparent, all hex/abbr/rgba forms, and every
+# reject case). Alpha values are exact doubles, e.g. "#f008" -> a = 136/255 = 0.5333333333333333,
+# "#ff000080" -> a = 128/255 = 0.5019607843137255, "#abcd" -> a = 221/255 = 0.8666666666666667.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): STEP 0 nullish guard; the branch ORDER
+#   (HEX6 -> ABBR -> RGBA -> PER -> KEYWORD -> null); the five regexes verbatim
+#   including the RGBA (?=[\s,]) lookaheads and the [\s,|/] alpha-separator classes;
+#   hex nibble expansion + hexAlpha/255; parseFloat channels (no rounding) for RGBA;
+#   the CORRECTED round(p*255/100) for PER; the "%" alpha *0.01 rule; the early returns
+#   for transparent and named colors (bypassing clamp); and STEP 3 clamp of the other
+#   four branches (channels [0,255], alpha [0,1]).
+# CARRIED DATA (imported, never memorized): colorNames from ./carried-color-names.js
+#   (148 entries). Demonstrated in-scope subset exercised by the oracle and all in the
+#   table: red[255,0,0], blue[0,0,255], white[255,255,255], black[0,0,0],
+#   rebeccapurple[102,51,153], grey[128,128,128]. "transparent" is NOT in the table
+#   (special-cased in BRANCH E1). Membership test is Object own-property lookup on the table.
+# OUT-OF-CONTRACT: the sibling parsers cs.get.hsl / cs.get.hwb, the dispatcher cs.get,
+#   and all cs.to.* serializers are NOT part of this unit. Non-string arguments are
+#   out-of-envelope (a real non-empty non-string would throw on .match); only strings
+#   are in scope.
+
+ENVELOPE get.rgb(string) only: hex #rgb/#rgba/#rrggbb/#rrggbbaa (case-insensitive; short forms double each nibble; trailing nibble/byte is alpha=value/255); rgb()/rgba() numeric channels (int, float, leading-dot, unsigned scientific e-notation, optional sign) with comma and/or space separators and optional alpha (fraction or %, introduced by comma/space/pipe/slash); rgb()/rgba() percent channels (CORRECTED round(p*255/100)); the literal "transparent" -> [0,0,0,0]; named colors via the carried table (unknown \w+ -> null). Result [r,g,b,a] with r,g,b clamped [0,255], a clamped [0,1], default a=1. Start-AND-end anchored: leading/trailing garbage -> null. Falsy/empty input -> null. OUT: hsl()/hwb() parsing, the cs.get dispatcher, all cs.to.* serializers, non-string inputs, and (deliberately) the package's float-imprecise percent rounding.
+
+PROVENANCE color-string@2.1.4 (repo Qix-/color-string, MIT), source file index.js function `cs.get.rgb`; spec anchor index.corrected.js (identical except the PER percent-to-byte rule corrected from round(p*2.55) to round(p*255/100)). Carried table extracted byte-exact from color-name (npm) via ./carried-color-names.js.

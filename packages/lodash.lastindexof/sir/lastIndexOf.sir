@@ -1,0 +1,230 @@
+UNIT lastIndexOf
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG lastIndexOf(array, value, fromIndex) -> number     # the DEFAULT export; re-emit as `export default <fn>`
+
+DEPENDS-ON none
+# Self-contained. No external modules, no carried data. The unit inlines its helpers
+# (toInteger/toFinite/toNumber/isObject/isObjectLike/isSymbol/baseIsNaN/baseFindIndex).
+# Pure: it never mutates `array` (read-only scan). No clock/RNG/io/env seam -> deterministic.
+
+ORACLE value -> oracle.json
+
+# =====================================================================================
+# OVERVIEW
+# =====================================================================================
+# Returns the index of the LAST (highest-index) element of `array` strictly equal
+# (=== ) to `value`, searching from right to left, or -1 if not found.
+# `value === value`-equality means -0 matches +0 (and vice-versa). The single exception
+# is the NaN search value, which is matched via a `v !== v` predicate (NaN is never ===
+# to anything, so a dedicated backward find is used).
+# `fromIndex` (default = array.length - 1) sets an INCLUSIVE upper bound on the indices
+# considered; it is coerced through lodash `toInteger` and then clamped.
+#
+# IMPORTANT: `array` is treated as an ARRAY-LIKE. The unit only ever reads `array.length`
+# and `array[index]`. It therefore also works on strings, typed arrays (Uint8Array/Buffer),
+# arguments objects, etc. There is NO Array.isArray check, NO type guard.
+
+# =====================================================================================
+# BEHAVIOR  (exact ordered pipeline — reproduce node-for-node)
+# =====================================================================================
+
+# ---- node-1: length resolution & empty/nullish early-out -------------------------------
+# length = array ? array.length : 0
+#   - If `array` is FALSY (null, undefined, 0, NaN, false, "", or any falsy value),
+#     length = 0.  NOTE: a NON-empty string / typed array / object-with-length is truthy,
+#     so its `.length` is read.  (`[]` is truthy but has length 0.)
+#   - `length` is used as-is; it is NOT re-coerced to a safe integer. (For real arrays it
+#     is always a non-negative integer.)
+# if (!length) return -1
+#   - Covers: array nullish -> length 0 -> -1 ; empty array [] -> length 0 -> -1 ;
+#     empty string "" -> -1.
+
+# ---- node-2: compute upper-bound `index` (exclusive cursor; loop decrements first) ------
+# index = length                              # default: full search, cursor starts at length
+# if (fromIndex !== undefined) {              # ONLY a literal `undefined` triggers default;
+#                                             #   passing undefined explicitly == omitting it.
+#     index = toInteger(fromIndex)            # see TOINTEGER below
+#     index = ( index < 0
+#                 ? nativeMax(length + index, 0)     # negative wrap, floored at 0
+#                 : nativeMin(index, length - 1)     # positive clamp to last valid index
+#             ) + 1                                   # +1 because the loop pre-decrements
+# }
+#   Resulting `index` is the EXCLUSIVE upper cursor; the highest index actually examined
+#   is `index - 1`.  Stratified meaning of `index` after node-2:
+#     - fromIndex omitted/undefined:        index = length            (examine length-1 .. 0)
+#     - fromIndex >= length-1 (incl. huge): index = length            (full backward search)
+#     - 0 <= fromIndex <= length-1:         index = fromIndex + 1     (examine fromIndex .. 0)
+#     - -length <= fromIndex < 0:           index = length+fromIndex+1 (examine length+fromIndex .. 0)
+#     - fromIndex < -length (beyond):       index = 0 + 1 = 1         (examine index 0 ONLY)
+#     - fromIndex coerces to 0 (e.g. NaN/null/""/-0): index = min(0,length-1)+1 = 1
+#                                                            (examine index 0 ONLY)
+
+# ---- node-3: NaN branch -----------------------------------------------------------------
+# if (value !== value)   # true iff value is NaN (the ONLY value not === to itself)
+#     return baseFindIndex(array, baseIsNaN, index - 1, true)
+#   baseFindIndex(arr, predicate, fromIndex=index-1, fromRight=true):
+#     i = (index-1) + 1 = index        # then loop pre-decrements: i-- before each test
+#     while (i--) { if (predicate(arr[i], i, arr)) return i }     # i runs index-1 down to 0
+#     return -1
+#   predicate baseIsNaN(v) = (v !== v).
+#   So: scan i = index-1, index-2, ..., 0 ; return first i where arr[i] is NaN, else -1.
+#   The bound `index-1` is INCLUSIVE.  (When index==1, only i=0 is tested. When the
+#   computed bound excludes the NaN, returns -1.)
+
+# ---- node-4: general === branch ---------------------------------------------------------
+# while (index--) {                    # index pre-decrements: examines index-1, ..., 0
+#     if (array[index] === value) return index
+# }
+# return -1
+#   - Strict equality (===). Reference types (objects/arrays/functions) match by IDENTITY.
+#   - Numbers: +0 === -0 is true, so searching 0 finds -0 and searching -0 finds +0.
+#   - bigint 1n !== number 1.  String 'a' !== number-coerced anything (no coercion here).
+#   - Returns the FIRST match encountered going right-to-left == the HIGHEST matching index
+#     that is <= the upper bound.
+
+# =====================================================================================
+# TOINTEGER  (coercion of fromIndex — inlined lodash toInteger@4.x)
+# =====================================================================================
+# toInteger(value):
+#   result = toFinite(value)
+#   remainder = result % 1
+#   return (result === result)                      # i.e. result is not NaN
+#            ? (remainder ? result - remainder : result)   # truncate toward zero
+#            : 0
+#
+# toFinite(value):
+#   if (!value) return (value === 0 ? value : 0)    # falsy: 0/-0/"" -> the value-or-0;
+#                                                   #   null/undefined/false/NaN -> 0.
+#                                                   #   (-0 returns -0; "" -> toNumber path? NO:
+#                                                   #    "" is falsy so returns 0 here.)
+#   value = toNumber(value)
+#   if (value === INFINITY || value === -INFINITY)  # INFINITY = 1/0
+#        return (value < 0 ? -1 : 1) * MAX_INTEGER  # MAX_INTEGER = 1.7976931348623157e+308
+#   return (value === value ? value : 0)            # NaN -> 0
+#
+# toNumber(value):
+#   if (typeof value == 'number') return value
+#   if (isSymbol(value)) return NaN                 # Symbol -> NaN (-> toInteger 0)
+#   if (isObject(value)) {                          # object/function
+#        other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#        value = isObject(other) ? (other + '') : other
+#   }
+#   if (typeof value != 'string') return (value === 0 ? value : +value)
+#   value = value.replace(/^\s+|\s+$/g, '')         # trim leading/trailing whitespace
+#   isBinary = /^0b[01]+$/i.test(value)
+#   return (isBinary || /^0o[0-7]+$/i.test(value))
+#            ? parseInt(value.slice(2), isBinary ? 2 : 8)        # 0b.. / 0o.. parse
+#            : (/^[-+]0x[0-9a-f]+$/i.test(value) ? NaN : +value) # bad signed hex -> NaN; else +value
+#
+# isSymbol(v)     = typeof v == 'symbol' || (isObjectLike(v) && Object.prototype.toString.call(v) == '[object Symbol]')
+# isObject(v)     = !!v && (typeof v == 'object' || typeof v == 'function')
+# isObjectLike(v) = !!v && typeof v == 'object'
+#
+# NET EFFECT for the fromIndex values genInputs emits (all confirmed against real package):
+#   - integer n               -> n
+#   - float f                 -> trunc-toward-zero (4.9 -> 4 ; -2.9 -> -2)
+#   - numeric string "4"/"4.9"-> 4
+#   - "" / "   "              -> 0          ("" falsy -> 0 ; "   " trims to "" -> +'' = 0)
+#   - NaN                     -> 0
+#   - +Infinity               -> +MAX_INTEGER (~1.8e308) -> clamps to length-1 -> full search
+#   - -Infinity               -> -MAX_INTEGER            -> negative wrap -> max(...,0) -> bound 0
+#   - null                    -> 0   (null is falsy in toFinite -> 0)
+#   - true                    -> 1   ; false -> 0
+#   - -0                      -> -0  (NOT < 0) -> min(-0,length-1)+1 = 1 -> examine index 0 only
+#   - 1e308 (finite huge)     -> 1e308 (toInteger keeps it) -> clamps to length-1 -> full search
+#   - bigint                  -> +value of bigint via toNumber's non-string +value path
+#                                  (e.g. 2n: toNumber -> not number, not symbol, isObject? no
+#                                   (bigint typeof 'bigint') -> not string -> +2n THROWS in JS!)
+#   NOTE on bigint fromIndex: `+2n` throws TypeError "Cannot convert a BigInt to a number".
+#   genInputs DOES NOT emit a bigint as the fromIndex arg (it is an out-of-envelope throw path,
+#   documented here only). bigint is exercised only as an ARRAY ELEMENT or as `value` (=== compare).
+
+# =====================================================================================
+# WORKED EXAMPLES  (all verified by executing lodash.lastindexof@4.0.5)
+# =====================================================================================
+#   lastIndexOf([1,2,1,2], 2)            => 3     # last occurrence
+#   lastIndexOf([1,2,1,2], 2, 2)         => 1     # bound at idx2: examine 2,1,0 -> idx1=2
+#   lastIndexOf([1,1,1], 1)              => 2
+#   lastIndexOf([1,2,3], 9)              => -1    # absent
+#   lastIndexOf([], 1)                   => -1    # empty
+#   lastIndexOf(null, 1)                 => -1    # nullish array
+#   lastIndexOf(undefined, 1)            => -1
+#   lastIndexOf([1,2,1], 1, undefined)   => 2     # explicit undefined == default
+#   # --- fromIndex clamping (a=[10,20,30,40,30,20,10], len 7) ---
+#   lastIndexOf(a, 30, 4)                => 4     # idx<=4 -> idx4=30
+#   lastIndexOf(a, 30, 3)                => 2     # idx<=3 -> idx2=30 (idx3=40)
+#   lastIndexOf(a, 30, 1)                => -1    # idx<=1 has no 30
+#   lastIndexOf(a, 10, 100)              => 6     # past-end -> full search, last 10 = idx6
+#   lastIndexOf(a, 30, -3)               => 4     # 7+(-3)=4 -> idx<=4 -> idx4=30
+#   lastIndexOf(a, 30, -5)               => 2     # 7-5=2 -> idx<=2 -> idx2=30
+#   lastIndexOf(a, 30, -6)               => -1    # 7-6=1 -> idx<=1 no 30
+#   lastIndexOf(a, 10, -100)             => 0     # beyond-negative -> bound idx0 -> idx0=10
+#   lastIndexOf(a, 20, -100)             => -1    # bound idx0 -> idx0=10 != 20
+#   lastIndexOf(a, 30, 4.9)              => 4     # toInteger 4.9 -> 4
+#   lastIndexOf(a, 30, "4")              => 4
+#   lastIndexOf(a, 30, NaN)              => -1    # toInteger NaN -> 0 -> bound idx0 -> 10!=30
+#   lastIndexOf(a, 10, NaN)              => 0
+#   lastIndexOf(a, 30, Infinity)         => 4     # huge -> full -> last 30 = idx4
+#   lastIndexOf(a, 30, -Infinity)        => -1    # -huge -> bound idx0 -> 10!=30
+#   lastIndexOf(a, 30, true)             => -1    # 1 -> idx<=1 no 30
+#   lastIndexOf(a, 10, true)             => 0
+#   lastIndexOf(a, 10, -0)               => 0     # -0 not <0 -> min(-0,6)+1=1 -> idx0=10
+#   lastIndexOf(a, 20, -0)               => -1
+#   # --- NaN value branch (n=[NaN,1,NaN,2,NaN], NaN at 0,2,4; len 5) ---
+#   lastIndexOf([1,NaN,3,NaN], NaN)      => 3     # last NaN
+#   lastIndexOf([NaN], NaN)              => 0
+#   lastIndexOf([1,NaN,3,NaN], NaN, 2)   => 1     # bound idx2: NaN at idx1 -> 1
+#   lastIndexOf(n, NaN, -1)              => 4     # 5-1=4 -> from idx4 -> 4
+#   lastIndexOf(n, NaN, -5)              => 0     # 5-5=0 -> bound idx0 -> NaN@0 -> 0
+#   lastIndexOf(n, NaN, -6)              => 0     # beyond -> bound idx0 -> NaN@0 -> 0
+#   lastIndexOf([1,2,NaN], NaN, -5)      => -1    # bound idx0 -> arr[0]=1 not NaN
+#   lastIndexOf([1,2], NaN)              => -1    # no NaN
+#   # --- -0 / +0 equivalence ---
+#   lastIndexOf([-0], 0)                 => 0     # -0 === 0
+#   lastIndexOf([0], -0)                 => 0
+#   lastIndexOf([1,-0,2,0], 0)           => 3     # +0 at idx3 (last 0-ish)
+#   lastIndexOf([1,0,2,-0], -0)          => 3
+#   # --- identity / mixed types ---
+#   lastIndexOf([obj,{}], obj)           => 0     # by reference
+#   lastIndexOf([{},{}], {})             => -1    # distinct identities
+#   lastIndexOf(['a','b','a'], 'a')      => 2
+#   lastIndexOf(['a','b','a'], 'a', 1)   => 0
+#   lastIndexOf([1,undefined,2,undefined], undefined) => 3
+#   lastIndexOf([1,2,3], undefined)      => -1    # default fromIndex; undefined-value uses === branch
+#   lastIndexOf([null,1,null], null)     => 2
+#   lastIndexOf([1n,2n,1n], 1n)          => 2     # bigint === bigint
+#   lastIndexOf([1n,2n], 1)              => -1    # 1n !== 1
+#   # --- array-like (string / typed array) ---
+#   lastIndexOf("abc", "c")              => 2     # "abc"[2]==="c"
+#   lastIndexOf("abc", "x")              => -1
+#   lastIndexOf(Uint8Array.from([3,1,3]), 3)    => 2
+#   lastIndexOf(Uint8Array.from([3,1,3]), 3, 1) => 0
+#   lastIndexOf([5,6,7,6,5], 5, 1e308)   => 4
+
+# =====================================================================================
+# SCOPE
+# =====================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full pipeline above: length resolution, !length early-out, fromIndex
+#     toInteger coercion + clamp (+1 cursor), the NaN backward-find branch, the ===
+#     backward scan, the -1 fallbacks.
+#   - toInteger / toFinite / toNumber inlined semantics (only the subset reachable from the
+#     fromIndex values genInputs emits is exercised; the spec documents all of it).
+#   - Strict-equality identity for reference values; +0/-0 equivalence; NaN special-casing.
+#   - Array-like handling (string / Uint8Array / Buffer) via .length + [index] only.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - bigint passed as the `fromIndex` arg -> `+bigint` throws TypeError (un-round-trippable
+#     in JSON anyway as a numeric coercion target). Not emitted.
+#   - Symbol or function as an ELEMENT or as `value` -> not JSON-codec-round-trippable; the
+#     === behavior is reconstructable from spec (identity compare) but not emitted.
+#   - Symbol passed as fromIndex -> toNumber returns NaN -> toInteger 0 -> bound idx0.
+#     Documented; not emitted (Symbol is non-round-trippable).
+#   - Sparse arrays (holes): a hole reads as `undefined` via array[index]; behaves like an
+#     explicit undefined element under ===. JSON does not preserve holes, so not emitted.
+#   - The unit performs NO side effects and NO mutation; read-only.
+
+PROVENANCE lodash.lastindexof@4.0.5 (lodash Custom Build, exports="npm");
+           repo lodash/lodash; license MIT;
+           source file: node_modules/lodash.lastindexof/index.js (module.exports = lastIndexOf)

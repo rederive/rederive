@@ -1,0 +1,82 @@
+UNIT directive
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs export directive — the parser's answer for one directive: the first directive named name in sir_parse's legacy-mode parse (cli/sir/sir-parse.mjs parse + get), its arguments and non-empty continuation pieces joined; reproduce it exactly, accidents included
+ORACLE-CLASS deterministic
+SIG directive(text: text, name: text) -> text | none
+ENVELOPE text is any well-formed text (every kind of line break, byte-order marks, non-ASCII and astral characters, quotes
+  and backslashes allowed). name is any text; a name outside the NAME grammar, and the name "CITED", are IN scope as throw observations (R1).
+DEPENDS-ON none
+DESCRIPTION Read one directive's value out of a SIR file the way the SIR parser reads it: find the FIRST directive line
+  whose name is name and return its arguments followed by every non-empty continuation piece that belongs to it, separated
+  by single spaces; comments and attribute groups are not part of the value, and a "#" or an attribute keyword inside a
+  quoted span is. A bare directive yields the empty text; an absent directive yields none. Only SPACE and CHARACTER TABULATION (the SEP set) ever separate, trim, blank a line or
+  border a comment marker; every other character, any other whitespace included, is content. The rules restate exactly the
+  parser behavior the value depends on.
+BEHAVIOR
+R1 NAME. name must match the NAME grammar, else -> throws, before text is read at all. This includes the empty text, a
+  lowercase name, "SIG:", a name with a space, a dot or a trailing line break, and non-ASCII letters. The name "CITED" (the
+  attribute-only keyword, which never starts a directive, R6) also -> throws, whatever text holds.
+R2 LINES. text is cut into physical lines at each CARRIAGE RETURN + LINE FEED pair (one break), each lone CARRIAGE
+  RETURN and each lone LINE FEED. LINE SEPARATOR, PARAGRAPH SEPARATOR and NEXT LINE do NOT break a line. Each line then
+  loses every BYTE ORDER MARK inside its LEAD — the longest leading run of SEP characters and BYTE ORDER MARKs, in any mix
+  (the SEP characters stay, in order) — and after that every SEP character at its very end. One pass reaches the fixed
+  point: BOM SPACE BOM "x" becomes SPACE "x" (so an unindented line can become indented). A mark after the first character
+  outside the LEAD is content. CITED FIDELITY package
+R3 SKIPPED lines. A line left empty by R2 is skipped (a line of NO-BREAK SPACE, LINE TABULATION or any other non-SEP
+  character is NOT empty). Otherwise its INDENT is its leading run of SEP characters (possibly empty) and its CONTENT is
+  the rest. A line whose CONTENT starts with "#" is a comment and is skipped. Skipped lines never end a directive: lines
+  after them still continue it.
+R4 QUOTED SPANS. CONTENT is scanned left to right for quoted spans. A QUOTATION MARK OPENS a span only at a token start: it
+  is the first character of CONTENT, or the character before it is in the OPENER set, or it is the character directly after
+  the closing mark of the span just closed (two literals back to back). From the opener the span runs to and
+  including the next QUOTATION MARK that is not the partner of an escape pair, where an escape pair is a REVERSE SOLIDUS plus
+  the ONE character after it, whatever that character is (QUOTATION MARK, REVERSE SOLIDUS, LINE SEPARATOR or an astral
+  character alike). The scan resumes after the closing mark. When CONTENT ends first (no closing mark, or a REVERSE SOLIDUS
+  last), that opener protects nothing and no later span exists on the line. Any other QUOTATION MARK — an inch mark after a digit, one
+  after a letter, a SOLIDUS, "*", "+" or "?", a closing parenthesis or bracket, a QUOTATION MARK that closed no span, a NO-BREAK SPACE or a
+  byte-order mark — opens nothing; a closing mark need not end a token. CITED FIDELITY package
+R5 COMMENT CUT. On every non-skipped line, CONTENT is cut at the FIRST "#" that has a SEP character immediately before it,
+  a SEP character or the end of CONTENT immediately after it, and does not lie strictly inside a quoted span (R4): that
+  "#", the SEP run immediately before it and everything after it are dropped. The result is CODE. "a#b", "a #b", a "#"
+  next to a NO-BREAK SPACE or IDEOGRAPHIC SPACE, and a "#" inside a quoted span are not cuts.
+R6 DIRECTIVE LINE. A line with an empty INDENT is examined as a candidate directive: its NAME-WORD is CODE up to (not
+  including) the first SEP character, or all of CODE when there is none; REST is CODE from that SEP character on (it keeps
+  its leading separator), or the empty text when there is none. A NAME-WORD that is a NAME followed by exactly one ":" is
+  read as that NAME ("SIG: x" is SIG, "SIG:: x" is not). When the NAME-WORD (so read) matches the NAME grammar and is not
+  the attribute keyword "CITED", the line STARTS a new directive with that name — whether or not the name is a known
+  directive; "EARNED" and "ANCHOR" do start directives — and its first piece is ATTR-CUT(REST). Any other character after the
+  name ("SIGNAL", "SIG-X", NO-BREAK SPACE, IDEOGRAPHIC SPACE, LINE SEPARATOR) makes it a different NAME-WORD: "ORACLE" never
+  matches an "ORACLE-CLASS" line, and a name glued to its arguments by non-SEP whitespace or by an invisible format character
+  (ZERO WIDTH SPACE, WORD JOINER, MONGOLIAN VOWEL SEPARATOR) is not a directive; nor is "NAME:" glued that way, nor a line
+  whose CONTENT starts with such a character before a name (the parser reports these; the value ignores the report).
+R7 CONTINUATION. Every other non-skipped line — an indented line, or an unindented line whose NAME-WORD fails R6 (prose,
+  lowercase words, a line beginning with NO-BREAK SPACE, a column-0 "CITED" or "CITED:" line) — continues the most recent
+  directive started above it, contributing the piece ATTR-CUT(SPACE + CODE). Before any directive has started such a line
+  is ignored.
+R8 ATTR-CUT(s). An ATTRIBUTE KEYWORD is one of the words CITED/EARNED/ANCHOR occurring as a whole token: preceded by one
+  or more SEP characters, followed by a SEP character or the end of s, and not lying inside a quoted span of the line's
+  CONTENT (R4), where it is data. ATTR-CUT keeps the part of s before the first such run-and-keyword, with leading and
+  trailing SEP characters removed; with no keyword it is s with leading and trailing SEP characters removed. Since both a directive line's REST and a continuation's piece begin with a separator, a keyword
+  FIRST on either kind of line yields the empty piece; a keyword glued to other letters, or followed by any non-SEP
+  character (":" or ","), is content.
+R9 RESULT. The first directive in text order whose name equals name (exactly, case-sensitively) decides: its pieces (first
+  the directive line's, then each continuation's, in order) are filtered to the NON-EMPTY ones and joined with one SPACE
+  between neighbours; nothing else is trimmed. No non-empty piece -> "" (the empty text). No directive named name -> none.
+  Later directives of the same name never count.
+PINNED grammar NAME = an ASCII capital letter A-Z followed by zero or more of A-Z, 0-9 and "-" CITED R1, R6 — the parser's directive-name grammar; it subsumes the R-number form ("R" then digits)
+PINNED charset OPENER = { SPACE, CHARACTER TABULATION, "(", "[", "{", ",", "=", ":", ";", "|", "<", ">", "!", "&", "-", "~" } CITED R4 — the sixteen characters after which a QUOTATION MARK starts a token; nothing else: not "*", "+" or "?" (regex quantifiers), no other whitespace, no SOLIDUS, letter, digit or closing bracket
+PINNED charset SEP = { SPACE, CHARACTER TABULATION } CITED R2, R3, R5, R6, R8 — the one whitespace set; NO-BREAK SPACE, LINE TABULATION, FORM FEED, IDEOGRAPHIC SPACE, LINE SEPARATOR, NEXT LINE and the byte-order mark (except those R2 drops) are content
+INVARIANT a non-none result never begins or ends with a SEP character, never contains LINE FEED or CARRIAGE RETURN, and is empty only when every piece was empty.
+ORACLE value -> oracles/directive.json  CANONICAL-SHA256 28f48ce2c793b0d474c21f1581e4871f1c4832cd4791a26de556fa05f6530554
+SCOPE IN: R1–R9 — the value of one directive as sir_parse's legacy-mode parse reads it. OUT: parse diagnostics (errors,
+  warnings incl. the name-separator, glued-colon and invisible-lead reports, strict mode), attribute values, comment text, indentation statistics, the
+  directive vocabulary's registers (an unknown but grammatical name is still a directive here), and non-text arguments.
+PROVENANCE rederive@6199e2cc8b75 (rederive, the SIR toolchain), cli/sir/v05.mjs export directive over cli/sir/sir-parse.mjs
+  parse + get; pinned authority snapshot selfhost/.authority/6199e2cc8b75, driven through selfhost/seams/directive.mjs (an
+  absent directive is none). Round 3: re-cut for the #43 parser (one SEP whitespace rule, keyword-first attribute split,
+  empty pieces dropped, a column-0 "CITED" line a continuation, quoted spans protect "#"). Round 4: re-cut for the 978444f parser (quoted spans open only at a token start, an escape
+  pair takes any one character, a quoted attribute keyword is data, the name "CITED" throws). Round 5: re-cut for the bb8ded8 parser (#75 the
+  nineteen-character OPENER set and back-to-back literals, #76 a byte-order mark after the indent dropped, #83 glued "NAME:"
+  and invisible leads reported, not directives). Round 5b: re-cut for the 6199e2c parser (#99 every byte-order mark in the
+  leading SEP-and-mark run dropped in one pass, #107 "*", "+" and "?" no longer OPENERs).

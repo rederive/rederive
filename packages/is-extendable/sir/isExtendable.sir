@@ -1,0 +1,202 @@
+UNIT isExtendable
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# isExtendable(val) -> boolean
+# "Returns true if a value is a plain object, array, or function."
+# Pure, read-only predicate. No seam (no clock/RNG/env/fs/net). No carried data.
+# ---------------------------------------------------------------------------
+
+SIG isExtendable(val: any) -> boolean
+
+DEPENDS-ON none
+# IMPORTANT FOR THE RE-EMITTER: in the original CJS package this unit does
+#   `var isPlainObject = require('is-plain-object')`
+# and is-plain-object in turn does `var isObject = require('isobject')`.
+# The reconstruction MUST be FULLY SELF-CONTAINED: there is NO `require`, NO
+# import, NO external dependency. INLINE the entire is-plain-object + isobject
+# pipeline (transcribed exactly below) directly into the emitted module.
+# The emission is an ES module with a DEFAULT export of the function.
+
+BEHAVIOR
+  # Top-level disjunction (SHORT-CIRCUIT, evaluated strictly left-to-right):
+  #
+  #   return isPlainObject(val)
+  #       || typeof val === 'function'
+  #       || Array.isArray(val);
+  #
+  # NOTE THE ORDER exactly: isPlainObject FIRST, then the function check,
+  # then Array.isArray. Order does not change the boolean result for any input
+  # (the three predicates are mutually exclusive over their true-sets:
+  #  a value that is a plain object is never a function and never an array),
+  # but the SIR pins the original order for faithfulness.
+  #
+  # The return value is a real boolean (true/false), not a truthy/falsy
+  # coercion: `||` here always lands on one of the three boolean predicates,
+  # each of which returns a genuine boolean.
+
+  NODE A  ARRAY CHECK
+    Array.isArray(val) === true  -> contributes TRUE.
+    (Arrays => true. Includes [], [1,2,3], nested arrays [[]], [{a:1}].)
+
+  NODE B  FUNCTION CHECK
+    typeof val === 'function'  -> contributes TRUE.
+    (Any callable: function expressions, arrow functions, class constructors,
+     and built-in functions like Array/Object => true.)
+    # OUT-OF-ENVELOPE for genInputs: functions do NOT survive the oracle codec
+    # (JSON.stringify drops them). This branch is REAL and SPECIFIED but is
+    # documented-as-OUT below; the generator never emits a function.
+
+  NODE C  PLAIN-OBJECT CHECK  (isPlainObject — INLINED in full)
+    isPlainObject(val) is computed by the following exact pipeline. All three
+    helpers are inlined; the re-emitter writes them with NO require.
+
+    # --- isObject(val)  (from `isobject@3.0.1`) ---
+    #   isObject(val) :=
+    #     val != null               # loose !=, rejects BOTH null and undefined
+    #     && typeof val === 'object'
+    #     && Array.isArray(val) === false
+    #   (So: non-null, typeof 'object', not an array.)
+
+    # --- isObjectObject(o)  (from `is-plain-object@2.0.4`) ---
+    #   isObjectObject(o) :=
+    #     isObject(o) === true
+    #     && Object.prototype.toString.call(o) === '[object Object]'
+    #   (The toString TAG must be exactly the string "[object Object]".
+    #    Date => "[object Date]", RegExp => "[object RegExp]",
+    #    Map => "[object Map]", Set => "[object Set]",
+    #    Uint8Array => "[object Uint8Array]", Error => "[object Error]",
+    #    Promise => "[object Promise]", arguments-LIKE plain objects still
+    #    "[object Object]". An object carrying a Symbol.toStringTag of "Custom"
+    #    yields "[object Custom]" => fails this check.)
+
+    # --- isPlainObject(o)  (from `is-plain-object@2.0.4`) ---  THE FULL BODY:
+    #   function isPlainObject(o) {
+    #     var ctor, prot;
+    #     if (isObjectObject(o) === false) return false;          # C.1
+    #     ctor = o.constructor;
+    #     if (typeof ctor !== 'function') return false;           # C.2
+    #     prot = ctor.prototype;
+    #     if (isObjectObject(prot) === false) return false;       # C.3
+    #     if (prot.hasOwnProperty('isPrototypeOf') === false)     # C.4
+    #       return false;
+    #     return true;                                            # C.5
+    #   }
+    #
+    # Branch-by-branch semantics (these are the points blind engineers diverge):
+    #   C.1  Not an isObjectObject (null, undefined, primitive, array, function,
+    #        or any non-"[object Object]" tag) => FALSE immediately.
+    #   C.2  ctor = o.constructor.  If it is NOT a function => FALSE.
+    #        *** This is why `Object.create(null)` => FALSE: its constructor is
+    #        undefined (typeof 'undefined'). Likewise `{constructor: undefined}`
+    #        => FALSE, and an object reparented via setPrototypeOf(o, null)
+    #        => FALSE (constructor resolves to undefined). ***
+    #   C.3  prot = ctor.prototype.  prot must itself be an isObjectObject
+    #        => FALSE otherwise.
+    #   C.4  prot.hasOwnProperty('isPrototypeOf') must be true.
+    #        *** This is why a CLASS INSTANCE (`new Foo()`) => FALSE: Foo.prototype
+    #        is a plain object but does NOT have its OWN 'isPrototypeOf'
+    #        (that method lives up on Object.prototype). Same for `new Bar()`
+    #        from a plain function constructor. Only Object.prototype owns
+    #        'isPrototypeOf', so only objects whose constructor.prototype IS
+    #        Object.prototype (i.e. ctor === Object) pass. ***
+    #   C.5  Otherwise => TRUE (a genuine `{...}` / new Object() literal, incl.
+    #        nested, frozen, sealed, JSON-parsed, or arguments-LIKE objects
+    #        such as {0:1, length:1}, and objects with an own non-function
+    #        property named isPrototypeOf like {isPrototypeOf: 1}).
+
+  RESULT
+    isExtendable(val) = NODE_C(val) || NODE_B(val) || NODE_A(val)
+    # returns boolean true iff val is a plain object OR a function OR an array.
+
+  # --- THROW behavior ---
+  # No input in the codec envelope throws. Object.prototype.toString.call and
+  # the property reads are total over all inputs. (A maliciously crafted getter
+  # on `.constructor`/`.prototype` could throw, but such objects are not
+  # codec-faithful and are out of envelope.) No __throw expecteds are produced.
+
+ORACLE value -> oracle.json
+# Deterministic value oracle. For each generated input [val], expected is the
+# boolean isExtendable(val). The harness computes expecteds by running the REAL
+# package; the SIR above is sufficient for a blind engineer to reproduce every
+# one of them WITHOUT the source.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    The full disjunction and the entire inlined isPlainObject/isObjectObject/
+    isObject pipeline transcribed above (NODE A, B, C with branches C.1..C.5).
+
+  DEMONSTRATED IN-SCOPE SUBSET (self-consistent with genInputs — every value the
+  generator can emit has its mapping fixed above):
+    TRUE:
+      {}                         -> true   (plain object, C.5)
+      {a:1}                      -> true   (plain object, C.5)
+      {a:1,b:{c:2}}              -> true   (nested plain object, C.5)
+      {"0":1,length:1}           -> true   (arguments-LIKE plain object, C.5)
+      {isPrototypeOf:1}          -> true   (own non-fn prop named isPrototypeOf; ctor still Object, C.5)
+      []                         -> true   (array, NODE A)
+      [1,2,3]                    -> true   (array, NODE A)
+      [[]]                       -> true   (nested array, NODE A)
+      [{a:1}]                    -> true   (array, NODE A)
+    FALSE:
+      null                       -> false  (isObject loose-!= rejects, C.1)
+      0, 42, -1, 3.14, 100       -> false  (numbers; not object, C.1)
+      "", "hello", "a"           -> false  (strings; not object, C.1)
+      true, false                -> false  (booleans; not object, C.1)
+    Special-codec object types (constructor preserved by the codec; all FALSE
+    via the toString-tag branch in C.1 of isObjectObject):
+      new RegExp / /x/           -> false  (tag "[object RegExp]")
+      new Date(...)              -> false  (tag "[object Date]")
+      new Map(...)               -> false  (tag "[object Map]")
+      new Set(...)               -> false  (tag "[object Set]")
+      new Uint8Array(...)        -> false  (tag "[object Uint8Array]")
+      Buffer.from(...)           -> false  (tag "[object Uint8Array]")
+      bigint (e.g. 9n)           -> false  (typeof 'bigint', not 'object', C.1)
+
+  CARRIED DATA: none.
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (specified & real, but NOT emitted by
+  genInputs because they do not survive the JSON oracle codec; a blind engineer
+  still reconstructs their behavior from the rules above):
+    * FUNCTIONS -> true (NODE B). Functions/arrows/classes/built-in fns are all
+      true, but JSON.stringify drops them, so the stored expected would be
+      un-reproducible. EXCLUDED from genInputs; behavior pinned by NODE B.
+    * SYMBOLS -> false (typeof 'symbol', fails isObject at C.1). Symbols are not
+      codec-faithful (not valid JSON). EXCLUDED from genInputs.
+    * undefined -> false (isObject loose-!= rejects). `undefined` does not
+      round-trip as an array element / object value through the codec. EXCLUDED
+      from genInputs as a *standalone* arg-bearing value; behavior pinned at C.1.
+    * Object.create(null) -> false (C.2: constructor is undefined). DOES NOT
+      round-trip: JSON serializes it to {} and JSON.parse yields a normal-proto
+      object (=> true), so the stored expected `false` would be un-reproducible.
+      EXCLUDED from genInputs; behavior pinned at C.2.
+    * {constructor: undefined} -> false (C.2). `undefined` object value is not
+      codec-faithful. EXCLUDED; behavior pinned at C.2.
+    * {[Symbol.toStringTag]:"Custom"} -> false (C.1, tag "[object Custom]").
+      Symbol keys are dropped by JSON.stringify. EXCLUDED; behavior pinned at C.1.
+    * Class instance `new Foo()` -> false (C.4). A class instance is not a
+      JSON-stable carrier of its constructor identity (JSON.parse of its
+      serialization is a plain Object => true). EXCLUDED from genInputs; behavior
+      pinned at C.4. (Teaching example only.)
+    * NaN / ±Infinity / -0 / boxed primitives (new Number/String/Boolean) ->
+      false. NaN/Infinity are not valid JSON; boxed primitives lose identity
+      through the codec. EXCLUDED from genInputs; behavior: numbers/typeof-object
+      -- NaN/Infinity/-0 are typeof 'number' => false at C.1; boxed Number/String/
+      Boolean have tags "[object Number]"/"[object String]"/"[object Boolean]"
+      => false at C.1.
+
+PROVENANCE
+  is-extendable@1.0.1  (jonschlinkert, MIT)
+    repo: github.com/jonschlinkert/is-extendable
+    source file: node_modules/is-extendable/index.js
+  INLINED transitive dependencies (resolved at install time, transcribed above):
+    is-plain-object@2.0.4 (MIT) — github.com/jonschlinkert/is-plain-object
+      source file: node_modules/is-plain-object/index.js
+      (the constructor/prototype + hasOwnProperty('isPrototypeOf') predicate,
+       i.e. the 2.0.x form — NOT the later getPrototypeOf-based rewrite)
+    isobject@3.0.1 (MIT) — github.com/jonschlinkert/isobject
+      source file: node_modules/isobject/index.js
+  Verified by executing the real `require('is-extendable')` under node v24.16.0
+  across every curated edge case listed in DEMONSTRATED IN-SCOPE SUBSET and the
+  OUT-OF-ENVELOPE list.

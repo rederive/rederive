@@ -1,0 +1,48 @@
+UNIT escape_markers
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@f68cca701417 cli/sir/canon.mjs escapeMarkers — the code is the truth
+ORACLE-CLASS deterministic
+SIG escape_markers(value: json) -> json
+ENVELOPE any json value: none, bool, f64, text, list[json], map[text, json], nested to any depth (deeper than the cap
+  throws, R1). The js file widens this to every host value of its runtime (array holes, non-map objects, wide integers, an absent value).
+DEPENDS-ON none
+DESCRIPTION Make a value an artifact RETURNED safe to grade: every map, at any depth, that holds one of the three codec
+  marker keys "__t", "__throw", "__threw" is wrapped in the escape map {"__t": "obj", "v": <the map>}, so no returned
+  value can ever read as a codec tag or as a throw. Everything else is rebuilt unchanged. The input is never modified.
+  The js file widens the walk to the host's keyed collection and its set (both descended, never wrapped) and to values
+  passed through.
+BEHAVIOR
+R1 DEPTH. The value itself is at depth 0; every element of a list and every value of a map is one deeper than its
+  container (lists and maps count alike; an escape map added by R4 adds no depth). If any node that is visited lies
+  at depth greater than 100 -> throws "a value nests deeper than 100". A scalar or an empty list or map counts as a
+  visited node at its own depth: 100 lists around a scalar returns, 101 lists around a scalar throws; 100 lists
+  around an empty list returns, 100 lists around a one-element list throws.
+PINNED number MAX_VALUE_DEPTH = 100 CITED canon.mjs MAX_VALUE_DEPTH, the codec's one value-depth model (round 5, #78)
+R2 SCALARS (none, bool, f64, text) -> returned unchanged.
+R3 LIST -> a new list of the same length; each element is the result of this contract applied to it, at its depth.
+R4 MAP -> a new map with the same keys in the same order, each value the result of this contract applied to it, at its
+  depth. Then, if the INPUT map holds the key "__t", "__throw" or "__threw" -> the result is the two-entry map
+  {"__t": "obj", "v": <that new map>} (keys in that order); otherwise the result is the new map itself.
+R5 The escape is on the KEY's presence alone: the marker key's value may be any json (text, number, none, bool, list,
+  map, empty text) and the map is still escaped; any other keys in the map do not matter. CITED FIDELITY package —
+  wider than the codec's own marker rule (an own TEXT-valued key), which reads only text-valued markers as tags.
+R6 Only the three exact keys trigger R4: look-alikes ("__T", "_t", "__t " with a trailing space, "__throws", "t",
+  "threw", "v") never do. A map already shaped like an escape ({"__t": "obj", "v": ...}) is escaped again, as is
+  the "v" map inside it if it holds a marker key.
+INVARIANT the result never contains a map with a marker key other than an escape map {"__t": "obj", "v": m} whose own
+  "__t" is the text "obj".
+INVARIANT the input value is not modified; the result shares no list or map with it.
+NOTE rust omitted: this unit's domain is the JS value model itself — which objects count as maps (plain vs class
+  instances, prototype-less objects), own vs inherited and enumerable keys, array holes, the host's keyed collection
+  and set (descended, never wrapped), values that pass through untouched (byte arrays, wide integers, the absent value). Over the abstract json envelope the contract is a small tree
+  rebuild that rust could carry, but every driver that calls it is a js/ts driver (rust drivers escape with their own
+  {ok}/{throw} envelope), so the JS envelope IS the contract. Tier 2 is js/ts only.
+ORACLE value -> oracles/escape_markers.json  CANONICAL-SHA256 5224025b24b2f999a63aa557b1dfb09f97d5336319c4e050832527676934aade
+SCOPE IN: R1–R6 over json values, plus the js file's widening (holes, Map and Set descent, pass-through of other non-plain values,
+  own-key rule).
+  OUT (graded): js-host values whose RESULT the js extension codec cannot encode — see the js file's GRADED line.
+  OUT: the depth argument (the real export takes an internal second parameter, depth, that the seam never passes —
+  it starts at 0), the codec's encode/decode of the escaped result, every rust driver.
+PROVENANCE rederive@f68cca701417 (authority tree a1c4b88edc06; Set descent #153), cli/sir/canon.mjs export escapeMarkers (round 4
+  selfhost #55 #58; round 5 #81 Map descent, #78 MAX_VALUE_DEPTH = 100); seam selfhost/seams/escape_markers.mjs.

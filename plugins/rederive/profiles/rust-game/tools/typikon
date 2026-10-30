@@ -1,0 +1,8 @@
+#!/bin/sh
+# typikon — the intent-contract / reach auditor (not a published package yet): `typikon` on PATH, else a checkout at
+# $TYPIKON run as a module. Run from this repo's root. Absent: the advisory Stop hook reports and passes; anything else fails.
+REPO="$(cd "$(dirname "$0")/.." && pwd)"; cd "$REPO"
+if command -v typikon >/dev/null 2>&1; then exec typikon "$@"; fi
+if [ -n "${TYPIKON:-}" ] && [ -d "$TYPIKON" ]; then PYTHONPATH="$TYPIKON${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m typikon.cli "$@"; fi
+if [ "${1:-}" = "stop-hook" ]; then echo "rederive: typikon not installed — the typikon Stop hook is inactive (advisory; put typikon on PATH or set TYPIKON)"; exit 0; fi
+echo "tools/typikon: typikon not found — put it on PATH or set TYPIKON to a checkout (it is not a published package yet)" >&2; exit 3

@@ -1,0 +1,321 @@
+UNIT get
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG get(object, path, defaultValue?) -> value-at-path | defaultValue | undefined
+DEPENDS-ON none   # standalone bundle; all helpers (castPath, stringToPath, isKey, toKey, baseGet) are inlined and reproduced below. ZERO carried data.
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# Pure read-only property accessor. Resolves `path` against `object` and returns
+# the value found; if the resolved value is === undefined, returns `defaultValue`
+# (which is undefined when the 3rd arg is omitted). NO mutation, NO seam, NO RNG,
+# NO clock, NO io. Deterministic value oracle.
+#
+# This is the lodash.get@4.4.2 standalone CommonJS bundle. `module.exports = get`.
+# The blind re-emitter MUST emit:  export default <the get function>
+# (DEFAULT export; a single function get(object, path, defaultValue)).
+#
+# The entire algorithm is reproduced below from source — the re-emitter needs no
+# package access. Reconstruct it byte-for-behavior.
+
+# ============================================================================
+# EXACT CONSTANTS (regexes — reproduce CHARACTER-FOR-CHARACTER)
+# ============================================================================
+# INFINITY      = 1 / 0                                  # +Infinity
+# symbolTag     = '[object Symbol]'
+#
+# reIsDeepProp  = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/
+#                 # matches a '.' OR a bracket group "[...]" whose contents are
+#                 # either non-bracket chars, or a quoted (single/double) string.
+#                 # => "is this string a DEEP property path (dots/brackets) ?"
+#
+# reIsPlainProp = /^\w*$/
+#                 # whole string is zero-or-more ASCII word chars [A-Za-z0-9_].
+#                 # NOTE \w is ASCII-only: accented letters (é, û) are NOT \w.
+#
+# reLeadingDot  = /^\./
+#                 # string starts with a literal dot.
+#
+# rePropName    = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g
+#                 # GLOBAL tokenizer. Each match is ONE of three alternatives:
+#                 #   (A) [^.[\]]+         one-or-more chars that are NOT '.', '[', ']'
+#                 #                        -> a bare dot-segment. capture groups empty;
+#                 #                           pushed value = `match`.
+#                 #   (B) \[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]
+#                 #                        a bracket group containing either:
+#                 #                          - a SIGNED number  -> capture group 1 (`number`)
+#                 #                            (pattern -?\d+(?:\.\d+)? ; pushed = number)
+#                 #                          - a QUOTED string   -> open-quote in group 2
+#                 #                            (`quote`), inner text in group 3 (`string`).
+#                 #                            inner allows any non-backslash char that is
+#                 #                            not the quote, OR a backslash-escape "\\."
+#                 #                            (backslash + any one char).
+#                 #   (C) (?=(?:\.|\[\])(?:\.|\[\]|$))   ZERO-WIDTH lookahead that matches
+#                 #                        the EMPTY string at boundaries between an empty
+#                 #                        dot/'[]' segment and the next dot/'[]'/end.
+#                 #                        Produces an empty-string segment "". `match`==''.
+#
+# reEscapeChar  = /\\(\\)?/g
+#                 # matches a backslash optionally followed by another backslash;
+#                 # used only on QUOTED bracket contents, replace -> '$1'
+#                 # (i.e. "\\x" -> "x",  "\\\\" -> "\\").
+
+# ============================================================================
+# HELPER: isArray(value)  ==  Array.isArray(value)
+# ============================================================================
+
+# ============================================================================
+# HELPER: isObjectLike(value)
+#   return  !!value && typeof value == 'object'
+# ============================================================================
+
+# ============================================================================
+# HELPER: isSymbol(value)
+#   return  typeof value == 'symbol'
+#        || (isObjectLike(value) && Object.prototype.toString.call(value) == '[object Symbol]')
+# ============================================================================
+
+# ============================================================================
+# HELPER: baseToString(value) -> string  (only reached for non-string non-null)
+#   if typeof value == 'string'            return value
+#   if isSymbol(value)                     return Symbol.prototype.toString.call(value)  # e.g. "Symbol(x)"
+#                                          # (if no Symbol support, '')
+#   result = (value + '')                  # default JS string coercion
+#   if result == '0' && (1/value) == -INFINITY   return '-0'    # negative-zero preservation
+#   return result
+# ============================================================================
+
+# ============================================================================
+# HELPER: toString(value) -> string
+#   if value == null   return ''           # null OR undefined -> ''
+#   return baseToString(value)
+# ============================================================================
+
+# ============================================================================
+# HELPER: isKey(value, object) -> boolean    # "is `value` a single property NAME, not a deep PATH?"
+# ----------------------------------------------------------------------------
+#   if isArray(value)                      return false      # arrays are never a single key
+#   type = typeof value
+#   if type == 'number' || type == 'symbol' || type == 'boolean'
+#        || value == null || isSymbol(value)
+#                                          return true        # numbers/symbols/bools/null/undefined are direct keys
+#   # else value is a string (or string-like object). Decide:
+#   return reIsPlainProp.test(value)                # all word chars (e.g. "abc","_foo","foo0","")  -> true
+#       || !reIsDeepProp.test(value)                # contains NO '.' and NO bracket-group           -> true
+#       || (object != null && value in Object(object))   # the WHOLE string is an existing key of object -> true
+# ----------------------------------------------------------------------------
+# CONSEQUENCES (verified by execution):
+#   * "a.b.c"  -> reIsPlainProp false, reIsDeepProp true; isKey only if "a.b.c" IS a key of object.
+#   * "a-b", "a b", "café", "a@b" (non-word but no dot/bracket) -> reIsDeepProp false -> isKey TRUE
+#         => treated as a SINGLE key (fast path), never split.
+#   * "" (empty) -> reIsPlainProp(/^\w*$/) matches "" -> isKey TRUE -> single key "".
+#   * "a[0]" -> reIsDeepProp true (has bracket group); isKey only if "a[0]" IS a key of object.
+#   * A whole dotted string that IS an own/inherited key wins the FAST path over any
+#     nested resolution:  get({'a.b':99, a:{b:1}}, 'a.b') === 99   (NOT 1).
+# ============================================================================
+
+# ============================================================================
+# HELPER: toKey(value) -> string|symbol     # final coercion of one path segment to a property key
+# ----------------------------------------------------------------------------
+#   if typeof value == 'string' || isSymbol(value)   return value   # strings & symbols pass through unchanged
+#   result = (value + '')                                           # coerce to string
+#   if result == '0' && (1/value) == -INFINITY        return '-0'   # negative-zero -> '-0'
+#   return result
+# ----------------------------------------------------------------------------
+# So a numeric segment 0 -> "0", -0 -> "-0", 1.5 -> "1.5", true -> "true",
+# null -> "null", undefined -> "undefined", {} -> "[object Object]".
+# ============================================================================
+
+# ============================================================================
+# HELPER: castPath(value) -> Array
+#   return isArray(value) ? value : stringToPath(value)
+# ============================================================================
+
+# ============================================================================
+# HELPER: stringToPath(string) -> Array<string>     # (memoized in source; memoization is a
+#                                                     #  performance cache only, NOT observable —
+#                                                     #  reproduce the pure function below.)
+# ----------------------------------------------------------------------------
+#   string = toString(string)                  # null/undefined -> ''; non-string coerced
+#   result = []
+#   if reLeadingDot.test(string)   result.push('')      # leading '.' -> first segment is ''
+#   string.replace(rePropName, function(match, number, quote, str) {
+#       result.push( quote ? str.replace(reEscapeChar, '$1')   # quoted bracket: un-escape "\\x"->"x"
+#                          : (number || match) )                # numeric bracket -> the number text;
+#                                                               # otherwise the raw bare segment.
+#   })
+#   return result
+# ----------------------------------------------------------------------------
+# VERIFIED TOKENIZATIONS (string -> array of segments). Reconstruct EXACTLY:
+#   "a.b.c"          -> ["a","b","c"]
+#   "a[0].b"         -> ["a","0","b"]            # numeric bracket captured -> "0"
+#   "a[\"x\"].b"     -> ["a","x","b"]            # double-quoted bracket -> inner "x" (quotes stripped)
+#   "a['x'].b"       -> ["a","x","b"]            # single-quoted bracket
+#   "a[0]['c'].d"    -> ["a","0","c","d"]        # mixed numeric + quoted + dot
+#   ".a.b"           -> ["","a","b"]             # leading dot pushes ""
+#   ""               -> []                       # empty string => EMPTY array (but see isKey: "" is a key, so get never reaches here for "")
+#   "a.b"            -> ["a","b"]
+#   "a..b"           -> ["a","","b"]             # consecutive dots -> empty middle segment (lookahead alt C)
+#   "a."             -> ["a",""]                 # trailing dot -> trailing ""
+#   "a[]"            -> ["a",""]                 # empty bracket -> "" (lookahead alt C)
+#   "a[].b"          -> ["a","","b"]
+#   "a[01]"          -> ["a","01"]               # leading-zero number still matches -?\d+ -> "01"
+#   "a[-1]"          -> ["a","-1"]               # signed number bracket -> "-1"
+#   "a[1.5]"         -> ["a","1.5"]              # decimal number bracket -> "1.5"
+#   "a[\"x\\\"y\"]"  -> ["a","x\"y"]             # escaped quote inside double-quote -> literal x"y
+#   "a[\"x\\\\y\"]"  -> ["a","x\\y"]             # escaped backslash -> literal x\y
+#   "a['it\\'s']"    -> ["a","it's"]             # escaped single-quote inside single-quote
+#   "x['a.b'].c"     -> ["x","a.b","c"]          # dots INSIDE a quoted bracket are literal, not split
+#   "[0]"            -> ["0"]
+#   "[0][1]"         -> ["0","1"]
+#   "a[0]"           -> ["a","0"]
+#   "abc"            -> ["abc"]
+#   "a\\.b"          -> ["a\\","b"]   # 4-CHAR string a\.b  ==> BACKSLASH IS NOT AN ESCAPE IN
+#                                     #   DOT NOTATION. The '\' stays in the segment; the '.'
+#                                     #   still splits. Segment 1 is the 2-char string "a\".
+#                                     #   (This DIFFERS from get-value/split-string semantics.)
+# ============================================================================
+
+# ============================================================================
+# HELPER: baseGet(object, path) -> value          # the deep walk; no default handling
+# ----------------------------------------------------------------------------
+#   path = isKey(path, object) ? [path] : castPath(path)   # fast single-key wrap, else parse/cast
+#   index = 0
+#   length = path.length
+#   while (object != null && index < length)
+#       object = object[ toKey(path[index]) ]              # plain bracket access; advance index
+#       index++                                            # (post-increment, matches source path[index++])
+#   return (index && index == length) ? object : undefined
+# ----------------------------------------------------------------------------
+# WALK SEMANTICS (verified):
+#   * Plain `object[key]` access only — NO Map.get(), NO Set semantics. A Map target
+#       resolves via property access: get(new Map([['a',1]]), 'a') === undefined,
+#       but get(new Map([['a',1]]), 'size') === 1 (the .size getter is a property).
+#   * Descending past a leaf: object becomes a primitive (number/bool) -> primitive[key]
+#       is undefined and the loop CONTINUES (primitive != null) reading undefined props;
+#       net result undefined unless string indexing yields a char:
+#         get({a:5}, 'a.b')      === undefined
+#         get({a:'hi'}, 'a.0')   === 'h'     (string char index)
+#         get({a:'hi'}, 'a.length') === 2
+#   * If `object` becomes null/undefined mid-walk, loop stops; index < length -> returns undefined.
+#   * EMPTY path array (length 0): the loop never runs, index stays 0; `index && ...` is
+#       falsy (0) -> returns undefined.  get(obj, []) === undefined.
+#   * Inherited properties ARE resolved (no own-prop check):
+#         get({}, 'toString')      -> [Function]
+#         get({}, 'hasOwnProperty')-> [Function]
+#         get({}, 'constructor')   -> [Function]
+#   * String char/length and typed-array index access work via normal [] semantics.
+# ============================================================================
+
+# ============================================================================
+# TOP-LEVEL: get(object, path, defaultValue) -> value
+# ============================================================================
+# BEHAVIOR (ordered):
+#   NODE 1  result = (object == null) ? undefined : baseGet(object, path)
+#            #  `== null` matches BOTH null AND undefined. For nullish object,
+#            #  short-circuit to undefined WITHOUT calling baseGet.
+#   NODE 2  return (result === undefined) ? defaultValue : result
+#            #  STRICT === undefined. A resolved value of null/0/false/'' is
+#            #  returned AS-IS (default NOT applied). Default applies ONLY when the
+#            #  resolved value is strictly undefined (including the omitted-arg case,
+#            #  where defaultValue itself is undefined).
+#
+# DEFAULT SEMANTICS (verified):
+#   get({a:null}, 'a', 'D')      === null        # null is NOT undefined -> kept
+#   get({a:undefined}, 'a', 'D') === 'D'         # stored undefined -> default
+#   get({a:0},     'a', 'D')     === 0           # 0 kept
+#   get({a:false}, 'a', 'D')     === false       # false kept
+#   get({a:''},    'a', 'D')     === ''          # '' kept
+#   get(null,  'a', 'D')         === 'D'         # nullish object -> baseGet skipped -> undefined -> default
+#   get(undefined,'a','D')       === 'D'
+#   get({a:1}, 'b')              === undefined   # 2-arg miss -> defaultValue is undefined
+#   get({a:1}, 'b', 'D')         === 'D'
+#
+# NON-OBJECT (non-nullish) TARGETS: NODE 1 calls baseGet because they are not == null.
+#   get(5, 'a')        -> baseGet(5,...) -> 5['a'] undefined -> undefined
+#   get('hi', '0')     -> 'h'   (string indexing)
+#   get(true, 'a')     -> undefined
+
+# ============================================================================
+# PATH-TYPE DISPATCH SUMMARY (what `path` may be)
+# ============================================================================
+#   * STRING  : isKey decides fast-key vs stringToPath parse (see isKey + tokenizer).
+#   * ARRAY   : castPath returns it AS-IS; each element passed through toKey, walked
+#               in order. Mixed string/number elements OK: ['a',0,'b'] walks
+#               obj['a'][toKey(0)='0']['b']. ['a.b.c'] is ONE segment (literal key).
+#               EMPTY array [] -> undefined (default applies).
+#   * NUMBER  : isKey true -> [number] -> toKey -> string key. 1.5 -> key '1.5'
+#               (NOT split into '1','5'). -0 -> key '-0'.
+#   * BOOLEAN : isKey true -> [bool] -> toKey -> 'true'/'false'.
+#   * null/undefined PATH : isKey true (value==null) -> [path]; toKey(null)='null',
+#               toKey(undefined)='undefined' -> object['null'] / object['undefined'].
+#   * SYMBOL  : isKey true -> [symbol]; toKey returns the symbol unchanged -> object[symbol].
+#   * PLAIN OBJECT path (e.g. {}) : isKey false (not array, type 'object', not symbol/null);
+#               reIsPlainProp/reIsDeepProp run on it via .test coercion ("[object Object]")
+#               -> in practice castPath -> stringToPath(toString({}))='[object Object]' parsing.
+#               (OUT-OF-ENVELOPE for genInputs; documented here for completeness.)
+
+# ============================================================================
+ORACLE value -> oracle.json
+# ============================================================================
+
+# ============================================================================
+SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly — all inlined above):
+#   regexes reIsDeepProp/reIsPlainProp/reLeadingDot/rePropName/reEscapeChar;
+#   isKey, toKey, baseToString, toString, isSymbol, isObjectLike, castPath,
+#   stringToPath, baseGet; the get() default-on-undefined wrapper and the
+#   == null nullish guard. Negative-zero key preservation. Inherited-property
+#   resolution. Plain-bracket (NOT Map.get) walk.
+#
+# CARRIED DATA: none. Zero literal tables; all constants are short regexes
+#   reproduced verbatim above. No carried.json.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; behavior still
+# fully specified above so a blind re-emitter reconstructs it):
+#   * SYMBOL-typed `path` AND object literals with SYMBOL keys: Symbols do not
+#     survive the oracle codec (JSON.stringify(encode(args))). Excluded from
+#     genInputs. (Symbol path semantics: isKey true -> object[symbol]; documented.)
+#   * FUNCTION-valued targets/values and function `path`: functions do not
+#     round-trip the codec. Excluded. (A function target is just an object whose
+#     props are read by [] like any other; documented.)
+#   * NaN / +-Infinity as a numeric `path` or as a stored value: do not round-trip
+#     JSON; excluded from genInputs. (As a path, isKey true -> toKey -> 'NaN'/'Infinity'.)
+#   * NEGATIVE-ZERO (-0) as a NUMERIC path argument: JSON.stringify(-0) === '0',
+#     so a -0 path round-trips to +0 and the resolved key flips '-0'->'0'. Excluded
+#     as a numeric arg. The '-0'-key / toKey-negative-zero branch IS exercised via
+#     ROUND-TRIPPABLE string forms: string path '-0', string bracket 'a[-0]', and
+#     array element '-0' (all yield toKey -> '-0' against a '-0' object key).
+#   * `undefined` as a PATH argument: JSON serializes an array-slot undefined to
+#     null, flipping toKey 'undefined'->'null'. Excluded as a path arg. The
+#     'undefined'-key branch is exercised via the round-trippable STRING path
+#     'undefined' (and null-path is covered directly: null survives JSON).
+#   * undefined as an ARRAY ELEMENT / object value / Map value / Set member, and
+#     {a:undefined}: the codec cannot carry undefined (and {a:undefined} also drops
+#     under JSON). The stored-undefined -> default branch is therefore documented
+#     here but NOT emitted; it is exercised by an equivalent MISSING-key tuple (a
+#     missing key resolves to undefined identically -> same default behavior).
+#   * memoize cache: an internal performance cache on stringToPath; NOT observable
+#     (pure function of its string arg). Reproduce stringToPath as a plain function.
+#
+# CODEC-FAITHFUL VALUES USED BY genInputs (self-consistent with the generator):
+#   JSON primitives (string/number/boolean/null), nested arrays & plain objects,
+#   bigint values, Map / Set / Uint8Array targets, RegExp values; string paths with
+#   dot/bracket/single-quote/double-quote/mixed/leading-dot/empty-bracket/escape and
+#   the backslash-not-an-escape case; array paths (string & non-negative-int & mixed
+#   & empty & single-dotted-key element & '-0' string element); numeric paths
+#   (non-negative 0/integer, 1.5, negative -1 — NEVER -0 as a numeric arg); boolean
+#   and null paths; string '-0' and 'undefined' paths; bare and {sentinel}
+#   defaultValues; 2-arg (omitted default) tuples.
+
+# ============================================================================
+PROVENANCE
+# ============================================================================
+# package: lodash.get@4.4.2  (standalone modularized bundle of lodash `_.get`)
+# repo:    https://github.com/lodash/lodash   (lodash-cli modularize export)
+# license: MIT (Copyright jQuery Foundation and other contributors)
+# source:  node_modules/lodash.get/index.js  (function get + inlined helpers,
+#          lines ~24-29 regexes, ~457-467 baseGet, ~552-563 isKey, ~597-608
+#          stringToPath, ~617-623 toKey, ~926-929 get, ~931 module.exports)

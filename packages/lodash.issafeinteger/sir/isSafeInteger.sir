@@ -1,0 +1,163 @@
+UNIT isSafeInteger
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# CALLING CONVENTION (for the SOURCE-BLIND re-emitter)
+# ---------------------------------------------------------------------------
+# This unit is the DEFAULT export of an ES module. The re-emitter MUST emit a
+# single default function export:
+#     export default function isSafeInteger(value) { ... }
+# (or `const isSafeInteger = ...; export default isSafeInteger;`)
+# It is invoked as `mod.default(value)` with exactly one positional argument.
+# The original CJS package does `module.exports = isSafeInteger;` (one named
+# function, no `.default`, no extra props) — the blind re-emission is the ESM
+# default-export analogue.
+#
+# PURITY / MUTATION: isSafeInteger is a READ-ONLY PREDICATE. It never mutates,
+# stores, or retains its argument; it reads `typeof value` and the numeric
+# value only. There is NO seam (no clock/RNG/env/io/net) — a pure unit.
+# The re-emitter must NOT clone the input and must NOT worry about side effects.
+
+SIG isSafeInteger(value: any) -> boolean
+
+DEPENDS-ON none
+# Self-contained. The published package inlines helpers (isInteger, toInteger,
+# toFinite, toNumber, isObject, isObjectLike, isSymbol) into one file, but as
+# shown in BEHAVIOR below, ALL of that coercion machinery is DEAD CODE for this
+# predicate because of the `typeof value == 'number'` short-circuit. The
+# re-emitter needs only the collapsed logic in BEHAVIOR; it does not need to
+# reconstruct the helpers.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered; exact)
+# ---------------------------------------------------------------------------
+# Source-of-record logic (lodash 4.0.4):
+#     MAX_SAFE_INTEGER = 9007199254740991            # == 2^53 - 1, exact
+#     isInteger(value) = (typeof value == 'number') && (value == toInteger(value))
+#     isSafeInteger(value) =
+#         isInteger(value)
+#         && value >= -MAX_SAFE_INTEGER
+#         && value <= MAX_SAFE_INTEGER
+#
+# NODE-1  TYPE GUARD (short-circuit; THE load-bearing gate for non-numbers)
+#   If `typeof value !== 'number'` -> return false IMMEDIATELY.
+#   Consequence: for EVERY non-number value (string, boolean, null, undefined,
+#   bigint, object, array, Date, function, Symbol, boxed Number/String, ...)
+#   the result is `false` and NO coercion ever runs. The inlined
+#   toInteger/toNumber/toFinite/isObject/isSymbol path is UNREACHABLE here.
+#   In particular a Symbol does NOT throw — it returns false at this gate.
+#   (`Number(symbol)` would throw, but it is never called: the typeof guard
+#   returns first.)
+#
+# NODE-2  INTEGER CHECK (value is now known to be a number)
+#   Compute the loose-equality `value == toInteger(value)`.
+#   For a finite number n, toInteger(n) === trunc-toward-zero(n) (i.e. n minus
+#   its fractional remainder n%1), and toFinite(n) === n. Therefore:
+#     - n with a nonzero fractional part (e.g. 3.5, -2.0000001) -> NOT integer
+#       -> false. (3.5 == 3 is false.)
+#     - NaN: toInteger(NaN) === 0 and NaN == 0 is false -> NOT integer -> false.
+#     - +Infinity: toFinite(+Inf) === MAX_INTEGER (1.7976931348623157e+308),
+#       so toInteger(+Inf) === that finite ceiling; Infinity == 1.79e308 is
+#       false -> NOT integer -> false. Likewise -Infinity -> false.
+#     - Any finite integer-valued number (incl. -0, and large ones like 1e20,
+#       1e308, MAX_INTEGER) satisfies value == toInteger(value) -> IS integer
+#       (true at NODE-2), and proceeds to NODE-3 for the range test.
+#   Equivalently: NODE-2 is true iff `value` is a finite, fraction-free number.
+#
+# NODE-3  RANGE CHECK (magnitude bound; independent of NODE-2)
+#   Return ( value >= -9007199254740991 ) && ( value <= 9007199254740991 ).
+#   Note BOTH comparisons are INCLUSIVE (<= and >=). The bound is exactly
+#   ±MAX_SAFE_INTEGER = ±(2^53 - 1).
+#     - -0 and +0: in range -> true (and they are integers) -> isSafeInteger true.
+#     - 9007199254740991  (= 2^53 - 1)      -> in range  -> true.
+#     - 9007199254740992  (= 2^53)          -> 2^53 > MAX_SAFE -> out of range -> false.
+#     - -9007199254740991                   -> in range  -> true.
+#     - -9007199254740992 (= -2^53)         -> below -MAX_SAFE -> out of range -> false.
+#     - 1e20, 1e308, MAX_INTEGER 1.7976931348623157e+308: integer-valued but
+#       magnitude far exceeds MAX_SAFE -> false.
+#
+# FINAL = NODE-1-pass && NODE-2 && NODE-3.
+# Net effect: identical to the platform `Number.isSafeInteger(value)`. Verified
+# in agreement across the curated edge set (see SCOPE / generator).
+#
+# WORKED EDGE TABLE (every value the generator's curated prefix emits; the
+# blind engineer must reproduce each EXACTLY from the rules above):
+#   42                       -> true    # number, integer, in range
+#   0                        -> true
+#   -0                       -> true    # -0 == toInteger(-0); in range
+#   1                        -> true
+#   -3                       -> true
+#   1000 (1e3)               -> true
+#   100 (1.0e2, int-valued)  -> true
+#   9007199254740991         -> true    # MAX_SAFE_INTEGER, inclusive upper
+#   -9007199254740991        -> true    # -MAX_SAFE_INTEGER, inclusive lower
+#   9007199254740992         -> false   # 2^53, just over upper bound
+#   -9007199254740992        -> false   # -2^53, just under lower bound
+#   3.5                      -> false   # fractional -> not integer
+#   -2.5                     -> false   # fractional -> not integer
+#   0.5                      -> false
+#   NaN                      -> false   # not integer (NaN == 0 is false)
+#   Infinity                 -> false   # not integer (Inf != 1.79e308)
+#   -Infinity                -> false
+#   1e20                     -> false   # integer-valued but out of range
+#   1.7976931348623157e+308  -> false   # MAX_INTEGER: integer-valued, out of range
+#   5e-324 (Number.MIN_VALUE)-> false   # subnormal, fractional -> not integer
+#   "42" (string)            -> false   # typeof != number -> NODE-1 fail
+#   "3.5" (string)           -> false   # typeof != number
+#   "" (empty string)        -> false   # typeof != number
+#   "  42  " (padded string) -> false   # typeof != number (no coercion runs)
+#   null                     -> false   # typeof 'object' != 'number'
+#   true                     -> false   # typeof 'boolean'
+#   false                    -> false   # typeof 'boolean'
+#   42n (bigint)             -> false   # typeof 'bigint' != 'number'
+#   0n (bigint)              -> false   # typeof 'bigint'
+#   {} (plain object)        -> false   # typeof 'object'
+#   {valueOf:()=>42} (obj)   -> false   # typeof 'object'; valueOf NEVER called
+#   [] (array)               -> false   # typeof 'object'
+#   [42] (array)             -> false   # typeof 'object'
+#   Date(0)                  -> false   # typeof 'object'
+#   /re/ (RegExp)            -> false   # typeof 'object'
+#   Uint8Array([1,2])        -> false   # typeof 'object'
+#   Map / Set                -> false   # typeof 'object'
+#
+# NOTE on `undefined`: behavior is `false` (typeof 'undefined'), BUT `undefined`
+# does NOT round-trip through the harness codec as an arg and so is NOT emitted
+# by the generator. It is documented here as OUT-OF-ENVELOPE for reproduction
+# completeness only.
+
+ORACLE value -> oracle.json
+# Pure deterministic predicate. The frozen oracle pairs each generator input
+# with the boolean (or `{__throw}` if a codec-faithful input ever threw — none
+# do here; this unit never throws on any round-trippable input).
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the three-node pipeline above —
+#   typeof-number guard, finite-fraction-free integer test, inclusive
+#   ±MAX_SAFE_INTEGER (9007199254740991) range test. Result is the AND of all
+#   three. Equivalent to Number.isSafeInteger.
+#
+# CARRIED DATA: none. The only embedded constant is the scalar
+#   MAX_SAFE_INTEGER = 9007199254740991 (= 2^53 - 1), stated inline above. There
+#   is no literal table; no <unit>.carried.json is emitted.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - `undefined` argument: result is `false`, but `undefined` is not codec-
+#     round-trippable as an arg; reconstructable from the rules, not graded.
+#   - Symbol argument: result is `false` (typeof 'symbol' fails NODE-1; it does
+#     NOT throw). Symbols are not codec-round-trippable; not emitted.
+#   - Function argument: result is `false` (typeof 'function'); functions are
+#     not codec-round-trippable; not emitted.
+#   - boxed primitives (new Number(5), new String('5'), new Boolean(true)):
+#     result is `false` (typeof 'object'); these are not codec-round-trippable
+#     (their boxed identity is lost); not emitted. Reconstructable from rules.
+#   These exclusions exist ONLY because the persisted-input codec cannot carry
+#   the value faithfully, NOT because the behavior is undefined. The behavior is
+#   fully specified above.
+
+PROVENANCE lodash.issafeinteger@4.0.4 (npm); repo lodash/lodash; MIT license;
+  source file index.js (function isSafeInteger at line 159, depending on inlined
+  isInteger@70 / toInteger@246 / toFinite@208 / toNumber@276, all of which are
+  unreachable for this predicate per NODE-1). MAX_SAFE_INTEGER literal at line 12.

@@ -1,0 +1,15 @@
+UNIT f64_canonical_bits
+LANG js
+PRIMARY-SHA256 3c0b7f98393070d57862813cef57df44b98940a1fb81567dc0cc6f17c633512d
+SIG f64_canonical_bits(raw: string): string
+NOTE named export f64_canonical_bits
+ABI text=string. raw is well-formed Unicode (the oracle codec carries no lone surrogate); the result is a 16-character string.
+MECHANISM R1 = the HEX16 pin tested over the whole string (it has no m flag, so $ matches only at the very end and a trailing
+  line feed fails), throw an Error otherwise. R2 = BigInt('0x' + raw) written with DataView.setBigUint64 (big-endian), read
+  back with getFloat64. R3 = Number.isNaN on that number returns QNAN without consulting any bits: the engine may itself
+  canonicalize or preserve a NaN payload through DataView, so the payload must never be what decides. R4 = setFloat64 then
+  getBigUint64, rendered with toString(16) and left-padded with '0' to 16 digits (a small pattern such as +0 or a subnormal
+  has leading zeros the radix rendering drops).
+DEPENDS-ON none
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R1 — no i flag (uppercase throws), no m flag
+PROVENANCE rederive@b15b56613f9d cli/sir/canon.mjs lines 8-13.

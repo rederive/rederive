@@ -1,0 +1,27 @@
+UNIT canonical_text
+LANG rust
+PRIMARY-SHA256 7ad7b1a714a12e0050b8b1c5548197cbd6a45b3524731c82f0cd5d55ced78430
+SIG pub fn canonical_text(text: &str) -> String
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn canonical_text) with no dependencies, no main, no
+  I/O, no unsafe. The verifier generates its own harness crate (text in, text out) that depends on the artifact by path;
+  compiling it against this SIG is the signature check. text = &str in, String out; never panics on any &str.
+ENVELOPE narrowing, by construction: a Rust &str cannot hold a lone surrogate (it is valid UTF-8 of scalar values), so the
+  primary's one exclusion — the package throws on a lone surrogate — cannot arise here and needs no code. Do not add a
+  check for it.
+MECHANISM what Rust gets wrong by default. (1) str::lines() is NOT R1: it splits on LF only and strips a CR only when it
+  directly precedes that LF, so a lone CR stays inside the line as content — "UNIT a\rKIND b" must give two lines here.
+  Scan the chars yourself: on '\r' end the line and also consume a directly following '\n'; on '\n' end the line.
+  (2) char::is_whitespace and str::trim / trim_end / trim_start / split_whitespace are the WRONG set: they also remove
+  no-break space, ideographic space, vertical tab, form feed, 0085, 2028 and 2029, which R2–R4 keep. Trim only ' ' and
+  '\t': trim_end_matches(|c| c == ' ' || c == '\t') (after the marks are gone) and trim_start_matches likewise are right. (3) R2 is
+  PER LINE, after the split and before the pad trim: let j be the end of the longest prefix of chars that are ' ', '\t'
+  or '\u{feff}' (mixed in any order); the line becomes line[..j] with every '\u{feff}' removed (its ' ' and '\t' kept,
+  in order) + line[j..]. str::trim does NOT remove FEFF — it is not Rust whitespace — and a FEFF after j is content.
+MECHANISM slicing: cut only at char boundaries (the pad characters, CR, LF and FEFF are found by char_indices or the
+  *_matches helpers); a byte offset inside a multi-byte character panics. Output: push each kept line then '\n' into one
+  String; an empty result is String::new(), not "\n".
+DEPENDS-ON none
+PINNED charset PAD = ' ' '\t' CITED R2 R4
+PINNED charset BREAK = '\r' '\n' CITED R1 — '\r' followed by '\n' is one break
+PROVENANCE rederive@6199e2cc8b75 cli/sir/sir-parse.mjs sirLines + canonicalText. Language file cut 2026-10-26 with the primary, before
+  any blind re-emission; re-cut 2026-10-27 for round 5 (marks after the indent); re-cut for round 5b on 6199e2cc8b75 (every mark in the leading run); ABI per the lab's rust driver (text -> &str).

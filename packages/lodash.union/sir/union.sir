@@ -1,0 +1,159 @@
+UNIT union
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# union(...arrays) -> a NEW array of the UNIQUE values drawn from all the
+# array-like-object arguments, in FIRST-APPEARANCE order, compared with
+# SameValueZero. Pure: reads only its arguments, mutates nothing, returns a
+# freshly allocated Array. No clock / RNG / IO / env / net seam.
+# Default export: module.exports = union  =>  the blind re-emitter MUST
+# `export default <fn>` so the harness picks it up via import().
+# ---------------------------------------------------------------------------
+
+SIG union(...arrays) -> Array
+    # Variadic. Each positional argument is one candidate "array-like" source.
+    # Zero arguments is legal and yields [].
+
+DEPENDS-ON none
+    # Self-contained build: all lodash internals (isArrayLikeObject, isArrayLike,
+    # isLength, isObjectLike, isFunction, baseFlatten, baseUniq, SameValueZero eq)
+    # are INLINED into the single source file. No external module is required.
+    # The observable behavior below fully captures them; reproduce the BEHAVIOR,
+    # not the internal call graph.
+
+BEHAVIOR
+  # The pipeline, in order:
+  #   1. Collect all positional arguments into a list  args = [arg0, arg1, ...].
+  #   2. CONCAT: for each arg in args, in left-to-right order, IF arg is an
+  #      "array-like object" (predicate below), append its indexed elements
+  #      arg[0..arg.length-1] (in index order) to a working buffer; OTHERWISE
+  #      drop the arg entirely (contributes nothing). [baseFlatten depth=1,
+  #      predicate=isArrayLikeObject, isStrict=true]
+  #   3. DEDUP the working buffer with SameValueZero, keeping FIRST occurrence,
+  #      preserving order. [baseUniq]  Output a NEW Array.
+
+  # -- NODE 1 (variadic collection) --------------------------------------
+  # No fixed arity. `union()` -> args = []. Holes are impossible here (real
+  # positional args), but an explicit `undefined` arg is just a non-array-like
+  # arg and is dropped at NODE 2.
+
+  # -- NODE 2 (array-like-object filter + index-order flatten, depth 1) ---
+  # An argument `a` is an ARRAY-LIKE OBJECT (kept) iff ALL hold:
+  #   (a) isObjectLike(a):  a is truthy AND typeof a === 'object'.
+  #       => Excludes: null, undefined, numbers, strings (primitive),
+  #          booleans, bigints, symbols, and FUNCTIONS (typeof 'function').
+  #       => Note: a primitive string 'abc' is typeof 'string', NOT 'object',
+  #          so a STRING ARGUMENT is DROPPED (even though it is index-addressable).
+  #   (b) isArrayLike(a):  a != null AND isLength(a.length) AND a is NOT a
+  #       function.
+  #       isLength(n):  typeof n === 'number' AND n > -1 AND n % 1 === 0 AND
+  #                     n <= 9007199254740991 (Number.MAX_SAFE_INTEGER).
+  #       => a.length must be a non-negative SAFE INTEGER NUMBER. A length that
+  #          is a string ('2'), float (1.5), negative (-1), NaN, Infinity,
+  #          > MAX_SAFE_INTEGER, or absent (undefined) => arg is DROPPED.
+  #
+  # KEPT argument examples (array-like objects):
+  #   - real Arrays  [ ... ]                       (incl. sparse arrays, see below)
+  #   - the `arguments` object
+  #   - typed arrays: Uint8Array, Buffer (Buffer IS a Uint8Array)
+  #   - plain objects WITH a valid numeric length: {0:'a',1:'b',length:2}
+  # DROPPED argument examples (NOT array-like objects):
+  #   - primitives: number, string ('abc'), boolean, bigint, symbol
+  #   - null, undefined
+  #   - functions (any function, incl. arrow)
+  #   - plain objects WITHOUT a valid length: {a:1}, {}
+  #   - Set, Map, RegExp  (no valid numeric `length` property)
+  #   - object whose `length` is non-integer / negative / string / NaN / Infinity
+  #     / > MAX_SAFE_INTEGER
+  #
+  # For a KEPT argument, its elements are taken BY INDEX i = 0 .. length-1:
+  #   element_i = a[i]   (a normal property read).
+  #   - SPARSE Arrays / HOLES:  a hole reads as `undefined`. Thus [1, <hole>, 3]
+  #     contributes the values 1, undefined, 3.
+  #   - A kept object/array-like whose index i is missing also yields `undefined`
+  #     for that position. {0:'a',length:2} contributes 'a', undefined.
+  #   - length=0 array-like contributes nothing (but is still "kept"/iterated 0x).
+  #   - NESTED arrays/array-likes are NOT recursively flattened (depth is 1):
+  #     a nested array element [1] flows through AS the element (an Array object),
+  #     deduped by object REFERENCE at NODE 3, never expanded.
+  #   Elements are appended in argument order, then index order.
+
+  # -- NODE 3 (SameValueZero dedup, first occurrence, order-preserving) ---
+  # Walk the working buffer left to right, emitting each value the FIRST time
+  # its SameValueZero key is seen; skip later equal values. SameValueZero(x,y):
+  #     x === y   OR   (x is NaN AND y is NaN).
+  # Consequences (ALL observed in live runs, MUST be reproduced):
+  #   - PRIMITIVES dedup by value:    [1,1,2] -> [1,2];  ['a','a'] -> ['a'].
+  #   - DISTINCT TYPES are distinct:  1 (number) !== 1n (bigint) -> both kept;
+  #     1 !== '1' -> both kept;  true !== 1 -> both kept.
+  #   - bigint dedups with bigint:    [2n,2n] -> [2n].
+  #   - NaN dedups with NaN:          [NaN,NaN] -> [NaN]  (exactly one NaN).
+  #   - +0 and -0 are the SAME key (collapse to one slot, first-appearance
+  #     position). FURTHER: union NORMALIZES the OUTPUT zero to +0 ALWAYS.
+  #     i.e. ANY -0 in the input emerges as +0 in the output (whether it was the
+  #     first-seen zero or not). union([0],[-0]) -> [0]; union([-0],[0]) -> [0];
+  #     a -0 element ALWAYS appears as +0. The re-emitter must NEVER output -0.
+  #     (Source: the line `value = value !== 0 ? value : 0` forces every 0/-0
+  #      to +0 before pushing; and the large-array Set fast-path likewise yields
+  #      +0 because the engine's Set canonicalizes -0 to +0 on insertion.)
+  #   - OBJECTS / ARRAYS / FUNCTIONS-as-elements dedup by REFERENCE (===):
+  #     the SAME object reference appearing twice -> one slot; two structurally
+  #     equal but distinct objects [{x:1}],[{x:1}] -> BOTH kept (length 2).
+  #   - `undefined` dedups with `undefined`; null with null; booleans by value.
+  #
+  # SIZE THRESHOLD (LARGE_ARRAY_SIZE = 200): purely an internal optimization.
+  # When the working buffer length >= 200, baseUniq uses a Set/SetCache instead
+  # of a linear scan. This changes NOTHING observable: same SameValueZero dedup,
+  # same first-appearance order, same +0 normalization, same NaN collapse. The
+  # re-emitter need only honor the observable contract; it MAY use any dedup
+  # structure. (Verified: large arrays with dupes, NaN, -0, and '__proto__'
+  # string keys all behave identically to the small path.)
+
+  # -- RESULT --------------------------------------------------------------
+  # Returns a NEW Array (never an input, never an input's alias). Inputs are
+  # NEVER mutated (verified: union([1,2],[2,3]) leaves both args intact).
+  # union() -> [];  union([]) -> [];  union([],[]) -> [];  union(<all dropped
+  # args>) -> [].
+
+  # -- ERROR / THROW BEHAVIOR ---------------------------------------------
+  # union does not throw for any codec-faithful argument shape in scope. There
+  # is no validation/throw path. (A getter on `length` or an index that throws
+  # could surface, but such adversarial objects are out of envelope and not
+  # generated.)
+
+ORACLE value -> oracle.json
+  # Deterministic value oracle. expected = the returned Array, compared by the
+  # harness codec (which preserves NaN, +0/-0 distinction in storage, bigint,
+  # Set/Map/typed-array element values, and array order). Because union always
+  # emits +0 (never -0), expecteds will contain +0 where inputs had -0.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the variadic collection;
+    - the isArrayLikeObject keep/drop predicate (isObjectLike AND isArrayLike,
+      with isLength's non-negative-safe-integer length rule), including the
+      function-drop and string-primitive-drop and Set/Map/RegExp-drop;
+    - the depth-1 (non-recursive) index-order flatten incl. sparse-hole ->
+      undefined and missing-index -> undefined;
+    - the SameValueZero first-occurrence order-preserving dedup, NaN collapse,
+      +0/-0 collapse WITH +0 output normalization, by-reference object dedup,
+      cross-type distinctness;
+    - returning a fresh, unmutated Array; [] for empty/all-dropped/no-args.
+  CARRIED DATA: none. (The only literal constant of note is LARGE_ARRAY_SIZE=200,
+    an unobservable optimization threshold, already folded into BEHAVIOR.)
+  OUT-OF-CONTRACT: none. union is pure with no side APIs and no stateful mutator.
+  OUT-OF-ENVELOPE (documented, NOT generated — do not emit from genInputs):
+    - FUNCTION ELEMENTS inside a kept array (functions don't survive the JSON
+      codec). Per-contract they would flow through and dedup by reference, but
+      they are kept OUT of generated inputs.
+    - SYMBOL elements (don't survive the codec).
+    - boxed primitives as elements (new Number(1)) — identity-typed, codec-lossy.
+    - adversarial objects with throwing/side-effecting `length` getters or index
+      getters.
+
+PROVENANCE lodash.union@4.6.0 (npm), repo lodash/lodash, MIT license,
+  source file: node_modules/lodash.union/index.js (single self-contained file;
+  union defined at the `var union = baseRest(function(arrays){ return
+  baseUniq(baseFlatten(arrays, 1, isArrayLikeObject, true)); });` site,
+  module.exports = union).

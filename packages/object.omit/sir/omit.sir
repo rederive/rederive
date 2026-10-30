@@ -1,0 +1,210 @@
+UNIT omit
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# The default (and only) export of npm `object.omit@3.0.0`, CommonJS.
+# Returns a NEW plain object that is the complement of `pick`: copies obj's own-enumerable
+# (string-keyed) properties EXCEPT those named in `props`, optionally further filtered by `fn`.
+# This SIR INLINES the full require chain so a blind re-emitter needs NO require:
+#   object.omit -> is-extendable@1.0.1 -> is-plain-object@2.0.4 -> isobject@3.0.1
+# All four leaves are reproduced below as in-contract logic. There is NO external dependency
+# and NO carried data (no published constant tables).
+
+SIG  omit(obj, props, fn) -> object
+     # NOTE: the real source has THREE parameters. The task framed it as omit(obj, keys); the
+     # third parameter `fn` is a filter predicate. `props` (the 2nd arg, the task's "keys") may be
+     # a string, an array, a function, undefined, null, or other values (see BRANCHES). When `props`
+     # is itself a function it is RE-ASSIGNED to `fn` (see node B1) and any real 3rd arg is discarded.
+
+DEPENDS-ON none   # is-extendable / is-plain-object / isobject are INLINED below; no require in emission.
+
+BEHAVIOR
+  # ---- Inlined helper: isObject(val)  [from isobject@3.0.1] ----
+  #   isObject(val)  ==  (val != null) && (typeof val === 'object') && (Array.isArray(val) === false)
+  #   i.e. true for non-null, non-array objects (plain objects, class instances, Date, RegExp,
+  #   Object.create(null), arguments, boxed wrappers, Map, Set, etc.); false for null/undefined/array/primitive/function.
+  #
+  # ---- Inlined helper: isObjectObject(o)  [from is-plain-object@2.0.4] ----
+  #   isObjectObject(o)  ==  (isObject(o) === true)
+  #                          && (Object.prototype.toString.call(o) === '[object Object]')
+  #   The toString brand restricts to objects whose internal [[Class]]/Symbol.toStringTag yields
+  #   '[object Object]' — so Date -> '[object Date]' is excluded, arguments -> '[object Arguments]'
+  #   is excluded, Map -> '[object Map]' excluded, a boxed wrapper whose proto is String.prototype
+  #   yields '[object String]' -> excluded.
+  #
+  # ---- Inlined helper: isPlainObject(o)  [from is-plain-object@2.0.4] ----
+  #   1. if isObjectObject(o) === false        -> return false
+  #   2. ctor = o.constructor
+  #      if typeof ctor !== 'function'         -> return false   # e.g. Object.create(null): ctor undefined -> false
+  #   3. prot = ctor.prototype
+  #      if isObjectObject(prot) === false     -> return false
+  #   4. if prot.hasOwnProperty('isPrototypeOf') === false -> return false
+  #   5. otherwise                             -> return true
+  #   Net effect for the codec-faithful inputs in scope:
+  #     - {a:1}, new Object(), Object.assign({}, ...)           -> PLAIN  (true)
+  #     - Object.create(null)                                   -> NOT plain (step 2: ctor undefined)
+  #     - class instance, Date, RegExp, arguments, Map, Set     -> NOT plain (step 1: toString brand)
+  #
+  # ---- Inlined helper: isExtendable(val)  [from is-extendable@1.0.1] ----  (the source's `isObject`)
+  #   isExtendable(val)  ==  isPlainObject(val) || (typeof val === 'function') || Array.isArray(val)
+  #   TRUE for: plain objects, functions, arrays.
+  #   FALSE for: null, undefined, numbers, strings, booleans, bigint, symbols, Date, RegExp,
+  #              class instances, Object.create(null), arguments, boxed wrappers, Map/Set/Buffer/typed-array.
+  #
+  # ============================ omit(obj, props, fn) pipeline ============================
+  #
+  # NODE A — extendability guard
+  #   if (isExtendable(obj) === false) return {}      # a brand-new empty plain object
+  #   -> Any non-extendable obj (null, undefined, primitive, Date, class instance,
+  #      Object.create(null), arguments, Map, Set, Buffer, etc.) short-circuits to {}.
+  #      obj that IS extendable (plain object, function, or array) proceeds.
+  #
+  # NODE B1 — props-as-function coercion (predicate detection)
+  #   if (typeof props === 'function') { fn = props; props = []; }
+  #   -> When the 2nd arg is a function, it BECOMES the filter predicate `fn`, props becomes the
+  #      empty array [], and ANY real 3rd argument is OVERWRITTEN/DISCARDED.
+  #
+  # NODE B2 — props-as-string coercion
+  #   if (typeof props === 'string') { props = [props]; }
+  #   -> A single string key is wrapped into a one-element array. (A multi-char string like "ab"
+  #      becomes ["ab"], NOT split into chars.)
+  #
+  # NODE C — predicate-presence flag
+  #   isFunction = (typeof fn === 'function')
+  #
+  # NODE D — enumerate own string keys
+  #   keys = Object.keys(obj)
+  #   -> OWN ENUMERABLE STRING keys only, in standard ECMAScript order:
+  #        (1) integer-index keys (canonical array indices, e.g. "0","1","2") in ascending numeric order,
+  #        (2) then remaining string keys in property-insertion order.
+  #   -> EXCLUDES: inherited/prototype keys, non-enumerable own keys, and ALL Symbol keys.
+  #      Consequence: symbol-keyed properties are NEVER copied into the result.
+  #
+  # NODE E — build result
+  #   res = {}
+  #   for i in 0 .. keys.length-1:
+  #     key = keys[i]
+  #     val = obj[key]
+  #     KEEP-CONDITION (copy key->val into res iff this is truthy):
+  #       (!props) || ( props.indexOf(key) === -1 && (!isFunction || fn(val, key, obj)) )
+  #     if KEEP-CONDITION: res[key] = val
+  #   return res
+  #
+  #   Decomposed KEEP-CONDITION semantics:
+  #     * `!props` : if props is FALSY at this point (null, undefined, 0, false, NaN), the whole
+  #         left disjunct is true -> EVERY key is copied -> a full shallow copy, predicate IGNORED.
+  #         (props can be falsy HERE only via the original 2nd arg being null/undefined/0/false/NaN.
+  #          NOTE: the empty string "" is FALSY but is a STRING, so NODE B2 wraps it to [""] (a TRUTHY
+  #          array) BEFORE the loop — so props==="" does NOT reach the !props branch; it goes to the
+  #          indexOf branch with omit-list [""], which matches no normal key, yielding a full copy too
+  #          (same observable result, different mechanism). Likewise function/string props were already
+  #          normalized to an array in B1/B2 and never reach the loop as a bare function/string.
+  #          An empty array [] is TRUTHY, so [] does NOT take this branch — see below.)
+  #     * else props is truthy and MUST support `.indexOf`:
+  #         props.indexOf(key) === -1  -> key is NOT in the omit list (kept, subject to predicate)
+  #         props.indexOf(key) !== -1  -> key IS in the omit list (dropped)
+  #         indexOf uses STRICT equality (===). `key` is always a STRING (from Object.keys), so an
+  #         omit-list entry must be the string form to match: [1].indexOf("1") === -1 (no match),
+  #         ["1"].indexOf("1") === 0 (match). For props===[] (empty array) indexOf is always -1 -> nothing omitted.
+  #     * predicate gate: if isFunction, additionally require fn(val, key, obj) to be TRUTHY to keep.
+  #         fn is invoked with (value, key, wholeObj). Its return is used in boolean context (any
+  #         truthy value keeps; any falsy value drops). If fn throws, the throw PROPAGATES out of omit.
+  #
+  # NODE F — throw path
+  #   If props is TRUTHY but lacks a callable `.indexOf` method (e.g. props is a number like 5, or a
+  #   plain object {}, or a boolean true, or a bigint), the expression `props.indexOf(key)` throws
+  #   TypeError("props.indexOf is not a function"). This is reached on the FIRST iteration (i.e. only
+  #   when obj has at least one own-enumerable key; an empty/keyless obj returns {} without throwing).
+  #   Recorded as {__throw: 'TypeError'} by the oracle.
+  #
+  # ---- Worked truth table (self-consistent with the generator's curated prefix) ----
+  #   omit({a:1,b:2,c:3}, "a")                       -> {b:2,c:3}            # B2 string
+  #   omit({a:1,b:2,c:3}, ["a","b"])                  -> {c:3}               # array
+  #   omit({a:1,b:2}, "z")                            -> {a:1,b:2}           # key absent, no-op
+  #   omit({a:1,b:2}, ["a","b"])                      -> {}                  # all removed
+  #   omit({a:1,b:2}, [])                             -> {a:1,b:2}           # empty array (TRUTHY) -> copy
+  #   omit({a:1,b:2})                                 -> {a:1,b:2}           # props undefined -> !props -> copy
+  #   omit({a:1,b:2}, null)                           -> {a:1,b:2}           # props null   -> !props -> copy
+  #   omit({a:1,b:2}, 0)                              -> {a:1,b:2}           # props 0      -> !props -> copy
+  #   omit({a:1,b:2}, false)                          -> {a:1,b:2}           # props false  -> !props -> copy
+  #   omit(null, "a")                                 -> {}                  # NODE A guard
+  #   omit(undefined, "a")                            -> {}                  # NODE A guard
+  #   omit(5, "a")                                    -> {}                  # NODE A guard (primitive number)
+  #   omit("hello", "a")                              -> {}                  # NODE A guard (string primitive)
+  #   omit(true, "a")                                 -> {}                  # NODE A guard (boolean)
+  #   omit([10,20,30], [])                            -> {"0":10,"1":20,"2":30}   # array IS extendable; keys "0","1","2"
+  #   omit([10,20,30], "0")                           -> {"1":20,"2":30}     # omit index "0"
+  #   omit([10,20,30], ["0","2"])                     -> {"1":20}            # omit indices "0","2"
+  #   omit(<function f with f.a=1,f.b=2>, "a")        -> {b:2}               # function IS extendable; own props copied
+  #   omit(Object.create({inherited:99}) +own:1, "x") -> {own:1}            # inherited keys excluded
+  #   omit({a:<fn>, b:2}, "b")                        -> {a:<fn>}            # function VALUES preserved by reference
+  #   omit({a:1,b:2,c:3,d:4}, v=>v%2===0)             -> {b:2,d:4}           # B1: props-as-fn predicate keeps even vals
+  #   omit({a:1,b:2,c:3}, v=>v>1, v=>v>2)             -> {b:2,c:3}           # B1: 3rd arg discarded; v>1 used
+  #   omit({a:1,b:2,c:3}, "a", (v)=>v>1)              -> {b:2,c:3}           # props=["a"] removed, then v>1 filter
+  #   omit({a:1,b:2,c:3,d:4}, ["a"], (v)=>v<4)        -> {b:2,c:3}           # remove a, keep v<4 of the rest
+  #   omit(Object.create(null) +a,b, "a")            -> {}                  # not plain -> guard -> {}
+  #   omit(new (class{a=1;b=2}), "a")                -> {}                  # class instance not plain -> {}
+  #   omit(new Date()+x:1, "y")                       -> {}                  # Date not plain -> {}
+  #   omit({a:1,[Symbol("s")]:2}, "a")               -> {}                  # symbol key not enumerated; a removed
+  #   omit({a:1,b:2}, 5)                              -> THROW TypeError     # NODE F
+  #   omit({a:1,b:2}, {})                             -> THROW TypeError     # NODE F
+  #   omit({a:1,b:2}, true)                           -> THROW TypeError     # NODE F (true is truthy, no .indexOf)
+  #   omit({}, 5)                                     -> {}                  # NO throw: no keys to iterate
+  #   omit({a:1}, [1])                                -> {a:1}               # numeric 1 !== string "a"; not omitted
+  #   omit({"1":10,"2":20}, [1])                      -> {"1":10,"2":20}     # 1 !== "1"; nothing omitted (strict ===)
+  #   omit({"1":10,"2":20}, ["1"])                    -> {"2":20}            # "1" === "1"; omitted
+  #
+  # Result is ALWAYS a fresh plain object built with `res = {}` (never the same reference as obj).
+  # The copy is SHALLOW: values (including object/function values) are copied by reference.
+
+ORACLE value -> oracle.json
+  # Pure/deterministic. The oracle records the return value; throw paths recorded as {__throw:'TypeError'}.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce EXACTLY):
+    - the NODE A extendability guard (full inlined isExtendable/isPlainObject/isObjectObject/isObject chain)
+    - props-as-function coercion (B1) incl. discarding the real 3rd arg
+    - props-as-string single-key wrapping (B2, no char-splitting)
+    - the !props full-copy short-circuit (falsy props -> shallow copy, predicate ignored)
+    - props.indexOf(key) === -1 strict-equality omit-list test (keys are strings from Object.keys)
+    - the optional fn(val,key,obj) predicate gate (truthy-keeps), and throw-propagation from fn
+    - Object.keys ordering (integer keys ascending, then insertion order), own-enumerable-string-only
+    - the NODE F TypeError throw path for truthy non-indexable props
+  CARRIED DATA: none.
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (in the SPEC for the blind emitter to reconstruct, but NOT emitted
+  by genInputs because the input codec corrupts them — so the held-out oracle for them would be un-reproducible):
+    - FUNCTION passed as `props` or `fn` (the predicate path, NODE B1 / NODE C / predicate gate). The
+      predicate semantics ARE fully in-contract and the blind emitter MUST reproduce them from the truth
+      table above (fn invoked as fn(val,key,obj), truthy-keeps, B1 re-assignment, 3rd-arg discard). But the
+      generator does NOT emit function args: the input codec serializes a function argument to JSON `null`
+      (functions are not a tagged form), which would turn `omit(obj, predicate)` into `omit(obj, null)`
+      (full-copy branch) at store-time — a corrupted, un-reproducible oracle. Hence the predicate branches
+      are spec-only here, NOT generator-emitted.
+    - FUNCTION-VALUED own properties of `obj` (e.g. {a: ()=>1, b: 2}). The behavior IS in-contract
+      (function values are copied by reference, never split/dropped by omit). But the input codec DROPS
+      function-valued own keys from objects at encode-time, so an emitted {a:fn,b:2} would be stored as
+      {b:2} — a different obj. Hence object values in genInputs are restricted to codec-faithful values
+      (numbers, strings, booleans, null, nested plain objects/arrays, bigint). Function values are spec-only.
+    - Symbol-keyed properties: documented as never-copied (Object.keys excludes them). The codec also drops
+      symbol keys, but because omit ALSO drops them the asserted string-key result is identical either way,
+      so a symbol-keyed obj IS safe to emit (the generator includes one; it asserts only the string-key result).
+    - Other non-codec-faithful args (undefined as an array element / object value, NaN/±Infinity values,
+      boxed Number/String/Boolean, Date/Map/Set as obj) are DOCUMENTED in the truth table but NOT emitted
+      by genInputs. (Note: a top-level `obj` that is a Date/Map/Set/primitive hits NODE A and returns {};
+      the generator exercises the guard via codec-faithful obj values — number, string, boolean, null,
+      undefined, array, plain object, function — not via Date/Map/Set instances.)
+
+EMISSION CONTRACT
+  - Emissions are .mjs with a DEFAULT export: `export default function omit(obj, props, fn) { ... }`.
+  - NO `require`/`import` — the is-extendable/is-plain-object/isobject chain MUST be inlined as local
+    helper functions (or equivalent inline expressions). The unit must be fully self-contained.
+  - Called as the default export: `omit(...args)` where args are the tuples from genInputs.
+  - Behavior must match node v24 ECMAScript semantics for Object.keys ordering and indexOf strict equality.
+
+PROVENANCE
+  object.omit@3.0.0, repo jonschlinkert/object.omit, MIT License, source file index.js.
+  Inlined dependency chain:
+    is-extendable@1.0.1 (jonschlinkert/is-extendable, MIT, index.js)
+    is-plain-object@2.0.4 (jonschlinkert/is-plain-object, MIT, index.js)
+    isobject@3.0.1       (jonschlinkert/isobject, MIT, index.js)
+  Verified against the real installed package under node v24.16.0.

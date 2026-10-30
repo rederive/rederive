@@ -1,0 +1,248 @@
+UNIT defaultsDeep
+KIND STATE                 # mutate-and-return: mutates argument[0] in place and returns it
+ORACLE-CLASS deterministic # pure given inputs; no clock/RNG/io/net seam
+SIG defaultsDeep(object, ...sources) -> object        # CommonJS default export: module.exports = defaultsDeep
+DEPENDS-ON none            # self-contained lodash modular build (lodash.defaultsdeep@4.6.1 index.js); no carried data
+
+# =====================================================================================
+# SUMMARY
+# =====================================================================================
+# _.defaultsDeep assigns recursively-inheritable default properties from one or more
+# `sources` into `object`, ONLY where `object` is "missing" a value (per the
+# assignMergeValue rule below). It is `mergeWith(object, ...sources, undefined,
+# customDefaultsMerge)`: a deep merge whose customizer keeps the destination value
+# whenever the destination value is itself an object (so recursion fills only the
+# gaps), and where the leaf-assignment rule is SameValueZero-based, NOT a naive
+# "if missing".
+#
+# Implementation skeleton (from index.js):
+#   defaultsDeep = baseRest(args => { args.push(undefined, customDefaultsMerge);
+#                                     return apply(mergeWith, undefined, args); })
+#   customDefaultsMerge(objValue, srcValue, key, object, source, stack):
+#       if (isObject(objValue) && isObject(srcValue)) {            # both objects/arrays/functions
+#           stack.set(srcValue, objValue);
+#           baseMerge(objValue, srcValue, undefined, customDefaultsMerge, stack);
+#           stack.delete(srcValue);
+#       }
+#       return objValue;                                          # <-- always returns dest value
+#
+# THE CONTRACT IS OBSERVED AS {result, post}:
+#   result = the return value of the call
+#   post   = argument[0] after the call (the mutated object)
+#   INVARIANT: result === post (same reference; mutate-and-return), so result deep-equals post.
+
+# =====================================================================================
+# KIND STATE — MUTATION / RETURN CONTRACT  (verified by running the real package)
+# =====================================================================================
+# - object is coerced to an object first: `object = Object(object)`.
+#     * a plain object / array / function passes through as the SAME reference (identity).
+#     * a primitive (number/string/boolean) is BOXED into a fresh wrapper object; the
+#       boxed wrapper is what is mutated and returned (e.g. dd("hi", {a:1}) returns a
+#       String wrapper object with own index keys 0,1 plus 'a'). null / undefined coerce
+#       to a fresh {} (plain Object). These boxed/wrapper returns are OUT-OF-ENVELOPE
+#       for the oracle codec (see SCOPE) and are excluded from genInputs; the SIR still
+#       defines them.
+# - The (coerced) object is MUTATED IN PLACE and RETURNED. result === the coerced object.
+#     For an object/array first arg, result === argument[0] (the original reference).
+#     Verified: const o={a:1}; dd(o,{b:2})===o  ->  true ; o is {a:1,b:2} after.
+# - Falsy sources are skipped: createAssigner does `if (source) assigner(...)`, so any
+#   source that is null / undefined / 0 / '' / false / NaN is a no-op (no keys read).
+# - Zero sources => object is coerced and returned unchanged (aside from boxing).
+
+# =====================================================================================
+# ITERATION & KEY SEMANTICS
+# =====================================================================================
+# - Sources are processed LEFT-TO-RIGHT (index 0,1,2,...). Each source merges into the
+#   SAME object. Because the leaf rule only fills gaps, the EARLIEST source that provides
+#   a value for a key wins ("first-source-wins"); later sources cannot overwrite a value
+#   an earlier source already placed (it is then "present" in object).
+#       Verified: dd({}, {a:1}, {a:2}) -> {a:1}.
+#                 dd({}, {a:{x:1}}, {a:{y:2}}) -> {a:{x:1,y:2}}  (deep-merged across sources).
+#                 dd({}, {a:1}, {b:2}) -> {a:1,b:2}.
+# - Keys iterated with keysIn = ENUMERABLE OWN **AND INHERITED** string keys of the source
+#   (for array-like sources, the integer index keys; NOT a `length` key). Inherited
+#   enumerable prototype properties of a source ARE merged in.
+#       Verified: function P(){this.own=1;} P.prototype.inh=2; dd({}, new P()) -> {own:1,inh:2}.
+# - Destination KEY ORDER: existing object keys keep their position; newly-created keys
+#   are appended in source-iteration order (insertion order). e.g. dd({b:1},{a:2,c:3})
+#   yields key order ["b","a","c"].
+# - safeGet POLLUTION GUARDS: when reading a value for key 'constructor' (only if the
+#   destination's current object[key] is a function) OR for key '__proto__', safeGet
+#   returns undefined (treated as "no value"), preventing prototype-chain traversal there.
+#   Observable effects:
+#     * source key '__proto__' (as a normal own data prop, e.g. parsed from JSON) does NOT
+#       pollute Object.prototype and does NOT create an own '__proto__' key on the result.
+#       Verified: dd({}, JSON.parse('{"__proto__":{"polluted":1}}')) -> own keys {} ;
+#                 ({}).polluted === undefined.
+#     * source key 'constructor' with an OBJECT value into a fresh/empty dest IS copied as
+#       an own 'constructor' key. Verified: dd({}, {constructor:{x:1}}) -> {constructor:{x:1}}.
+
+# =====================================================================================
+# THE LEAF-ASSIGNMENT RULE  (assignMergeValue) — load-bearing, exact
+# =====================================================================================
+# assignMergeValue(object, key, value) assigns (creates/overwrites) object[key]=value IFF:
+#     (value !== undefined && !eq(object[key], value))          # defined value, differs from current
+#  OR (value === undefined && !(key in object))                 # undefined value, AND key absent
+# where eq is SameValueZero: a===b OR (a!==a && b!==b)  (i.e. NaN equals NaN; +0 equals -0).
+# Otherwise NO assignment (existing value preserved; key not created).
+#
+# CONSEQUENCES (each verified against the real package):
+#  - dest MISSING key, src value DEFINED  -> key CREATED with src value.
+#  - dest MISSING key, src value === undefined -> key CREATED with value undefined.
+#        *** THE CORRECTION ***  dd({},{a:undefined}) -> {a:undefined}  (own key 'a' EXISTS,
+#        value undefined). dd({}, {a:undefined, b:2}) -> {a:undefined, b:2} (own keys a,b).
+#  - dest key PRESENT with a DEFINED value (scalar/null/object/array), src DEFINED
+#        -> dest KEPT. For a scalar/null dest the customizer returns objValue (the dest) so
+#        newValue===objValue, eq(object[key], objValue) is true -> kept regardless of src.
+#        Verified: dd({a:1},{a:5|null|{x:1}|[1,2]}) all -> {a:1};
+#                  dd({a:null},{a:5|null|{x:1}|[1,2]}) all -> {a:null}.
+#  - dest key PRESENT with value undefined, src DEFINED scalar/null/object/array
+#        -> OVERWRITTEN by the (merged) src value, because eq(undefined, srcValue) is false
+#        and srcValue !== undefined. Verified: dd({a:undefined},{a:5}) -> {a:5};
+#        dd({a:undefined},{a:null}) -> {a:null}; dd({a:undefined},{a:{x:1}}) -> {a:{x:1}};
+#        dd({a:undefined},{a:[1,2]}) -> {a:[1,2]}. (NESTED too: dd({a:{b:undefined}},{a:{b:5}})
+#        -> {a:{b:5}}.)
+#  - dest key PRESENT with value undefined, src === undefined -> kept undefined (key already in).
+#        Verified: dd({a:undefined},{a:undefined}) -> {a:undefined}.
+#  - +0 vs -0: SameValueZero treats them equal -> dest +0 kept when src -0 (and vice-versa);
+#        the dest's existing zero sign is preserved. Verified: dd({a:0},{a:-0}).a is +0.
+#  - NaN: SameValueZero treats NaN===NaN -> dest NaN kept when src NaN/anything.
+#        Verified: dd({a:NaN},{a:NaN}).a is NaN ; dd({a:NaN},{a:42}).a is NaN.
+
+# =====================================================================================
+# DECISION TABLE  (single key, single source; rows = dest state, cols = src value)
+# Each cell = the resulting object[key] (and whether the key exists). VERIFIED by running
+# lodash.defaultsdeep@4.6.1. "obj" = plain object, "arr" = array.
+# =====================================================================================
+#
+#                | src scalar(5) | src null      | src undefined        | src plainobj {x:1}        | src arr [1,2]
+# ---------------+---------------+---------------+----------------------+---------------------------+----------------------------
+# dest MISSING   | 5             | null          | undefined (key made) | DEEP-CLONE of {x:1}       | DEEP-CLONE of [1,2]
+# dest = 1       | 1             | 1             | 1                    | 1                         | 1
+# dest = null    | null          | null          | null                 | null                      | null
+# dest = undef   | 5  (overwrite)| null (ow)     | undefined (kept)     | {x:1} (ow, cloned-merge)  | [1,2] (ow, cloned-merge)
+# dest = {y:2}   | {y:2}         | {y:2}         | {y:2}                | DEEP-MERGE {y:2,x:1}      | OBJ<-ARR merge: {0:1,1:2,y:2}
+# dest = [9]     | [9]           | [9]           | [9]                  | ARR<-OBJ merge: see note  | DEEP-MERGE by index: [9,2]
+#
+# NOTES on the container cells (verified):
+#  * dest MISSING + src plainobj/arr: the src is NOT shared by reference. baseMergeDeep
+#    builds a fresh container (initCloneObject for plain objects, [] for arrays) and
+#    recursively merges the source into it. So result container !== source container, and
+#    nested object elements of a source array/object are likewise freshly built (NOT shared).
+#       Verified: out.a !== src.a ; out.a[0] !== src.a[0]  for dd({}, {a:[{x:1}]}).
+#  * dest {y:2} + src plainobj {x:1}: DEEP MERGE. Keys present in dest are kept (gap-fill);
+#    keys only in src are added; recurses for nested objects.
+#       dd({a:{x:1}},{a:{x:9,y:2}}) -> {a:{x:1,y:2}} (x kept, y added).
+#       dd({a:{b:{c:1}}},{a:{b:{d:2},e:3}}) -> {a:{b:{c:1,d:2},e:3}}.
+#  * dest plainobj + src arr: src is an array but dest is a plain object -> merge array index
+#    keys into the object (gap-fill): a plain object, NOT an array; no `length` own key.
+#       dd({a:{x:1}},{a:[1,2]}) -> {a:{0:1,1:2,x:1}}.
+#       dd({a:{}},{a:[7,8]}) -> {a:{0:7,1:8}}.
+#  * dest arr + src arr: deep merge BY INDEX into the EXISTING array (gap-fill per index;
+#    dest stays an array). dd({a:[1]},{a:[9,8,7]}) -> {a:[1,8,7]} (idx0 kept=1, idx1=8, idx2=7).
+#       dd({a:[1,2,3]},{a:[9]}) -> {a:[1,2,3]}. dd({a:[]},{a:[9,8]}) -> {a:[9,8]}.
+#  * dest arr + src plainobj: merge the object's index/string keys into the array (gap-fill);
+#    dest stays an array. dd({a:[1]},{a:{0:9,b:7}}) -> {a:[1]} with key 'b' handling per:
+#       Verified: dd({a:[10,20]},{a:{0:9,2:7,b:5}}) -> array [10,20] grown: own keys
+#       {0:10,1:20,2:7,length:3,b:5}, isArray=true. Index0/1 present so kept; index2 was a gap
+#       so filled (7); non-index key 'b' added (5).
+#  * dest = non-plain object (e.g. Date) + src plainobj: end-result is a FRESH plain object
+#    holding the merged src keys; the non-plain object is replaced.
+#       Verified: dd({a:new Date(0)},{a:{x:1}}) -> {a:{x:1}}.
+#  * src = non-plain object (Date, RegExp) into MISSING dest: NOT cloned field-by-field;
+#    isPlainObject(srcValue) is false and not arr/buffer/typed, so the SAME reference is
+#    assigned. Verified: dd({}, {a:new Date(0)}).a is a Date instance, getTime()===0.
+
+# =====================================================================================
+# CIRCULAR REFERENCES
+# =====================================================================================
+# A `stack` (Stack/Map) tracks each traversed source object -> its merged counterpart, so
+# self-referential sources terminate. For cyc={a:1}; cyc.self=cyc:
+#   dd({}, cyc) -> r with r.a===1, r.self the merged clone-of-cyc, r.self.self === r.self
+#   (the cycle is reproduced against the cloned counterpart; r.self !== r at top because the
+#   top dest {} is the assigned target and the source clone is a distinct object).
+# Contract: NO infinite loop, NO throw. (Circular inputs are not codec-faithful; the
+# generator does not emit them, but the SIR defines the behavior.)
+
+# =====================================================================================
+# BEHAVIOR  (ordered pipeline)
+# =====================================================================================
+# 1. Collect (object, ...sources) via baseRest.
+# 2. object = Object(object)  (box primitives; null/undefined -> {}).
+# 3. For each source in order, if source is truthy:
+#      baseMerge(object, source, customizer=customDefaultsMerge):
+#        for each key in keysIn(source) (own+inherited enumerable; index keys for array-like):
+#          srcValue = source[key]
+#          if isObject(srcValue):                      # object/array/function source value
+#              baseMergeDeep(object, source, key, ..., customDefaultsMerge):
+#                 objValue = safeGet(object,key); srcValue = safeGet(source,key)
+#                 if stack has srcValue: assignMergeValue(object,key, stacked); continue
+#                 newValue = customDefaultsMerge(objValue, srcValue, key+'', object, source, stack)
+#                    -> if isObject(objValue) && isObject(srcValue): recurse baseMerge into
+#                       objValue (so an existing dest container is merged-into, gap-filled);
+#                       return objValue (dest kept).
+#                 isCommon = (newValue === undefined)   # true only when dest objValue NOT an object
+#                 if isCommon: build fresh container per src type:
+#                       arr/buffer/typed src -> use objValue if it's an array/array-like, else
+#                          [] (or a buffer/typed-array clone);
+#                       plainObject/arguments src -> use objValue if it's a usable object, else
+#                          initCloneObject(srcValue);
+#                       otherwise (non-plain object src) -> isCommon=false; newValue=srcValue (by ref).
+#                    if still isCommon: recurse mergeFunc(newValue, srcValue, ...).
+#                 assignMergeValue(object, key, newValue)   # leaf rule (SameValueZero / undef-create)
+#          else:                                        # scalar/null/undefined source value
+#              newValue = customDefaultsMerge(safeGet(object,key), srcValue, key+'', ...)
+#                    -> customDefaultsMerge returns objValue (the dest value) for a scalar src
+#                       (isObject(srcValue) false so no recursion). For dest MISSING, objValue
+#                       is undefined.
+#              if newValue === undefined: newValue = srcValue
+#              assignMergeValue(object, key, newValue)   # leaf rule
+# 4. return object.   # result === the (coerced) object; deep-equals post.
+
+# =====================================================================================
+# EDGE / DEGENERATE CASES (all verified)
+# =====================================================================================
+# - dd({a:1})                       -> {a:1}        (no sources; identity, same ref)
+# - dd({a:1}, null|undefined|0|'')  -> {a:1}        (falsy source skipped)
+# - dd({}, {})                      -> {}
+# - dd({a:1}, {})                   -> {a:1}
+# - dd(null, {a:1})                 -> {a:1}  (fresh object; OUT-OF-ENVELOPE first-arg form, excluded from gen)
+# - dd(undefined, {a:1})            -> {a:1}  (fresh object; same)
+# - dd(5,{a:1}) / dd("hi",{a:1})    -> Number/String WRAPPER object (OUT-OF-ENVELOPE; excluded)
+# - inherited enumerable source keys ARE merged (keysIn).
+# - '__proto__' source key (own data prop) does NOT pollute and does NOT appear as own key.
+
+# =====================================================================================
+ORACLE value -> oracle.json
+# Observable recorded per input tuple [object, ...sources]:
+#   { result, post }  where post = argument[0] AFTER the call.
+#   result === post (mutate-and-return); both serialized via the harness codec
+#   (undefined round-trips as {__t:'undef'}). The grader compares deep structural equality
+#   of result AND of post. NaN/+-0 sign and own-key existence (incl. undefined-valued keys)
+#   are part of the observable.
+
+# =====================================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire merge algorithm above —
+#   the leaf assignMergeValue rule (incl. undefined-source key-creation and
+#   present-undefined-dest overwrite), SameValueZero equality, deep recursion into plain
+#   objects and arrays (and array<->object cross merges), first-source-wins ordering,
+#   keysIn own+inherited iteration, falsy-source skipping, fresh-container cloning of
+#   object/array sources, by-reference assignment of non-plain object sources, circular
+#   handling, safeGet __proto__/constructor guards, mutate-in-place + return-same-reference.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (defined here, EXCLUDED from genInputs because the
+#   oracle codec cannot round-trip them):
+#     * first arg `object` that is a primitive / null / undefined -> result is a boxed
+#       wrapper object (Number/String/Boolean wrapper) or a fresh {}; wrapper identity is
+#       not codec-faithful. (Behavior is fully specified above for a blind re-emitter.)
+#     * source VALUES that are functions or Symbols (not codec-faithful). A function source
+#       value at a key would be treated by isObject as an object and recursed/assigned; a
+#       Symbol value is a scalar leaf. Not emitted by the generator.
+#     * Buffers / TypedArrays as source values: behavior (cloneBuffer/cloneTypedArray deep
+#       copy) is specified; not exercised by the generator to keep the codec envelope tight.
+#     * circular / self-referential inputs (not codec-faithful). Behavior specified above.
+
+PROVENANCE lodash.defaultsdeep@4.6.1 (MIT). repo lodash/lodash. source file: index.js
+#   (module.exports = defaultsDeep; baseRest + mergeWith + createAssigner + baseMerge +
+#    baseMergeDeep + assignMergeValue + customDefaultsMerge + safeGet + keysIn).

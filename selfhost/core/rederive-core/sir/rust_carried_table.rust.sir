@@ -1,0 +1,35 @@
+UNIT rust_carried_table
+LANG rust
+PRIMARY-SHA256 b54a3ed7077e52f9f806a114c3b438b12912312756bbc114692a863b763fbfec
+SIG pub fn rust_carried_table(src: &str, shape: Option<&str>) -> Result<serde_json::Value, String>
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn rust_carried_table) depending on
+  serde_json only — no main, no I/O, no binary, no regex crate, no unsafe. The verifier generates its own harness crate
+  from the abstract SIG: one JSON array of args per stdin line; src bound as &str, shape as Option<&str> (JSON null = None);
+  the call rust_carried_table(src, shape); one JSON line with the result. Compiling that harness against this SIG is the
+  signature check.
+ABI type mapping: the result is Ok(Value::Object) — a serde_json::Map from each key String to its value; text =
+  Value::String; bool = Value::Bool; none = Value::Null; list = Value::Array; EVERY number = an f64 Number (Value::from(x)
+  with x: f64, or Number::from_f64), never an integer Number, so -0.0 crosses as negative zero; inside the envelope every
+  number is finite. A throw (R3, R4, R6, R7, R9, R10, R11, R12, R13) is Err(message); the message is not graded (a panic is
+  also recorded as a throw, but Err is the contract). Map key order is immaterial (the canonical form sorts).
+ENVELOPE as the primary; no narrowing is needed (no NaN or infinity is ever produced inside it; -0.0 is a valid f64 Number).
+MECHANISM tokenize over chars (str::chars collected into a Vec<char>, or char_indices) — never by byte offset into a
+  multi-byte character; the 32- and 64-character windows of R1/R5 only ever cover ASCII, so chars and UTF-16 units agree
+  there. R5's value: strip underscores and the suffix. An integer-shaped body may have up to ~62 digits, past u128: decide
+  EXACT on the digits themselves (strip leading zeros; zero is exact; for a radix body, bit length L and trailing zero bits T: exact iff
+  L - T <= 53 and L <= 1024; for a decimal body, halve the digit string while it is even, counting T, until the odd part m:
+  exact iff m < 2^53 and m × 2^T < 2^1024), and build the value as m × 2^T in f64 (exact by construction). A
+  fraction-or-exponent body goes through str::parse::<f64>() (correctly rounded, like the host; an infinite result is
+  INEXACT). An f32 suffix on a non-hex literal is ALSO INEXACT when (x as f32) as f64 != x or the f32 is infinite (the
+  value is never changed by it). Keep the INEXACT flag on the token; throw only when R6 reads it. TABLE CAST f32:
+  (x as f32) as f64 == x with the f32 finite. R4 "\u{…}": u32::from_str_radix on the underscore-free hex (more than 8 hex
+  digits overflows: treat any value above 0x10FFFF as the throw), then char::from_u32. R11's WS is space, tab, CR, LF only (NOT
+  str::trim); the width test of step 3 is written by hand over chars. FIT (R12) compares an f64 x with x.fract() == 0.0
+  and -9223372036854775808.0 <= x < 9223372036854775808.0 (i64) or 0.0 <= x < 18446744073709551616.0 (u64) — the f64
+  bounds are exact powers of two, so the comparison is exact (-0.0 >= 0.0 holds). R13: keep a serde_json::Map; SAME for a
+  non-list earlier value compares bits-or-kind (an f64 by to_bits, so -0.0 differs from 0.0), for two lists compares item
+  by item with numbers by == (under which -0.0 == 0.0); on a match the later value is inserted.
+DEPENDS-ON serde_json (crate, version 1) — the SIG's result type and nothing else
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs. Language file re-cut 2026-10-27 (round 5b) with the primary, before any blind
+  re-emission; the ABI follows the lab's rust driver (drivers/rust.mjs: harness generated from the abstract SIG, a json-typed
+  result crossing as JSON text, a Result's Err as a throw).

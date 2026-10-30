@@ -1,0 +1,141 @@
+UNIT isUncPath
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isUncPath(filepath: any) -> boolean   # throws TypeError on non-string
+
+DEPENDS-ON none
+# NOTE: the original is-unc-path@1.0.0 does `require('unc-path-regex')()` to obtain its
+# matcher. unc-path-regex@0.1.2 exports a FUNCTION that returns a FRESH RegExp literal.
+# This SIR INLINES that regex source verbatim (see UNC-REGEX below). The blind
+# reconstruction MUST be SELF-CONTAINED: NO require/import of `unc-path-regex` (and no
+# require of anything else). The regex is reconstructed as an inline RegExp literal.
+
+# ============================================================================
+# UNC-REGEX (the single source of truth — inline verbatim, do NOT alter)
+# ============================================================================
+# The matcher is exactly this RegExp literal, with EMPTY flags (no g, no i, no m, no s):
+#
+#     /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/
+#
+# In JS source that is the literal token:  /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/
+#   .source === "^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+"   (the 32-char source string)
+#   .flags  === ""        (NOT global -> no lastIndex statefulness; safe to .test repeatedly)
+#
+# Anatomy of the pattern (left to right; ^ = start-of-STRING anchor, no /m so a leading
+# "\n" does NOT let a later position match):
+#   ^            anchor at index 0 of the whole string (string MUST start with the match)
+#   [\\\/]{2,}   TWO OR MORE leading separators, each a backslash (\) OR forward slash (/),
+#                in ANY mix (e.g. "\\/", "//", "\\\\", "///", "////" all qualify)
+#   [^\\\/]+     ONE OR MORE chars that are NEITHER backslash NOR slash  (the "server" run;
+#                spaces, dots, "?", letters, digits, etc. all count as non-separator chars)
+#   [\\\/]+      ONE OR MORE separators (backslash/slash, any mix)        (the separator run)
+#   [^\\\/]+     ONE OR MORE non-separator chars                          (the "share" run)
+#   (NO end anchor) -> anything may follow; trailing path components / trailing spaces are
+#                fine and do not affect the match.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline)
+# ============================================================================
+# node-1  TYPE GUARD
+#   IF (typeof filepath !== 'string')  ->  THROW TypeError with message exactly
+#        "expected a string"
+#   The check is `typeof x !== 'string'`. This means:
+#     - JS string primitives ("", "abc")            -> pass the guard (continue)
+#     - everything else throws: number (incl. NaN/Infinity if reached), bigint, boolean,
+#       null, undefined, plain object, array, function, symbol, Date, RegExp, boxed
+#       String object (typeof new String("x") === 'object') -> THROW.
+#   The thrown value is `new TypeError('expected a string')`; constructor name "TypeError",
+#   message "expected a string". No other error type, no custom props.
+#
+# node-2  MATCH (only reached when filepath is a string)
+#   RETURN UNC_REGEX.test(filepath)  -> the JS boolean result of .test on the inline regex.
+#   Because the regex has empty flags (non-global), .test is pure/stateless: same input ->
+#   same boolean, and order/repetition of calls has no effect (no lastIndex carry).
+#
+# The return value is exactly that boolean (true | false). No truthy/falsey coercion games;
+# .test already yields a primitive boolean.
+
+# ============================================================================
+# WORKED EDGE CASES  (confirmed by running the REAL is-unc-path@1.0.0 package)
+# ============================================================================
+#   "\\\\server\\share"   (JS literal "\\\\server\\share" = chars \ \ s e r v e r \ s ...)
+#                                                        -> true   (2 backslashes, server, \, share)
+#   "//server/share"                                     -> true
+#   "/path/to/x"                                         -> false  (only ONE leading slash)
+#   "C:\\x"               (C : \ x)                       -> false  (no leading separators at index 0)
+#   "foo/bar"                                            -> false  (no leading separators)
+#   ""                    (empty)                         -> false
+#   "\\\\server"          (2 backslashes + "server")      -> false  (no separator+share after server)
+#   "//server"                                           -> false  (same: missing /share)
+#   "///server/share"     (3 leading slashes)             -> true   ({2,} allows 3+)
+#   "\\\\\\server\\share" (3 leading backslashes)         -> true
+#   "////server/share"    (4 leading slashes)             -> true
+#   "\\/server/share"     (mixed lead \ then /)           -> true   (char class mixes freely)
+#   "//server\\share"     (fwd lead, backslash sep)       -> true
+#   "\\\\server/share"    (back lead, fwd sep)            -> true
+#   "\\\\server\\share\\dir\\file"                        -> true   (trailing components OK; not end-anchored)
+#   "//server/share/dir/file"                            -> true
+#   "/single"             (one leading slash)             -> false
+#   "\\single"            (one leading backslash)         -> false
+#   "//"                                                 -> false  (no server run)
+#   "\\\\"                (two backslashes only)          -> false
+#   "///"                 (three slashes only)            -> false  (no non-sep chars at all)
+#   "//server//share"     (double sep between)            -> true   (sep run is [\\\/]+)
+#   "//a/b"               (minimal valid)                 -> true
+#   "//a/"                (server then sep, no share)     -> false
+#   "//a//"               (sep run, no share)             -> false
+#   "//server/ "          (share is a single space char)  -> true   (space is a non-separator)
+#   "// /share"           (server is a single space)      -> true
+#   "//server/share "     (trailing space after share)    -> true
+#   "\\\\?\\C:\\path"     (extended-length \\?\C:\path)    -> true   ("?" is a non-sep char)
+#   "\\\\.\\pipe\\name"   (device path \\.\pipe\name)      -> true
+#   "a//server/share"     (a char BEFORE the slashes)      -> false  (^ anchor: must start at index 0)
+#   "  //server/share"    (leading spaces then //)         -> false  (^ anchor; spaces are not seps)
+#   "\n//server/share"    (leading newline)                -> false  (^ is start-of-STRING, no /m flag)
+#   non-string args (42, 3.14, null, undefined, {}, [], true) -> THROW TypeError "expected a string"
+
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function with NO ambient seam (no clock/RNG/env/io/net). The match is
+# a function of the input string and the FROZEN inline regex only. No injection needed.
+# Throw cases are graded via the harness {__throw} sentinel (codec-faithful inputs that
+# reach the TypeError path are recorded as throws and compared).
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the `typeof !== 'string'` guard and the exact TypeError('expected a string') throw.
+#   - the inline UNC regex literal /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/ (empty flags) and
+#     RETURN regex.test(filepath).
+# CARRIED DATA: none. The regex is small SIR text inlined verbatim above — NOT an extracted
+#   data table. There is NO <unit>.carried.json for this unit.
+# OUT-OF-CONTRACT / side APIs: none. No mutation, no state, no I/O.
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because the persistence codec
+#   `JSON.stringify(encode(args))` cannot faithfully round-trip them):
+#   - `undefined` as an argument, `NaN`, `±Infinity` -> all are non-strings and WOULD throw
+#     TypeError, but they are not codec-faithful, so the generator does NOT emit them. A
+#     blind re-emitter still reconstructs the behavior from node-1 (any non-string throws).
+#   - functions, symbols, boxed `new String(...)` objects, class instances -> all non-string
+#     -> THROW per node-1; not emitted (not round-trippable / identity-bearing).
+#   The CODEC-FAITHFUL non-string throw-triggers the generator DOES emit are: number literals
+#   (e.g. 42, 3.14, 0, -1), boolean (true/false), null, plain object {}, and array [] — each
+#   recorded as a {__throw} expected (TypeError "expected a string").
+
+PROVENANCE
+#   unit:       is-unc-path@1.0.0  (default/main export of index.js, CommonJS module.exports = function(filepath){...})
+#   repo:       https://github.com/jonschlinkert/is-unc-path   (author: Jon Schlinkert)
+#   license:    MIT
+#   source:     node_modules/is-unc-path/index.js
+#   regex from: unc-path-regex@0.1.2 (https://github.com/regexhq/unc-path-regex, MIT),
+#               node_modules/unc-path-regex/index.js -> module.exports = function uncPathRegex(){ return /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/; };
+#               INLINED here; the reconstruction must NOT require it.
+
+# ============================================================================
+# RECONSTRUCTION REQUIREMENTS (for the blind re-emitter)
+# ============================================================================
+#   - The emission is an ES module with a DEFAULT export that is the function isUncPath.
+#   - It MUST be SELF-CONTAINED: zero require/import statements. Inline the UNC regex literal
+#     /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/ directly (or build it once at module scope). Do NOT
+#     `require('unc-path-regex')` or any other module.
+#   - Signature: default export `function isUncPath(filepath) { ... }`.
+#   - Behavior is exactly node-1 then node-2 above.

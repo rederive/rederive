@@ -1,0 +1,339 @@
+UNIT assignDeep
+KIND STATE
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# assignDeep deeply assigns own-enumerable STRING-keyed properties of each
+# source object into `target`, recursively merging nested PLAIN objects. It
+# MUTATES `target` in place and RETURNS the (same, mutated) target reference.
+#
+# This SIR describes a STANDALONE, NO-REQUIRE function. The package's
+# assign-symbols dependency is NOT fully omittable: its Symbol-COPY effect is
+# OUT-OF-CONTRACT (Symbols are non-round-trippable), BUT its EAGER first-arg
+# validation guard is OBSERVABLE (it throws a literal message that the oracle
+# records). The faithful reconstruction must reproduce that guard inline. There
+# is no require() anywhere in the reconstruction; the one observable piece of
+# assign-symbols (its `isObject(target)` guard + throw message) is INLINED, and
+# the unobservable piece (the actual Symbol enumerate/copy) is omitted.
+#
+# HARDEN NOTE (round 1 -> 2): the prior SIR treated the assign-symbols call as
+# producing NOTHING observable and modeled the only primitive-target throw as a
+# LAZY "Cannot create property ..." TypeError. That was WRONG. assign-symbols
+# carries its OWN eager `isObject(target)` guard that throws the literal string
+# "expected the first argument to be an object" whenever the merge loop reaches
+# an object source while `target` is a truthy NON-object (number/string/boolean/
+# bigint) AND no lazy key-write already threw. Two throw paths now coexist;
+# their EXACT predicates and messages are pinned in [N4] / THROW-PATHS below.
+# ----------------------------------------------------------------------------
+
+SIG assignDeep(target: any, ...sources: any[]) -> any   # returns the mutated target (or a fresh {} it created)
+
+DEPENDS-ON none
+  # In the original package, assignDeep calls assign-symbols@2.0.2 once per
+  # object source, as assignSymbols(target, src). assign-symbols does TWO things:
+  #   (a) EAGER GUARD (OBSERVABLE -- must be reproduced inline):
+  #         if (!isObjectAS(target)) throw new TypeError(
+  #             'expected the first argument to be an object');
+  #       where assign-symbols' OWN isObject is:
+  #         isObjectAS(val) = typeof val === 'function'
+  #                        || Object.prototype.toString.call(val) === '[object Object]'
+  #                        || Array.isArray(val)
+  #       NOTE: this isObjectAS DIFFERS from assign-deep's isObject -- it ALSO
+  #       returns true for ARRAYS. So an ARRAY target does NOT trip the guard.
+  #   (b) SYMBOL COPY (UN-OBSERVABLE under the codec -- omitted):
+  #         copies each enumerable own Symbol-keyed property of src onto target.
+  #       Symbols are NON-ROUND-TRIPPABLE through the oracle codec; the generator
+  #       never emits Symbol keys, so this copy changes no oracle-observable
+  #       value. It is declared OUT-OF-CONTRACT.
+  # The reconstruction therefore needs NO require(): it inlines exactly the
+  # guard (a) at node N4.3 and OMITS the copy (b).
+
+# ============================================================================
+# ORACLE OBSERVABLE REPRESENTATION
+# ============================================================================
+# The oracle records the RETURN VALUE of assignDeep (which, by the mutation
+# invariant, is the mutated target) serialized via the harness JSON codec
+# (JSON primitives, arrays, plain objects round-trip). Throw-paths reachable
+# from codec-faithful inputs are recorded as the harness marker
+#   {"__throw": "<exact message>"}
+# so the THROW MESSAGE TEXT is part of the observable contract (see THROW-PATHS).
+#
+# Because the call MUTATES target, the input-generator DEEP-CLONES every tuple
+# it produces, so each emitter and the oracle receive a pristine argument list
+# and no run can corrupt another run's inputs. The unit is deterministic and
+# pure-above-the-mutation: same (deep-cloned) inputs => same returned shape /
+# same throw.
+
+# ============================================================================
+# HELPERS (inline, exact)
+# ============================================================================
+#
+# toString := Object.prototype.toString  (used as toString.call(val))
+#
+# isObject(val):                       # assign-deep's predicate (NO array branch)
+#   return  typeof val === 'function'
+#        OR Object.prototype.toString.call(val) === '[object Object]'
+#   # TRUE  for: plain objects {...}, and FUNCTIONS.
+#   # FALSE for: null, undefined, numbers, strings, booleans, bigint, ARRAYS,
+#   #            Date/RegExp/Map/Set/etc (any toString tag other than [object Object]).
+#   # CONSEQUENCE: arrays are NOT objects here => arrays are NEVER recursed into;
+#   #              they are always assigned by reference (replace, never merge).
+#
+# isObjectAS(val):                     # assign-symbols' predicate (HAS array branch)
+#   return  typeof val === 'function'
+#        OR Object.prototype.toString.call(val) === '[object Object]'
+#        OR Array.isArray(val)
+#   # Used ONLY by the eager guard at N4.3. Differs from isObject by also being
+#   # TRUE for arrays. (So an array target passes the guard; a primitive target
+#   # fails it.)
+#
+# isPrimitive(val):
+#   return  (typeof val === 'object')  ?  (val === null)  :  (typeof val !== 'function')
+#   # TRUE  for: null, undefined, numbers, strings, booleans, bigint, symbols.
+#   # FALSE for: every non-null object (incl. arrays, plain objects, Date, ...)
+#   #            and FUNCTIONS (functions are NOT primitive).
+#   # NOTE the asymmetry vs isObject: an ARRAY is NEITHER isObject(true) NOR
+#   #      isPrimitive(true) -- isPrimitive([]) is false (typeof 'object', not null).
+#
+# isValidKey(key):   # the prototype-pollution / pollution-class guard
+#   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
+#   # Keys EXACTLY equal to the strings '__proto__', 'constructor', or
+#   # 'prototype' are SKIPPED entirely (never read, never written). All other
+#   # string keys are valid. Comparison is by exact string identity.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline / branch nodes -- exact)
+# ============================================================================
+#
+# assignDeep(target, ...args):   # args is the rest array of sources, length A
+#
+# [N1] i := 0
+#
+# [N2] TARGET-PRIMITIVE FIXUP (runs ONCE, not in a loop):
+#        if isPrimitive(target):
+#            target := args[i]; i := i + 1
+#        # i.e. if the first argument is primitive (null, number, string,
+#        # boolean, undefined, bigint, symbol), DISCARD it and adopt the FIRST
+#        # source (args[0]) as the new target, consuming it (the merge loop
+#        # then starts at args[1]).
+#        # If there are no sources, target becomes args[0] === undefined.
+#
+# [N3] FALSY-TARGET FIXUP:
+#        if !target:                  # JS truthiness: matches null, undefined,
+#            target := {}             # 0, -0, NaN, '', false
+#        # After N2+N3, target is one of:
+#        #   (a) a fresh {} (if it was falsy: original falsy target, or an
+#        #       adopted falsy primitive source, or undefined when no sources), or
+#        #   (b) a truthy non-object primitive adopted in N2 that N3 did NOT
+#        #       replace (e.g. 7 / 'word' / true / 10n -- all truthy), or
+#        #   (c) the original object/array/function target.
+#        # Case (b) is the THROW SETUP (see THROW-PATHS).
+#
+# [N4] MERGE LOOP -- for i from its current value while i < args.length, i++:
+#        let src := args[i]
+#        [N4.1] if NOT isObject(src):  CONTINUE  (skip this source entirely).
+#               # Numbers, strings, booleans, null, undefined, bigint, symbols,
+#               # and ARRAYS as a source contribute NOTHING. Only plain objects
+#               # and functions are merged. (A function source IS merged: its own
+#               # enumerable string keys are copied.) IMPORTANT: when EVERY source
+#               # is non-object, the loop NEVER reaches N4.2/N4.3, so a truthy
+#               # primitive target is returned AS-IS (no throw): e.g.
+#               # assignDeep(5,7,8,9) -> returns 7 (the adopted number).
+#        [N4.2] KEY-COPY:  for each key in Object.keys(src):   # own enumerable
+#                                                              # string keys, in
+#                                                              # enumeration order
+#                 if NOT isValidKey(key):  CONTINUE   # skip __proto__/constructor/prototype
+#                 if isObject(target[key]) AND isObject(src[key]):
+#                     # both sides are plain-object-or-function => RECURSE
+#                     assignDeep(target[key], src[key])   # in-place deep merge
+#                     # (the recursive target[key] is ALWAYS an object here, so
+#                     #  the eager guard at N4.3 NEVER fires inside recursion.)
+#                 else:
+#                     # any other case => OVERWRITE by reference (last-wins):
+#                     #   - target[key] absent / primitive / array  AND/OR
+#                     #   - src[key] primitive / array / null
+#                     # => arrays REPLACE, primitives REPLACE objects, objects
+#                     #    REPLACE primitives, values are copied BY REFERENCE.
+#                     target[key] := src[key]     # <-- LAZY THROW SITE (see below)
+#        [N4.3] EAGER GUARD (the observable, inlined piece of assign-symbols):
+#                 if NOT isObjectAS(target):
+#                     throw new TypeError('expected the first argument to be an object')
+#               # This runs AFTER the key-copy loop, ONCE per object source.
+#               # If target is a truthy non-object primitive (number/string/
+#               # boolean/bigint adopted in N2 and not replaced in N3) it FAILS
+#               # this guard and throws. (Array target PASSES -- isObjectAS true.)
+#               # The original Symbol-COPY that follows the guard is OUT-OF-
+#               # CONTRACT and OMITTED (see SCOPE).
+#
+# [N5] return target   # the mutated target reference (mutation invariant)
+
+# ============================================================================
+# THROW-PATHS  (exact predicates + exact message strings -- the observable contract)
+# ============================================================================
+# Both throws require the SAME SETUP: after N2+N3, `target` is a TRUTHY
+# non-object primitive (a number/string/boolean/bigint that was adopted as the
+# target in N2 and survived N3 because it is truthy). With an object target,
+# array target, or a fresh {} target, NEITHER throw can fire.
+#
+# Given that setup, the FIRST object source encountered in the merge loop
+# decides WHICH throw (the loop reaches N4.2/N4.3 only for object sources;
+# non-object sources are skipped at N4.1 and do not throw):
+#
+#   THROW-A  (LAZY, V8-generated):  "Cannot create property '<key>' on <type> '<value>'"
+#     CONDITION: the object source has >= 1 VALID key (a key not in
+#                {__proto__, constructor, prototype}) whose value falls into the
+#                OVERWRITE branch (which it always does here, since target[<key>]
+#                of a primitive is undefined => NOT isObject => else-branch).
+#                Then `target[key] := src[key]` is attempted on a primitive in
+#                strict mode and V8 throws.
+#     <key>   = the FIRST valid key in Object.keys(src) enumeration order
+#               (invalid pollution-class keys are skipped before this).
+#     <type>  = typeof target  ('number' | 'string' | 'boolean' | 'bigint').
+#     <value> = String(target)  (e.g. 7 -> '7', -3.5 -> '-3.5', 'word' -> 'word',
+#                                 true -> 'true', 10n -> '10').
+#     This message is V8/Node-generated; a faithful reconstruction obtains it by
+#     PERFORMING the write `target[key] = src[key]` (do NOT hand-format it),
+#     so the exact V8 text is reproduced by the same engine the oracle/emitters run on.
+#     EXAMPLES (all execution-verified, Node v24):
+#       assignDeep(5, 7, {a:1})       -> "Cannot create property 'a' on number '7'"
+#       assignDeep(true, true, {a:1}) -> "Cannot create property 'a' on boolean 'true'"
+#       assignDeep(5, 'word', {a:1})  -> "Cannot create property 'a' on string 'word'"
+#       assignDeep(true, 58, {a:1})   -> "Cannot create property 'a' on number '58'"
+#       assignDeep(5, 10n, {a:1})     -> "Cannot create property 'a' on bigint '10'"
+#       assignDeep(5, 7, {b:2,a:1})   -> "Cannot create property 'b' on number '7'"   # FIRST key b
+#       assignDeep(5, 7, JSON.parse('{"__proto__":9,"q":1}')) -> "...property 'q'..." # skips __proto__
+#
+#   THROW-B  (EAGER, literal):  "expected the first argument to be an object"
+#     CONDITION: the object source has ZERO valid keys to write -- i.e.
+#                Object.keys(src) is empty OR contains ONLY pollution-class keys
+#                (__proto__ / constructor / prototype). The key-copy loop N4.2
+#                writes nothing, control falls through to N4.3, isObjectAS(target)
+#                is false for the truthy primitive, and the LITERAL string is
+#                thrown. This message is a HARD-CODED literal (from assign-symbols)
+#                and must be reproduced EXACTLY, byte-for-byte:
+#                  'expected the first argument to be an object'
+#     EXAMPLES (all execution-verified):
+#       assignDeep(true, 58, {})                            -> THROW-B   # the round-1 divergence
+#       assignDeep(true, 'hello', {})                       -> THROW-B   # the round-1 divergence
+#       assignDeep(5, 7, {})                                -> THROW-B
+#       assignDeep(5, 10n, {})                              -> THROW-B
+#       assignDeep(true, 58, {__proto__:1})                 -> THROW-B   # only invalid key
+#       assignDeep(true, 58, {constructor:1})               -> THROW-B
+#       assignDeep(true, 58, {prototype:1})                 -> THROW-B
+#       assignDeep(5, 7, {}, {a:1})                         -> THROW-B   # FIRST obj is empty -> eager, before 2nd
+#
+#   ORDERING within multiple object sources after primitive adoption:
+#     The FIRST object source reached decides the throw. If it has a valid key ->
+#     THROW-A (the write throws before any later source). If it is empty/invalid
+#     -> THROW-B (the guard throws before any later source). No later source runs.
+#       assignDeep(5, 7, {a:1}, {b:2}) -> THROW-A "Cannot create property 'a' on number '7'"
+#       assignDeep(5, 7, {}, {a:1})    -> THROW-B "expected the first argument to be an object"
+#
+#   NO-THROW escapes from the primitive-target setup (for completeness):
+#     - First source is itself an OBJECT (adopted as target in N2, so target is
+#       now an object): assignDeep(5,{a:1}) -> {a:1}.   No throw.
+#     - All sources non-object (loop never reaches N4.2/N4.3):
+#       assignDeep(5,7,8,9) -> 7 ;  assignDeep(5) -> {} ;  assignDeep(true) -> {}.
+#     - Adopted primitive source is FALSY (N3 replaces it with fresh {}):
+#       assignDeep(5,0,{a:1}) -> {a:1} ; assignDeep(5,'',{a:1}) -> {a:1} ;
+#       assignDeep(5,null,{a:1}) -> {a:1}.
+
+# ----------------------------------------------------------------------------
+# WORKED INVARIANTS (all execution-verified against assign-deep@1.0.1, Node v24)
+# ----------------------------------------------------------------------------
+#  shallow:      assignDeep({a:1},{b:2})                 -> {a:1,b:2}
+#  deep merge:   assignDeep({a:{x:1,y:2}},{a:{y:3,z:4}}) -> {a:{x:1,y:3,z:4}}
+#  3-level:      assignDeep({a:{b:{c:1}}},{a:{b:{d:2}}}) -> {a:{b:{c:1,d:2}}}
+#  last-wins:    assignDeep({},{a:1},{a:2},{a:3})        -> {a:3}
+#  mixed merge:  assignDeep({},{a:1},{a:{b:2}},{a:{c:3}})-> {a:{b:2,c:3}}
+#  prim over obj:assignDeep({a:{x:1}},{a:5})             -> {a:5}
+#  obj over prim:assignDeep({a:5},{a:{x:1}})             -> {a:{x:1}}
+#  array replace:assignDeep({a:[1,2,3]},{a:[9]})         -> {a:[9]}
+#  obj over arr: assignDeep({a:[1,2,3]},{a:{0:'z'}})     -> {a:{"0":"z"}}   # array not isObject => replaced
+#  arr over obj: assignDeep({a:{x:1}},{a:[1,2]})         -> {a:[1,2]}
+#  arr-of-objs:  assignDeep({a:[{x:1}]},{a:[{y:2}]})     -> {a:[{y:2}]}     # array replaced wholesale, no element merge
+#  array target: assignDeep([1,2,3],[9])                 -> [1,2,3]         # array source skipped (not isObject)
+#  array tgt+obj:assignDeep([1,2,3],{a:1})               -> [1,2,3]         # array target passes eager guard; obj src merged onto array (a=1) BUT
+#                                                                           #   returned via JSON codec as [1,2,3] (extra non-index key a not in JSON array form)
+#  __proto__:    assignDeep({}, JSON.parse('{"__proto__":{"x":1}}')) -> {}  ; Object.prototype.x stays undefined
+#  ctor/proto:   assignDeep({},{constructor:'x',prototype:'y',normal:'z'}) -> {normal:'z'}
+#  no sources:   assignDeep({a:1})                       -> {a:1}
+#  empty target: assignDeep({},{a:1,b:{c:2}})            -> {a:1,b:{c:2}}
+#  prim target:  assignDeep(null,{a:1},{b:2})            -> {a:1,b:2}       # null discarded, {a:1} adopted, {b:2} merged
+#  prim target:  assignDeep(5,{a:1})                     -> {a:1}           # 5 discarded, {a:1} adopted
+#  prim target:  assignDeep('hi',{a:1})                  -> {a:1}
+#  falsy target: assignDeep(0,{a:1}) / assignDeep(false,{a:1}) / assignDeep('',{a:1}) -> {a:1}  # N3 -> fresh {}
+#  bare prim:    assignDeep(5)                           -> {}              # 5 adopted=undefined? -> N2 sets target=args[0]=undefined, N3 -> {}
+#  bare undef:   assignDeep(undefined)                   -> {}
+#  bare null:    assignDeep(null)                        -> {}
+#  no-obj srcs:  assignDeep(5,7,8,9)                     -> 7               # NO object source -> truthy prim returned, NO throw
+#  skip srcs:    assignDeep({a:1},5,{b:2}) / ...null... / ...[9,9]... / ...'xyz'... -> {a:1,b:2} (the non-object skipped)
+#  fn source:    assignDeep({a:1}, (function f(){...}) with own key custom:'prop') -> {a:1,custom:'prop'}   # fn source merged (OUT-of-codec)
+#  THROW-A:      assignDeep(5,7,{a:1})     -> THROW "Cannot create property 'a' on number '7'"
+#  THROW-A:      assignDeep(true,true,{a:1}) -> THROW "Cannot create property 'a' on boolean 'true'"
+#  THROW-A:      assignDeep(5,'word',{a:1})  -> THROW "Cannot create property 'a' on string 'word'"
+#  THROW-A:      assignDeep(true,58,{a:1})   -> THROW "Cannot create property 'a' on number '58'"
+#  THROW-B:      assignDeep(true,58,{})      -> THROW "expected the first argument to be an object"   # ROUND-1 DIVERGENCE
+#  THROW-B:      assignDeep(true,'hello',{}) -> THROW "expected the first argument to be an object"   # ROUND-1 DIVERGENCE
+#  THROW-B:      assignDeep(5,7,{})          -> THROW "expected the first argument to be an object"
+#  THROW-B:      assignDeep(true,58,{__proto__:1}) -> THROW "expected the first argument to be an object"
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly; the standalone function above):
+#   - The N1..N5 pipeline including target-primitive fixup (N2), falsy-target
+#     fixup (N3), the merge loop (N4) with: non-object-source skip (N4.1),
+#     the key-copy/recurse/overwrite branch (N4.2) including the pollution-class
+#     guard and the LAZY THROW-A write site, and the EAGER GUARD (N4.3) that
+#     reproduces assign-symbols' isObjectAS(target) check + the literal THROW-B
+#     message 'expected the first argument to be an object'.
+#   - The isObject / isObjectAS / isPrimitive / isValidKey helpers (exact
+#     predicates; note isObjectAS includes the array branch, isObject does not).
+#   - Recursive deep-merge of plain objects, last-wins overwrite-by-reference,
+#     arrays-never-merged, prototype-pollution guard, mutation + same-reference
+#     return, and BOTH primitive-target throw paths (THROW-A lazy, THROW-B eager)
+#     with their exact predicates and messages (see THROW-PATHS).
+#   - Observable values are STRING-keyed, JSON-round-trippable (primitives,
+#     nested plain objects, arrays of JSON-round-trippable values); throws are
+#     recorded as {"__throw": "<exact message>"}.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / NON-ROUND-TRIPPABLE (a blind emitter omits these without
+# diverging, because genInputs never emits them):
+#   - [SYMBOL-COPY SEAM] The actual Symbol-keyed property COPY inside
+#     assign-symbols (after its guard) is OMITTED: it copies enumerable own
+#     Symbol-keyed properties from each object source onto target. Symbols are
+#     NON-ROUND-TRIPPABLE; the generator never emits Symbol keys, so omitting
+#     the copy changes no oracle-observable value. (Its companion EAGER GUARD is
+#     IN-CONTRACT and inlined at N4.3 -- only the copy is OUT.)
+#   - FUNCTION values (as source values, or a function used as target/source):
+#     functions are valid runtime values (isObject(fn)=true; a fn source's own
+#     keys ARE merged; a fn value IS copied by reference) but do NOT survive the
+#     JSON oracle codec. genInputs does NOT emit function values; documented OUT.
+#   - undefined / NaN / +-Infinity property VALUES: assignDeep will create the
+#     key with that value (e.g. assignDeep({},{a:undefined}) sets own key a=
+#     undefined; NaN/Infinity pass through), but these are non-round-trippable
+#     (undefined -> dropped, NaN/Infinity -> null under JSON). genInputs does
+#     NOT emit them; documented OUT.
+#   - Non-plain object values whose toString tag is not [object Object]
+#     (Date, RegExp, Map, Set, class instances): isObject(...) is FALSE for
+#     these, so as a target[key]/src[key] they take the OVERWRITE (replace)
+#     branch (never recursed). genInputs does NOT emit them as values to keep
+#     the observable JSON-faithful; the SIR predicate fully defines their branch
+#     should a blind emitter encounter one.
+#   - SYMBOL or undefined as a top-level TARGET/SOURCE arg: not codec-faithful
+#     as array elements; genInputs does not emit them. Their branch is still
+#     defined (isPrimitive(symbol)=true => N2 adopts/discards; undefined target
+#     => N2 may adopt args[0], then N3 -> {}).
+
+PROVENANCE assign-deep@1.0.1 (jonschlinkert/assign-deep), MIT License,
+  source file index.js. Observable dependency: assign-symbols@2.0.2
+  (jonschlinkert/assign-symbols), MIT License, index.js -- its EAGER first-arg
+  guard (isObjectAS + literal throw 'expected the first argument to be an
+  object') is IN-CONTRACT and inlined at N4.3; its Symbol-copy effect is
+  declared OUT-OF-CONTRACT. Throw messages and branch behavior verified by
+  executing the real package (Node v24).

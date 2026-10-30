@@ -1,0 +1,211 @@
+UNIT add
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# IMPORTANT NAMING NOTE (do not be misled by the package name/version):
+# The npm package is `lodash.add@3.7.0`, but its index.js is a lodash-4.x-style
+# build of `_.add` implemented via `createMathOperation`. The behavior below is
+# what the REAL installed package actually does (verified by execution against
+# node v24.16.0). It is NOT the naive `+augend + +addend`. In particular, if
+# EITHER argument is a string the operation is STRING CONCATENATION, not numeric
+# addition. Reproduce the algorithm below EXACTLY.
+# ---------------------------------------------------------------------------
+
+SIG add(value, other) -> number | string | (raw passthrough value)
+    # `value` is the augend, `other` is the addend. Both are `*` (any JS value).
+    # Default/main export of the module. The blind re-emitter MUST `export default <fn>`.
+
+DEPENDS-ON none   # zero runtime deps; self-contained module
+
+EXPORT-SHAPE default   # module.exports = add;  -> emit as `export default add`
+
+# ===========================================================================
+# BEHAVIOR  (exact reproduction of createMathOperation(operator=+, defaultValue=0))
+# ===========================================================================
+#
+# The unit is the closure returned by createMathOperation. Internally it uses two
+# private coercion helpers (reproduce them verbatim):
+#
+#   baseToNumber(v):
+#     if typeof v == 'number'  -> return v
+#     if isSymbol(v)           -> return NaN          # (see isSymbol below)
+#     else                     -> return (+v)         # JS unary-plus coercion
+#
+#   baseToString(v):
+#     if typeof v == 'string'  -> return v
+#     if isSymbol(v):
+#         # symbolProto.toString.call(v) if Symbol exists, else ''
+#         -> return String(v)    # e.g. Symbol('s') -> "Symbol(s)"  (Symbols are OUT, see SCOPE)
+#     else:
+#         result = (v + '')                          # JS string coercion
+#         # SPECIAL CASE: distinguish -0 from 0
+#         if result == '0' AND (1 / v) == -Infinity  -> return '-0'
+#         else                                        -> return result
+#
+#   isSymbol(v):
+#     typeof v == 'symbol'  OR  (v is object-like AND Object.prototype.toString.call(v) == '[object Symbol]')
+#
+# --- MAIN PIPELINE  (this is the exact control flow; order matters) ---
+#
+# BRANCH-0  (both undefined -> defaultValue):
+#     if value === undefined AND other === undefined:
+#         return 0                      # the defaultValue
+#
+# Initialize: result = undefined
+#
+# BRANCH-1  (seed result from value):
+#     if value !== undefined:
+#         result = value                # NOTE: raw value, not yet coerced
+#
+# BRANCH-2  (fold in other):
+#     if other !== undefined:
+#
+#         BRANCH-2a  (value was undefined -> return other RAW, no coercion):
+#             if result === undefined:        # i.e. value === undefined and other !== undefined
+#                 return other                # <-- returns `other` UNCHANGED, same reference,
+#                                             #     NO numeric/string coercion whatsoever
+#
+#         BRANCH-2b  (both present -> choose string vs numeric mode):
+#             if typeof value == 'string' OR typeof other == 'string':
+#                 value = baseToString(value)
+#                 other = baseToString(other)
+#                 result = value + other          # STRING CONCATENATION
+#             else:
+#                 value = baseToNumber(value)
+#                 other = baseToNumber(other)
+#                 result = value + other          # NUMERIC ADDITION
+#
+# RETURN result
+#
+#   (If other === undefined but value !== undefined, BRANCH-2 is skipped entirely
+#    and `result` is still the RAW `value` set in BRANCH-1 -> returned uncoerced.)
+#
+# ===========================================================================
+# GROUND-TRUTH EXAMPLES  (verified against the REAL package on node v24.16.0)
+# ===========================================================================
+# Each line: add(<args>) = <result>   [<branch>]
+#
+# --- numeric path (BRANCH-2b numeric: neither arg is a string) ---
+#   add(6, 4)                 = 10                 (number)
+#   add(1, 2)                 = 3                  (number)
+#   add(-1, -2)               = -3                 (number)
+#   add(1.5, 2.25)            = 3.75               (number)
+#   add(0.1, 0.2)             = 0.30000000000000004 (number; IEEE-754, no rounding)
+#   add(0, 0)                 = 0                  (number)
+#   add(-0, -0)               = -0                 (number; Object.is(-0))
+#   add(-0, 0)                = 0                  (number)  # -0 + 0 = +0
+#   add(0, -0)                = 0                  (number)
+#   add(-0, 5)                = 5                  (number)
+#   add(NaN, 1)               = NaN
+#   add(1, NaN)               = NaN
+#   add(Infinity, 1)          = Infinity
+#   add(-Infinity, 1)         = -Infinity
+#   add(Infinity, -Infinity)  = NaN
+#   add(1e308, 1e308)         = Infinity           # overflow
+#   add(9007199254740993, 1)  = 9007199254740992   # beyond 2^53, IEEE-754 rounding of the LITERAL
+#   add(true, 1)              = 2                  (number)  # +true = 1
+#   add(1, false)            = 1                  (number)  # +false = 0
+#   add(true, false)         = 1                  (number)
+#   add(null, 1)             = 1                  (number)  # +null = 0   (null is NOT undefined!)
+#   add(1, null)             = 1                  (number)
+#   add(null, null)          = 0                  (number)
+#   add(null, 0)             = 0                  (number)
+#   add([], 1)               = 1                  (number)  # +[] = 0
+#   add(1, [])               = 1                  (number)
+#   add([], [])              = 0                  (number)
+#   add([5], 2)              = 7                  (number)  # +[5] = 5
+#   add(["3"], 1)            = 4                  (number)  # +["3"] = 3
+#   add([1,2], 1)            = NaN                          # +[1,2] = NaN
+#   add({}, 1)               = NaN                          # +{} = NaN
+#   add(1, {})               = NaN
+#
+# --- string path (BRANCH-2b string: AT LEAST ONE arg is typeof 'string') ---
+#     IMPORTANT: this is CONCATENATION, not numeric addition.
+#   add("1", 2)              = "12"
+#   add(1, "2")              = "12"
+#   add("1", "2")            = "12"
+#   add("a", "b")            = "ab"
+#   add("", 1)               = "1"                # baseToString(1) = "1"
+#   add(1, "")               = "1"
+#   add("", "")              = ""
+#   add(123, "")             = "123"
+#   add("3.14", "2")         = "3.142"            # NO numeric parse; "3.14" + "2"
+#   add("0x10", 1)           = "0x101"
+#   add("  5  ", 2)          = "  5  2"           # whitespace preserved
+#   add("1e3", 2)            = "1e32"
+#   add("1e3", "2")          = "1e32"
+#   add(0.1, "2")            = "0.12"             # baseToString(0.1)="0.1" + "2"
+#   add(0.1, "x")            = "0.1x"
+#   add(1e21, "x")           = "1e+21x"           # default Number->String of 1e21
+#   add(Infinity, "x")       = "Infinityx"
+#   add(NaN, "x")            = "NaNx"
+#   add(true, "x")           = "truex"            # baseToString(true) = "true"
+#   add(null, "x")           = "nullx"            # baseToString(null) = "null"
+#   add("x", null)           = "xnull"
+#   add(-0, "x")             = "-0x"              # baseToString(-0) special case -> "-0"
+#   add("x", -0)             = "x-0"
+#   add(0, "x")              = "0x"               # baseToString(+0) = "0"
+#   add([], "x")             = "x"                # baseToString([]) = ""
+#   add("x", [])             = "x"
+#   add([1], "x")            = "1x"               # baseToString([1]) = "1"
+#
+# --- undefined / missing-argument paths ---
+#   add()                    = 0                  (number)  # BRANCH-0
+#   add(undefined, undefined)= 0                  (number)  # BRANCH-0
+#   add(1)                   = 1                  (number)  # other undefined -> BRANCH-2 skipped -> raw value 1
+#   add(1, undefined)        = 1                  (number)  # same
+#   add("1", undefined)      = "1"                # raw value passthrough (a STRING, uncoerced)
+#   add([5], undefined)      = [5]                          # raw value passthrough -> SAME array reference
+#   add(undefined, 2)        = 2                  (number)  # BRANCH-2a -> raw other
+#   add(undefined, "2")      = "2"                # BRANCH-2a -> raw other (string, uncoerced)
+#   add(undefined, -0)       = -0                 (number)  # BRANCH-2a -> raw other (preserves -0)
+#   add(undefined, NaN)      = NaN                          # BRANCH-2a -> raw other
+#   add(undefined, null)     = null               (object)  # BRANCH-2a -> raw `null` returned
+#   add(undefined, true)     = true               (boolean) # BRANCH-2a -> raw passthrough
+#   add(undefined, [5])      = [5]                (object)  # BRANCH-2a -> raw passthrough, SAME reference
+#   add(undefined, {})       = {}                 (object)  # BRANCH-2a -> raw passthrough, SAME reference
+#   add(null, undefined)     = null               (object)  # value=null (defined) -> result=null; other undefined -> returns null raw
+#
+# CASING/CONSTANTS: none beyond the above. INFINITY = 1/0, NAN = 0/0 internally.
+# No regexes. No locale. No environment reads. PURE function, no seam.
+
+# ===========================================================================
+# ORACLE
+# ===========================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function. For each generated args tuple, expected =
+# JSON-faithful capture of add(...args). Codec-faithful return values:
+#   - numbers (incl. NaN, +/-Infinity, -0), strings, booleans, null,
+#   - plain objects / arrays (raw passthrough cases return the SAME reference;
+#     value-wise they serialize identically to the input, which is what is graded).
+# Throw-path: add(2n, 3n) throws TypeError "Cannot convert a BigInt value to a number"
+#   (numeric path -> baseToNumber bigint -> +bigint throws). Recorded as {__throw}.
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire createMathOperation pipeline
+#   above, including baseToNumber, baseToString (with its -0 special case),
+#   isSymbol, the BRANCH-0/1/2/2a/2b control flow, string-vs-numeric mode
+#   selection, raw-passthrough on the single-undefined paths, and defaultValue 0.
+#
+# CARRIED DATA: none. No literal tables.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+# they do not survive the persistence codec `JSON.stringify(encode(args))`, or are
+# non-deterministic, or have host-dependent representations):
+#   - Symbol args: numeric path -> NaN; string path -> String(symbol) e.g.
+#     add(Symbol('s'), 'x') = "Symbol(s)x"; add(undefined, Symbol('s')) = the symbol raw.
+#     Symbols are NOT codec-faithful -> reconstructable from this spec but not generated.
+#   - bigint args in the NUMERIC path THROW (TypeError, see ORACLE). bigint is
+#     codec-faithful but the throw is the contract; documented, not stratified beyond
+#     one note. (If both are bigint the numeric path is taken since neither is a string.)
+#   - Objects with custom valueOf/toString (e.g. {valueOf:()=>5} -> numeric 6;
+#     {valueOf:()=>5}+'x' -> "5x") and Date instances (new Date(0) -> +date numeric)
+#     are NOT codec-faithful (functions/Date identity lost) -> documented, not generated.
+#   - No stateful mutators, no side APIs, no I/O, no global writes. Function is pure.
+
+PROVENANCE lodash.add@3.7.0 (npm), repo lodash/lodash, MIT license,
+           source file index.js (createMathOperation build of _.add).
+           Behavior verified by execution on node v24.16.0.

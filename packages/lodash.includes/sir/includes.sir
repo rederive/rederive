@@ -1,0 +1,227 @@
+UNIT includes
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure function. No clock/RNG/env/fs/net seam. Output depends only on the arguments.
+# (The only "ambient" influences are JS engine semantics for Object.keys ordering, ToNumber
+#  coercion, and String.prototype.indexOf — all of which are deterministic and identical across
+#  conformant ECMAScript engines, so they are part of the IN-CONTRACT logic, not a seam.)
+
+SIG includes(collection: any, value: any, fromIndex?: number, guard?: any) -> boolean
+# Default export: `module.exports = includes`.
+# Public/documented arity is 3: includes(collection, value, [fromIndex]).
+# `guard` is an UNDOCUMENTED 4th parameter ("@param-") that lodash uses internally so the
+# function can be passed as an iteratee (e.g. to _.reduce). It is OBSERVABLE and MUST be modeled:
+# when guard is truthy, fromIndex is ignored (forced to 0). See node fromIndex-3.
+
+DEPENDS-ON none
+# Self-contained single file. Bundles its own private helpers (isArrayLike, isString, isArray,
+# isFunction, isLength, isObject, isObjectLike, isSymbol, isArguments, isArrayLikeObject,
+# baseIndexOf, baseFindIndex, baseIsNaN, values, keys, baseKeys, arrayLikeKeys, baseValues,
+# arrayMap, baseTimes, isIndex, isPrototype, isProto, toInteger, toFinite, toNumber, overArg).
+# All of these are IN-CONTRACT logic to be reproduced exactly; none is carried data.
+
+# ============================================================================
+# CONSTANTS (in-contract, small — reproduce literally, NOT carried data)
+# ============================================================================
+CONST INFINITY        = Infinity            # 1 / 0
+CONST MAX_SAFE_INTEGER = 9007199254740991   # 2^53 - 1
+CONST MAX_INTEGER     = 1.7976931348623157e+308   # Number.MAX_VALUE
+CONST NAN             = NaN                  # 0 / 0
+CONST stringTag       = "[object String]"
+CONST symbolTag       = "[object Symbol]"
+CONST argsTag         = "[object Arguments]"
+CONST funcTag         = "[object Function]"
+CONST genTag          = "[object GeneratorFunction]"
+CONST reTrim          = /^\s+|\s+$/g          # strips leading/trailing ASCII whitespace
+CONST reIsBadHex      = /^[-+]0x[0-9a-f]+$/i
+CONST reIsBinary      = /^0b[01]+$/i
+CONST reIsOctal       = /^0o[0-7]+$/i
+CONST reIsUint        = /^(?:0|[1-9]\d*)$/
+
+# ============================================================================
+# BEHAVIOR — ordered pipeline of `includes(collection, value, fromIndex, guard)`
+# ============================================================================
+BEHAVIOR
+
+# ---- NODE 1: normalize the collection into an indexable sequence ----------
+# collection = isArrayLike(collection) ? collection : values(collection)
+#
+# isArrayLike(value):  value != null
+#                      AND isLength(value.length)   # typeof number, value > -1, value % 1 == 0, value <= MAX_SAFE_INTEGER
+#                      AND NOT isFunction(value)     # tag (via Object#toString) is funcTag or genTag (only when isObject)
+#
+# So a value is "array-like" iff it is non-null/undefined, has an integer length in
+# [0, MAX_SAFE_INTEGER], and is not a function. This covers:
+#   - real Arrays (incl. sparse arrays: length is the declared length)
+#   - strings (primitive AND boxed String objects): .length is an integer
+#   - arguments objects
+#   - plain objects carrying an integer `length` property (e.g. {0:'a',1:'b',length:2})
+#
+# BRANCH 1a (collection IS array-like): keep collection as-is.
+# BRANCH 1b (collection is NOT array-like, e.g. plain object, number, boolean, Symbol,
+#            null, undefined, or an object whose .length is missing/NaN/negative/> MAX_SAFE_INTEGER):
+#   collection = values(collection)
+#   values(object):
+#     - if object is falsy (null, undefined, 0, "", false, NaN)  -> return []
+#     - else                                                     -> baseValues(object, keys(object))
+#   keys(object):
+#     - if isArrayLike(object) -> arrayLikeKeys(object)   # (not reachable from NODE 1b since 1b means NOT array-like,
+#                                                         #  except `keys` is also called standalone; within includes
+#                                                         #  the object reaching values() is non-array-like)
+#     - else                   -> baseKeys(object)
+#   baseKeys(object): own enumerable string-keyed property names. Concretely == Object.keys(object)
+#     for ordinary objects (isPrototype(object) is false). For a prototype object it returns own
+#     enumerable keys excluding "constructor". The ENUMERATION ORDER is the ECMAScript
+#     OwnPropertyKeys order used by Object.keys: integer-index keys ('0','1',... that are valid
+#     array indices) in ascending numeric order FIRST, then remaining string keys in
+#     property-insertion order. THIS ORDER IS LOAD-BEARING because fromIndex (NODE 3/4)
+#     indexes into the resulting values array.
+#   baseValues(object, props): map each prop name -> object[prop]  (i.e. the values, same order as keys).
+#   => For a plain object, NODE 1 yields the array of OWN ENUMERABLE VALUES in Object.keys order.
+#   => For null/undefined/number/boolean/Symbol/empty-object, NODE 1 yields [] (empty).
+#      (Number/boolean/Symbol are falsy-or-have-no-own-enumerable-keys -> values() -> []; note a
+#       non-empty primitive number like 123 is NOT array-like (no .length) and Object(123) has no
+#       own enumerable keys, so values -> []. Likewise boolean true. Result: search over [] -> false.)
+#
+# IMPORTANT SUBTLETY: a STRING reaching NODE 1 stays a string (BRANCH 1a, strings are array-like).
+# It is NOT converted to a char array. The string branch in NODE 5 handles it via indexOf.
+# A boxed String object (new String("..")) is ALSO array-like (has .length) -> BRANCH 1a -> stays
+# the boxed String -> string branch in NODE 5 (isString returns true for boxed strings).
+
+# ---- NODE 2: normalize fromIndex -----------------------------------------
+# fromIndex = (fromIndex && !guard) ? toInteger(fromIndex) : 0
+#
+# BRANCH 2a: if fromIndex is FALSY (undefined, null, 0, -0, NaN, "", false) OR guard is TRUTHY
+#            -> fromIndex := 0.
+# BRANCH 2b: otherwise -> fromIndex := toInteger(fromIndex).
+#
+# toInteger(value):
+#   result = toFinite(value); remainder = result % 1
+#   return (result === result) ? (remainder ? result - remainder : result) : 0
+#   # i.e. truncate toward zero; NaN-result -> 0.
+# toFinite(value):
+#   if (!value) return value === 0 ? value : 0          # falsy non-zero -> 0; 0 -> 0
+#   value = toNumber(value)
+#   if value === Infinity or value === -Infinity:
+#       return (value < 0 ? -1 : 1) * MAX_INTEGER         # +/- Number.MAX_VALUE
+#   return value === value ? value : 0                    # NaN -> 0
+# toNumber(value):
+#   if typeof value == 'number'              -> value
+#   if isSymbol(value)                       -> NaN          # Symbols never throw here; coerce to NaN
+#   if isObject(value):                                       # objects (incl. arrays, boxed)
+#       other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#       value = isObject(other) ? (other + '') : other       # may invoke valueOf/toString;
+#                                                            # if user valueOf/toString THROWS, the throw PROPAGATES
+#   if typeof value != 'string'              -> (value === 0 ? value : +value)   # numeric coercion of non-strings
+#   value = value.replace(reTrim, '')        # trim leading/trailing whitespace
+#   isBinary = reIsBinary.test(value)
+#   return (isBinary || reIsOctal.test(value))
+#          ? parseInt(value.slice(2), isBinary ? 2 : 8)       # "0b1010"->10, "0o17"->15
+#          : (reIsBadHex.test(value) ? NaN : +value)          # "-0x1f"->NaN; otherwise JS Number()
+#
+#   Net effect of NODE 2 (truthy fromIndex, no guard):
+#     - number: truncate toward zero (1.9->1, -1.9->-1, -2.9->-2)
+#     - Infinity -> MAX_INTEGER ; -Infinity -> -MAX_INTEGER
+#     - numeric string ("2", "  2 ", "0x1f", "0b101", "0o17") per toNumber rules; bad-hex/NaN -> 0
+#     - Symbol -> NaN -> 0
+#     - boolean true -> toNumber(true) -> +true = 1
+#     - array [2] -> "2" -> 2 ; array [1,2] -> "1,2" -> NaN -> 0 ; {} -> "[object Object]" -> NaN -> 0
+#     - object with throwing valueOf/toString -> THROWS (propagated to caller)
+
+# ---- NODE 3: capture length ----------------------------------------------
+# length = collection.length
+#   - array: its .length (sparse arrays: declared length, holes count toward length)
+#   - string / boxed String: number of UTF-16 code units
+#   - array-like object: its .length property value
+#   - values()-produced array (NODE 1b): the number of own enumerable values
+
+# ---- NODE 4: clamp negative fromIndex ------------------------------------
+# if (fromIndex < 0) fromIndex = Math.max(length + fromIndex, 0)
+#   - negative offsets count from the end; clamps at 0 (never goes below).
+#   - applies AFTER toInteger, so e.g. -1.9 -> -1 -> max(length-1,0).
+
+# ---- NODE 5: search (terminal BRANCH on string-ness) ---------------------
+# return isString(collection)
+#   ? (fromIndex <= length && collection.indexOf(value, fromIndex) > -1)
+#   : (!!length && baseIndexOf(collection, value, fromIndex) > -1)
+#
+# isString(value): typeof value == 'string'
+#                  OR (NOT isArray(value) AND isObjectLike(value)
+#                      AND Object#toString.call(value) == "[object String]")   # boxed String
+#
+# BRANCH 5a (STRING / boxed String):
+#   result = (fromIndex <= length) AND (collection.indexOf(value, fromIndex) > -1)
+#   - `value` is coerced to a string by String.prototype.indexOf:
+#       includes("a1c", 1)    -> indexOf("1") -> true
+#       includes("atruec", true) -> indexOf("true") -> true
+#       includes("a,b", ",")  -> indexOf(",") -> true
+#   - Empty search string: indexOf("", k) returns k for k <= length, so it is found IFF
+#       fromIndex <= length. (includes("abc","",3) -> true; includes("abc","",4) -> false.)
+#   - Substring search uses standard UTF-16 String.prototype.indexOf from fromIndex (inclusive).
+#   - The guard `fromIndex <= length` makes an out-of-range fromIndex short-circuit to false
+#     WITHOUT calling indexOf (matters only for the empty-string case; for non-empty values
+#     indexOf would already return -1 past the end).
+#
+# BRANCH 5b (NON-STRING: array, arguments, array-like object, or values()-array):
+#   result = (length is truthy, i.e. != 0) AND (baseIndexOf(collection, value, fromIndex) > -1)
+#   - If length == 0 -> false immediately (empty collection never contains anything).
+#   - baseIndexOf(array, value, fromIndex):
+#       if (value !== value)   # value is NaN
+#           return baseFindIndex(array, baseIsNaN, fromIndex)
+#               # baseFindIndex scans index = fromIndex; while (++index < length) test predicate;
+#               # returns first index i >= fromIndex with array[i] !== array[i] (i.e. NaN), else -1.
+#               # => NaN IS matched (SameValueZero treats NaN as equal to NaN).
+#       else
+#           index = fromIndex - 1
+#           while (++index < length) if (array[index] === value) return index
+#           return -1
+#       # Uses strict === for non-NaN. Consequences (SameValueZero semantics):
+#       #   - +0 === -0 is true in JS -> includes([0],-0) and includes([-0],0) -> true.
+#       #   - Object identity for reference types: only the SAME reference matches
+#       #     (two distinct {} or [] are not equal).
+#       #   - Sparse-array HOLES read as undefined: includes([1,,3], undefined) -> true.
+
+# ---- RETURN: a strict boolean (true / false). ----------------------------
+
+ORACLE value -> oracle.json
+# Adjudicate on the returned boolean. Throw cases (e.g. fromIndex object whose valueOf throws)
+# are part of the contract: the expected outcome is the thrown error (an Error is raised during
+# NODE 2). The generator includes a throwing-fromIndex case so the oracle records the throw.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — array-like detection,
+#   values()/keys() extraction with Object.keys ordering, the toInteger/toFinite/toNumber
+#   fromIndex coercion (incl. binary/octal/bad-hex string handling and trimming), negative-index
+#   clamping, the string-vs-non-string terminal branch, SameValueZero (NaN + signed-zero) via
+#   baseIndexOf/baseFindIndex, the empty-string fromIndex<=length guard, sparse-hole=undefined,
+#   and the undocumented `guard` 4th-arg fromIndex override.
+#
+# CARRIED DATA: NONE. There is no large literal table. The small regexes and Number constants
+#   above are reproduced inline as part of the logic. (No carried.json is emitted.)
+#
+# OUT-OF-CONTRACT: NONE. The function performs no I/O and mutates nothing. The ONLY way it
+#   reaches outside its arguments is by invoking a user-supplied valueOf/toString on a non-number
+#   fromIndex during ToNumber coercion (NODE 2). That is the caller's own object behavior, not a
+#   side effect of `includes`; if it throws, the throw propagates (modeled as a throw oracle).
+
+# ============================================================================
+# SELF-CONSISTENCY CROSS-CHECK (SIR <-> genInputs)
+# ============================================================================
+# Every value class the generator can emit has an explicit mapping above:
+#   - arrays of numbers/strings/mixed/NaN/+0/-0/refs/holes        -> NODE 5b + baseIndexOf rules
+#   - strings (substring, empty value, coerced non-string value)  -> NODE 5a indexOf rules
+#   - plain objects (value search, Object.keys ordering)          -> NODE 1b + 5b
+#   - array-like objects (length property)                         -> NODE 1a + 5b
+#   - boxed String objects                                         -> NODE 1a + isString -> 5a
+#   - arguments objects                                            -> NODE 1a + 5b
+#   - null/undefined/number/boolean/Symbol collections             -> NODE 1b -> [] -> false
+#   - fromIndex: number (int/float/+/-), Infinity/-Infinity, falsy (0/null/NaN/""/false),
+#       boolean true, numeric/whitespace/binary/octal/bad-hex strings, Symbol, array, plain
+#       object, throwing-valueOf object                            -> NODE 2 coercion rules
+#   - guard truthy (4th arg)                                        -> NODE 2 BRANCH 2a override
+# Conversely the generator emits nothing whose behavior is left undefined by this SIR.
+
+PROVENANCE lodash.includes@4.3.0 (npm), repo lodash/lodash (Custom Build: `lodash modularize exports="npm" -o ./`), MIT license, source file: node_modules/lodash.includes/index.js

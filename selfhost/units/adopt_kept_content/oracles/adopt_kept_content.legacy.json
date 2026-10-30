@@ -1,0 +1,791 @@
+{
+ "mode": "vectors",
+ "unit": "adopt_kept_content",
+ "authority": "rederive@c7b0916ed08a",
+ "authorityTreeSha256": "6716d5ceb289679ec027961905ff2233656ae8af20f973ce72d1f0ae32ca4c23",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "",
+    ""
+   ],
+   "expected": []
+  },
+  {
+   "name": "v1",
+   "args": [
+    "   \n\t\n",
+    "Only prose here."
+   ],
+   "expected": []
+  },
+  {
+   "name": "v2",
+   "args": [
+    42,
+    "x"
+   ],
+   "expected": {
+    "__throw": "text.split is not a function"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "x",
+    null
+   ],
+   "expected": {
+    "__throw": "Cannot read properties of null (reading 'split')"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "~~~md\n```bash\nrm -rf build\n```\n~~~",
+    "```sh\nrm -rf build\n```"
+   ],
+   "expected": [
+    "~~~md\n```bash\nrm -rf build\n```\n~~~"
+   ]
+  },
+  {
+   "name": "v5",
+   "args": [
+    "~~~\n```\nrm x\n```\n~~~\n\n``````\nq\n```\n``````",
+    "~~~\nrm x\n~~~\n\n```\nq\n```"
+   ],
+   "expected": [
+    "~~~\n```\nrm x\n```\n~~~",
+    "``````\nq\n```\n``````"
+   ]
+  },
+  {
+   "name": "v6",
+   "args": [
+    "```\nv\n``` x\n# H\n```",
+    "```\nv\n# H\n```"
+   ],
+   "expected": [
+    "```\nv\n``` x\n# H\n```"
+   ]
+  },
+  {
+   "name": "v7",
+   "args": [
+    "Skip **/node_modules/** always.\n\nUse x**2** y.\n\nGlob *.log* here.\n\nUse **bold** here.",
+    "Skip /node_modules/ always.\n\nUse x2 y.\n\nGlob .log here.\n\nUse bold here."
+   ],
+   "expected": [
+    "Skip **/node_modules/** always.",
+    "Use x**2** y.",
+    "Glob *.log* here.",
+    "Use **bold** here."
+   ]
+  },
+  {
+   "name": "v8",
+   "args": [
+    "x\u0000 Run `ls -S. Then` now.\n\n\u0001ls\u0001 -S.",
+    "x\u0000 run `ls -s. Then` NOW.\n\n`ls` -S."
+   ],
+   "expected": [
+    "x\u0000 Run `ls -S. Then` now.",
+    "\u0001ls\u0001 -S."
+   ]
+  },
+  {
+   "name": "v9",
+   "args": [
+    "Never deploy. Ask first.\n\nA. B.\n\nC. D.",
+    "Never deploy. Except today. Ask first.\n\nX. A. B. Y.\n\nD. C."
+   ],
+   "expected": [
+    "Never deploy. Ask first.",
+    "C. D."
+   ]
+  },
+  {
+   "name": "v10",
+   "args": [
+    "Rule.\n\n```bash",
+    "Other.\n```bash"
+   ],
+   "expected": [
+    "Rule.",
+    "```bash"
+   ]
+  },
+  {
+   "name": "v11",
+   "args": [
+    "```bash\nls\n```\n\n```\nq\n```\n\n```x```\n\n```\n```",
+    "```py\nls\n```\n\n~~~\nq\n~~~\n\n~~~\n```x```\n~~~\n\n```\n\n```"
+   ],
+   "expected": [
+    "```bash\nls\n```",
+    "```\nq\n```",
+    "```x```"
+   ]
+  },
+  {
+   "name": "v12",
+   "args": [
+    "x\u0000 Run.\n\nA \u0001b\u0001 C.\n\nQ\u0000  r.",
+    "x\u0000 Run.\n\nA \u0001b\u0001 C.\n\nq\u0000 r."
+   ],
+   "expected": [
+    "Q\u0000  r."
+   ]
+  },
+  {
+   "name": "v13",
+   "args": [
+    "\u0002x\u0000 y.\n\n\u0002Abc.",
+    "\u0002x\u0000 y.\n\n\u0002abc."
+   ],
+   "expected": []
+  },
+  {
+   "name": "v14",
+   "args": [
+    "```x```\n\n~~~\n```x```\n~~~\n\n```bash\n```",
+    "~~~\n  ```x```\n~~~\n\n```x```\n\n```bash"
+   ],
+   "expected": [
+    "```bash\n```"
+   ]
+  },
+  {
+   "name": "v15",
+   "args": [
+    "a\n```\n\nb\n```bash",
+    "c\n```bash"
+   ],
+   "expected": [
+    "a",
+    "```\n\nb\n```bash"
+   ]
+  },
+  {
+   "name": "v16",
+   "args": [
+    "```\nq\n```````\nafter.\n\n````\nr\n```\n```````",
+    "```\nq\n```\n\n~~~\nr\n```\n~~~"
+   ],
+   "expected": [
+    "after.",
+    "````\nr\n```\n```````"
+   ]
+  },
+  {
+   "name": "v17",
+   "args": [
+    "#  \n\n- A. A.\n\n- B. B.",
+    "#  \n\nA. A.\n\nB. X. B."
+   ],
+   "expected": [
+    "# ",
+    "- B. B."
+   ]
+  },
+  {
+   "name": "v18",
+   "args": [
+    "## Rules\n\n1. Never push to main. Ask Lane first.\n2. Run tests.\n",
+    "<!-- rederive:begin x -->\n- Ask Lane first.\n- Run tests.\n<!-- rederive:end -->"
+   ],
+   "expected": [
+    "## Rules",
+    "1. Never push to main. Ask Lane first."
+   ]
+  },
+  {
+   "name": "v19",
+   "args": [
+    "- Never deploy on Friday. Ask Lane first.\n\nA. B.\n\nC. D.\n\nE. E.\n\nF.",
+    "- Ask Lane first.\n- Never deploy on Friday.\n\nB. A.\n\nC. X. D.\n\nE.\n\nY. F. Z."
+   ],
+   "expected": [
+    "- Never deploy on Friday. Ask Lane first.",
+    "A. B.",
+    "C. D.",
+    "E. E."
+   ]
+  },
+  {
+   "name": "v20",
+   "args": [
+    "A. A.\n\nA.\n\n- B. A.\n- A. B.",
+    "X. A. Y. A.\n\n- A. B. A."
+   ],
+   "expected": [
+    "A. A."
+   ]
+  },
+  {
+   "name": "v21",
+   "args": [
+    "### Never deploy on Fridays\n- Run tests.\n# A. B.\n## A.\n# Rules\nRules\n#  ",
+    "Run tests.\n\nA.\n## Rules"
+   ],
+   "expected": [
+    "### Never deploy on Fridays",
+    "# A. B.",
+    "Rules #"
+   ]
+  },
+  {
+   "name": "v22",
+   "args": [
+    "# A. B.\n\n- Keep `src/` clean.\n* Use **bold** rules.\n10. Ten.\n007. Seven.\n",
+    "A.\nB.\n\nkeep `src/` clean.\n\nUSE BOLD RULES.\n\nTen.\n\n7. Seven."
+   ],
+   "expected": [
+    "* Use **bold** rules."
+   ]
+  },
+  {
+   "name": "v23",
+   "args": [
+    "~~~\n```\nrm x\n```\n~~~\n\n~~~\n```\n~~~",
+    "~~~\nrm x\n~~~"
+   ],
+   "expected": [
+    "~~~\n```\nrm x\n```\n~~~",
+    "~~~\n```\n~~~"
+   ]
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "``````\nq\n```\n``````\n\n````\n```\nr\n```\n````\nafter.",
+    "```\nq\n```\n\n````\nr\n````"
+   ],
+   "expected": [
+    "``````\nq\n```\n``````",
+    "````\n```\nr\n```\n````",
+    "after."
+   ]
+  },
+  {
+   "name": "v25",
+   "args": [
+    "```\nq\n````\nafter.\n\n```\nq\n~~~\nr\n```sh\ns\n```  \nafter two.",
+    "```\nq\n```\n\n```\nq\nr\ns\n```"
+   ],
+   "expected": [
+    "after.",
+    "```\nq\n~~~\nr\n```sh\ns\n```  ",
+    "after two."
+   ]
+  },
+  {
+   "name": "v26",
+   "args": [
+    "~~~\nq\n~~~~\nafter.\n~~~~\nr\n~~~\n~~~~~\n\n```\nz\n  ```\t\nend.",
+    "~~~\nq\n~~~\n\n```\nz\n```"
+   ],
+   "expected": [
+    "after.",
+    "~~~~\nr\n~~~\n~~~~~",
+    "end."
+   ]
+  },
+  {
+   "name": "v27",
+   "args": [
+    "```bash\nls\n```\n\n```\nv\n``` x\n# H\n```\n\n```\nk\n```x```\n```",
+    "```py\nls\n```\n\n# H\n\n```\nk\n```"
+   ],
+   "expected": [
+    "```bash\nls\n```",
+    "```\nv\n``` x\n# H\n```",
+    "```\nk\n```x```\n```"
+   ]
+  },
+  {
+   "name": "v28",
+   "args": [
+    "```bash\nmake test\n\n# not a heading\n- not a list. Two parts\n```\nafter.",
+    "~~~\nmake test\n# not a heading\n\n- not a list. Two parts\n```"
+   ],
+   "expected": [
+    "```bash\nmake test\n\n# not a heading\n- not a list. Two parts\n```",
+    "after."
+   ]
+  },
+  {
+   "name": "v29",
+   "args": [
+    "```\nmake test\n```\n\n```\nMake test\n```\n\nmake test\n\n```\nstep 2\nstep 1\n```",
+    "```\nMake test\n```\n\n```\nmake test\n```\n\n```\nstep 1\nstep 2\n```"
+   ],
+   "expected": [
+    "make test",
+    "```\nstep 2\nstep 1\n```"
+   ]
+  },
+  {
+   "name": "v30",
+   "args": [
+    "```\nmake   test\n\n```\n```\n\n```\n```\n   ```\n",
+    "```\n  make test  \n```\n```\n```"
+   ],
+   "expected": []
+  },
+  {
+   "name": "v31",
+   "args": [
+    "a\n```\nopen\n## h\n- l",
+    "```\nopen\n## h\n- l"
+   ],
+   "expected": [
+    "a",
+    "```\nopen\n## h\n- l"
+   ]
+  },
+  {
+   "name": "v32",
+   "args": [
+    "```x```\n\n``````\nq",
+    "```\n```x```\n```"
+   ],
+   "expected": [
+    "```x```",
+    "``````\nq"
+   ]
+  },
+  {
+   "name": "v33",
+   "args": [
+    "```x```\n\n```   ```\n```` ```\n  ```x```  \nq\n```x``` y\n\n```a\rb```\nr\n```a b```",
+    "```x```"
+   ],
+   "expected": [
+    "```   ```",
+    "```` ```",
+    "q",
+    "```x``` y\n\n```a\rb```\nr\n```a b```"
+   ]
+  },
+  {
+   "name": "v34",
+   "args": [
+    "```make deploy```\nfoo\nbar",
+    "foo bar"
+   ],
+   "expected": [
+    "```make deploy```"
+   ]
+  },
+  {
+   "name": "v35",
+   "args": [
+    "Run `ls` -S.\n\nRun ` ls ` now.\n\nRun `ls -S`.\n\nRun `ls -s` NOW.",
+    "Run `ls -S`.\n\nRun `ls` now.\n\nRun `ls` -S.\n\nRUN `ls -s` now."
+   ],
+   "expected": [
+    "Run ` ls ` now."
+   ]
+  },
+  {
+   "name": "v36",
+   "args": [
+    "**a ***\n\n*a**b*\n\n_*a*_\n\né*a*\n\n**a**b\n\n* a*\n\n*a *\n\n****\n\n*****\n\n**x**y**z**",
+    "a *\n\nab\n\n_a_\n\néa\n\nab\n\n a\n\na \n\n**\n\n*\n\nxyz"
+   ],
+   "expected": [
+    "**a ***",
+    "*a**b*",
+    "_*a*_",
+    "é*a*",
+    "**a**b",
+    "* a*",
+    "*a *",
+    "****",
+    "*****",
+    "**x**y**z**"
+   ]
+  },
+  {
+   "name": "v37",
+   "args": [
+    "\u0001ls\u0001 -S.\n\n`a`*b* `c`.\n\nX `a` b `c\n\nx `` y\n\na ` b",
+    "`ls` -S.\n\n`a`b `c`.\n\nx `a` B `c\n\nx  y\n\nA ` B"
+   ],
+   "expected": [
+    "\u0001ls\u0001 -S.",
+    "`a`*b* `c`.",
+    "x `` y"
+   ]
+  },
+  {
+   "name": "v38",
+   "args": [
+    "ΑΣ `Σ` ΑΣ.\n\nNever commit .env files\n\nRun   the\ttests  now.\n\nCafé rules apply. ÉCOLE matters.",
+    "ας `Σ` ας.\n\nNever commit .env files.\n\nrun the tests now.\n\ncafé rules apply. école matters."
+   ],
+   "expected": [
+    "Never commit .env files"
+   ]
+  },
+  {
+   "name": "v39",
+   "args": [
+    "***\n\n* * *",
+    "**"
+   ],
+   "expected": [
+    "***",
+    "* * *"
+   ]
+  },
+  {
+   "name": "v40",
+   "args": [
+    "Use `x`, not \u00000\u0000.\n\nA \u00001`x` b.\n\nC. \u0000d. `e`. `f` G.",
+    "Use `x`, not `x`.\n\nA undefined0\u0000 b.\n\nc. \u0000d. `e`. `f` g."
+   ],
+   "expected": [
+    "Use `x`, not \u00000\u0000.",
+    "A \u00001`x` b.",
+    "C. \u0000d. `e`. `f` G."
+   ]
+  },
+  {
+   "name": "v41",
+   "args": [
+    "- First rule wraps\n  onto a second line. Second sentence\nkeeps going.\n\nA paragraph\nthat wraps.",
+    "First rule wraps onto a second line. Second sentence keeps going. Extra."
+   ],
+   "expected": [
+    "A paragraph that wraps."
+   ]
+  },
+  {
+   "name": "v42",
+   "args": [
+    "Para line one\n- item starts\ncontinues item\n# Head\ntail para\n\n- \nfoo\n\n- foo  \nbar\n\n-  x\n- x \n- x",
+    "tail para"
+   ],
+   "expected": [
+    "Para line one",
+    "- item starts continues item",
+    "# Head",
+    "-  foo",
+    "- foo   bar",
+    "- x",
+    "- x ",
+    "- x"
+   ]
+  },
+  {
+   "name": "v43",
+   "args": [
+    "-\n-- not a list\n+ plus\n1) paren\n1.no-space\n*emph* text\n\n1. one\n   2. two\n10.ten",
+    "one"
+   ],
+   "expected": [
+    "- -- not a list + plus 1) paren 1.no-space *emph* text",
+    "2. two 10.ten"
+   ]
+  },
+  {
+   "name": "v44",
+   "args": [
+    "   # Indented\n#NoSpace\n####### Seven\n# Trail (x)  \n  # Indented later\n# One\n###### Six\n#  \n## Never deploy on Fridays (rule)\nbody.",
+    "One"
+   ],
+   "expected": [
+    "# Indented",
+    "#NoSpace ####### Seven",
+    "# Trail (x)",
+    "# Indented later",
+    "###### Six",
+    "# ",
+    "## Never deploy on Fridays (rule)",
+    "body."
+   ]
+  },
+  {
+   "name": "v45",
+   "args": [
+    "x\n#  \n#\rx\n#\r\n#  x\n# x ",
+    "q"
+   ],
+   "expected": [
+    "x",
+    "# ",
+    "# x",
+    "#",
+    "# x",
+    "# x"
+   ]
+  },
+  {
+   "name": "v46",
+   "args": [
+    "x\n#  ",
+    "```\nq\n```"
+   ],
+   "expected": [
+    "x #"
+   ]
+  },
+  {
+   "name": "v47",
+   "args": [
+    "e.g. Foo. 'x.' Bar.) (Baz ! `q` Ok? \"Quoted.\" Next.] Then... Done!! Yes.)) No",
+    "e.g. Zz. Foo. 'x.' Zz. Bar.) Zz. (Baz ! Zz. `q` Ok? \"Quoted.\" Zz. Next.] Zz. Then... Zz. Done!! Zz. Yes.)) No"
+   ],
+   "expected": [
+    "e.g. Foo. 'x.' Bar.) (Baz ! `q` Ok? \"Quoted.\" Next.] Then... Done!! Yes.)) No"
+   ]
+  },
+  {
+   "name": "v48",
+   "args": [
+    "Ends with dot. lower start. Écrit. 1. digit. A",
+    "Ends with dot. lower start."
+   ],
+   "expected": [
+    "Ends with dot. lower start. Écrit. 1. digit. A"
+   ]
+  },
+  {
+   "name": "v49",
+   "args": [
+    "A. B c.D e.﻿F g.　H i. J k.\u000bL m. N",
+    "A. Zz. B c.D e. Zz. F g. Zz. H i. Zz. J k. Zz. L m. Zz. N"
+   ],
+   "expected": [
+    "A. B c.D e.﻿F g.　H i. J k.\u000bL m. N"
+   ]
+  },
+  {
+   "name": "v50",
+   "args": [
+    "Run `a.` Then `b`. Next `c. D`.",
+    "Next `c. D`. Zz. Run `a.` Then `b`."
+   ],
+   "expected": [
+    "Run `a.` Then `b`. Next `c. D`."
+   ]
+  },
+  {
+   "name": "v51",
+   "args": [
+    "## Rules\r\n- a thing.\r\n- Other thing.\r\n",
+    "- a thing.\n- Other thing."
+   ],
+   "expected": [
+    "## Rules"
+   ]
+  },
+  {
+   "name": "v52",
+   "args": [
+    "- a thing.\n- Other thing.\n",
+    "## Rules\r\n- a thing.\r\n- Other thing.\r\n"
+   ],
+   "expected": []
+  },
+  {
+   "name": "v53",
+   "args": [
+    "# x\r\r\n# y\r\r\r\n- z\r\r\r\n```\r\r\nq\r\r\n```\r\r\na\r\r\nb\r\r\r\nc",
+    "w"
+   ],
+   "expected": [
+    "# x",
+    "# y - z",
+    "```\nq\n```",
+    "a b c"
+   ]
+  },
+  {
+   "name": "v54",
+   "args": [
+    "Q.\n\nR.",
+    "<!--\n rederive:begin\n x\n -->Q.\n\nR."
+   ],
+   "expected": []
+  },
+  {
+   "name": "v55",
+   "args": [
+    "Q.",
+    "<!-- rederive:begin <!-- x --> -->Q."
+   ],
+   "expected": [
+    "Q."
+   ]
+  },
+  {
+   "name": "v56",
+   "args": [
+    "Q.\n\nP.",
+    "<!-- rederive:begin <!-- rederive:begin -->Q."
+   ],
+   "expected": [
+    "P."
+   ]
+  },
+  {
+   "name": "v57",
+   "args": [
+    "Q.",
+    "<!--  rederive:begin\n\n-->\nQ."
+   ],
+   "expected": []
+  },
+  {
+   "name": "v58",
+   "args": [
+    "Q.",
+    "<!-- rederive:begin x<!-->Q."
+   ],
+   "expected": [
+    "Q."
+   ]
+  },
+  {
+   "name": "v59",
+   "args": [
+    "Q. R.\n\nS.",
+    "<!-- rederive:begin profile\nQ. R.\n\nS."
+   ],
+   "expected": [
+    "Q. R."
+   ]
+  },
+  {
+   "name": "v60",
+   "args": [
+    "Q.\n\nR.",
+    "<!-- rederive:begin a\nR.\n<!-- rederive:begin b -->\nQ."
+   ],
+   "expected": [
+    "R."
+   ]
+  },
+  {
+   "name": "v61",
+   "args": [
+    "Keep me. Drop me.",
+    "<!-- rederive:begin p -->\nDrop me. Keep me.\n<!-- rederive:end -->\nIgnored."
+   ],
+   "expected": [
+    "Keep me. Drop me."
+   ]
+  },
+  {
+   "name": "v62",
+   "args": [
+    "Before. After.",
+    "Before.\n<!-- a comment -->\nAfter."
+   ],
+   "expected": [
+    "Before. After."
+   ]
+  },
+  {
+   "name": "v63",
+   "args": [
+    "P.\n\nQ.\n\nR.\n\nS.",
+    "<!-- rederive:beginner -->P.\n<!-- rederive:begin_x -->Q.\n<!-- rederive:begin-x -->R."
+   ],
+   "expected": [
+    "P.",
+    "Q.",
+    "S."
+   ]
+  },
+  {
+   "name": "v64",
+   "args": [
+    "Q. R.\n\nZ.",
+    "R.\n<!-- rederive:end -->\nQ.\n\n<!-- rederive:end -->\n<!-- rederive:begin -->Z."
+   ],
+   "expected": [
+    "Q. R."
+   ]
+  },
+  {
+   "name": "v65",
+   "args": [
+    "Joined text.",
+    "<!-- rederive:begin -->Joined<!--  rederive:end  --> text."
+   ],
+   "expected": [
+    "Joined text."
+   ]
+  },
+  {
+   "name": "v66",
+   "args": [
+    "Joined text.",
+    "<!-- rederive:begin -->Joined text.<!--\trederive:end\n-->"
+   ],
+   "expected": []
+  },
+  {
+   "name": "v67",
+   "args": [
+    "Keep me.\n<!-- rederive:end -->\nAlso keep me.\n\n<!-- rederive:begin -->\n- Ask first.",
+    "Keep me.\n\n- Ask first."
+   ],
+   "expected": [
+    "Keep me. <!-- rederive:end --> Also keep me.",
+    "<!-- rederive:begin -->"
+   ]
+  },
+  {
+   "name": "v68",
+   "args": [
+    "  # Head\nbody\n\n- Same. Same.\n- Same.\n\nSame.",
+    "Other."
+   ],
+   "expected": [
+    "# Head",
+    "body",
+    "- Same. Same.",
+    "- Same.",
+    "Same."
+   ]
+  },
+  {
+   "name": "v69",
+   "args": [
+    "body",
+    "  # Head\nbody"
+   ],
+   "expected": []
+  },
+  {
+   "name": "v70",
+   "args": [
+    "- Review the GDD:\n- Ask before touching the giver.  Do not edit migrations.\n- Ask before touching Lane.\" Keep Lane? Keep *.env.]\n",
+    "<!-- rederive:begin profile -->\r\n## Rules\r\n\r\n* Review the GDD: Ask before touching tests\r\n\r\n## Ask before touching the giver. DO NOT EDIT MIGRATIONS.\r\n\r\n## Ask before touching Lane.\" KEEP LANE? Keep *.env.]\r\n<!-- rederive:end -->\r\n"
+   ],
+   "expected": [
+    "- Review the GDD:"
+   ]
+  },
+  {
+   "name": "v71",
+   "args": [
+    "~~~text\ngit push -S\ngit push -S\n```sh\n\n## Process (v2)\n",
+    "<!-- rederive:begin profile -->\r\n## Rules\r\n\r\nProcess (v2)\r\n1. (`make` §11.'\r\n<!-- rederive:end -->\r\n"
+   ],
+   "expected": [
+    "~~~text\ngit push -S\ngit push -S\n```sh\n\n## Process (v2)"
+   ]
+  }
+ ]
+}

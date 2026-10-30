@@ -1,0 +1,41 @@
+UNIT encode_value
+LANG ts
+PRIMARY-SHA256 d91d945d8d17d24001cdc090bc43f8c5eb89a2c7df0116a28a0cb40c0dfc2727
+SIG export default function encode_value(value: Json, type: string): Json
+ABI TypeScript compiles to the js runtime and is driven exactly as js. The artifact declares
+  `type Json = null | boolean | number | string | Json[] | { [key: string]: Json }` and uses it for the argument and
+  the result (the result tree holds only maps, lists, strings and booleans). STRICT: it type-checks under strict: true
+  with no `any`, no non-null assertions (`!`), no @ts-ignore / @ts-expect-error; narrowing by typeof, Array.isArray and
+  null checks. A throw is a thrown Error; the message is not graded. The artifact is an ES module default-exporting the
+  function and imports nothing.
+ENVELOPE as the primary: json values only (the js extension's undefined, bigint, Uint8Array, Map and unpaired surrogates
+  are verified by the js variant alone, and so is R13's refuse side: the shared oracle's codec cannot carry an argument
+  past depth 100; the shared vectors pin the accept side only up to 49 list / 33 map levels; implement the cap exactly). Internally the absent value and a decoded bigint still occur (R4, R5): model
+  them in a private union type (for example `Json | undefined | bigint`), never as `any`.
+MECHANISM (restated from js — language files are self-contained) ONE plain-object rule for record, map and json: a
+  non-null, non-Array object whose prototype is Object.prototype or null. A record field is
+  Object.hasOwn(value, name) ? value[name] : undefined; a map position takes Object.entries. ONE marker rule for
+  __throw, __threw and __t: an OWN member (Object.hasOwn) holding a string, on a plain object that is not ESCAPED; a THROW marker also has exactly one own key
+  (Object.keys(v).length === 1).
+  ESCAPED maps live in a module-level WeakSet<object>; the obj unwrap requires v.v to be a plain object (else throw)
+  and copies Object.keys(v.v) with Object.defineProperty (never assignment). num: the four spellings, else NUM-LITERAL,
+  then n = Number(v); throw when n is zero and the mantissa (v before any e/E) holds a digit 1-9, else throw unless
+  n is finite and not -0 (Object.is); bigint: BIGINT-LITERAL then BigInt(v). Integral =
+  Number.isInteger(x) or a bigint, range-checked as bigints.
+MECHANISM well-formed text = String.prototype.isWellFormed(). It is ES2024: the verifier type-checks against the ES
+  lib of the Node it runs (es2024 on Node 22 and later), so the call type-checks as written — no cast, no
+  declaration merging. Where the lib is older, the portable equivalent is a scan for an unpaired surrogate (a code
+  unit 0xD800-0xDBFF not followed by 0xDC00-0xDFFF, or 0xDC00-0xDFFF not preceded by 0xD800-0xDBFF). R9 sort key = key text for a text node, else CANON(node) (compact JSON, sorted
+  keys, f64 nodes reduced to { bits, t }, throw nodes to { t }); comparator with < and > (16-bit code-unit order),
+  stable. RENDER = String(x) with -0 tested first by Object.is(x, -0); BITS via DataView setFloat64 / getBigUint64,
+  16 lowercase hex digits, NaN as 7ff8000000000000. The R1 reader treats exactly ' \t\r\n' as whitespace, skipped
+  before every token ("[" included); R2 SAME decided on parsed nodes (a canonical key per type: union keys sorted,
+  record "name:key" fields sorted, other composites in order) and COVERS a recursive predicate over them (R2 a-d), each
+  later alternative against every earlier one; a composite depth counter throws at 17. R13: the value's depth passed
+  down — 0 at the call, + 1 into every child value, unchanged into a union alternative, the json position and a tag's
+  replacement — throwing when it exceeds 100.
+PINNED regex NUM-LITERAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/ CITED R5 num
+PINNED regex BIGINT-LITERAL = /^(?:0|-?[1-9][0-9]*)$/ CITED R5 bigint, no -0
+PINNED regex NAME = /^[A-Za-z_][A-Za-z0-9_]*/ CITED R1 NAME, read greedily
+DEPENDS-ON none
+PROVENANCE rederive@7b348e351c9f cli/sir/canon.mjs (unchanged since bb8ded84fa50). Language file revised 2026-10-27 (round 5) with the primary.

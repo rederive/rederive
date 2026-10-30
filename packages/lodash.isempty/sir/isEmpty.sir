@@ -1,0 +1,384 @@
+UNIT isEmpty
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isEmpty(value: any) -> boolean
+DEPENDS-ON none   # self-contained; all helper predicates below are inlined into this UNIT
+
+# =============================================================================
+# HARDEN ROUND 2 — what changed and WHY (round 1 failed differential 399/400)
+# =============================================================================
+# Round-1 root cause was NOT this SIR's prose (which already said "{length:0}
+# => false via the own-key loop") — it was a POISONED FROZEN ORACLE plus an
+# under-specified RUNG-1 qualifier:
+#
+#   * The round-1 generator's curated prefix emitted splice-FUNCTION objects,
+#     e.g. {length:0, splice: function(){}}. The harness codec (encode->
+#     JSON.stringify->decode) CANNOT round-trip a function value: a plain
+#     object's function-valued key is DROPPED by JSON.stringify, so
+#     {length:0, splice: fn}  PERSISTS AS  {"length":0}. The oracle had STAMPED
+#     `expected:true` from the ORIGINAL value (which really is true), but the
+#     DECODED value handed to the blind emitters was the bare {"length":0},
+#     whose REAL answer is FALSE. => poisoned frozen entry teaching `true`.
+#   * The only length-only object in the frozen set was that poisoned one, so
+#     the blind emitters reasonably (but wrongly) generalized "array-like object
+#     with valid integer length => !length", making bare {length:0} => true.
+#
+# FIXES THIS ROUND:
+#   (A) RUNG 1's qualifier is now stated as the EXACT 4.4.0 disjunction and made
+#       mandatory: being array-like ALONE NEVER triggers `!value.length`.
+#   (B) The generator NO LONGER emits any splice-function object (codec-poison).
+#       The discriminators are the BARE codec-faithful {length:0} (real=>FALSE)
+#       and {length:3} (real=>FALSE), placed FIRST in the curated prefix so they
+#       enter the frozen oracle with their CORRECT answers.
+#   (C) The splice clause, genuine `arguments` objects, host/jQuery collections,
+#       functions, and symbols are all documented as OUT-OF-ENVELOPE for the
+#       generator (not codec-faithful as the distinguishing type) but fully
+#       reconstructable from this spec.
+# Every claim below was re-verified against lodash.isempty@4.4.0 index.js AND by
+# executing the real package on Node v24 (see PROVENANCE).
+# =============================================================================
+
+# =============================================================================
+# EMISSION CONTRACT (for the BLIND re-emitter)
+# =============================================================================
+# This is the DEFAULT export of an ES module. The re-emitter MUST produce:
+#     export default isEmpty
+# i.e. the function `isEmpty` IS the module's default export. (In the original
+# CommonJS source it is `module.exports = isEmpty`; the verified-recompose
+# target is an ES module whose DEFAULT export is the function.)
+#
+# Pure, read-only, total function. Single argument `value` of ANY type.
+# Returns a strict boolean (true/false). Never throws for any input. No
+# mutation of `value`, no side effects, no I/O, no clock, no RNG. There is NO
+# injection seam (N/A). ORACLE-CLASS is plain `deterministic`, value mode.
+#
+# Semantics: "true if `value` is empty, else false." Emptiness is decided by
+# the ordered ladder in BEHAVIOR. The four rungs are tried IN ORDER; the FIRST
+# rung that APPLIES decides the result. (Note the structure: RUNG 1 is a single
+# `if` that returns; if it does not return, RUNG 2's `if` is tried; etc.)
+# =============================================================================
+
+# =============================================================================
+# RUNTIME-CONSTANT PRECONDITIONS (load-bearing — pinned to modern V8 / Node)
+# =============================================================================
+# The original lodash source computes two environment-probe constants at module
+# load. On any modern V8 (Node >= ~6, browsers since ~2016) they evaluate as
+# follows, and the re-emitter MUST hard-code these resolved values (do NOT
+# re-derive them, and do NOT branch on legacy-engine alternatives):
+#
+#   nonEnumShadows == false
+#       Defined in source as: !propertyIsEnumerable.call({ valueOf: 1 }, 'valueOf')
+#       On modern engines an OWN 'valueOf' data property IS enumerable, so
+#       propertyIsEnumerable returns true, so nonEnumShadows == false.
+#       CONSEQUENCE: in RUNG 3 below, the `nonEnumShadows || isPrototype(value)`
+#       guard reduces to just `isPrototype(value)`. The `nativeKeys` sub-branch
+#       fires ONLY for prototype objects; everything else reaches RUNG 4.
+#
+#   getTag(value) == Object.prototype.toString.call(value)   (the identity case)
+#       The original has a legacy fallback that rewrites getTag when a runtime
+#       mis-tags Map/Set/Promise/WeakMap/DataView. On modern V8 native Map and
+#       Set already report '[object Map]' / '[object Set]', so the fallback is
+#       NOT installed and getTag is exactly Object.prototype.toString.call.
+#       The re-emitter MUST use Object.prototype.toString.call(value) for the
+#       tag. (Verified on the live package: tag(new Map()) == '[object Map]',
+#       tag(new Set()) == '[object Set]'.)
+# =============================================================================
+
+BEHAVIOR
+# ---------------------------------------------------------------------------
+# EXACT SOURCE (lodash.isempty@4.4.0 index.js, function body, verbatim):
+#
+#   function isEmpty(value) {
+#     if (isArrayLike(value) &&
+#         (isArray(value) || typeof value == 'string' ||
+#           typeof value.splice == 'function' || isBuffer(value) || isArguments(value))) {
+#       return !value.length;
+#     }
+#     var tag = getTag(value);
+#     if (tag == mapTag || tag == setTag) {
+#       return !value.size;
+#     }
+#     if (nonEnumShadows || isPrototype(value)) {
+#       return !nativeKeys(value).length;
+#     }
+#     for (var key in value) {
+#       if (hasOwnProperty.call(value, key)) {
+#         return false;
+#       }
+#     }
+#     return true;
+#   }
+#
+# NOTE FOR 4.4.0 SPECIFICALLY: the RUNG-1 disjunction has EXACTLY FIVE members —
+#   isArray(value) || typeof value=='string' || typeof value.splice=='function'
+#   || isBuffer(value) || isArguments(value).
+# There is NO isTypedArray() member in this version (it was added in later
+# lodash). Therefore typed arrays (Uint8Array, Float64Array, DataView, etc.) are
+# NOT decided by RUNG 1 here — they fall through to RUNG 4. (Re-verified against
+# the 4.4.0 source: `isTypedArray` does not appear in this file at all.)
+# ---------------------------------------------------------------------------
+# Helper predicates used above (all inlined into the UNIT; exact definitions):
+#
+#   isLength(v):
+#       typeof v == 'number' && v > -1 && v % 1 == 0 && v <= 9007199254740991
+#       (9007199254740991 == Number.MAX_SAFE_INTEGER). I.e. v is a non-negative
+#       integer in [0, MAX_SAFE_INTEGER]. -1 is excluded (v > -1), as are NaN,
+#       fractional, Infinity, and negatives.
+#
+#   isObject(v):
+#       !!v && (typeof v == 'object' || typeof v == 'function')
+#
+#   isFunction(v):
+#       tag = isObject(v) ? Object.prototype.toString.call(v) : ''
+#       return tag == '[object Function]' || tag == '[object GeneratorFunction]'
+#
+#   isArrayLike(v):
+#       v != null && isLength(v.length) && !isFunction(v)
+#       # Reading v.length on a primitive string is allowed; on null/undefined it
+#       # is short-circuited by the `v != null` guard. A plain object {length:N}
+#       # with a non-negative integer N IS array-like (this is the trap).
+#
+#   isObjectLike(v):  !!v && typeof v == 'object'
+#   isArrayLikeObject(v):  isObjectLike(v) && isArrayLike(v)
+#
+#   isArray(v):  Array.isArray(v)
+#
+#   isBuffer(v):  Node Buffer.isBuffer(v) when a global Buffer exists, else
+#                 const-false. A Node Buffer IS array-like AND isBuffer-true.
+#                 A Uint8Array is NOT a Buffer => isBuffer(Uint8Array)==false.
+#
+#   isArguments(v):
+#       isArrayLikeObject(v) && hasOwnProperty.call(v, 'callee') &&
+#         (!propertyIsEnumerable.call(v, 'callee') ||
+#          Object.prototype.toString.call(v) == '[object Arguments]')
+#       # A genuine `arguments` object satisfies this (its tag is
+#       # '[object Arguments]'). A plain object/array does NOT (no own 'callee').
+#
+#   isPrototype(v):
+#       Ctor  = v && v.constructor
+#       proto = (typeof Ctor == 'function' && Ctor.prototype) || Object.prototype
+#       return v === proto
+#       # True for e.g. Object.prototype, Array.prototype, or `Foo.prototype`.
+#
+#   nativeKeys(v):  Object.keys(v)   # own ENUMERABLE string keys, as an array
+#
+#   hasOwnProperty:  Object.prototype.hasOwnProperty (called via .call)
+# ---------------------------------------------------------------------------
+
+# RUNG 0 — null / undefined short-circuit (implicit, via the guards):
+#   `value == null` (matches both null and undefined). isArrayLike's first
+#   clause `value != null` is false, so RUNG 1 does not apply. getTag(null) is
+#   '[object Null]', getTag(undefined) is '[object Undefined]' — neither is
+#   Map/Set, so RUNG 2 does not apply. isPrototype(null/undefined) is false, so
+#   RUNG 3's nativeKeys sub-branch does not fire. The `for (key in value)` loop
+#   over null/undefined iterates zero times. => RESULT true.
+#   (Net: isEmpty(null) == true, isEmpty(undefined) == true.)
+
+# RUNG 1 — ARRAY-LIKE-COLLECTION branch (returns !value.length):
+#   IF  isArrayLike(value)
+#       AND ( isArray(value)                       # a real Array
+#             OR typeof value == 'string'          # a primitive string
+#             OR typeof value.splice == 'function' # exposes a splice FUNCTION
+#             OR isBuffer(value)                   # a Node Buffer
+#             OR isArguments(value) )              # a genuine arguments object
+#   THEN return !value.length      # true iff length === 0 (after !!-coercion)
+#
+#   *** MANDATORY QUALIFIER — this is the round-1 ambiguity, now pinned: ***
+#   Array-like-ness ALONE is NEVER sufficient. The value MUST ALSO satisfy at
+#   least ONE of the five secondary predicates above. The `isArrayLike(value)
+#   && ( ... )` is a CONJUNCTION: both halves must hold to take this rung. If
+#   `value` is array-like but matches NONE of {Array, string, splice-fn, Buffer,
+#   arguments}, RUNG 1 does NOT fire and control falls through to RUNG 2/3/4.
+#
+#   Members that DO take this rung, and their results:
+#     isEmpty([])              => !0  => true      isEmpty([1])      => !1 => false
+#     isEmpty([1,2,3])         => false
+#     isEmpty('')              => !0  => true      isEmpty('x')      => !1 => false
+#     isEmpty(Buffer.alloc(0)) => true             isEmpty(Buffer.from([1])) => false
+#     isEmpty(Buffer.from([1,2,3])) => false
+#     isEmpty(<empty arguments>) => true (length 0)   isEmpty(<arguments len 1>) => false
+#     isEmpty({length:0, splice: <a FUNCTION>}) => true   # splice-fn clause
+#     isEmpty({length:2, splice: <a FUNCTION>}) => false  # (jQuery-like)
+#
+#   *** CRITICAL NON-MEMBERS — array-like but FAIL the secondary clause, so they
+#       FALL THROUGH to a later rung. The blind re-emitter MUST NOT shortcut
+#       these here: ***
+#
+#   (N1) PLAIN object carrying a `length` key but NOT a real Array/string/
+#        splice-FUNCTION/Buffer/arguments — e.g. {length:0}, {length:3},
+#        {length:7,foo:1}. It IS array-like (length is a non-negative integer),
+#        but isArray=false, typeof!='string', typeof value.splice (undefined) is
+#        'undefined' not 'function', isBuffer=false, isArguments=false. So RUNG 1
+#        does NOT fire. It is not Map/Set-tagged (RUNG 2 no), not a prototype
+#        (RUNG 3 no), so it reaches RUNG 4. In RUNG 4 the `length` property is
+#        ITSELF an own enumerable key, so the for-in/hasOwnProperty loop returns
+#        false on its FIRST iteration.
+#          => isEmpty({length:0}) == FALSE       # `length` own key => non-empty
+#          => isEmpty({length:3}) == FALSE
+#          => isEmpty({length:0, x:1}) == FALSE
+#        (THIS is the round-1 discriminator. Source + live package both say
+#         FALSE. The naive "array-like => !length" reading is WRONG here.)
+#
+#        SUB-NOTE on `splice: undefined` as an explicit key — {length:0, splice:
+#        undefined}: `typeof value.splice` is 'undefined', NOT 'function', so the
+#        splice clause is FALSE; RUNG 1 does not fire; it reaches RUNG 4 where
+#        `length` (and `splice`, if it survived) are own enumerable keys =>
+#        FALSE. (Live-verified: isEmpty({length:0,splice:undefined}) == false.)
+#        [Codec caveat: a value of `undefined` for an object key is DROPPED by
+#         the harness JSON codec, so this exact shape is OUT-OF-ENVELOPE for the
+#         generator; it collapses to {length:0}. The result is the same FALSE.]
+#
+#   (N2) TYPED ARRAYS (Uint8Array, Int8Array, Float64Array, ...) and DataView:
+#        they have a valid `.length`/`.byteLength` and are array-like, but in
+#        4.4.0 are NOT isArray, NOT typeof=='string', have NO splice function,
+#        are NOT Buffer (isBuffer(Uint8Array)==false), and are NOT arguments. So
+#        RUNG 1 does NOT fire; they fall to RUNG 4. There, a typed array's own
+#        ENUMERABLE integer-index keys ('0','1',...) decide emptiness:
+#          isEmpty(new Uint8Array(0))       => true    (no index keys)
+#          isEmpty(new Uint8Array([1]))     => false   (own enumerable key '0')
+#          isEmpty(new Uint8Array([1,2,3])) => false
+#        (So typed arrays ARE handled correctly, but via RUNG 4, NOT RUNG 1.
+#         A Node BUFFER, by contrast, IS isBuffer-true => decided by RUNG 1.
+#         Both give the same length-based answer, but by DIFFERENT rungs — the
+#         re-emitter must implement both paths so the mechanism, not just the
+#         answer, is right.)
+#
+#   (N3) BOXED String/Number/Boolean (new String('ab'), new Number(0),
+#        new Boolean(false)): typeof is 'object', so the `typeof value=='string'`
+#        clause is false even for new String. new String('ab') IS array-like
+#        (length 2) but matches no secondary predicate => RUNG 4, where its own
+#        enumerable index keys '0','1' make it FALSE. new String('') has no
+#        index keys => true. new Number(n) / new Boolean(b) are NOT array-like
+#        (no .length) and have no own enumerable keys => RUNG 4 => true.
+#          isEmpty(new String(''))    => true     isEmpty(new String('ab')) => false
+#          isEmpty(new Number(0))     => true     isEmpty(new Number(5))    => true
+#          isEmpty(new Boolean(false))=> true
+
+# RUNG 2 — MAP / SET tag branch (returns !value.size):
+#   tag = getTag(value)   # == Object.prototype.toString.call(value), see preconditions
+#   IF tag == '[object Map]' OR tag == '[object Set]'
+#   THEN return !value.size            # true iff size === 0
+#     isEmpty(new Map())                      => !0 => true
+#     isEmpty(new Map([['a',1]]))             => !1 => false
+#     isEmpty(new Map([['a',1],['b',2]]))     => false
+#     isEmpty(new Set())                      => !0 => true
+#     isEmpty(new Set([1]))                   => !1 => false
+#     isEmpty(new Set([1,2,3]))               => false
+#   NOTE: WeakMap / WeakSet tags are '[object WeakMap]' / '[object WeakSet]',
+#   which do NOT match this rung — they fall through to RUNG 4 and (having no
+#   own enumerable keys) yield true. DataView tag '[object DataView]' likewise
+#   falls through to RUNG 4 (=> true; an empty DataView has no own enumerable
+#   keys). Maps/Sets that are array-like never happen (they have no `.length`),
+#   so they always reach RUNG 2 first.
+
+# RUNG 3 — PROTOTYPE-OBJECT sub-branch (returns !nativeKeys(value).length):
+#   IF (nonEnumShadows || isPrototype(value))      # nonEnumShadows == false (see preconditions)
+#   THEN return !nativeKeys(value).length          # == (Object.keys(value).length === 0)
+#   Because nonEnumShadows is false, this fires ONLY when value IS a prototype
+#   object (isPrototype true). Emptiness then == (it has zero own enumerable
+#   string keys via Object.keys).
+#     isEmpty(Object.prototype) => true    (Object.keys(Object.prototype) == [])
+
+# RUNG 4 — FOR-IN / hasOwnProperty FALLBACK (the default for ordinary objects):
+#   for (var key in value) {
+#     if (hasOwnProperty.call(value, key)) return false   # first OWN enumerable key => non-empty
+#   }
+#   return true                                            # no own enumerable key => empty
+#
+#   The for-in loop visits OWN + INHERITED enumerable string keys; the
+#   hasOwnProperty filter keeps only OWN ones. So: empty iff value has NO own
+#   ENUMERABLE string-keyed property. Inherited enumerable props do NOT count;
+#   own NON-enumerable props do NOT count.
+#     isEmpty({})                       => true
+#     isEmpty({a:1})                    => false
+#     isEmpty({a:1,b:2})                => false
+#     isEmpty({0:1})                    => false  (own enumerable index key '0')
+#     isEmpty({length:0})               => false  (own enumerable key 'length'; see N1)
+#     isEmpty({length:3})               => false
+#     isEmpty(new Uint8Array([1]))      => false  (own enumerable index key '0'; see N2)
+#     isEmpty(Object.create({x:1}))     => true   (x is inherited, not own)
+#     isEmpty(obj-with-only-nonenum-own)=> true   (own prop is non-enumerable)
+#     isEmpty(new Date())               => true   (no own enumerable keys)
+#     isEmpty(/a/)                      => true   (RegExp: no own enumerable keys)
+#     isEmpty(/abc/gi)                  => true
+#     isEmpty(new WeakMap())            => true   (tag not Map/Set; no own enum keys)
+#     isEmpty(new DataView(new ArrayBuffer(1))) => true
+#
+#   PRIMITIVES that reach this rung (because RUNGs 0-3 did not apply) iterate
+#   zero times and yield true:
+#     isEmpty(0)        => true      isEmpty(1)        => true
+#     isEmpty(42)       => true      isEmpty(-7)       => true
+#     isEmpty(3.14)     => true      isEmpty(NaN)      => true
+#     isEmpty(Infinity) => true      isEmpty(-Infinity)=> true
+#     isEmpty(true)     => true      isEmpty(false)    => true
+#     isEmpty(0n)       => true (bigint)   isEmpty(5n)  => true (bigint)
+#     isEmpty(<any large bigint>) => true
+#   (Numbers/booleans/bigints have no `.length`, so RUNG 1 never applies; their
+#    tags are not Map/Set; they are not prototypes; for-in over a primitive is
+#    empty. Net: every number/boolean/bigint => true. A primitive string is the
+#    sole length-bearing primitive and is decided by RUNG 1 instead.)
+
+ORACLE value -> /tmp/factory-run/lodash.isempty/sir/oracle.json
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire four-rung emptiness ladder
+#   above, in order, and every inlined predicate (isLength, isArrayLike,
+#   isFunction, isObject, isObjectLike, isArrayLikeObject, isArray, isBuffer,
+#   isArguments, isPrototype, getTag-as-Object.prototype.toString, nativeKeys,
+#   the for-in/hasOwnProperty loop), with the pinned runtime constants
+#   nonEnumShadows == false and getTag == Object.prototype.toString.call. The
+#   RUNG-1 secondary-predicate disjunction is EXACTLY the five 4.4.0 members and
+#   is MANDATORY (array-like-ness alone never triggers !length).
+#
+# CARRIED DATA: none. (No large literal table; no carried.json for this unit.)
+#
+# OUT-OF-ENVELOPE (documented & blind-reconstructable, but NOT exercised by
+#   genInputs because they are not faithfully codec-round-trippable AS THE
+#   DISTINGUISHING TYPE — the harness JSON codec would silently lose the trait
+#   that makes them interesting, so emitting them would re-introduce poison):
+#     - SPLICE-FUNCTION OBJECTS ({length:N, splice: function(){}}): the splice
+#       FUNCTION value does not survive JSON (it is dropped), collapsing the
+#       value to {length:N} whose real answer differs (RUNG 4, not RUNG 1).
+#       Behavior IS specified (RUNG 1, => !length) but it is OUT of the
+#       generator's envelope. THIS WAS THE ROUND-1 POISON SOURCE.
+#     - GENUINE `arguments` OBJECTS: the harness codec encodes an arguments
+#       object via Object.keys (its index keys only) — it does NOT preserve the
+#       internal [[Class]]/callee that makes isArguments true. So a length-0
+#       arguments object persists as {} and a length-1 as {"0":1} — i.e. it
+#       decodes to a PLAIN object decided by RUNG 4, not the RUNG-1 arguments
+#       path. The RESULT happens to match (empty arguments => true via length;
+#       {} => true via no-own-keys), but the rung differs, so arguments are
+#       documented here, not emitted, to avoid teaching the wrong rung.
+#       (Behavior: isEmpty(<arguments len 0>) == true, <len 1> == false, RUNG 1.)
+#     - FUNCTIONS: isEmpty(function(){}) == true. isArrayLike is false (isFunction
+#       true); tag is '[object Function]', not Map/Set; not a prototype; for-in
+#       over a function visits no own enumerable string key => true. Functions
+#       are not JSON/codec round-trippable, so NOT emitted.
+#     - SYMBOLS: isEmpty(Symbol('s')) == true. typeof 'symbol'; no length; tag
+#       not Map/Set; for-in over a symbol primitive is empty => true. Not codec
+#       round-trippable, so NOT emitted.
+#     - Host/DOM/jQuery collections (an object exposing a splice FUNCTION + a
+#       valid length) behave per RUNG 1 (=> !length) but are not constructible
+#       in the harness; documented for completeness only.
+#     - PROTOTYPE OBJECTS (Object.prototype etc.): RUNG 3 => !Object.keys().length
+#       (=> true for Object.prototype). Not codec round-trippable as the same
+#       identity, documented only.
+#   NOTE: boxed Number/String/Boolean ARE codec round-trippable (the codec has a
+#   `boxed` tag) and ARE codec-faithful for isEmpty, so a few are emitted by
+#   genInputs (see RUNG-1 note N3 for their exact mechanism).
+
+PROVENANCE
+# package: lodash.isempty@4.4.0  (npm)
+# repo:    lodash/lodash  (modularized build: `lodash modularize exports="npm"`)
+# license: MIT  (Copyright jQuery Foundation and other contributors; based on
+#          Underscore.js 1.8.3, Copyright Jeremy Ashkenas / DocumentCloud)
+# source:  node_modules/lodash.isempty/index.js  (module.exports = isEmpty,
+#          function body at lines 431-450; the five-member RUNG-1 disjunction is
+#          at lines 432-434; helpers inlined above). NO isTypedArray in 4.4.0.
+# verified-against-live: Node v24 — every rung, every curated input, AND the
+#          full codec round-trip (encode->JSON.stringify->decode) were executed
+#          against the real package. The bare {length:0} and {length:3}
+#          discriminators were confirmed FALSE both in the real package and
+#          after codec round-trip. The round-1 poison ({length:0,splice:fn}
+#          collapsing to {"length":0} with stale expected:true) was reproduced
+#          and is now excluded from the generator.

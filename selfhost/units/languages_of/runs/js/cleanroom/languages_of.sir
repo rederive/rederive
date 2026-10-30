@@ -1,0 +1,70 @@
+UNIT languages_of
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/features.mjs languagesOf — the fail-closed language gate (round 5); reproduce the code exactly, accidents included
+ORACLE-CLASS deterministic
+SIG languages_of(input: json) -> list[text]
+ENVELOPE input is json. The domain is a map whose entry sirFiles (optional) is a list of text — SIR file names or paths —
+  and whose entry variants (optional, or none) is a map from variant keys (package or lang:<id>) to maps, each with
+  optional text entries lang and sir (sir naming a .sir file).
+  Every other shape is OUT-OF-DOMAIN and throws (R1, R2, R5, R6). Throws are IN scope as observations: only throw-ness is
+  graded, never the message. Text is Unicode scalar values; a lone surrogate is a js-only widening (see the js file).
+DEPENDS-ON none
+DESCRIPTION The target languages a SIR bundle carries, read from its structure only: the language segment of every SIR file
+  name <unit>.<lang>.sir, every variants key lang:<id>, a variant's own lang entry and the language of its sir path. The gate
+  fails closed: a malformed SIR name, an id outside the closed language registry, a variant whose names disagree or that
+  names a language while pointing at a SIR that names none, two variants claiming one language, a variant key other than
+  package or lang:<id>, a unit name outside the unit-name grammar, a variant sir that names no .sir file, or an argument of
+  the wrong shape throws. The result lists each language once, sorted.
+BEHAVIOR
+R1 input is not a map (none, a list, text, a number or a bool) -> throws. Entries other than sirFiles and variants are ignored.
+R2 FILES = the entry sirFiles: missing -> the empty list; a list -> its elements; anything else (none included) -> throws. An
+  element that is not text -> throws.
+R3 CLAIM-OF(path) is an id, nothing, or a throw. BASE = the part of path after its last "/" or "\" (all of path when it holds
+  neither), with SPACE-TAB characters removed from both ends (only those). A SIR-END is the four characters "." then one of
+  SIR-CASE's s S, one of i I, one of r R — an ASCII-only fold.
+  (a) BASE is text that ends with a SIR-END, followed by one or more HIDDEN characters to the very end -> throws.
+  (b) Otherwise, BASE not ending with a SIR-END -> nothing (x.ts.sir.bak, x.ts.sir~, x.ts.sir/, README.md, x.ts.ſir, x.ts.sır).
+  (c) Otherwise STEM = BASE without its last four characters, cut at every "." into SEGMENTS; UNIT = the first SEGMENT.
+  UNIT not empty and not a UNIT-NAME -> throws (x y.ts.sir, é.sir, -x.ts.sir, a<LF>b.rust.sir; an empty UNIT is allowed).
+  More than two SEGMENTS -> throws (a.b.ts.sir, x.go.ts.sir, ...sir). One SEGMENT -> nothing (x.sir, .sir, ts.sir). Two: the
+  second empty -> throws (x..sir, ..sir); else the claim is the second exactly as written, no case change or trim (.php.sir
+  claims php; a.b.sir claims b, which R4 refuses).
+R4 SIGHT(id): id not in REGISTRY (exact, case-sensitive) -> throws; otherwise id is SIGHTED. Each element of FILES with a
+  claim is sighted: x.TS.sir, x.carried.sir and "x. ts.sir" throw.
+R5 VARIANTS = the entry variants: missing or none -> no entries; a map -> its entries; anything else (a list, text, number or
+  bool — false and 0 included) -> throws. Entry order is immaterial: every check below is per entry or over all entries.
+R6 For each entry K -> V of VARIANTS:
+  (a) V not a map -> throws. V has an entry lang that is not text (none included) -> throws. V has an entry sir that is not
+  text -> throws. V has a text sir: CLAIM-OF(sir) is taken (it may throw, R3), and BASE of sir (as R3 cuts it) not ending
+  with a SIR-END -> throws (the empty text, "/", README.md, x.ts.sir.bak, x.ts.sir/).
+  (b) K is neither exactly package nor exactly lang: followed by a LANG-ID -> throws (Lang:ts, lang:, lang:TS, lang:1ts,
+  " lang:ts", default, look-alikes with a Cyrillic letter, a fullwidth colon or an invisible character). The LANG-ID runs to
+  the very end of K: lang:ts followed by a line feed throws.
+  (c) KEYLANG = the LANG-ID of a lang: key (none for package); OWNLANG = V's lang (the empty text included); PATHLANG =
+  CLAIM-OF(V's sir) when V has a sir. NAMED = those present.
+  (d) two members of NAMED differ (exact comparison) -> throws.
+  (e) KEYLANG or OWNLANG present, V has a sir, and PATHLANG is nothing -> throws (lang:ts, or package with lang ts, and sir x.sir).
+  (f) NAMED empty -> the entry contributes nothing (only a package key without lang whose sir is absent or a one-SEGMENT name).
+  (g) otherwise SIGHT(the one id NAMED holds) — so lang:go or an empty lang throws — and that id is claimed by K: two entries
+  claiming one id -> throws. A FILES claim and a variant claim of the same id do not conflict.
+R7 The result is the SIGHTED ids, each once, in ascending order (every REGISTRY id is ASCII lowercase, so any text order
+  agrees). A throw anywhere is the outcome of the whole call: no partial result.
+PINNED names REGISTRY = js ts rust php csharp python CITED capabilities.json toolchain.languageRegistry at the anchor commit — the closed registry
+PINNED charset SPACE-TAB = U+0020 U+0009 CITED R3 — the only characters trimmed; NBSP, U+0085, U+FEFF stay and so reach R3(a)
+PINNED charset VISIBLE = U+0021-U+007E CITED R3(a) — visible ASCII, the only characters that may follow a SIR-END without a throw
+PINNED charset HIDDEN = every code point outside VISIBLE CITED R3(a) — space, controls, DEL, every non-ASCII code point whether visible, invisible, private-use or unassigned; a fixed set, never a Unicode table
+PINNED chars SIR-CASE = s S i I r R CITED R3 — ASCII only: U+017F, U+0131 and U+0130 never stand for s or i
+PINNED grammar UNIT-NAME = one of A-Z a-z 0-9 _ then zero or more of A-Z a-z 0-9 _ - (ASCII only), the whole UNIT CITED R3(c) FINDINGS #77
+PINNED grammar LANG-ID = one of a-z then zero or more of a-z 0-9 (ASCII only), the whole rest of K CITED R6(b) FINDINGS #77 — lang:go passes the key grammar and R4 refuses it
+INVARIANT the result is sorted, never holds a duplicate, and every member is in REGISTRY; the input is never modified.
+OUT-OF-DOMAIN what the code does outside ENVELOPE, all reproduced: every shape violation throws.
+  1. The input itself not a map throws (R1).
+  2. sirFiles not a list, or an element not text, throws (R2). variants neither a map nor none throws (R5).
+  3. A variant that is not a map, whose lang is not text, or whose sir is not text naming a .sir file, throws (R6a); a
+  variant key outside package / lang:<id> throws (R6b).
+ORACLE value -> oracles/languages_of.json  CANONICAL-SHA256 8c9d31d3992f56852ec43f596bc0160638d27cdb9aa1dbdbabb81a93547bfed9
+SCOPE IN: R1–R7, OUT-OF-DOMAIN 1–3. OUT: deciding what the languages mean (harnessing, toolchains) — the caller's job.
+PROVENANCE rederive@bb8ded84fa50 cli/features.mjs (languagesOf, langOfPath, SIR_TAIL, HIDDEN_TAIL) and cli/capabilities.json
+  (toolchain.languageRegistry), MIT. Round 5 (2026-10-27, REDERIVE_SELF_PLAN Tier 1) against the fixed gate (FINDINGS #77),
+  through seams/languages_of.mjs (the returned set listed in iteration order, which the code sorts).

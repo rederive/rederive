@@ -1,0 +1,25 @@
+UNIT parse_wire
+LANG js
+PRIMARY-SHA256 4c4e81554252a1204b31465947429f7ed248b5f7d92b440fde8d9c576c9ef1a6
+SIG parse_wire(line: string): null | boolean | number | bigint | string | Array | object
+NOTE default export
+ABI text = string (UTF-16; a lone surrogate code unit is representable); f64 = number (IEEE-754 double; -0 preserved); the
+  exact integer of R6 = bigint; bool = boolean; none = null; list = Array; map = a plain object (Object.prototype) whose
+  entries are OWN enumerable properties — a "__proto__" key is an own property, never the prototype. Key order is
+  immaterial (the canonical form sorts). A throw (R1, R5, R8, OUT-OF-DOMAIN) is a thrown Error; the message is not graded.
+  ES module default-exporting the function; imports nothing.
+ENVELOPE widening: results holding a bigint (R6) or a lone surrogate (R3), and non-string arguments (OUT-OF-DOMAIN: a
+  throw, never converted with String()).
+MECHANISM a hand-written recursive-descent reader over the string's UTF-16 code units, each numeral kept as its source
+  text. Do NOT use JSON.parse: on the authority's Node 24.16 it carries a key cache across calls (after a key that is one
+  backslash, a later one-escape key such as "\t" reads back as the backslash), and the oracle holds exactly that sequence of
+  lines; it also yields Infinity where R5 throws and has no R8
+  limit. Number(text) realizes the R5 rounding. R6: for an
+  INTEGER-SPELLING numeral whose Number is not a safe integer, return BigInt(text) unless the Number is finite and
+  BigInt(Number) equals it. Build maps with Object.defineProperty so
+  "__proto__" is own. OUT-OF-DOMAIN: throw first when typeof line is not
+  'string'.
+DEPENDS-ON none
+PINNED regex INTEGER-SPELLING = /^-?[0-9]+$/ CITED R6 — no fraction, no exponent; tested on the numeral's source text
+PINNED regex NUMERAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/ CITED R1 R5 — matched at the read position
+PROVENANCE rederive@f68cca701417 cli/lang/rust.mjs parseWire (byte-identical to 1d1861440f2c and 6199e2cc8b75). Language file re-cut 2026-10-27 with the primary; round-5b delta (FINDINGS #120).

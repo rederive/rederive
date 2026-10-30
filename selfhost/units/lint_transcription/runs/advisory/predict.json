@@ -1,0 +1,134 @@
+{
+ "status": "ok",
+ "unit": "lint_transcription",
+ "primary": "selfhost/units/lint_transcription/sir/lint_transcription.sir",
+ "primarySha256": "b2ececf14eac4abb39082b925650a8c58ef7602ee2ee2e491830442bc97851be",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Lines. Scanning left to right, a BREAK is a CR (000D) immediately followed by a line feed (000A) — the pair is ONE break — or else a lone CR, or a lone line feed. The text is split at every BREAK and nowhere else: LINE SEPARATOR (2028), PARAGRAPH SEPARATOR (2029), NEXT LINE (0085), form feed and vertical tab stay inside their line. Lines are numbered from 1. A text of k breaks has k + 1 lines, so the empty text is one empty line, a trailing break adds an empty last line, and CR CR LF is two breaks (a lone CR, then a pair). Normalization, applied to every line before anything else reads it, in this order: first, the line's LEAD is its maximal leading run of spaces (0020), tabs (0009) and BYTE ORDER MARKs (FEFF), in any mix, possibly empty; every FEFF of the LEAD is removed and its spaces and tabs are kept in their order (so space, FEFF, space, FEFF, x becomes space, space, x; a FEFF after any other character stays, and one pass is final: the lead left behind holds no FEFF); then every space and tab at the very end of the line is removed (a run of them; any other trailing WS character, a no-break space or a FEFF for one, stays). Every later rule reads the NORMALIZED line, and its \"end of the line\" is the normalized end: a trailing space or tab is never seen by any shape, while a trailing no-break space is an ordinary WS character of the line.",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R2",
+   "text": "Stripping. Each line is copied into its STRIPPED form, in which every QUOTED span is replaced by the two characters of an empty quoted literal (a pair of double quotes). Spans are found left to right. A double quote OPENS a span only (a) at a TOKEN START: it is the first character of the line, or the character just before it in the line is one of space, tab, \"(\", \"[\", \"{\", \",\", \"=\", \":\", \";\", \"|\", \"<\", \">\", \"!\", \"&\", \"-\", \"~\" (16 OPENERS; any other neighbour opens nothing: a letter, a digit, \"+\", \"*\", \"?\", \"/\", \")\", \"]\", \"}\", \".\", a single quote, a no-break space, a FEFF); or (b) directly after a span: it is the character right after the closing quote of the span just found, so two literals written side by side are two spans. A double quote that follows a quote which closed nothing (a quote that never opened) opens nothing by (b), and a quote inside an earlier span is never considered. From an opening quote the span is that quote, a sequence of items, and the first double quote that ends the sequence. An item is a backslash together with the ONE character after it, whatever it is (a double quote, a backslash, LS, PS, an astral character), or one character other than a double quote or a backslash. When the line ends first (a backslash that is the last character included) the quote is UNCLOSED: it opens no span, and no later quote of the line opens one. Single quotes and backticks never open a span. Only the shape tests (R3) read the stripped form; R6's text is the normalized line, unstripped.",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "R3",
+   "text": "Shapes. Each row of TABLE SHAPES is tested once against the stripped line; a row matches when its condition holds anywhere in the line (only the narration row is tied to the line start). Every matching row is one hit. Letters are case-sensitive except in the narration row. A line may yield several hits; a row never yields two hits on one line.",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE SHAPES row 1",
+   "text": "\"typeof\"                     | the word \"typeof\", bounded",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE SHAPES row 2",
+   "text": "\"arrow fn\"                   | the two characters \"=>\" side by side",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE SHAPES row 3",
+   "text": "\"method call\"                | a full stop, then one of \"match\" \"reduce\" \"slice\" \"test\" \"exec\" \"split\" \"map\" \"filter\", then \"(\" — nothing between them",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE SHAPES row 4",
+   "text": "\"JS builtin\"                 | a BOUNDARY, one of \"parseInt\" \"parseFloat\" \"Number\" \"String\" \"Math\", then zero or more WS characters, then a full stop or \"(\"",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE SHAPES row 5",
+   "text": "\"if (\"                       | a BOUNDARY, the word \"if\", zero or more WS characters, then \"(\"",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE SHAPES row 6",
+   "text": "\"return\"                     | the word \"return\", bounded",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE SHAPES row 7",
+   "text": "\"loop\"                       | a BOUNDARY then \"for\", one or more WS, one or more WORD, one or more WS, then \"in\" followed by a BOUNDARY; or a BOUNDARY then \"for\" or \"while\", zero or more WS, then \"(\"",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE SHAPES row 8",
+   "text": "\"STEP/NODE/BRANCH narration\" | S begins with zero or more WS, at most one \"#\", zero or more WS, one of \"STEP\" \"NODE\" \"BRANCH\" \"GATE\" in any ASCII letter case, one or more WS, then a WORD character or a hyphen",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "TABLE SHAPES row 9",
+   "text": "\"indexed assignment\"         | a WORD character, \"[\", one or more WORD characters, \"]\", zero or more WS, then OP, then an equals sign whose next character, if any, is neither an equals sign nor \">\"; OP is nothing or exactly one of \"**\" \"<<\" \">>\" \">>>\" \"&&\" \"||\" \"??\" \"-\" \"+\" \"*\" \"/\" \"%\" \"&\" \"|\" \"^\" written with no WS inside or before the equals sign (an equals sign ending S qualifies; \"==\" and \"=>\" never do at that sign; \"<=\", \">=\", \"!=\" and \"?=\" are not OP forms)",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "TABLE SHAPES row 10",
+   "text": "\"dialect regex literal\"      | some occurrence of the pair \"/^\" (any, not only the first) and, later in the line and not overlapping it, the pair \"$/\", with no LT character between them",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE SHAPES row 11",
+   "text": "\"JS value name (say none)\"   | the word \"null\" or the word \"undefined\", bounded",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE SHAPES row 12",
+   "text": "\"assignment statement\"       | ASSIGN (R7)",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "TABLE SHAPES row 13",
+   "text": "\"capture-group reference\"    | a BOUNDARY, the word \"group\", exactly one ASCII digit, then a BOUNDARY",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R4",
+   "text": "A hit is the map (line = the line's number, what = the row's what text exactly as in the table, text = R6). The hits list is ordered by line number, and within a line by the row order of TABLE SHAPES.",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R5",
+   "text": "Counts. A line is BLANK when it is empty or consists only of WS characters. The entry lines is the number of non-BLANK lines. The entry commentLines is the number of lines whose first non-WS character is \"#\" (a comment line is non-BLANK and counts in lines too). The entry hitLines is the number of distinct line numbers among the hits. The entry density is hitLines / lines as a double (correctly rounded division, not rounded further: 1 of 3 is 0.3333333333333333, 1 of 10 is exactly the double nearest 0.1, the same double as 3 of 30), and 0 when lines is 0. A BLANK line never has a hit, so density never exceeds 1.",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "R6",
+   "text": "The text of a hit is the normalized line (R1, before R2) with every leading and trailing WS character removed, then cut to its first 96 characters (code points: a character outside the Basic Multilingual Plane counts as ONE and is never split); a shorter text is kept whole.",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R7",
+   "text": "ASSIGN holds on S when there is an equals sign E in S such that all of these hold: (a) skipping back from E over zero or more WS characters reaches a run of WORD characters (the whole maximal run) that holds at least one ASCII letter or underscore — so \"a1 = b;\" qualifies and \"1 = 2;\" does not; (b) after E come zero or more WS characters and then a character C that is neither an equals sign nor WS — so a double equals sign or a compound operator such as \"+=\" never qualifies at that sign; (c) the last non-WS character of S is a semicolon standing strictly after C, with no LT character between C and it.",
+   "ambiguity": 0.5
+  }
+ ],
+ "ranked": [
+  "R2",
+  "R7",
+  "TABLE SHAPES row 9",
+  "R5",
+  "TABLE SHAPES row 12",
+  "R3",
+  "TABLE SHAPES row 10",
+  "R1",
+  "R6",
+  "TABLE SHAPES row 8",
+  "TABLE SHAPES row 7",
+  "TABLE SHAPES row 4",
+  "TABLE SHAPES row 5",
+  "TABLE SHAPES row 3",
+  "R4",
+  "TABLE SHAPES row 11",
+  "TABLE SHAPES row 13",
+  "TABLE SHAPES row 1",
+  "TABLE SHAPES row 6",
+  "TABLE SHAPES row 2"
+ ],
+ "at": "2026-10-28T02:47:56Z"
+}

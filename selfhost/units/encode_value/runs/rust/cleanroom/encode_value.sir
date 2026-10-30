@@ -1,0 +1,158 @@
+UNIT encode_value
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@7b348e351c9f cli/sir/canon.mjs (unchanged since bb8ded84fa50) — encode(value, parseType(type)) with no options (the neutral codec), as
+  composed by selfhost/seams/encode_value.mjs; the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG encode_value(value: json, type: text) -> json
+ENVELOPE value is any json tree (numbers include NaN, the infinities and -0), including the reserved shapes R2 and R4
+  give meaning to; type is any text. Throws are IN: a type text outside the grammar, a malformed reserved shape (R4), a
+  value past the nesting cap (R13) and a value that does not fit its type all throw. The js file widens value to
+  host-only kinds (an absent value, arbitrary-precision integers, byte strings, keyed collections with non-text keys,
+  text holding an unpaired surrogate, lists with holes).
+DEPENDS-ON none
+DESCRIPTION The sir-canonical-v1 encoder: parse an abstract SIR type, then turn a value into the canonical tagged tree for
+  that type, or throw. Every node of the result is a map with a member t naming its kind (TABLE NODES); members v, cu and
+  bits carry the payload. The member order of a node is immaterial (results are compared canonically); list order is
+  significant.
+BEHAVIOR
+R1 TYPE GRAMMAR. The type text is parsed completely before the value is looked at; any failure throws, whatever the
+  value. The text must be exactly one TYPE, where TYPE is one ALT or two or more ALTs joined by "|" (a union, in written
+  order), and ALT is one of: a scalar name from TABLE NODES (text bytes bool none i64 u64 f64 json); "tuple[" TYPE
+  ("," TYPE)* "]" (one or more items); "list[" TYPE "]" (exactly one); "map[" TYPE "," TYPE "]" (exactly two);
+  "record[" FIELD ("," FIELD)* "]" with FIELD = NAME ":" TYPE (one or more fields, names distinct). A NAME is a letter or
+  "_" followed by letters, digits or "_" (ASCII only), and a word is always read greedily, so "textx" is an unknown name.
+  Space, tab, carriage return and line feed may appear between ANY two tokens (a keyword and its "[" included) and at
+  both ends — no other character is whitespace. Names are case-sensitive. So "text|", "text || none", "list[]",
+  "record[]", "map[text]", "list[f64, text]", "record[text]", "record[0: none]" and "text none" all throw, while
+  " record [ a : list [ f64 ] ] " parses. Composite types (tuple, list, map, record) nest at most MAX_DEPTH deep: a
+  composite with MAX_DEPTH composites around it throws (16 nested lists around text parse, 17 throw); siblings do not
+  add up (a tuple of two 15-deep lists is 16 deep).
+R2 UNREACHABLE ALTERNATIVES. A union (at any depth) throws the parse when a later alternative is COVERED by any earlier
+  one of the same union. COVERS(a, b) — earlier a, later b — holds exactly when ANY of these holds:
+  (a) SAME: a and b are the same type, where a union compares as the SET of its alternatives and a record as the SET of
+  its named fields (orders immaterial; names and field types count), every other composite position by position;
+  (b) a is json and b is JSON-REACHED: none, bool, f64, text or json; a list of a JSON-REACHED item; a tuple whose items
+  are all JSON-REACHED; a map whose key type is exactly the scalar text (not a union holding it) and whose value type is
+  JSON-REACHED; a record whose field types are all JSON-REACHED; a union of JSON-REACHED alternatives;
+  (c) STRUCTURAL: both lists and COVERS(item, item); both tuples of the same length and COVERS item by item; both maps
+  and COVERS on the key types and on the value types; both records and EVERY field of a has a field of the same name in
+  b that it COVERS (b may have more fields, a may not);
+  (d) b is a union and a COVERS every alternative of b; or a is a union and some alternative of a COVERS b.
+  Nothing else counts (a record never covers a map, a list never a tuple, json never bytes, i64 or u64). So
+  "none | none", "json | none", "json | tuple[text]", "json | record[a: text]", "list[json] | list[text]",
+  "list[text | json] | list[json]", "map[text, json] | map[text, text]" and "record[a: text] | record[a: text, b: none]"
+  throw, while "none | json", "json | i64", "json | tuple[i64]", "json | map[json, f64]",
+  "json | map[text | none, f64]", "list[text] | list[text | none]", "tuple[json, json] | tuple[text]",
+  "record[a: text, b: none] | record[a: text]" and "tuple[text, none] | tuple[none, text]" parse.
+  NOTE coverage is decided on types alone: an alternative R2 refuses may still be the only one that accepts some value
+  (the absent value under none, a record's unread members) — the parse refuses it all the same (FIDELITY package).
+R3 THROW OBSERVATIONS. At every TYPED position — the top, each union alternative, each tuple or list item, each map key
+  and value, each record field, and the top of a json position — the value is first tested, before the type is
+  consulted: a map with EXACTLY ONE member, named "__throw" or "__threw", whose value is text encodes as the node t throw
+  with msg = that text. A second member of any kind makes it an ordinary map ({"__throw": "x", "a": 1} is a map, and
+  {"__t": "num", "v": "5", "__throw": "x"} is the num tag of R5); a non-text marker value is an ordinary member. Only a
+  map is ever a throw observation (never a list), and an ESCAPED map (R5) never is. Inside json content (below the top
+  of a json position) such maps are ordinary maps.
+R4 ABSENT. The absent value arises from a record field the value lacks (R8) or an undef tag (R5). It encodes as t none
+  where the type is none or a union with a none alternative, and throws everywhere else — json included.
+R5 LEGACY TAGS. After R3, a map holding a text member "__t" (and not ESCAPED) is a v0.4 codec tag and is replaced by the
+  value it stands for before the type is applied — at every typed position, and at every node inside json content:
+  num: member v must be text: "NaN", "Infinity", "-Infinity" or "-0" give those numbers; otherwise v must spell a json
+  number literal (optional "-", then "0" or a digit 1-9 and more digits, optional "." and one or more digits, optional
+  "e" or "E", optional sign, one or more digits) and gives its nearest double. The literal is a VALUE, not a spelling:
+  "1E3", "1000.0" and "1000" all give 1000. It throws when that double is infinite ("1e999", "-1e999"); when it is zero
+  of either sign while the MANTISSA (the literal before any "e" or "E") holds a digit 1-9 — an underflow: "1e-400",
+  "-1e-400", "2e-324", "0.1e-323", while "3e-324" gives the least subnormal; and when it is -0 ("-0.0", "-0e5"). So a
+  zero is accepted only from an unsigned literal whose mantissa digits are all 0 ("0", "0e5", "0.000"). Anything else
+  throws ("", "00", "+1", ".5", a non-text v).
+  bigint: v must be text spelling a decimal integer in its one canonical form ("0", or an optional "-" then a digit 1-9
+  and more digits — so "-0" and "007" throw); it gives that exact integer (an integer kind that is not a number, R6);
+  anything else throws.
+  undef: the absent value (R4).
+  obj (the escape of a user map): member v must be a map — none, a missing v, a list, text, a number or a bool throws.
+  The result is a NEW map, ESCAPED, holding v's entries. ESCAPED means the new map's own members "__t", "__throw" and
+  "__threw" are DATA at that node wherever it is then encoded (a union retries alternatives on the same escaped map);
+  its entry VALUES are ordinary, so R3 and R5 apply to them.
+  Any other tag name throws. Members of a tag map beyond those named are ignored ({__t: "num", v: "5", x: 1} gives 5).
+R6 SCALARS AND CONTAINERS encode by TABLE NODES. A value outside a row's accept set throws (inside a union: the next
+  alternative is tried).
+TABLE NODES — type | accepts | node
+  none | none or the absent value | t none
+  bool | a bool | t bool, v = the bool
+  text | well-formed text | t text, v = the text, cu = "utf8"
+  f64 | any number | t f64, v = RENDER(x), bits = BITS(x)
+  i64 | an integral number or an integer, within -2^63 .. 2^63-1 | t i64, v = the exact value in decimal ("-" for negatives, no leading zeros; -0 gives "0")
+  u64 | an integral number or an integer, within 0 .. 2^64-1 | t u64, v as for i64
+  bytes | a byte string | t bytes, v = "base64:" then the standard base64 alphabet with "=" padding (RFC 4648 section 4); none in json
+  json | see R10 | the json node tree
+  tuple[T1..Tn] | a list of exactly n items | t tuple, v = item i encoded under Ti
+  list[T] | any list | t list, v = each item encoded under T
+  map[K, V] | a map or a keyed collection (not a list) | t map, v = the entries as pairs [key encoded under K, value encoded under V], sorted by R9
+  record[...] | a map (not a list, not a keyed collection) | t record, v = one pair [field name as plain text, field encoded under its type] per field, in written order
+  union | see R7 | the first alternative's node
+R7 UNIONS. Tags are resolved once (R5) — a malformed tag at the union's own position throws the union before any
+  alternative is tried — then the alternatives are tried in written order on that value and the FIRST that encodes it
+  without throwing — anywhere inside it, R13 included — wins; when every alternative throws, the union throws. A throw
+  anywhere inside a list, tuple, map, record or json content throws that whole container. So "i64 | f64" gives 1 as
+  i64 and "f64 | i64" gives it as f64.
+R8 RECORD READS. A field reads the map's OWN entry of exactly that name (a key spelled __proto__ or constructor is an
+  ordinary key), or the absent value when there is none. A map position takes the map's own entries; over a map the keys
+  are always text, so a key type that rejects text (i64, none, …) throws on any non-empty map.
+R9 MAP ORDER — one order for every map, typed (map[K, V]) and json alike. Entries sort ascending by a sort key compared
+  as sequences of 16-bit code units: a text key's sort key is the key text itself; any other key's is CANON of its
+  encoded node (R11). Entries with equal sort keys keep their input order (reachable only through a host keyed
+  collection).
+R10 JSON. A json position (after R3 at its top) encodes recursively, R5 applied at every node: none -> t none; bool; a
+  number -> the f64 node; text -> the text node (well-formed); a list -> t list of its items' json nodes; a map -> t map
+  whose pairs are [text node of the key, json node of the value], sorted by R9. Everything else throws: the absent value,
+  an integer that is not a number, a byte string, a keyed collection, a list with a hole, a non-plain host object.
+R11 CANON. The canonical string of an encoded node: compact json text with map members sorted by key (16-bit code
+  units), strings written as ESC inside double quotes, booleans as true / false, lists in order; an f64 node is reduced
+  to its members bits and t, a throw node to t alone. So an i64 key reads {"t":"i64","v":"10"} (decimal text order: "10"
+  before "9"), an f64 key {"bits":"…","t":"f64"}; against a text key the comparison is the raw text versus that string.
+TABLE ESC — character | written as
+  double quote | "\""
+  backslash | "\\"
+  8, 9, 10, 12, 13 | "\b", "\t", "\n", "\f", "\r"
+  any other code 0-31 | "\u00" then two lowercase hex digits
+  every other character | itself
+R12 RENDER(x) is the ECMA-262 Number::toString(x) radix-10 rendering (the fewest digits that round-trip and, among
+  digit strings of that length, the one closest to x; exponent form below 1e-6 and from 1e21, written "1e+21", "1e-7",
+  "1.5e-7"; integral values below 1e21 in full positional form, so 123456789012345680000), except -0 renders "-0";
+  NaN, Infinity and -Infinity render "NaN", "Infinity", "-Infinity". BITS(x) is the IEEE-754 binary64 bit pattern as 16
+  lowercase hex digits, most significant first; every NaN gives "7ff8000000000000".
+R13 NESTING CAP. Values have depths: the whole value is depth 0 and each CHILD value is one deeper than its parent — a
+  list or tuple item, a map key and a map value, a record field value (the absent value of a missing field included),
+  and inside json content a list item and a map value. A union alternative, the json position and a legacy tag (R5)
+  are the SAME value at the same depth; an escaped map's entry values (R5 obj) are its children. Encoding a value at
+  depth greater than MAX_VALUE_DEPTH throws (inside a union: an ordinary alternative failure). So under "json" 100
+  nested lists around a scalar encode (the scalar sits at depth 100) and 101 throw; 100 nested lists around an EMPTY
+  list encode; under "list[json] | none" and under 16 typed lists around json the same 101-deep value throws. Typed
+  positions alone cannot reach the cap (types nest at most MAX_DEPTH, R1); it is met inside json content.
+PINNED const MAX_VALUE_DEPTH = 100 CITED R13 — canon.mjs MAX_VALUE_DEPTH (#78: one value-depth model, under serde_json's 128)
+PINNED const MAX_DEPTH = 16 CITED R1 — canon.mjs MAX_DEPTH, the composite nesting cap of the type grammar
+INVARIANT the result is a pure function of the value and the type; the value is never changed.
+INVARIANT every node the encoder produces is one of TABLE NODES' kinds or t throw; cu is always "utf8" in this unit.
+OUT-OF-DOMAIN malformed reserved shapes throw (R5: a bad num, bigint or obj payload, an unknown tag name), and so do a bad
+  type text (R1, R2) and a value past the nesting cap (R13). Three silent behaviors remain, all IN and pinned by the
+  oracle: a record ignores the value's members it does not name (R8); a map with a marker member and any other member
+  is an ordinary map (R3); a tag ignores its unnamed members (R5).
+ORACLE value -> oracles/encode_value.json  CANONICAL-SHA256 65c6df5f5b61f31064ac2a88b876ca3ce00605b2aac4e145a994dabe2361ffa9
+SCOPE IN: R1-R13 over json values (tags and escapes included) and arbitrary type text, through the shared oracle; the js
+  file's widening through the js extension oracle (integers beyond the numbers, keyed collections with text and integer
+  keys, unpaired surrogates) and R13's refuse side. Every oracle codec — the shared one and the js extension's — applies the
+  same 100-value cap to the ARGUMENT and to the RESULT, and an encoded tree nests two levels per list level and three per map
+  level (one more for a leaf node's members), so a result fits only while the value nests at most 49 list levels or 33 map
+  levels. R13 is therefore pinned from both sides of that gap: ACCEPT by the deepest probes whose result fits (49 lists, 33
+  maps, an escaped map's entry at 33 — shared vectors), REFUSE by values past the cap whose result is a throw (101 lists, 101
+  maps, 16 typed lists around 85, an escaped map at 100 whose entry is at 101 — their arguments are past the shared codec's cap,
+  so they ride the js extension). Values nested 50..100 list levels (34..100 map levels) are IN the rule but carried by no
+  oracle. R1's type cap (16 parse, 17 throw) is shared. The encoder options (the js-native utf16 codec, its absent-value marker) are not
+  reachable through this seam — OUT. The codec's marker escape for returned values is a separate function — OUT.
+PROVENANCE rederive@7b348e351c9f (rederive, the trust kernel; see LICENSE in the authority tree), cli/sir/canon.mjs:
+  parseType and its reader (typeKey, inJson, covers), encode, encodeJson, legacyToNative, plainObj, marker,
+  throwMarker, MAX_DEPTH, MAX_VALUE_DEPTH, textTag, f64bits, f64str, canonicalString. Round 5 (2026-10-27) re-cut for
+  FINDINGS #74, #78 and #79 (structural coverage, json covering tuples and records, one value-depth model with the caps
+  at 16 and 100); rules probed against the real function on a 500,000-input seeded sample, 0 mismatches. Round 5c
+  (FINDINGS #137): no probe's result nests past the codec cap; the R13 probes sit at the result bound or past the cap.

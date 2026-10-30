@@ -1,0 +1,56 @@
+{
+ "status": "ok",
+ "unit": "vector_set_sha",
+ "primary": "selfhost/units/vector_set_sha/sir/vector_set_sha.sir",
+ "primarySha256": "8b5022fdc658ffc607a31321298cfe965b315f8427a5ff1286efbe397db4fe00",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "The oracle must be a map holding key \"frozen\" and key \"heldout\", each bound to a list; otherwise -> throws. That covers an oracle that is not a map (list, text, f64, bool, none), a missing key, and a key bound to anything but a list (none, a map, text, empty text included). Every other top-level key is ignored and never examined.",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "R2",
+   "text": "Every case, in both lists, must be a map; otherwise -> throws (none, text, a list, an f64). From a case only the values under \"args\" and \"expected\" are taken, and both keys must be present (a missing one -> throws); every other key of the case (\"name\", \"note\", anything) is ignored and never examined.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R3",
+   "text": "The PROJECTION is the map with exactly two entries: \"frozen\" -> the list of {\"args\": A, \"expected\": E} built from the frozen cases in their order, and \"heldout\" -> the same from the heldout cases. Order is preserved, duplicate cases are kept, nothing is sorted or de-duplicated, and an empty list stays empty.",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R4",
+   "text": "CANON is canonical_string(PROJECTION) (unit canonical_string); a throw there is a throw here. Summary of that contract: text renders as a JSON string literal (quotation mark, reverse solidus, backspace, form feed, line feed, carriage return and tab as their two-character short escapes; every other control 0x00..0x1F as the six-character unicode escape with LOWER-case hex; everything else raw, non-ASCII included); bool as true/false; a list as [e1,e2,..]; a map as {\"k\":v,..} with keys sorted ascending by 16-bit code units; no whitespace anywhere outside text. A map whose \"t\" is exactly the text \"f64\" renders as {\"bits\":B,\"t\":\"f64\"} and requires \"bits\" to be text of exactly 16 characters from 0-9 and lower-case a-f (else throws); a map whose \"t\" is exactly \"throw\" renders as {\"t\":\"throw\"}; in both the other entries are dropped unexamined. A raw f64 or a none reached by the rendering throws. Hence CANON always begins {\"frozen\":[ and each case renders as {\"args\":A,\"expected\":E}. canonical_string's depth cap is R5. CITED ANCHOR SIR_SCHEMA §10",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "R5",
+   "text": "NESTING CAP (canonical_string's depth rule, seen through the projection). Depth is counted in the PROJECTION: the projection itself is depth 0 and every value directly inside a list or a map (a map's values; keys are never counted) is one deeper than its container, so the frozen and heldout lists are depth 1, each case map depth 2, and every case's args and expected depth 3. The rendering throws as soon as it reaches a value deeper than 416 (= 4 × 100 + 16, from the codec's 100-value cap). Only REACHED values count: the dropped entries of an f64 or throw node are never measured, while the texts such a node does render (\"t\" and \"bits\" of an f64, \"t\" of a throw) sit one level below the node. Measured from args or expected as depth 0: a reached value at depth 413 renders, one at 414 or deeper -> throws; an f64 or throw node renders at depth 412 at most. Nesting of any depth past the cap is this throw. A wide but shallow tree never throws for its size. CITED FIDELITY package",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R6",
+   "text": "The result is SHA-256 (FIPS 180-4) of CANON's bytes in the 8-bit Unicode encoding (each scalar value as 1 to 4 bytes, §10's cu utf8 form), written as 64 LOWER-case hexadecimal digits. CITED FIDELITY package",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "R7",
+   "text": "Whether the oracle throws is the observation; the message is a display hint and is not part of the contract. When several causes are present, any of them may be the one reported.",
+   "ambiguity": 0.31
+  }
+ ],
+ "ranked": [
+  "R4",
+  "R5",
+  "R1",
+  "R7",
+  "R2",
+  "R6",
+  "R3"
+ ],
+ "at": "2026-10-28T02:49:08Z"
+}

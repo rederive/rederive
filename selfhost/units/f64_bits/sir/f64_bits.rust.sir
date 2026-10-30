@@ -1,0 +1,14 @@
+UNIT f64_bits
+LANG rust
+PRIMARY-SHA256 c6667a66d269b295c9a9e05d023b1f91bd541e5e65c8971a537aed79fb8e90f1
+SIG pub fn f64_bits(x: f64) -> String
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn f64_bits) — no main, no I/O; the
+  verifier owns the harness and decodes the argument from its canonical bits. f64=f64 (IEEE-754 binary64); text=String.
+  std only, no dependencies.
+MECHANISM raw bits (R1) = f64::to_bits (the u64 encoding, independent of host endianness); render with format!("{:016x}", b)
+  — lowercase hex, zero-padded to 16.
+MECHANISM NaN rule (R2) = test x.is_nan() FIRST and return "7ff8000000000000": to_bits preserves a NaN's sign and payload
+  (and f64::NAN's own bits are not guaranteed by the language to be 0x7ff8000000000000), so never rely on to_bits for a NaN.
+MECHANISM -0 (R3): never branch on x == 0.0 (true for -0.0); to_bits keeps the sign bit.
+DEPENDS-ON none
+PROVENANCE contract from rederive@b329a40412df cli/sir/canon.mjs f64bits + hex16; no Rust reconstruction yet.

@@ -1,0 +1,162 @@
+UNIT longest
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG longest(arr: any) -> any        # default export: module.exports = function(arr) { ... }
+
+DEPENDS-ON none                     # zero runtime deps; pure synchronous function
+
+# --------------------------------------------------------------------------
+# SUMMARY
+# Returns the element of `arr` with the greatest numeric `.length`. On ties of
+# `.length`, the FIRST-encountered element wins (strict `>` comparison, never
+# replaced by a later equal). The element ITSELF is returned (the array, the
+# object, the string) -- NOT its index and NOT its length -- with ONE exception:
+# a winning NUMBER element is returned as its String() form (see node n3/n5b).
+# The reading property is `.length`. There is NO injected seam; fully pure and
+# deterministic over its argument.
+# --------------------------------------------------------------------------
+
+BEHAVIOR   # ordered pipeline; node-numbered; matches index.js lines 10-49 exactly
+
+  n0  GUARD non-array:
+        if Array.isArray(arr) is false:
+          THROW TypeError, message EXACTLY "expected an array".
+        # Applies to EVERY non-array: null, undefined, string, number, boolean,
+        # bigint, plain object, RegExp, Set, Map, Uint8Array/Buffer, function.
+        # An array-LIKE object ({length:n}, arguments) is NOT an array -> THROWS.
+
+  n1  EMPTY:
+        let len = arr.length.
+        if len === 0:
+          RETURN undefined.        # the literal value undefined
+
+  n2  SEED from first element (arr[0]) -- NOTE: NO numeric-length guard here:
+        let val = arr[0].
+        if typeof val === 'number':
+          val = String(val).       # e.g. 42 -> "42", 0 -> "0", NaN -> "NaN",
+                                   # Infinity -> "Infinity", -0 -> "0"
+        let longest = val.length.  # property read on the (possibly stringified) seed
+        # SUB-CASES of the seed read (CRITICAL -- this read is UNGUARDED):
+        #   (a) seed is null OR undefined (incl. a hole at index 0):
+        #         arr[0] is null/undefined -> reading `.length` THROWS a native
+        #         TypeError. Message text is the V8 runtime message
+        #         "Cannot read properties of null (reading 'length')" or
+        #         "...of undefined (reading 'length')". Treat as a THROW path;
+        #         grade on the throw, not on exact native message text.
+        #   (b) seed is a string / array / typed-array / Buffer / string-object:
+        #         longest = a NUMBER (its character/byte count). Normal path.
+        #   (c) seed is a (stringified) number: longest = the digit/string length.
+        #   (d) seed is an object WITHOUT a numeric `.length` (e.g. {foo:1}, {}),
+        #       OR a boolean, OR a bigint, OR a Symbol-less object, OR a RegExp,
+        #       OR a Set/Map (Set/Map have no `.length`):
+        #         longest = undefined  (typeof undefined, not a number).
+        #         *** POISON STATE *** -- see n4 tie/replace rule: because the
+        #         replace test is `elen > longest` and (anyNumber > undefined)
+        #         is ALWAYS false, NO later element can EVER beat the seed.
+        #         Result: the first element is returned UNCHANGED regardless of
+        #         how long any later element is. (e.g. [{foo:1},"abcdefgh"] -> {foo:1}.)
+        let idx = 0.
+
+  n3  ITERATE remaining elements: while (++idx < len):
+        let ele = arr[idx].
+        n3a SKIP nullish: if ele == null (i.e. ele === null OR ele === undefined,
+            INCLUDING a sparse-array hole which reads as undefined):
+              continue (do not consider).
+        n3b STRINGIFY number: if typeof ele === 'number':
+              ele = String(ele).   # 12345 -> "12345" (len 5); NaN -> "NaN"
+                                   # (len 3); Infinity -> "Infinity" (len 8);
+                                   # 0 -> "0" (len 1).
+        n3c READ length: let elen = ele.length.
+            GUARD: if typeof elen !== 'number':
+              continue.            # skips booleans (no .length), bigints,
+                                   # objects/RegExp/Set/Map without numeric
+                                   # .length, etc. Note: this guard EXISTS in
+                                   # the loop but NOT for the seed (see n2).
+        n3d REPLACE (strict greater): if elen > longest:
+              longest = elen.
+              val = ele.           # store the POST-stringify ele (so a winning
+                                   # number is stored as its String() form).
+            else: keep current val (TIE keeps the earlier element -> FIRST wins).
+
+  n4  RETURN val.
+        # val is: the seed (n2) if never replaced; otherwise the last element
+        # that strictly increased `longest`. Returned AS-IS, except numbers are
+        # returned in their String() form (because that is what was stored).
+
+# --------------------------------------------------------------------------
+# WORKED EXAMPLES (all verified against longest@2.0.1 by execution)
+#   longest(["a","abcde","abc"])         -> "abcde"
+#   longest([])                          -> undefined
+#   longest(["only"])                    -> "only"
+#   longest([42])                        -> "42"            (number seed stringified)
+#   longest(["aa","bb"])                 -> "aa"            (tie -> first)
+#   longest(["a","bb","cc"])             -> "bb"            (first of the 2-len ties)
+#   longest(["xy","ab","cd"])            -> "xy"            (equal length keep first)
+#   longest(["a","aa","aaa","aa","a"])   -> "aaa"           (peak in middle)
+#   longest(["", "a"])                   -> "a"             (len 0 vs 1)
+#   longest(["", ""])                    -> ""              (tie -> first)
+#   longest(["x", null, "yyyy"])         -> "yyyy"          (null in loop skipped)
+#   longest(["ab", true])                -> "ab"            (boolean elen not number -> skip)
+#   longest(["ab", 12345n])              -> "ab"            (bigint elen not number -> skip)
+#   longest(["ab", {foo:1}])             -> "ab"            (obj no .length -> skip)
+#   longest([[1,2,3], "ab"])             -> [1,2,3]         (array .length 3 wins; element returned)
+#   longest(["ab", [1,2,3]])             -> [1,2,3]         (3 > 2 -> array wins)
+#   longest([new Uint8Array([1,2,3,4]),"ab"]) -> the Uint8Array (byteLength.length 4 > 2)
+#   longest([{length:5}, "ab"])          -> {length:5}      (object .length is numeric)
+#   longest([123, "abcd"])               -> "abcd"          (String(123) len 3 < 4)
+#   longest(["abcd", 123])               -> "abcd"          (4 > String(123) len 3)
+#   longest([NaN, "ab"])                 -> "NaN"           (String(NaN) len 3 > 2)
+#   longest([Infinity, "ab"])            -> "Infinity"      (len 8)
+#   POISON-STATE cases (seed lacks numeric .length -> first always returned):
+#   longest([{foo:1}, "abcdefgh"])       -> {foo:1}
+#   longest([true, "abcdefgh"])          -> true
+#   longest([{}, [1,2,3,4,5]])           -> {}
+#   longest([123n, "abcd"])              -> 123n
+#   THROW cases:
+#   longest(null) / longest("str") / longest(42) / longest({length:3})
+#                                        -> THROW TypeError "expected an array"
+#   longest([null, "abc"]) / longest([undefined,"abc"])
+#                                        -> THROW (seed .length on null/undefined)
+#   longest(holeAt0)  # e.g. (() => { const a=[]; a[2]="abc"; return a; })()
+#                                        -> THROW (arr[0] is undefined hole)
+
+ORACLE value -> oracle.json
+  # Pure: the oracle stores the literal return value (or the {__throw} marker
+  # the harness records for THROW paths). No seam, no expecteds authored by hand
+  # beyond what genInputs + the real package produce.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - Array.isArray gate + exact message "expected an array".
+    - Empty-array -> undefined.
+    - Seed read from arr[0] with number->String coercion, UNGUARDED .length
+      read (throws on null/undefined seed; yields undefined `longest` on a
+      seed lacking numeric .length, which POISONS replacement).
+    - Loop: nullish skip (== null catches null/undefined/holes), number->String
+      coercion, `typeof elen !== 'number'` skip guard, strict `>` replacement
+      (FIRST wins on ties), storing the post-stringify element.
+    - Return the stored element AS-IS (number elements stored/returned as String()).
+  CARRIED DATA: none. (No literal tables; nothing imported.)
+  OUT-OF-CONTRACT: none. Pure function, no state, no side effects, no I/O, no
+    ambient reads. The native V8 TypeError MESSAGE TEXT for the null/undefined
+    seed read is engine-version-dependent -- grade these on "did it throw",
+    not on exact message bytes. (The "expected an array" message IS exact and
+    in-contract.)
+
+  # Codec / envelope notes for the blind re-emitter:
+  #   * Returned element is whatever was stored; for arrays/objects/typed-arrays
+  #     the IDENTITY-by-structure is graded (the codec serializes Uint8Array,
+  #     Buffer, Set, Map, RegExp, bigint, NaN/Infinity faithfully).
+  #   * genInputs uses `null` (never raw `undefined`) for the nullish skip and
+  #     the throwing-seed cases, because null and undefined are behaviorally
+  #     identical here (== null catches both; arr[0].length throws for both)
+  #     and null is unambiguous under JSON.stringify(encode(args)).
+  #   * Array-LIKE objects ({length:n}) as the TOP-LEVEL arg are a THROW path
+  #     (not an array); as an ELEMENT they are a valid {length} read.
+
+PROVENANCE
+  package: longest@2.0.1
+  repo: https://github.com/jonschlinkert/longest  (jonschlinkert)
+  license: MIT (Copyright (c) 2014-2017, Jon Schlinkert)
+  source file: index.js  (module.exports = function(arr){...}, lines 10-49)
+  emission target: default export -> the re-emitter MUST `export default <fn>`.

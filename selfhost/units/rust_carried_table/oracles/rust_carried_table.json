@@ -1,0 +1,3284 @@
+{
+ "unit": "rust_carried_table",
+ "sig": "rust_carried_table(src: text, shape: text | none) -> map[text, json]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "pub static T: &[(&str, &str)] = &[(\"a\", \"x\"), (\"b\", \"y\"), (\"c\", \"\")];",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "y",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "pub const C: [(&str, [u8; 3]); 2] = [\n  (\"red\", [255, 0, 0]),\n  (\"blue\", [0, 0, 255]),\n];",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map text -> list[u8]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "blue",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "255",
+         "bits": "406fe00000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "red",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "255",
+         "bits": "406fe00000000000"
+        },
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "static P: phf::Map<&'static str, i32> = phf_map! {\n  \"a\" => 1,\n  \"b\" => -2,\n  \"c\" => 0x10,\n};",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, i64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-2",
+       "bits": "c000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "16",
+       "bits": "4030000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "fn f(s: &str) -> Option<f64> { match s { \"pi\" => Some(3.14), \"e\" => Some(2.71), \"nan\" => None, _ => None } }",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "e",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "2.71",
+       "bits": "4005ae147ae147ae"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "nan",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "pi",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "3.14",
+       "bits": "40091eb851eb851f"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "// (\"x\", 1) is a comment\nlet m = HashMap::from([\n  (\"on\", true), /* (\"y\", 2) /* nested */ (\"z\", 3) */\n  (\"off\", false),\n]);",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, bool]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "off",
+       "cu": "utf8"
+      },
+      {
+       "t": "bool",
+       "v": false
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "on",
+       "cu": "utf8"
+      },
+      {
+       "t": "bool",
+       "v": true
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"nl\", \"a\\nb\"), (\"tab\", \"\\t\"), (\"cr\", \"\\r\"), (\"nul\", \"\\0\"), (\"bs\", \"\\\\\"), (\"q\", \"\\\"\"), (\"ap\", \"\\'\"), (\"x\", \"\\x41\\x7e\"), (\"u\", \"\\u{1F600}\\u{e9}\"), (\"cont\", \"one \\\n     two\")]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, text]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "ap",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "'",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "bs",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\\",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "cont",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "one two",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "cr",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\r",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "nl",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "a\nb",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "nul",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\u0000",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "q",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\"",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "tab",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\t",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "u",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "😀é",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "A~",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(r\"raw\\n\", r#\"has \"quotes\"\"#), (\"bytes\", b\"ab\\x41\"), (br\"braw\", r##\"x\"#y\"##)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "braw",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x\"#y",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "bytes",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "abA",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "raw\\n",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "has \"quotes\"",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "impl<'a> T<'a> { fn g(x: &'a str) {} }\nconst C: &[(&str, char)] = &[(\"x\", 'x'), (\"nl\", '\\n'), (\"ap\", '\\''), (\"dq\", '\"'), (\"smile\", '\\u{263A}'), (\"hx\", '\\x41')];",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, text]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "ap",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "'",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "dq",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\"",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "hx",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "A",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "nl",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\n",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "smile",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "☺",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"hex\", 0xFF), (\"oct\", 0o17), (\"bin\", 0b1010_1010), (\"us\", 1_000_000), (\"suf\", 255u8), (\"f\", 2.5e-3), (\"f32\", 0.5f32), (\"f32i\", 16777216f32), (\"bf\", 0b1f32), (\"hexf\", 0x1f64), (\"neg\", -7i64), (\"E\", 1E3)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "E",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1000",
+       "bits": "408f400000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "bf",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "bin",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "170",
+       "bits": "4065400000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0.0025",
+       "bits": "3f647ae147ae147b"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "f32",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0.5",
+       "bits": "3fe0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "f32i",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "16777216",
+       "bits": "4170000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "hex",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "255",
+       "bits": "406fe00000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "hexf",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "8036",
+       "bits": "40bf640000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "neg",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-7",
+       "bits": "c01c000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "oct",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "15",
+       "bits": "402e000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "suf",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "255",
+       "bits": "406fe00000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "us",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1000000",
+       "bits": "412e848000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 255 as u8), (\"b\", -1 as i8), (\"c\", 1.0 as u8), (\"d\", 1e3 as u16), (\"e\", 0.5 as f32), (\"f\", 0.1 as f64), (\"g\", 7 as usize), (\"h\", -0x80 as i8), (\"i\", -0.0 as u8), (\"j\", 4294967295 as u32), (\"k\", 9007199254740991 as u64), (\"l\", -9007199254740991 as i128), (\"m\", [1 as i16, 2 as u32]), (\"n\", -2147483648 as i32), (\"o\", -0 as i64), (\"p\", 9007199254740992 as u64), (\"q\", -9007199254740992 as i64), (\"r\", -0i64), (\"s\", -0.0 as f64)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "255",
+       "bits": "406fe00000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-1",
+       "bits": "bff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "d",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1000",
+       "bits": "408f400000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "e",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0.5",
+       "bits": "3fe0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0.1",
+       "bits": "3fb999999999999a"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "g",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "7",
+       "bits": "401c000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "h",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-128",
+       "bits": "c060000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "i",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0",
+       "bits": "0000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "j",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "4294967295",
+       "bits": "41efffffffe00000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "9007199254740991",
+       "bits": "433fffffffffffff"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "l",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-9007199254740991",
+       "bits": "c33fffffffffffff"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "m",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1",
+         "bits": "3ff0000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "2",
+         "bits": "4000000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "n",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-2147483648",
+       "bits": "c1e0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "o",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0",
+       "bits": "0000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "p",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "9007199254740992",
+       "bits": "4340000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "q",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-9007199254740992",
+       "bits": "c340000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "r",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-0",
+       "bits": "8000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "s",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-0",
+       "bits": "8000000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"list\", [1, 2, 3]), (\"tup\", (1, \"a\", true)), (\"paren\", (5)), (\"one\", (5,)), (\"unit\", ()), (\"empty\", []), (\"some\", Some(4)), (\"ref\", &[&1, &2]), (\"nest\", [[1], [2, [3]]]), (\"none\", None), (\"opt\", [Some(1), None]), (\"sn\", Some(&None)), (\"sp\", Some((None))), (\"ss\", Some(&Some(2)))]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, json]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "empty",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": []
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "list",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1",
+         "bits": "3ff0000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "2",
+         "bits": "4000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "3",
+         "bits": "4008000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "nest",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "list",
+         "v": [
+          {
+           "t": "f64",
+           "v": "1",
+           "bits": "3ff0000000000000"
+          }
+         ]
+        },
+        {
+         "t": "list",
+         "v": [
+          {
+           "t": "f64",
+           "v": "2",
+           "bits": "4000000000000000"
+          },
+          {
+           "t": "list",
+           "v": [
+            {
+             "t": "f64",
+             "v": "3",
+             "bits": "4008000000000000"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "none",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "one",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "5",
+         "bits": "4014000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "opt",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1",
+         "bits": "3ff0000000000000"
+        },
+        {
+         "t": "none"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "paren",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "5",
+       "bits": "4014000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "ref",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1",
+         "bits": "3ff0000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "2",
+         "bits": "4000000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "sn",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "some",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "4",
+       "bits": "4010000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "sp",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "ss",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "2",
+       "bits": "4000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "tup",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1",
+         "bits": "3ff0000000000000"
+        },
+        {
+         "t": "text",
+         "v": "a",
+         "cu": "utf8"
+        },
+        {
+         "t": "bool",
+         "v": true
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "unit",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "const MAX: u64 = 18446744073709551615;\nconst T: &[(&str, u64)] = &[(\"p53\", 9007199254740992), (\"p60\", 0x1000_0000_0000_0000), (\"p64\", 18446744073709551616), (\"neg63\", -9223372036854775808i64), (\"r\", 9007199254740993.0)];",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, f64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "neg63",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-9223372036854776000",
+       "bits": "c3e0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "p53",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "9007199254740992",
+       "bits": "4340000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "p60",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1152921504606847000",
+       "bits": "43b0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "p64",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "18446744073709552000",
+       "bits": "43f0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "r",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "9007199254740992",
+       "bits": "4340000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"big\", 9007199254740993u64)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: 9007199254740993u64 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1), (\"b\", x)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: the value of entry \"b\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "pub static T: &[(&str, u8)] = &[];",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs: no carried entries found — expected a Rust table of (\"key\", value) tuples (&[(k, v), …], [(k, v); N], vec![…], HashMap::from([…])) or \"key\" => value arms (phf_map! / match); string-literal keys, values a string / number / bool or a [..] / (..) of those"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", [0]), (\"a\", [-0]), (\"b\", 1), (\"b\", 1.0), (\"c\", None), (\"c\", None), (\"constructor\", 1), (\"__proto__\", [2]), (\"toString\", \"x\")]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "__proto__",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "2",
+         "bits": "4000000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "-0",
+         "bits": "8000000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "constructor",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "toString",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 0), (\"a\", -0)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 duplicate key \"a\" with a different value (0 then 0) — the table is ambiguous"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "static P: phf::Map<&str, u8> = phf_map! { \"a\" => 1, \"b\" => 2 };\nfn label() -> String { format!(\"{}\", 5) }",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "{}",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "5",
+       "bits": "4014000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "static M: phf::Map<&str, u8> = phf_map! { \"a\" => 1, \"b\" => foo() };",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: the arm \"b\" => … has a value this reader does not read — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1.5)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map text -> i64",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 entry \"a\" has value 1.5 which does not fit the declared SHAPE value type i64: not i64: 1.5 (NaN/Inf/fraction can never occupy an integer slot — envelope violation) (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "match k { \"a\" | \"b\" => 1, \"c\" => 2, _ => 0 }",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: an or-pattern arm (\"a\" | \"b\" => v) is not read — one key per arm"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"red\", [255, 0, 0, \"r\"]), (\"blue\", [0, 0, 255, \"b\"])]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map text -> tuple[u8, u8, u16, text]; rgb plus a name",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "blue",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "255",
+         "bits": "406fe00000000000"
+        },
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "red",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "255",
+         "bits": "406fe00000000000"
+        },
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "f64",
+         "v": "0",
+         "bits": "0000000000000000"
+        },
+        {
+         "t": "text",
+         "v": "r",
+         "cu": "utf8"
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1), (\"b\", Some(None))]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: a nested Option is not read (Some(None) and None are one json value)"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", \"bad \\q escape\")]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 unknown escape \\q in string literal"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"n\", 1), (\"s\", \"x\"), (\"z\", None)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, f64 | text | none]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "n",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "s",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "z",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, json | text]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "a union alternative is unreachable: an earlier json accepts every value it does at 21 in \"map[text, json | text]\""
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", [1, 2])]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, tuple[json, f64] | tuple[f64, f64]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "a union alternative is unreachable: an earlier tuple accepts every value it does at 44 in \"map[text, tuple[json, f64] | tuple[f64, f64]]\""
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, record[a: text] | record[a: text, b: none]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "a union alternative is unreachable: an earlier record accepts every value it does at 52 in \"map[text, record[a: text] | record[a: text, b: none]]\""
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1), (\"b\", [1.5])]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, f64 | record[a: text, b: none] | record[a: text] | list[f64] | list[i64] | map[text, f64]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1.5",
+         "bits": "3ff8000000000000"
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1), (\"b\", 2)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, f64 | record[u8: u8, i16: list[i32 ]]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "2",
+       "bits": "4000000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", -1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map\t text\t->  u32 \t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 entry \"a\" has value -1 which does not fit the declared SHAPE value type u64: u64 out of range: -1 (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "﻿map[text, f64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "expected an identifier at 0 in \"﻿map[text, f64]\""
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "\nmap[text,\r\nf64]\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "\r\nmap\ntext ->\nu8\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", -1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text,\nu8]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 entry \"a\" has value -1 which does not fit the declared SHAPE value type u64: u64 out of range: -1 (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "expected an identifier at 0 in \"\""
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map\u000btext -> f64",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "expected '[' at 3 in \"map\\u000btext -> f64\""
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", [[[[[[[[[[[[[[[1]]]]]]]]]]]]]]])]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[u8]]]]]]]]]]]]]]]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "list",
+         "v": [
+          {
+           "t": "list",
+           "v": [
+            {
+             "t": "list",
+             "v": [
+              {
+               "t": "list",
+               "v": [
+                {
+                 "t": "list",
+                 "v": [
+                  {
+                   "t": "list",
+                   "v": [
+                    {
+                     "t": "list",
+                     "v": [
+                      {
+                       "t": "list",
+                       "v": [
+                        {
+                         "t": "list",
+                         "v": [
+                          {
+                           "t": "list",
+                           "v": [
+                            {
+                             "t": "list",
+                             "v": [
+                              {
+                               "t": "list",
+                               "v": [
+                                {
+                                 "t": "list",
+                                 "v": [
+                                  {
+                                   "t": "list",
+                                   "v": [
+                                    {
+                                     "t": "f64",
+                                     "v": "1",
+                                     "bits": "3ff0000000000000"
+                                    }
+                                   ]
+                                  }
+                                 ]
+                                }
+                               ]
+                              }
+                             ]
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", [[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]])]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[u8]]]]]]]]]]]]]]]]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "types nest deeper than 16 at 89 in \"map[text, list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[list[u64]]]]]]]]]]]]]]]]]\""
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", [1])]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, tuple[f64, f64]]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 entry \"a\" has value [1] which does not fit the declared SHAPE value type tuple[f64, f64]: not tuple (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1e19), (\"b\", -0.0), (\"c\", 0xFFFF_FFFF_FFFF_F800)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, u64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "10000000000000000000",
+       "bits": "43e158e460913d00"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-0",
+       "bits": "8000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "18446744073709550000",
+       "bits": "43efffffffffffff"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 9.3e18)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, i64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 entry \"a\" has value 9300000000000000000 which does not fit the declared SHAPE value type i64: i64 out of range: 9300000000000000000 (tuple form, 1 entries parsed)"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 9.2e18), (\"b\", -9.2e18), (\"c\", 1e3), (\"d\", -9223372036854775808)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, i64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "9200000000000000000",
+       "bits": "43dfeb3dd0676600"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-9200000000000000000",
+       "bits": "c3dfeb3dd0676600"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1000",
+       "bits": "408f400000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "d",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-9223372036854776000",
+       "bits": "c3e0000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "record[a: text]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs: declared SHAPE 'record[a: text]' is not a map — a Rust (key, value) table can only realize map[K, V]"
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[i64, f64]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 key \"a\" does not fit the declared SHAPE key type i64: not i64: a (NaN/Inf/fraction can never occupy an integer slot — envelope violation)"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"long\", 1.0000000000000000000000000000000000000000000000000000000000000000000000), (\"ok\", 2), (\"a\", r##############################\"x\"##############################), (\"b\", br#############################\"y\"#############################)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "y",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "ok",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "2",
+       "bits": "4000000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", r###############################\"x\"###############################), (\"b\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: the value of entry \"a\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"dot\", 1.), (\"cast\", true as u8), (\"ch\", 'a' as u8), (\"par\", (1) as u8), (\"sum\", 1 + 2), (\"two\", 1 as u8 as u16), (\"big\", 1 + 99999999999999999), (\"kept\", 3), (\"a\", (\"b\", 1), 3), (\"z\", 0X10)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "kept",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "3",
+       "bits": "4008000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "match s { \"g\" if f => 3, \"d\" => (\"e\", 4), \"h\" => 5 }",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "d",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "text",
+         "v": "e",
+         "cu": "utf8"
+        },
+        {
+         "t": "f64",
+         "v": "4",
+         "bits": "4010000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "h",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "5",
+       "bits": "4014000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "\"a\" => 1",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: the arm \"a\" => … has a value this reader does not read — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "\"a\" | x => 1, \"c\" => 2, _ if s == \"d\" || \"e\" => 3,",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "2",
+       "bits": "4000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "e",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "3",
+       "bits": "4008000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"q\", 'static)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: the value of entry \"q\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "fn f(n: &str) -> String { format!(\"{}\", n) }\n&[(\"a\", 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: the value of entry \"{}\" is not one this reader reads — it would be dropped (#121)"
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", Some(Some(1)))]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: a nested Option is not read (Some(None) and None are one json value)"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 0.1f32)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: 0.1f32 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 16777217f32)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: 16777217f32 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1)] /* this comment never closes (\"b\", 2)",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", \"\\u{110000}\")]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "Invalid code point 1114112"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", \"\\u{}\")]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 bad \\u{…} escape in string literal"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", r#\"never closed)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 unterminated raw string"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", \"never closed)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "carried.rs:1 unterminated string literal"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"ua\", \"\\u{_1_F_6_0_0}\"), (\"ub\", \"\\xFF\"), (\"uc\", \"p\\\r\n \tq\"), (\"c\", -0x10), (\"d\", - 5), (\"e\", -9007199254740991), (\"g\", (None)), (\"h\", -0)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-16",
+       "bits": "c030000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "d",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-5",
+       "bits": "c014000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "e",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-9007199254740991",
+       "bits": "c33fffffffffffff"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "g",
+       "cu": "utf8"
+      },
+      {
+       "t": "none"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "h",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-0",
+       "bits": "8000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "ua",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "😀",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "ub",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "ÿ",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "uc",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "pq",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"b\", 'x'), (\"é\", \"日本語\"), (\"emoji\", ['\\u{1F600}', \"\\u{10FFFF}\"]), (\"a\", 0x1FFFFFFFFFFFFF), (\"nb\", 0o377), (\"c\", 0b1111_0000u8), (\"d\", 1e5u8), (\"e\", 1_f64), (\"f\", 007), (\"g\", 0X10), (\"h\", 1e-400)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "9007199254740991",
+       "bits": "433fffffffffffff"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "x",
+       "cu": "utf8"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "240",
+       "bits": "406e000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "d",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "100000",
+       "bits": "40f86a0000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "e",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "emoji",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "text",
+         "v": "😀",
+         "cu": "utf8"
+        },
+        {
+         "t": "text",
+         "v": "􏿿",
+         "cu": "utf8"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "7",
+       "bits": "401c000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "h",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "0",
+       "bits": "0000000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "nb",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "255",
+       "bits": "406fe00000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "é",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "日本語",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "const A: f64 = 1e400; const B: u64 = 0x_; // \"\\q\" in a comment is never read\n&[(\"s\", \"/* not a comment */ // nor this\")]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "s",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "/* not a comment */ // nor this",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "\"a\" => 1, \"b\" => [1, (2,), (3)], \"c\" => -1, \"a\" => 1 }",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "map[text, json]",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "map",
+    "v": [
+     [
+      {
+       "t": "text",
+       "v": "a",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "1",
+       "bits": "3ff0000000000000"
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "b",
+       "cu": "utf8"
+      },
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "f64",
+         "v": "1",
+         "bits": "3ff0000000000000"
+        },
+        {
+         "t": "list",
+         "v": [
+          {
+           "t": "f64",
+           "v": "2",
+           "bits": "4000000000000000"
+          }
+         ]
+        },
+        {
+         "t": "f64",
+         "v": "3",
+         "bits": "4008000000000000"
+        }
+       ]
+      }
+     ],
+     [
+      {
+       "t": "text",
+       "v": "c",
+       "cu": "utf8"
+      },
+      {
+       "t": "f64",
+       "v": "-1",
+       "bits": "bff0000000000000"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1e400)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: 1e400 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 0x_)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: 0x_ has no exact JSON number"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 18446744073709551615 + 1)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: 18446744073709551615 has no exact JSON number"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1.9 as u8)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: `1.9 as u8` changes the value — write the value itself"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 0.1 as f32)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: `0.1 as f32` changes the value"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 1 as char)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: `1 as char` is not a numeric cast this reader applies"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "&[(\"a\", 18014398509481984 as u64)]",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "rust carried table: line 1: `18014398509481984 as u64` changes the value — write the value itself"
+   }
+  }
+ ],
+ "canonicalSha256": "29a519c892f505096e614bfbd8bb758dfd7a057c26e0cd97dc9bbd7bb5c6dff2"
+}

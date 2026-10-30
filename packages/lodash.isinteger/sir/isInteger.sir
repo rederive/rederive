@@ -1,0 +1,179 @@
+# =====================================================================
+# SIR — lodash.isinteger
+# =====================================================================
+UNIT isInteger
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic        # pure; no clock/RNG/env/fs/net seam
+
+SIG isInteger(value: any) -> boolean
+    # Single positional arg. Extra args ignored. Zero-arg call => value is `undefined`.
+    # This is `module.exports = isInteger` (the DEFAULT/only export of lodash.isinteger@4.0.4).
+
+DEPENDS-ON none
+    # The source FILE inlines helpers (isObject, isObjectLike, isSymbol, toNumber,
+    # toFinite, toInteger), but see SCOPE: for the EXPORTED behavior of `isInteger`
+    # the entire toNumber/toFinite/toInteger chain is UNREACHABLE except on number-typed
+    # inputs, where it collapses to identity-ish. No external/runtime dependency.
+
+# =====================================================================
+# BEHAVIOR  (exact, ordered)
+# =====================================================================
+# Source (verbatim, the only line that defines the export):
+#
+#     function isInteger(value) {
+#       return typeof value == 'number' && value == toInteger(value);
+#     }
+#
+# Evaluation order (short-circuit `&&`):
+#
+# NODE 1 — TYPE GUARD (short-circuit):
+#     IF (typeof value) != "number"  ->  return false  IMMEDIATELY.
+#     * "number" is the ONLY accepted typeof. Everything else is false:
+#       string, boolean, undefined, object (incl. null, arrays, boxed `new Number(3)`),
+#       function, symbol, bigint.
+#     * CRITICAL: because the guard short-circuits FIRST, `toInteger(value)` is
+#       NEVER evaluated for non-numbers. Therefore NO coercion ever happens:
+#       valueOf / toString / Symbol.toPrimitive are NEVER invoked on the argument.
+#       (Verified: an object exposing all three coercion hooks returns false with
+#        ZERO hooks called.)
+#     * Consequence list (all VERIFIED against the real package, see ORACLE NOTES):
+#         "3"            -> false   # numeric string is NOT coerced
+#         "3.2"          -> false
+#         "abc"          -> false
+#         ""             -> false
+#         true / false   -> false
+#         null           -> false
+#         undefined      -> false  (also: zero-arg call isInteger())
+#         {}             -> false
+#         []             -> false
+#         [3]            -> false   (single-element array is NOT unwrapped)
+#         {valueOf:()=>3}-> false   (no coercion; hook not called)
+#         new Number(3)  -> false   (boxed Number is typeof "object")
+#         new Number(3.5)-> false
+#         Symbol()       -> false   (does NOT throw — guard short-circuits)
+#         Symbol.iterator-> false
+#         3n  (BigInt)   -> false   (typeof "bigint")
+#         function(){}   -> false
+#
+# NODE 2 — INTEGRALITY TEST (only reached when typeof value == "number"):
+#     return  value == toInteger(value)
+#     where, for a number-typed input, the helper chain reduces as follows.
+#
+#     toNumber(value):  typeof value == "number"  =>  returns value unchanged.
+#                       (The string/symbol/object branches are unreachable here.)
+#
+#     toFinite(value):  let INFINITY = 1/0;  MAX_INTEGER = 1.7976931348623157e+308
+#         IF (!value)                      # falsy numbers: 0, -0, NaN
+#             return value === 0 ? value : 0
+#             # 0   -> 0      (0 === 0 true)
+#             # -0  -> -0     (-0 === 0 is TRUE in JS, so returns the value, i.e. -0)
+#             # NaN -> 0      (NaN === 0 false  -> returns 0)
+#         value = toNumber(value)          # = value (already a number)
+#         IF value === INFINITY  || value === -INFINITY
+#             sign = value < 0 ? -1 : 1
+#             return sign * MAX_INTEGER    # +Inf -> +MAX_INTEGER ; -Inf -> -MAX_INTEGER
+#         return value === value ? value : 0   # finite non-NaN number -> itself
+#
+#     toInteger(value):
+#         result    = toFinite(value)
+#         remainder = result % 1
+#         return result === result            # NaN-guard (result is never NaN after toFinite)
+#                  ? (remainder ? result - remainder : result)
+#                  : 0
+#         # Truncates toward zero by subtracting the fractional remainder.
+#         # For an integral finite number, remainder == 0  -> returns result unchanged.
+#         # For a fractional finite number, returns result - remainder (truncated).
+#
+#     Then the final comparison `value == toInteger(value)` (loose `==`, but both
+#     sides are numbers so it behaves as `===` except it is `==`):
+#
+#     CASE TABLE for number-typed `value` (all VERIFIED):
+#       finite integer-valued (e.g. 3, -5, 0, 1e21, 9.99e307, Number.MAX_VALUE):
+#                                 toInteger == value  -> TRUE
+#       finite fractional (e.g. 3.2, 0.5, -0.5, 0.1+0.2 == 0.30000000000000004,
+#                          12345.6789):  toInteger != value -> FALSE
+#       +0:    toInteger(+0)=+0 ;   +0 == +0  -> TRUE
+#       -0:    toInteger(-0)=-0 ;   -0 == -0  -> TRUE   (lodash returns TRUE for -0)
+#       NaN:   toInteger(NaN)=0 ;   NaN == 0  -> FALSE
+#       +Infinity:  toInteger=+MAX_INTEGER ;  Infinity == 1.7976e308 -> FALSE
+#       -Infinity:  toInteger=-MAX_INTEGER ; -Infinity == -1.7976e308 -> FALSE
+#       Number.MIN_VALUE (5e-324):  toInteger=0 ; 5e-324 == 0 -> FALSE  (subnormal, not integer)
+#       Number.MAX_VALUE (== 1.7976931348623157e+308 == MAX_INTEGER):
+#                          toInteger == value -> TRUE   (it is an integral float)
+#       Number.EPSILON (~2.22e-16): fractional -> FALSE
+#       MAX_SAFE_INTEGER and beyond (2^53, 2^53+1->rounds to 2^53, 1e21):
+#                          integral floats -> TRUE
+#
+# NET BEHAVIOR (the one-line spec a blind engineer can hold):
+#   return true  IFF  `value` is of JS type "number" AND `value` is a finite
+#   integer-valued double (no fractional part), treating -0 and +0 as integers.
+#   Everything else (non-numbers, NaN, ±Infinity, fractional numbers, subnormals
+#   like Number.MIN_VALUE) returns false. No coercion of non-numbers EVER occurs.
+
+# =====================================================================
+# NATIVE-vs-LODASH DIVERGENCE (verified, important for re-emitters)
+# =====================================================================
+# For NUMBER-typed inputs, lodash.isInteger is BEHAVIORALLY IDENTICAL to native
+# `Number.isInteger`. VERIFIED: 2,000,000 random doubles spanning 1e-320..1e320
+# (with an integer-biased subset) PLUS all special values
+# (±Infinity, NaN, ±0, MIN_VALUE, MAX_VALUE, EPSILON) -> ZERO divergences.
+#
+# Why they agree (so a blind engineer reproducing via Number.isInteger is SAFE
+# on the integrality test): the toFinite clamp of ±Infinity to ±MAX_INTEGER would
+# only matter if MAX_INTEGER could appear as a finite input distinct from Infinity
+# — but the only finite number equal to MAX_INTEGER is Number.MAX_VALUE itself,
+# and that IS an integral float, which native also reports true. So the clamp never
+# produces a number-input disagreement.
+#
+# The REAL trap for a re-emitter is NOT numbers — it is mistakenly thinking the
+# `toInteger`/`toNumber` chain causes COERCION of non-number inputs. It does not,
+# due to the leading `typeof value == 'number'` short-circuit. A naive
+# "coerce-then-test" reimplementation (e.g. `Number.isInteger(Number(value))` or
+# `value == Math.trunc(Number(value))`) would WRONGLY return true for "3", [3],
+# {valueOf:()=>3}, new Number(3), 3n, true(->1), etc. The CORRECT behavior is:
+# ALL non-number inputs -> false, with no coercion. This is the behavior the
+# generated oracle inputs hammer on.
+#
+# Equivalent faithful one-liners (both produce identical results to the source):
+#   typeof value === 'number' && value === toInteger(value)     # === ok since both numeric
+#   typeof value === 'number' && Number.isInteger(value)        # VERIFIED equivalent
+# (lodash uses loose `==`, but with both operands number-typed it equals `===`.)
+
+# =====================================================================
+ORACLE value -> oracle.json
+# Pure function; oracle is the value (boolean) returned for each input vector.
+# The held-out grader runs the REAL lodash.isinteger@4.0.4 to produce expecteds.
+
+# =====================================================================
+# SCOPE
+# =====================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   * The two-node pipeline above: typeof-number guard, then finite-integer test.
+#   * -0 -> true, +0 -> true, NaN/±Infinity/Number.MIN_VALUE -> false.
+#   * No coercion of non-numbers (no valueOf/toString/Symbol.toPrimitive calls).
+#   * No throws on ANY input (symbols, bigints, objects all return false, never throw).
+#
+# CARRIED DATA: NONE.
+#   The file declares regexes (reTrim/reIsBadHex/reIsBinary/reIsOctal), constants
+#   (INFINITY, MAX_INTEGER=1.7976931348623157e+308, NAN), and `symbolTag` — but for
+#   the EXPORTED isInteger behavior, MAX_INTEGER is the only constant that even
+#   participates (in the unreachable-for-disagreement ±Infinity clamp), and its value
+#   is identically Number.MAX_VALUE. No table requiring verbatim transcription. No
+#   carried.json needed.
+#
+# OUT-OF-CONTRACT: NONE. No side effects, no ambient reads, no mutation, no I/O.
+#   The inlined helpers (isObject/isObjectLike/isSymbol/toNumber/toFinite/toInteger)
+#   are NOT exported by this package and are dead with respect to isInteger's
+#   observable behavior (toInteger only ever sees number-typed inputs here).
+
+# =====================================================================
+PROVENANCE
+#   package:  lodash.isinteger@4.0.4
+#   export:   module.exports = isInteger  (default/only export)
+#   repo:     lodash/lodash  (Custom Build, modularize exports="npm")
+#   license:  MIT
+#   file:     index.js
+#   verified: Node executed the real installed package for every behavior claim above
+#             (edge-case probe table + 2M-sample native-vs-lodash divergence sweep +
+#              coercion-hook trace confirming no valueOf/toString/Symbol.toPrimitive).
+# =====================================================================

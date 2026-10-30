@@ -1,0 +1,376 @@
+UNIT isEqual
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isEqual(value: any, other: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; pure algorithm. Uses host built-ins only (Object.prototype.toString, Array.isArray, Map/Set iteration, Object.keys, Object.getOwnPropertySymbols, Buffer.isBuffer when present).
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# Performs a DEEP equivalence test between `value` and `other`. The leaf
+# comparison is SameValueZero (=== but with NaN-equal-NaN, and +0 === -0).
+# Recursion descends into arrays, plain objects, Maps, Sets, typed arrays,
+# arguments objects, and a fixed set of wrapper tags (Boolean/Date/Number/
+# String/RegExp/Symbol/Error/ArrayBuffer/DataView). Functions and DOM-like
+# nodes compare by reference identity (===). The traversal tracks visited
+# object PAIRS on a stack so cyclic structures compare equal by position.
+# isEqual is READ-ONLY: it never mutates either argument (verified).
+#
+# Public entry is `isEqual(value, other)` == `baseIsEqual(value, other)` with
+# no bitmask, no customizer, no stack (bitmask = 0, so neither the PARTIAL nor
+# UNORDERED-at-entry flags are set; UNORDERED is set internally only for
+# Map/Set element comparison).
+
+# ============================================================================
+# NODE 0 — baseIsEqual(value, other)   [the SameValueZero / dispatch gate]
+# ============================================================================
+# BRANCH 0a: if value === other  -> return true.
+#   (Strict === here. Note +0 === -0 is true in JS, so +0 vs -0 returns true
+#    at top level via this branch. NaN === NaN is false, handled by 0c.)
+# BRANCH 0b: if value == null OR other == null OR
+#            (NOT isObjectLike(value) AND NOT isObjectLike(other))
+#       -> return (value !== value AND other !== other)
+#          # i.e. return true ONLY if BOTH are NaN; else false.
+#          # isObjectLike(x) := x != null && typeof x == 'object'.
+#          # This branch fires when at least one side is null/undefined, OR
+#          # when NEITHER side is an object (both are primitives: number,
+#          # string, boolean, bigint, symbol, undefined). Primitives that are
+#          # not ===-equal and not both-NaN => false here.
+#          # Examples settled here:
+#          #   1 vs "1"            -> false
+#          #   null vs undefined   -> false  (one is null)
+#          #   NaN vs NaN          -> true   (both !== self)
+#          #   1n vs 1n            -> true via 0a (===); 1n vs 2n -> false here
+#          #   1n vs 1             -> false here (=== false, not both NaN)
+#          #   true vs 1           -> false; 0 vs false -> false
+# BRANCH 0c: otherwise -> return baseIsEqualDeep(value, other, 0, undefined,
+#                                                 baseIsEqual, undefined).
+#   (Reached when at least one side is object-like and the other is non-null:
+#    e.g. {} vs {}, [] vs [], new Number(1) vs 1, new Date vs new Date.
+#    NOTE: a boxed primitive (Object(1)) is object-like, so `new Number(1)` vs
+#    primitive `1` reaches the DEEP path and is decided by the number tag
+#    branch — see NODE 2, numberTag.)
+
+# isObjectLike(x)  := x != null && typeof x === 'object'
+# isObject(x)      := x != null && (typeof x === 'object' || typeof x === 'function')
+
+# ============================================================================
+# NODE 1 — baseIsEqualDeep(object, other, bitmask=0, customizer=undef, equalFunc=baseIsEqual, stack)
+# ============================================================================
+# Compute the dispatch tags:
+#   objIsArr = Array.isArray(object)
+#   othIsArr = Array.isArray(other)
+#   objTag = objIsArr ? '[object Array]' : getTag(object)
+#   othTag = othIsArr ? '[object Array]' : getTag(other)
+#   # getTag(x) := Object.prototype.toString.call(x), with null->'[object Null]',
+#   #             undefined->'[object Undefined]'. (Symbol.toStringTag-aware via
+#   #             getRawTag, but for in-scope values it equals toString.call.)
+#   # COLLAPSE arguments to object:
+#   if objTag == '[object Arguments]' then objTag = '[object Object]'
+#   if othTag == '[object Arguments]' then othTag = '[object Object]'
+#   objIsObj  = (objTag == '[object Object]')
+#   othIsObj  = (othTag == '[object Object]')
+#   isSameTag = (objTag == othTag)
+#
+# BRANCH 1a (Buffer guard):
+#   if isSameTag AND isBuffer(object):
+#       if NOT isBuffer(other) -> return false
+#       set objIsArr = true; objIsObj = false   # fall through to array path
+#   # isBuffer(x) := Buffer.isBuffer(x) when Node Buffer is present, else const
+#   #   false. SEAM NOTE: this is an AMBIENT host capability (Node's
+#   #   Buffer.isBuffer). It only changes behavior for Node Buffer values; a
+#   #   Buffer and a Uint8Array share tag '[object Uint8Array]' but
+#   #   Buffer-vs-non-Buffer returns false here. This Buffer/Uint8Array CROSS
+#   #   case is host-dependent and is declared OUT-OF-ENVELOPE for genInputs
+#   #   (see SCOPE). Buffer-vs-Buffer and Uint8Array-vs-Uint8Array are in scope.
+#
+# BRANCH 1b (non-plain same-tag => array-like or by-tag):
+#   if isSameTag AND NOT objIsObj:
+#       (stack created if absent)
+#       if (objIsArr OR isTypedArray(object)):
+#            return equalArrays(object, other, bitmask, customizer, equalFunc, stack)   # NODE 3
+#       else:
+#            return equalByTag(object, other, objTag, bitmask, customizer, equalFunc, stack)  # NODE 2
+#   # isTypedArray(x) is true iff Object.prototype.toString tag is one of:
+#   #   Float32Array, Float64Array, Int8Array, Int16Array, Int32Array,
+#   #   Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array.
+#   #   (DataView/ArrayBuffer are NOT typed arrays; they route to equalByTag.)
+#
+# BRANCH 1c (lodash-wrapper unwrap):  bitmask & PARTIAL is 0 at entry, so this
+#   block runs. It checks own '__wrapped__' property on either side and, if
+#   present, unwraps via .value() then recurses. For all in-scope inputs
+#   (plain values; no lodash wrapper objects) neither side has '__wrapped__',
+#   so this branch is INERT. OUT-OF-SCOPE: lodash chain wrapper objects.
+#
+# BRANCH 1d (tag mismatch):
+#   if NOT isSameTag -> return false.
+#   # Settles tag-mismatch cases: [] vs {} -> false; [1] vs {0:1} -> false;
+#   #   arguments vs [1,2,3] -> false (args collapses to objectTag, array stays
+#   #   arrayTag => different => false); Map vs Set -> false; Date vs RegExp ->
+#   #   false; [1,2,3] vs {0:1,1:2,2:3,length:3} -> false.
+#
+# BRANCH 1e (plain object path): same tag AND objIsObj (both '[object Object]',
+#   which now ALSO includes original arguments objects collapsed above):
+#       (stack created if absent)
+#       return equalObjects(object, other, bitmask, customizer, equalFunc, stack)  # NODE 4
+
+# ============================================================================
+# NODE 2 — equalByTag(object, other, tag, bitmask, customizer, equalFunc, stack)
+# ============================================================================
+# Same-tag comparison for non-array-like wrapper objects. switch(tag):
+#
+#   case '[object DataView]':
+#       if object.byteLength != other.byteLength OR object.byteOffset != other.byteOffset -> false
+#       object = object.buffer; other = other.buffer;   # FALL THROUGH to ArrayBuffer
+#   case '[object ArrayBuffer]':
+#       if object.byteLength != other.byteLength
+#          OR NOT equalFunc(new Uint8Array(object), new Uint8Array(other)) -> false
+#       return true
+#       # (ArrayBuffer/DataView compared byte-for-byte via Uint8Array view.)
+#
+#   case '[object Boolean]':
+#   case '[object Date]':
+#   case '[object Number]':
+#       return eq(+object, +other)
+#       # Coerce: Boolean -> 1/0, Date -> ms-since-epoch, Number(box) -> number.
+#       # Invalid Date -> NaN; eq() makes NaN==NaN true (so two Invalid Dates
+#       #   are equal). eq(+0, -0): +0 === -0 is true => equal. eq(NaN,NaN) true.
+#       # KEY: this is the branch that makes new Number(1) === 1 (DEEP path):
+#       #   both have number tag (Object(1) tag is '[object Number]', primitive
+#       #   1 only reaches here when the OTHER side is also number-tagged; the
+#       #   reached-via-deep case is boxed-vs-boxed or boxed-vs-... see below).
+#       #   Verified: isEqual(new Number(1), 1) -> true,
+#       #             isEqual(Object(1), Object(2)) -> false,
+#       #             isEqual(new Boolean(true), true) -> true,
+#       #             isEqual(new Date(1000), new Date(1000)) -> true.
+#       #   NOTE on boxed-vs-primitive routing: when value=Object(1) (objectLike)
+#       #   and other=1 (primitive), baseIsEqual NODE0 0b is FALSE (value is
+#       #   objectLike) so it reaches deep; both compute number tag; same tag;
+#       #   number branch -> eq(+Object(1), +1) = eq(1,1) = true.
+#
+#   case '[object Error]':
+#       return object.name == other.name AND object.message == other.message
+#       # (Errors compared by name+message only. OUT-OF-ENVELOPE for genInputs:
+#       #  Error objects do not round-trip the codec; documented, not emitted.)
+#
+#   case '[object RegExp]':
+#   case '[object String]':
+#       return object == (other + '')
+#       # Coerce other to string and loose-== object. For RegExp this is
+#       #   regex.toString() == otherRegex.toString(), i.e. source+flags must
+#       #   match (flag ORDER is normalized by JS, so /a/gi == /a/ig -> true).
+#       #   lastIndex is IGNORED. For boxed String, Object('a') == ('a'+'') etc.
+#       #   Verified: /a/g vs /a/g true; /a/g vs /a/i false; /a/ vs /b/ false;
+#       #             /a/gi vs /a/ig true; RegExp differing lastIndex -> true.
+#
+#   case '[object Map]':
+#       convert = mapToArray   # Map -> array of [key,value] pairs in insertion order
+#       FALL THROUGH to Set case
+#   case '[object Set]':
+#       isPartial = bitmask & PARTIAL  (0 here)
+#       convert := convert or setToArray   # Set -> array of values in insertion order
+#       if object.size != other.size AND NOT isPartial -> false
+#       # cyclic guard:
+#       stacked = stack.get(object); if stacked -> return stacked == other
+#       bitmask |= UNORDERED_FLAG            # element comparison is UNORDERED
+#       stack.set(object, other)
+#       result = equalArrays(convert(object), convert(other), bitmask, customizer, equalFunc, stack)  # NODE 3 (unordered)
+#       stack.delete(object)
+#       return result
+#       # So Maps/Sets compare element-multiset-wise, ORDER-INDEPENDENT:
+#       #   Set([1,2,3]) vs Set([3,2,1]) -> true; Set diff size -> false;
+#       #   Set([{x:1},{y:2}]) vs Set([{y:2},{x:1}]) -> true (deep+unordered);
+#       #   Map([[a,1],[b,2]]) vs Map([[b,2],[a,1]]) -> true; Map deep keys ok.
+#       #   NaN as Set member / Map value compares equal.
+#
+#   case '[object Symbol]':
+#       return symbolValueOf.call(object) == symbolValueOf.call(other)
+#       # Boxed Symbol object equality by primitive symbol identity.
+#       # OUT-OF-ENVELOPE for genInputs: symbols/boxed-symbols don't round-trip.
+#
+#   default (any other tag, e.g. '[object BigInt]' boxed, Promise, WeakMap,
+#            Function — though functions never reach here): return false.
+#       # Verified: Object(1n) vs Object(1n) -> false (BigInt box tag not in
+#       #   switch). (Primitive bigint never reaches deep path; it's settled in
+#       #   NODE 0 by === / both-NaN.)
+
+# eq(a, b) := (a === b) OR (a !== a AND b !== b)   # SameValueZero leaf
+
+# ============================================================================
+# NODE 3 — equalArrays(array, other, bitmask, customizer, equalFunc, stack)
+# ============================================================================
+# Used for: real arrays, typed arrays, AND (post-convert) Map/Set element lists.
+# isPartial = bitmask & PARTIAL (0 for arrays/typed arrays; 0 for Map/Set too,
+#             but those pass UNORDERED).
+# arrLength = array.length; othLength = other.length
+# if arrLength != othLength AND NOT (isPartial AND othLength > arrLength) -> false
+#    # With isPartial=0: any length mismatch -> false.
+#    # Length mismatch settles: [1,2,3] vs [1,2] -> false; typed-array length
+#    # mismatch -> false; Map/Set size mismatch already pre-checked in NODE 2.
+# cyclic guard:
+#   stacked = stack.get(array); if (stacked AND stack.get(other)) -> return stacked == other
+# seen = (bitmask & UNORDERED) ? new SetCache : undefined
+# stack.set(array, other); stack.set(other, array)
+# index walk 0..arrLength-1 over INDEX properties only (non-index own props of
+#   arrays are IGNORED — e.g. arr.foo differences don't matter):
+#   arrValue = array[index]; othValue = other[index]
+#   (customizer is undefined here, so `compared` stays undefined)
+#   IF UNORDERED (Map/Set path):
+#       find some othIndex not yet in `seen` such that
+#           arrValue === othValue OR equalFunc(arrValue, othValue, bitmask, customizer, stack)
+#       if found, mark othIndex in seen and continue; if none -> result=false, break
+#       # greedy multiset match; first available match wins (lodash semantics).
+#   ELSE (ORDERED, plain/typed arrays):
+#       if NOT (arrValue === othValue OR equalFunc(arrValue, othValue, bitmask, customizer, stack))
+#            -> result=false, break
+# stack.delete(array); stack.delete(other)
+# return result
+#   # ORDERED arrays: [{a:1},{a:2}] vs [{a:2},{a:1}] -> false (order matters).
+#   # Element leaf uses === first (so bigint/primitive elements compare by ===,
+#   #   then NaN/deep via equalFunc): [1n] vs [1n] true; [NaN] vs [NaN] true;
+#   #   [Infinity] vs [Infinity] true; [+0] vs [-0] true (=== for +0/-0).
+
+# ============================================================================
+# NODE 4 — equalObjects(object, other, bitmask, customizer, equalFunc, stack)
+# ============================================================================
+# Plain-object (and collapsed-arguments) comparison.
+# isPartial = bitmask & PARTIAL (0)
+# objProps = getAllKeys(object)   # OWN ENUMERABLE string keys + own enumerable symbols
+# othProps = getAllKeys(other)
+#   # getAllKeys = own enumerable property NAMES (Object.keys-equivalent over
+#   #   own enumerable, EXCLUDING inherited) concatenated with own enumerable
+#   #   symbol keys (Object.getOwnPropertySymbols filtered by enumerable).
+#   #   For arrays this would be index keys, but arrays never reach NODE 4.
+#   #   Symbol keys: IN-PRINCIPLE compared, but symbols don't round-trip the
+#   #   codec, so genInputs emits only string-keyed objects (see SCOPE).
+# objLength = objProps.length; othLength = othProps.length
+# if objLength != othLength AND NOT isPartial -> return false
+#    # Different own-enumerable key COUNT -> false. So {a:1} vs {a:1,b:2} -> false,
+#    # {a:undefined} vs {} -> false (count differs: 1 vs 0).
+# key-PRESENCE check (walk objProps): for each key,
+#    if NOT (isPartial ? key in other : hasOwnProperty(other, key)) -> return false
+#    # With isPartial=0: every own key of object must be an OWN key of other.
+#    # {a:undefined} vs {b:undefined} -> false (key 'a' absent in other).
+# cyclic guard:
+#    stacked = stack.get(object); if (stacked AND stack.get(other)) -> return stacked == other
+# stack.set(object, other); stack.set(other, object)
+# value-compare walk (key order is objProps order; key-ORDER INDEPENDENT result
+#   because both presence and per-key value are checked):
+#    for each key in objProps:
+#       objValue = object[key]; othValue = other[key]
+#       (customizer undefined -> compared undefined)
+#       if NOT (objValue === othValue OR equalFunc(objValue, othValue, bitmask, customizer, stack))
+#            -> result=false, break
+#       skipCtor = skipCtor OR (key == 'constructor')
+#    # KEY-ORDER INDEPENDENCE verified: {a:1,b:2} vs {b:2,a:1} -> true.
+#
+# CONSTRUCTOR CHECK (only if result still true AND NOT skipCtor):
+#    objCtor = object.constructor; othCtor = other.constructor
+#    if objCtor != othCtor
+#       AND ('constructor' in object AND 'constructor' in other)
+#       AND NOT ( typeof objCtor == 'function' AND objCtor instanceof objCtor
+#                 AND typeof othCtor == 'function' AND othCtor instanceof othCtor )
+#       -> result = false
+#    # Two non-Object class instances with DIFFERENT constructors are unequal
+#    #   even with identical props: new Foo vs new Bar -> false; new Foo vs Foo
+#    #   match -> true. A plain {} and Object.create(null) with same props
+#    #   compare EQUAL (the inner instanceof-of-its-own-ctor escape hatch +
+#    #   'constructor' in object being false for the null-proto object makes the
+#    #   condition fall through): {a:1} vs Object.create(null){a:1} -> true.
+#    #   new Foo (custom class) vs {a:1} plain -> false (different ctor).
+# stack.delete(object); stack.delete(other)
+# return result
+
+# ============================================================================
+# CYCLIC HANDLING (summary)
+# ============================================================================
+# Each recursive container compare pushes (object->other) and (other->object)
+# onto the shared `stack` before descending, deletes them after. On re-entry
+# with an already-stacked pair, returns (stacked == other) — i.e. cycles are
+# assumed equal-by-position. Verified: two self-referential objects/arrays
+# compare equal; a cyclic vs an equivalent non-cyclic structure compares
+# unequal. (Cyclic inputs are NOT codec-serializable and are OUT-OF-ENVELOPE
+# for genInputs — documented here for the blind re-emitter, never emitted.)
+
+# ============================================================================
+# VERIFIED BEHAVIOR TABLE (all confirmed against lodash.isequal@4.5.0)
+# ============================================================================
+#  NaN vs NaN ............................. true
+#  [NaN] vs [NaN] / Set/Map NaN ........... true
+#  +0 vs -0 (top & nested) ................ true   (=== treats +0===-0; eq() too)
+#  Infinity vs Infinity ................... true ; Infinity vs -Infinity .. false
+#  1 vs "1" ............................... false  (primitives, not ===)
+#  null vs undefined ...................... false ; undefined vs undefined . true
+#  true vs 1 / 0 vs false / "" vs false ... false
+#  new Number(1) vs 1 ..................... true   (deep number tag, +coerce)
+#  new Number(1) vs new Number(1) ......... true ; Object(1) vs Object(2) .. false
+#  new String("a") vs "a" / boxed ......... true
+#  new Boolean(true) vs true .............. true
+#  Object(1n) vs Object(1n) .............. false   (BigInt box -> default false)
+#  1n vs 1n (primitive) .................. true ; 1n vs 2n ............. false
+#  {a:1,b:2} vs {b:2,a:1} ................. true   (key-order independent)
+#  {a:1} vs {a:1,b:2} ..................... false  (key count)
+#  {a:undefined} vs {} .................... false  (key count 1 vs 0)
+#  {a:undefined} vs {b:undefined} ......... false  (key presence)
+#  [] vs {} / [1] vs {0:1} ................ false  (tag mismatch)
+#  arguments(1,2,3) vs arguments(1,2,3) ... true
+#  arguments(1,2,3) vs [1,2,3] ............ false  (tag mismatch arr vs obj)
+#  new Foo vs new Foo ..................... true ; new Foo vs new Bar .... false
+#  new Foo vs {a:1} ...................... false  (ctor differs)
+#  {a:1} vs Object.create(null){a:1} ..... true
+#  Date same/diff time ................... true / false ; Invalid==Invalid . true
+#  Date vs number ........................ false  (tag mismatch)
+#  /a/g vs /a/g / /a/gi vs /a/ig ......... true ; /a/g vs /a/i ......... false
+#  RegExp differing lastIndex ............ true   (lastIndex ignored)
+#  Map unordered-equal / Set unordered ... true ; diff value/size ...... false
+#  Uint8Array equal / unequal / difflen .. true / false / false
+#  Uint8Array vs Int8Array (same vals) ... false  (different typed tags)
+#  Uint8Array vs Array (same vals) ....... false  (tag mismatch)
+#  Buffer vs Buffer equal/unequal ........ true / false
+#  Buffer vs Uint8Array (same vals) ...... false  (host-dependent; OUT-OF-ENVELOPE)
+#  [1,2,3] vs [1,2] / nested mixed ....... false / per-element
+#  array w/ differing non-index prop ..... true   (non-index props ignored)
+#  isEqual() (no args) / undefined,undefined  true
+#  read-only: never mutates inputs ....... verified
+
+ORACLE value -> oracle.json
+# Pure deterministic function of its two arguments. No seam (the Buffer.isBuffer
+# host capability is a constant for non-Buffer inputs and is exercised only by
+# Buffer-vs-Buffer pairs which are deterministic in any Node host). Oracle is
+# value-mode: for each [value, other] tuple the recorded expected is the boolean
+# isEqual returns (throw-paths none for codec-faithful inputs).
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire ladder in NODES 0-4 above —
+#   SameValueZero leaf (eq), tag dispatch via Object.prototype.toString, the
+#   per-tag branches (array/typed-array, Boolean/Date/Number coerce-+eq,
+#   RegExp/String coerce-to-string, Map/Set unordered multiset, Error name+msg,
+#   ArrayBuffer/DataView byte compare, Symbol primitive), plain-object own-
+#   enumerable key-count + key-presence + recursive value compare + constructor
+#   check, NaN-equal, +0/-0-equal, cyclic equal-by-position via the stack.
+#   No carried data.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-ENVELOPE (behavior specified above; NOT emitted by genInputs because it
+#   does not round-trip the persistence codec or is host-dependent):
+#     - Functions / DOM nodes (compared by === ; never object-like-deep).
+#     - Symbols and boxed Symbol objects (Symbol tag branch) — not codec-safe.
+#     - Boxed BigInt objects Object(1n) (default-false branch) — not codec-safe.
+#     - Error objects (name+message branch) — not codec-safe.
+#     - lodash chain wrapper objects ('__wrapped__' unwrap) — out of contract.
+#     - Cyclic / self-referential inputs — not serializable.
+#     - ArrayBuffer / DataView raw (byte-compare branch) — codec ambiguity;
+#       typed-array views over buffers ARE in scope and exercise the byte path
+#       indirectly via element compare.
+#     - Buffer-vs-Uint8Array CROSS pairs — host-dependent (Buffer.isBuffer);
+#       Buffer-vs-Buffer and U8-vs-U8 same-type pairs ARE in scope.
+#
+# OUT-OF-CONTRACT (side effects / mutation): NONE. isEqual is pure and
+#   read-only; it allocates internal Stack/SetCache and temporary Uint8Array
+#   views but never mutates the arguments.
+
+PROVENANCE lodash.isequal@4.5.0  (npm)  repo lodash/lodash  license MIT
+  source file: node_modules/lodash.isequal/index.js
+  public export: module.exports = isEqual  (single default export)
+  Build: `lodash modularize exports="npm"`. Copyright JS Foundation / Underscore.js.

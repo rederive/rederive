@@ -1,0 +1,158 @@
+UNIT toObjectPath
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure function. No clock/RNG/env/fs/net seam. No injection needed.
+
+SIG module.exports = function toObjectPath(...args) -> string
+    # Variadic. CJS default export IS the function itself.
+    # Called as toObjectPath(a0, a1, a2, ...). Each arg is an arbitrary JS value.
+    # In the real source the formal param is named `args` (a single named param) but the
+    # body operates on the full `arguments` object — see BEHAVIOR node 1. Treat as variadic.
+
+DEPENDS-ON none
+    # The real package does `require('kind-of')` (kind-of@3.2.2). That dependency is
+    # INLINED here (see BEHAVIOR). The blind re-emitter MUST NOT require('kind-of') or any
+    # other module. kind-of is used in EXACTLY TWO spots, both of which reduce — for every
+    # in-envelope input — to checks the re-emitter can implement with plain JS:
+    #   (a) top-level: typeOf(args) === 'arguments'   -> see node 1
+    #   (b) in filter: typeOf(ele) === 'arguments'    -> see node 4
+    # kind-of returns the literal string 'arguments' ONLY for a true JS `arguments` object
+    # (detected via Object.prototype.toString.call(x) === '[object Arguments]'). A real
+    # `arguments` object CANNOT be produced by the oracle codec (does not JSON round-trip),
+    # so for every in-envelope generated input these two checks behave as documented below
+    # WITHOUT needing kind-of. The arguments-object behavior is fully specified anyway (it is
+    # the package's headline feature) so a re-emitter can reproduce it if ever exercised.
+
+BEHAVIOR
+  # ---- The exact reference algorithm. Reproduce step-for-step. ----
+  #
+  # toObjectPath(...args):
+  #   1. Let A = the live arguments object of THIS call, i.e. the ordered list of all
+  #      positional args passed: [a0, a1, ..., a_{k-1}], length k.
+  #
+  #      Source detail (kind-of seam (a), fully reduced):
+  #        The source binds the FIRST positional param to a name `args` and does:
+  #            if (typeOf(args) !== 'arguments') { args = arguments; }
+  #        - If a0 is NOT itself a JS `arguments` object (the normal case for ALL
+  #          oracle-codec inputs: strings, numbers, arrays, objects, null, booleans, etc.),
+  #          the branch is TAKEN and `args` is reassigned to the full arguments list
+  #          [a0..a_{k-1}]. => A = [a0, a1, ..., a_{k-1}].
+  #        - If a0 IS a JS `arguments` object (OUT-OF-ENVELOPE for the generator — cannot be
+  #          JSON-serialized; documented for completeness only), the branch is NOT taken and
+  #          `args` stays = a0 (that single arguments object). => A = the elements of a0.
+  #      NET for every in-envelope input: A = the full positional arg list [a0..a_{k-1}].
+  #      If called with zero args, A = [] (length 0).
+  #
+  #   2. Compute res = FILTER(A)  (an array of strings — see node 3).
+  #   3. Return res.join('.').    (NO trailing-dot strip, NO trimming — see node 6.)
+  #
+  # FILTER(arr) -> array of strings:   # recursive deep-flatten + string-keep
+  #   res = []
+  #   for idx = 0 .. arr.length-1:
+  #     ele = arr[idx]
+  #     # --- node 4: RECURSE branch (kind-of seam (b), fully reduced) ---
+  #     if (ele is a JS `arguments` object)  OR  (Array.isArray(ele) === true):
+  #         res = res.concat( FILTER(ele) )       # splice all results in, in order
+  #     # --- node 5: KEEP branch ---
+  #     else if (typeof ele === 'string'):        # PRIMITIVE string ONLY
+  #         res.push(ele)
+  #     # --- node 6: DROP (implicit else) ---
+  #     else:
+  #         # do nothing — element is dropped entirely
+  #   return res
+  #
+  # CRITICAL PRECISION POINTS (verified against the real package — see SCOPE/notes):
+  #
+  #   * DEEP FLATTEN: arrays are flattened RECURSIVELY to ANY depth, not one level.
+  #       [['a',['b',['c',['d']]]]]            -> 'a.b.c.d'
+  #       toObjectPath('a', ['b', ['c','d'], 'e'], 'f') -> 'a.b.c.d.e.f'
+  #       [[['x'],'y']]                        -> 'x.y'
+  #
+  #   * KEEP-PREDICATE IS `typeof ele === 'string'` — NOT kind-of(ele) === 'string'.
+  #     ONLY primitive strings are kept. This is the single most important rule:
+  #       - NUMBERS ARE DROPPED. (The intuition "strings/numbers" is WRONG for this package.)
+  #             toObjectPath('a','b',0)   -> 'a.b'      (the 0 is dropped)
+  #             toObjectPath(0)           -> ''         ('' join of [])
+  #             toObjectPath(-1)          -> ''
+  #             toObjectPath(1.5)         -> ''
+  #             [['a',0,1,2,'b']]         -> 'a.b'
+  #       - BOOLEANS (true/false) dropped.       'a',true,'b'  -> 'a.b'
+  #       - null dropped.                        'a',null,'b'  -> 'a.b'
+  #       - undefined dropped.                   'a',undefined,'b' -> 'a.b'
+  #       - plain objects {} dropped.            'a',{},'b'    -> 'a.b'
+  #       - NaN / Infinity / -Infinity are numbers => dropped.  'a',NaN,'b' -> 'a.b'
+  #       - boxed `new String('y')` is typeof 'object' => DROPPED (not kept).
+  #         (Out-of-envelope for the generator regardless; noted for fidelity.)
+  #       - Functions, Symbols, Dates, RegExps, Maps, Sets, etc. => dropped
+  #         (none are typeof 'string'; all out-of-envelope for the generator).
+  #
+  #   * EMPTY STRINGS ARE KEPT (they are typeof 'string') and DO produce dots:
+  #             [['a','','b']]   -> 'a..b'
+  #             [['','']]        -> '.'
+  #             ['a','','']      -> 'a..'
+  #             ['']             -> ''        (join of [''] is the single element '' => '')
+  #             ['']  alone      -> ''
+  #
+  #   * NO TRAILING-DOT STRIP and NO LEADING-DOT STRIP. The result is a raw Array.join('.').
+  #     A dropped element does NOT insert a dot (it was never pushed); only kept (string)
+  #     elements occupy join positions. Trailing/leading dots arise ONLY from kept empty
+  #     strings, and they are PRESERVED:
+  #             ['','a']         -> '.a'
+  #             [[['',''],'c']]  -> '..c'
+  #             ['a','','']      -> 'a..'
+  #
+  #   * EMPTY / DEGENERATE:
+  #             toObjectPath()        -> ''     (zero args; FILTER([]) = []; [].join('.') = '')
+  #             [[]]                  -> ''
+  #             [[],[],[]]            -> ''
+  #             ['a',[],'b']         -> 'a.b'   (empty array contributes nothing)
+  #
+  #   * SINGLE-ARG:
+  #             ['a']                -> 'a'
+  #             [['a']]              -> 'a'
+  #             [0]                  -> ''      (number dropped)
+  #             [{}]                 -> ''
+  #             [true] / [null] / [undefined] -> ''
+  #
+  #   * ARGUMENTS-OBJECT INPUT (headline feature; OUT-OF-ENVELOPE for the generator since a
+  #     real arguments object cannot be produced via the JSON oracle codec — documented for a
+  #     re-emitter's completeness): if a SINGLE arguments object is passed as a0, it is
+  #     iterated directly (node 1 branch NOT taken), and any nested arguments objects /arrays
+  #     inside it are recursed. e.g. given f(){return toObjectPath(arguments)};
+  #     f('a',['b','c']) -> 'a.b.c'.  A nested arguments element is also recursed (node 4).
+
+ORACLE value -> oracle.json
+  # Deterministic value oracle: expected = JSON-stringifiable return string of the real
+  # package for each generated arg-tuple. No seam, no scripting. Throw paths: none reachable
+  # from in-envelope inputs (the function never throws on the documented value space).
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The variadic collection of positional args (node 1, in-envelope reduction: A = full arg list).
+    - The recursive deep-flatten of nested Arrays (Array.isArray) to arbitrary depth (node 4).
+    - The keep-predicate `typeof ele === 'string'` (primitive strings only; node 5).
+    - Dropping every non-string (numbers incl. 0/neg/float/NaN/Infinity, booleans, null,
+      undefined, plain objects, and any other non-string type) (node 6).
+    - Preservation of empty strings as join positions.
+    - Final `Array.join('.')` with NO post-processing (no strip/trim) (node 3 + node 6 notes).
+  CARRIED DATA: none. This unit has no literal tables. (NOT a carried-data unit.)
+  OUT-OF-CONTRACT: none (pure function; no side effects, no mutation, no ambient reads).
+  OUT-OF-ENVELOPE (documented; the generator does NOT emit these because they do not survive
+  the oracle codec round-trip, but their behavior is fully specified above so a blind
+  re-emitter still reconstructs them):
+    - true JS `arguments` objects (incl. nested ones) — do not JSON round-trip.
+    - functions, Symbols — do not round-trip; all dropped (not typeof 'string').
+    - boxed primitives (new String / new Number / new Boolean) — identity/codec-unsafe;
+      boxed String is DROPPED here (typeof 'object'), unlike kind-of's classification.
+    - undefined / NaN / Infinity as ARGS-LIST elements: documented as dropped; the generator
+      avoids them in positions where the codec would corrupt them. (See generator notes:
+      such values are exercised behaviorally where the codec tolerates them, otherwise only
+      documented.)
+    - The kind-of seam (a)/(b): only diverges from the inlined reduction for true arguments
+      objects, which are themselves out-of-envelope — so kind-of need not be reconstructed.
+
+PROVENANCE
+  to-object-path@0.3.0 (MIT, Jon Schlinkert, repo jonschlinkert/to-object-path), file index.js.
+  Inlined dependency: kind-of@3.2.2 (MIT), file index.js — used only for the two 'arguments'
+  checks, both reduced to plain JS for the in-envelope value space (no carried data).

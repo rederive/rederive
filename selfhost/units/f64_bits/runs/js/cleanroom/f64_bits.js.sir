@@ -1,0 +1,16 @@
+UNIT f64_bits
+LANG js
+PRIMARY-SHA256 c6667a66d269b295c9a9e05d023b1f91bd541e5e65c8971a537aed79fb8e90f1
+SIG f64_bits(x: number): string
+NOTE named export f64_bits; the real code is reached as encode(x, { k: 'f64' }).bits
+ABI f64=number (every number is an IEEE-754 binary64, NaN payloads included); text=string. The verifier decodes the
+  argument from its canonical bits, so -0 and the infinities arrive as themselves.
+MECHANISM raw bits (R1) = a DataView over an 8-byte ArrayBuffer: setFloat64(0, x) then getBigUint64(0), both big-endian
+  (the DataView default, no littleEndian flag) so the most significant byte is first; render with toString(16), which
+  is lowercase, then padStart(16, "0").
+MECHANISM NaN rule (R2) = test Number.isNaN(x) FIRST and return the canonical pattern without touching the DataView:
+  setFloat64 preserves a NaN's sign and payload (fff8000000000000 stays fff8000000000000), so skipping the test is a
+  real divergence even though the oracle's single NaN vector cannot show it.
+MECHANISM -0 (R3): do not test x === 0 or compare numerically anywhere — -0 === 0 in js; the DataView path keeps the sign bit.
+DEPENDS-ON none
+PROVENANCE rederive@b329a40412df cli/sir/canon.mjs f64bits (DataView + Number.isNaN guard) and hex16 (toString(16).padStart(16, '0')).

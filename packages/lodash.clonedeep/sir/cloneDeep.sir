@@ -1,0 +1,247 @@
+UNIT cloneDeep
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# The module's DEFAULT EXPORT IS the cloneDeep function. The emitted ES module MUST do
+#   export default <fn>
+# where <fn> is callable as fn(value) -> deepClone. Exactly ONE argument; returns the clone.
+# Pure, deterministic, NO seam (no clock / RNG / env / io / net). A pure unit.
+
+SIG  cloneDeep(value: any) -> any        # one positional arg; returns a NEW deep structural clone
+
+DEPENDS-ON none        # zero runtime deps; standalone lodash.clonedeep build
+
+# =====================================================================================
+# INVARIANTS
+# =====================================================================================
+# READ-ONLY: cloneDeep NEVER mutates `value` (verified: deep nested input unchanged after call).
+# The clone is a NEW object graph; `clone !== value` for every cloneable object node, and the
+# clone is STRUCTURALLY EQUAL to the input (this is what the grader compares — structure, not ref).
+# Cyclic and shared references in the input are PRESERVED in the clone (an object reached by two
+# paths is cloned ONCE; both paths in the clone point at the same single clone node — see Stack).
+# Primitives (non-objects) are returned AS-IS (identity). Determinism: no ambient state read.
+
+# =====================================================================================
+# BEHAVIOR  (this is exactly baseClone(value, isDeep=true, isFull=true) — the DEEP+FULL path)
+# =====================================================================================
+# Entry: cloneDeep(value) == baseClone(value, /*isDeep*/ true, /*isFull*/ true).
+# Throughout, isDeep=true and isFull=true are FIXED. There is no customizer.
+#
+# baseClone(value, isDeep=true, isFull=true, customizer=undefined, key, object, stack):
+#   `object` is the PARENT object of `value` (undefined at the top call, set on recursive calls).
+#   `stack` is the cycle-tracking Stack (undefined at top, created lazily).
+#
+# NODE 0  (customizer): no customizer is passed, so this branch never fires. Skip.
+#
+# NODE 1  (non-object passthrough):
+#   isObject(value) is: !!value && (typeof value == 'object' || typeof value == 'function').
+#   If NOT isObject(value)  ->  return value  (IDENTITY, no clone).
+#     This covers: number, string, boolean, undefined, null, bigint, symbol PRIMITIVE.
+#     => cloneDeep(42)===42, cloneDeep("hi")==="hi", cloneDeep(null)===null,
+#        cloneDeep(undefined)===undefined, cloneDeep(NaN) is NaN, cloneDeep(Infinity)===Infinity,
+#        cloneDeep(-Infinity)===-Infinity, cloneDeep(10n)===10n (typeof bigint preserved),
+#        cloneDeep(aSymbolPrimitive)===that same symbol (identity).
+#
+# NODE 2  (arrays):
+#   isArr = Array.isArray(value).
+#   If isArr:
+#     result = initCloneArray(value):
+#         result = new value.constructor(length)   # an empty array of the same length (Array(n))
+#         SPECIAL CASE (RegExp#exec-result shape): if (length && typeof value[0]=='string'
+#             && value has OWN property 'index')  then copy result.index = value.index and
+#             result.input = value.input.  (Only when first element is a STRING and own 'index' exists.)
+#     Because isDeep=true, do NOT early-return; fall through to the property-walk (NODE 5).
+#   NOTE on array property walk (NODE 5): for arrays `props` stays undefined, so the walk iterates
+#   `value` itself by integer index 0..length-1 (arrayEach over the array). Consequences:
+#     - Named NON-INDEX own properties of an array are NOT copied (e.g. arr.custom is dropped),
+#       EXCEPT the index/input pair handled above in initCloneArray.
+#     - Sparse-array HOLES are materialized: each index 0..length-1 is read (a hole reads as
+#       undefined) and assigned, so the clone has OWN index slots for every position 0..length-1
+#       (a hole at i becomes an own property i with value undefined in the clone).
+#
+# NODE 3  (non-array objects): compute  tag = Object.prototype.toString.call(value)  (the toStringTag).
+#   isFunc = (tag == '[object Function]' || tag == '[object GeneratorFunction]').
+#
+#   NODE 3a (Buffer):  if isBuffer(value)  ->  return cloneBuffer(value, isDeep=true):
+#       returns value.slice()  (Node Buffer#slice). The clone is a Buffer with the SAME bytes,
+#       a NEW Buffer object (clone !== value), structurally equal. (Implementation note: Node's
+#       Buffer#slice returns a view that may SHARE the underlying ArrayBuffer — irrelevant to the
+#       structural grade; the bytes and the Buffer-ness are what match.)
+#
+#   NODE 3b (plain-object / arguments / top-level function):
+#       if (tag == '[object Object]' || tag == '[object Arguments]' || (isFunc && !object)):
+#         if isHostObject(value)  ->  return object ? value : {}   # host objects (IE<9 quirk);
+#               in normal Node this is never true for the in-scope inputs -> treat as not taken.
+#         result = initCloneObject(isFunc ? {} : value):
+#             # PROTOTYPE PRESERVATION for plain objects:
+#             initCloneObject(o) = (typeof o.constructor == 'function' && !isPrototype(o))
+#                                    ? Object.create(Object.getPrototypeOf(o))   # SAME prototype
+#                                    : {}                                        # default Object proto
+#             - For a normal {} literal: constructor is Object, proto preserved == Object.prototype.
+#             - For a class/constructor instance (e.g. new Foo()): the CLONE's prototype is set to
+#               Foo.prototype (so clone instanceof Foo is true; own data props are deep-cloned;
+#               inherited methods remain reachable through the shared prototype, NOT copied).
+#             - For a NULL-PROTOTYPE object (Object.create(null)): it has NO constructor, so
+#               initCloneObject returns {} — the clone gets the DEFAULT Object.prototype, NOT null.
+#               (Own enumerable string keys are still deep-copied.)
+#             - When isFunc && !object (a TOP-LEVEL function): initCloneObject({}) -> a fresh {}
+#               whose own keys are then... none (functions expose no own ENUMERABLE keys via keys()),
+#               so a top-level function clones to a NEW EMPTY plain object {} (clone !== the function).
+#         Because isDeep=true, do NOT early-return; fall through to NODE 5 property-walk.
+#
+#   NODE 3c (tag-dispatched objects / non-cloneable):
+#     else (tag is none of Object/Arguments and not a top-level func):
+#       cloneableTags lookup (a fixed table — see CLONEABLE TAGS below).
+#       if NOT cloneableTags[tag]  ->  return object ? value : {}
+#           # NON-CLONEABLE tag. If it has a PARENT (object truthy): return the ORIGINAL value
+#           #   (identity — the original is shared into the clone, NOT recursed).
+#           # If TOP-LEVEL (object falsy): return a NEW EMPTY plain object {}.
+#           # In scope this is: Function (nested -> original fn shared; top-level -> {} handled at 3b),
+#           #   Error ('[object Error]' -> false), WeakMap ('[object WeakMap]' -> false),
+#           #   Promise ('[object Promise]' — not in cloneableTags at all -> false).
+#           #   Verified: nested function value keeps ORIGINAL identity; top-level WeakMap/Error -> {}.
+#       else  ->  result = initCloneByTag(value, tag, baseClone, isDeep=true)   # NODE 4 ladder.
+#         Then fall through to NODE 5 property-walk (the tagged result may ALSO carry own keys/symbols,
+#         e.g. a Date/RegExp with extra own props — those extras are deep-copied in NODE 5).
+#
+# NODE 4  (initCloneByTag ladder — VERIFIED exact, in source switch order):
+#   Ctor = value.constructor.
+#     '[object ArrayBuffer]'        -> cloneArrayBuffer(value):
+#                                        r = new value.constructor(value.byteLength);
+#                                        new Uint8Array(r).set(new Uint8Array(value)); return r.
+#                                        => NEW ArrayBuffer, same byteLength, same bytes, diff ref.
+#     '[object Boolean]'  \
+#     '[object Date]'      >          -> new Ctor(+value)
+#                                        => Boolean wrapper: new Boolean(value.valueOf()? coerced via +);
+#                                           Date: new Date(value.getTime()).  NEW wrapper/Date, same value.
+#                                        (NOTE: for a Boolean wrapper, +object is 0/1 then new Boolean(0/1);
+#                                           new Boolean(0)===falsy-wrapper, new Boolean(1)===truthy-wrapper —
+#                                           valueOf preserved. For Date, +object is the epoch ms.)
+#     '[object DataView]'           -> cloneDataView(value, isDeep=true):
+#                                        buffer = cloneArrayBuffer(value.buffer)   (deep -> NEW buffer);
+#                                        new value.constructor(buffer, value.byteOffset, value.byteLength).
+#                                        => NEW DataView, same offset/length, NEW underlying buffer.
+#     '[object Float32Array]' '[object Float64Array]'
+#     '[object Int8Array]' '[object Int16Array]' '[object Int32Array]'
+#     '[object Uint8Array]' '[object Uint8ClampedArray]' '[object Uint16Array]' '[object Uint32Array]'
+#                                   -> cloneTypedArray(value, isDeep=true):
+#                                        buffer = cloneArrayBuffer(value.buffer)   (deep -> NEW buffer);
+#                                        new value.constructor(buffer, value.byteOffset, value.length).
+#                                        => NEW typed array of the SAME element type, same elements,
+#                                           backed by a NEW (copied) ArrayBuffer (diff buffer ref).
+#     '[object Map]'                -> cloneMap(value, isDeep=true, cloneFunc=baseClone):
+#                                        array = baseClone(mapToArray(value), true)  # DEEP-clone the
+#                                          [k,v] pair array, so BOTH keys and values are deep-cloned;
+#                                        reduce with addMapEntry into a new value.constructor (new Map).
+#                                        => NEW Map, entries in original insertion order, keys AND
+#                                           values structurally cloned (object keys/values get NEW refs).
+#     '[object Number]' '[object String]'
+#                                   -> new Ctor(value):
+#                                        Number wrapper: new Number(value)  (value coerces to its number,
+#                                          incl. NaN/Infinity preserved); String wrapper: new String(value)
+#                                          (also gains own index props '0'.. via String semantics — these
+#                                          are characters, structurally equal). NEW wrapper, same valueOf.
+#     '[object RegExp]'             -> cloneRegExp(value):
+#                                        r = new value.constructor(value.source, /\w*$/.exec(value));
+#                                          # the flags are re-extracted from the regexp's stringified
+#                                          # tail via /\w*$/ -> preserves the SAME flags (g,i,m,s,u,y);
+#                                        r.lastIndex = value.lastIndex;   # lastIndex IS preserved.
+#                                        => NEW RegExp, same source, same flags, same lastIndex.
+#     '[object Set]'                -> cloneSet(value, isDeep=true, cloneFunc=baseClone):
+#                                        array = baseClone(setToArray(value), true)  # DEEP-clone members;
+#                                        reduce with addSetEntry into a new value.constructor (new Set).
+#                                        => NEW Set, members in original insertion order, object members
+#                                           structurally cloned (new refs).
+#     '[object Symbol]'             -> cloneSymbol(value):  Object(Symbol.prototype.valueOf.call(value)).
+#                                        # a SYMBOL WRAPPER object (Object(aSymbol)) -> a new wrapper
+#                                        # around the SAME underlying symbol primitive. (OUT-OF-ENVELOPE
+#                                        # for grading — not codec-round-trippable; see SCOPE.)
+#   (No default case: a cloneable tag not listed would return undefined, but all cloneableTags=true
+#    tags are covered by the ladder above, so this never happens for in-scope inputs.)
+#
+# NODE 5  (cycle check + recursive property walk — runs for arrays(2), plain objects(3b),
+#          and tagged objects(3c) that fell through):
+#   stack || (stack = new Stack)            # Stack: a small ListCache (linear) that upgrades to a
+#                                           #   Map-backed MapCache once it exceeds 199 entries.
+#   stacked = stack.get(value)              # SameValueZero keyed by the ORIGINAL node identity.
+#   if stacked: return stacked              # CYCLE / SHARED-REF: return the already-built clone,
+#                                           #   so the same input node maps to ONE clone node.
+#   stack.set(value, result)                # register BEFORE recursing (enables cycle resolution).
+#
+#   Determine the keys to walk:
+#     if NOT isArr:  props = isFull ? getAllKeys(value) : keys(value)
+#                     # isFull=true -> getAllKeys = own enumerable STRING keys (keys()) followed by
+#                     #   own enumerable SYMBOL keys (Object.getOwnPropertySymbols). So SYMBOL-KEYED
+#                     #   own enumerable properties ARE cloned/copied (their VALUES deep-cloned).
+#                     #   keys() = own enumerable string keys (lodash keys: for plain objects excludes
+#                     #   inherited; for array-likes uses index keys). 'constructor' own key on a
+#                     #   prototype object is excluded by baseKeys, but normal instances are unaffected.
+#     (for arrays props stays undefined.)
+#   arrayEach(props || value, function(subValue, key){
+#       if props { key = subValue; subValue = value[key]; }   # when walking a key list
+#       assignValue(result, key,
+#                   baseClone(subValue, isDeep=true, isFull=true, customizer, key, value, stack));
+#   })
+#   # assignValue(obj,key,val): sets obj[key]=val unless an equivalent own value already exists;
+#   #   crucially, if val===undefined it still assigns when key not already in obj — so
+#   #   undefined-VALUED own keys (and sparse holes) are materialized as own undefined slots in clone.
+#   return result.
+#
+#   KEY-WALK CONSEQUENCES (verified):
+#     - Own enumerable STRING keys: values deep-cloned, key preserved (incl. undefined-valued keys).
+#     - Own enumerable SYMBOL keys: copied; their values deep-cloned (symbol VALUES kept by identity
+#       per NODE 1). Verified: {a:1,[sym]:99} -> clone[sym]===99, clone.a===1.
+#     - NON-enumerable and INHERITED properties are NOT copied (only own enumerable).
+#     - Order: string keys first (insertion/integer-index order per JS), then symbol keys.
+#     - Date/RegExp/typed-array EXTRA own enumerable props are also deep-cloned here (e.g. a Date with
+#       an extra own .extra prop -> clone has .extra deep-cloned, plus the Date value from NODE 4).
+
+# =====================================================================================
+# CLONEABLE TAGS (fixed lookup table — the cloneableTags object)
+# =====================================================================================
+# true  (cloneable): Arguments, Array, ArrayBuffer, DataView, Boolean, Date, Float32Array,
+#                    Float64Array, Int8Array, Int16Array, Int32Array, Map, Number, Object,
+#                    RegExp, Set, String, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Symbol.
+# false (NON-cloneable): Error, Function, WeakMap.
+# absent (treated false): Promise, and any other exotic tag.
+#  Non-cloneable handling (NODE 3c): nested -> ORIGINAL value shared (identity); top-level -> {}.
+
+# =====================================================================================
+ORACLE value -> oracle.json
+# The harness calls fn(value) on the single cloned VALUE and records the returned clone; the grader
+# compares the clone STRUCTURALLY against the expected clone the real package produces. Both must be
+# structurally equal to the (unmutated) input for every codec-round-trippable input.
+
+# =====================================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire baseClone(DEEP,FULL) pipeline above —
+#   primitive passthrough; array clone (incl. index/input special case, sparse-hole materialization,
+#   named-prop drop); plain-object clone with PROTOTYPE PRESERVATION (and null-proto -> default proto);
+#   the full initCloneByTag ladder (ArrayBuffer/Bool/Date/DataView/typed-arrays/Map/Number/String/
+#   RegExp(+lastIndex)/Set/Symbol-wrapper); Buffer slice clone; non-cloneable handling (nested->original,
+#   top-level->{}); own enumerable STRING + SYMBOL key walk; cycle/shared-ref preservation via Stack.
+#
+# CARRIED DATA: none (no large literal table; the only constants are the small fixed tag-strings and
+#   the cloneableTags boolean map, transcribed inline above; no carried.json).
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (specified in prose, NOT emitted by genInputs, NOT graded —
+#   because the oracle codec JSON.stringify(encode(args)) cannot structurally round-trip them, so a
+#   stored expected would be corrupt; their CLONE BEHAVIOR is nonetheless fully defined above for a
+#   blind re-emitter to reconstruct):
+#     - FUNCTIONS as the value (top-level -> {}; nested -> original fn shared by identity).
+#     - SYMBOL primitives used as VALUES (passthrough identity) and SYMBOL-KEYED properties
+#       (copied, values deep-cloned) — symbols don't survive JSON.
+#     - SYMBOL WRAPPER objects (Object(Symbol())) via NODE 4 symbolTag -> wrapper of same symbol.
+#     - CYCLIC / SHARED references (self-referential graphs) — JSON cannot serialize cycles; behavior
+#       (single-clone-per-node, cycle preserved) is defined but not graded by the codec.
+#     - undefined NESTED inside a container (array element / object value / Map value / Set member)
+#       and SPARSE HOLES — `undefined` is dropped by the codec; cloneDeep DOES materialize these as
+#       own undefined slots, but the codec can't carry them, so genInputs avoids nested-undefined.
+#     - NaN / +-Infinity NESTED as plain numbers inside arrays/objects (JSON turns them to null) —
+#       only emitted at TOP LEVEL (where the arg itself is the value) or inside boxed wrappers.
+#     - Error / WeakMap / Promise / host objects / DataView with exotic buffers — not emitted.
+#   NON-MUTATION of the input is an invariant for ALL inputs (graded indirectly: clone structurally
+#   equals the unmodified input).
+
+PROVENANCE lodash.clonedeep@4.5.0 ; repo lodash/lodash (custom modularized build) ; MIT license ;
+           source file index.js (single-file build; module.exports = cloneDeep).

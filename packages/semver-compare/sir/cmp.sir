@@ -1,0 +1,155 @@
+UNIT cmp
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG cmp(a: string, b: string) -> number   # return is ALWAYS one of the integer values -1, 0, or 1 (typeof === "number")
+DEPENDS-ON none   # pure; uses only built-in String.prototype.split and the global Number() coercion
+
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ---------------------------------------------------------------------------
+# This unit is the DEFAULT export of a CommonJS module. The emitted ES module
+# MUST `export default <fn>` where <fn> is a single function of arity 2
+# (a, b) returning a number. No named exports. No options object.
+#
+#   export default function cmp(a, b) { ... }
+#
+# Both arguments are STRINGS. The unit calls a.split('.') and b.split('.')
+# unconditionally, so a/b MUST be strings (a non-string would throw on
+# `.split`; the generator only ever emits strings, so this throw path is NOT
+# exercised — see SCOPE).
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact, complete pipeline — verified by running semver-compare@1.0.0)
+# ---------------------------------------------------------------------------
+# STEP 1. SPLIT
+#   pa = a.split('.')      # array of substrings, never contains a '.'
+#   pb = b.split('.')
+#   Note: ''.split('.')  === ['']  (length 1, element is the empty string)
+#         '1..2'.split('.') === ['1','','2']  (empty middle segment preserved)
+#
+# STEP 2. FIXED 3-ITERATION LADDER  (this is the load-bearing quirk)
+#   The loop index i runs over EXACTLY i = 0, 1, 2 — a HARD-CODED count of 3.
+#   It does NOT iterate over the actual number of segments. Consequences:
+#     - Segments at index >= 3 are NEVER read and NEVER affect the result.
+#       e.g. cmp('1.2.3.4', '1.2.3.5') === 0   (the 4th segment is ignored)
+#     - If a version has fewer than 3 segments, the missing indices read as
+#       `undefined`. Number(undefined) === NaN. This drives the length-asymmetry
+#       behavior below (it is NOT a "treat-missing-as-zero" rule).
+#
+#   For each i in [0, 1, 2], IN THIS ORDER, evaluate:
+#       na = Number(pa[i])     # pa[i] may be undefined  -> Number(undefined) = NaN
+#       nb = Number(pb[i])     # pb[i] may be undefined  -> Number(undefined) = NaN
+#
+#   Then apply these four guarded returns, IN THIS EXACT ORDER. The FIRST one
+#   whose condition is true returns immediately and ends the whole function:
+#       (R1)  if (na > nb)                 return  1
+#       (R2)  if (nb > na)                 return -1
+#       (R3)  if (!isNaN(na) && isNaN(nb)) return  1     # finite a-seg beats NaN b-seg
+#       (R4)  if (isNaN(na) && !isNaN(nb)) return -1     # NaN a-seg loses to finite b-seg
+#   If none of R1..R4 fired for this i, CONTINUE to the next i.
+#   (Note: when na and nb are two DISTINCT finite numbers, exactly one of R1/R2
+#    always fires, so R3/R4 only ever decide outcomes that involve a NaN. When
+#    na and nb are equal finite numbers, all four are false -> continue. When
+#    BOTH are NaN, all four are false [NaN>NaN is false, isNaN&&!isNaN false] ->
+#    continue: two NaN segments at the same index are treated as a TIE.)
+#
+# STEP 3. FALL-THROUGH
+#   If all three iterations completed without returning, return 0.
+#
+# REFERENCE PSEUDO-CODE (semantically exact — emit equivalent logic, any order
+# of the four checks that preserves precedence R1>R2>R3>R4 and the >/isNaN ops):
+#   pa = a.split('.'); pb = b.split('.')
+#   for i in 0..2:
+#       na = Number(pa[i]); nb = Number(pb[i])
+#       if na > nb: return 1
+#       if nb > na: return -1
+#       if (not isNaN(na)) and isNaN(nb): return 1
+#       if isNaN(na) and (not isNaN(nb)): return -1
+#   return 0
+
+# ---------------------------------------------------------------------------
+# SEGMENT COERCION — Number() semantics (standard JS; NO custom parsing)
+# ---------------------------------------------------------------------------
+# Each segment string s (which never contains '.') is converted with the global
+# Number(s). The re-emitter MUST use the language's standard numeric coercion of
+# a string, equivalent to JS Number(s). The behaviors the generator EXERCISES
+# and the SIR therefore PINS:
+#     Number('')         === 0          # empty segment -> 0 (NOT NaN)
+#     Number(undefined)  === NaN        # a MISSING index (past array end) -> NaN
+#     Number('0')        === 0
+#     Number('00')       === 0
+#     Number('02')       === 2          # leading zeros: plain decimal, value 2
+#     Number('1')        === 1
+#     Number('10')       === 10         # NUMERIC magnitude: 10 > 3, 10 > 2 ...
+#     Number('5')        === 5
+#     Number(' 1 ')      === 1          # surrounding ASCII whitespace is trimmed
+#     Number('1e3')      === 1000       # scientific notation honored
+#     Number('0x10')     === 16         # hex prefix honored
+#     Number('Infinity') === Infinity   # the string "Infinity" -> +Infinity (finite-comparison-wise it is the largest; isNaN(Infinity) is false)
+#     Number('x')        === NaN        # any non-numeric segment -> NaN
+#     Number('NaN')      === NaN
+#     Number('1.5')      === 1.5        # NOTE: cannot occur as a segment, since split('.') removes all dots; listed only for completeness
+# The comparison uses NUMERIC `>` (so '1.10.0' > '1.2.3' because 10 > 2), and
+# isNaN() to detect non-numeric/missing segments. There is NO lexical/string
+# comparison anywhere.
+
+# ---------------------------------------------------------------------------
+# WORKED OUTCOMES (every one VERIFIED by running semver-compare@1.0.0)
+# ---------------------------------------------------------------------------
+#   cmp('1.2.3',   '1.10.0')  === -1   # i=1: 2 < 10 numerically (R2)
+#   cmp('1.10.0',  '1.2.3')   ===  1   # i=1: 10 > 2 (R1)
+#   cmp('1.2.3',   '1.2.3')   ===  0   # all three tie -> 0
+#   cmp('1.2',     '1.2.0')   === -1   # i=2: na=Number(undefined)=NaN, nb=Number('0')=0 -> R4 -> -1  (SHORTER+missing < trailing-zero!)
+#   cmp('1.2.0',   '1.2')     ===  1   # i=2: na=0, nb=NaN -> R3 -> 1
+#   cmp('1.2',     '1.2.1')   === -1   # i=2: na=NaN, nb=1 -> R4 -> -1
+#   cmp('1.2.1',   '1.2')     ===  1   # i=2: na=1, nb=NaN -> R3 -> 1
+#   cmp('0.0.1',   '1.0.0')   === -1   # i=0: 0 < 1 (R2)
+#   cmp('1.0.0',   '0.0.1')   ===  1   # i=0: 1 > 0 (R1)
+#   cmp('1.02.3',  '1.2.3')   ===  0   # i=1: Number('02')=2 == 2 -> tie; all tie -> 0
+#   cmp('1.x.3',   '1.2.3')   === -1   # i=1: na=NaN, nb=2 -> R4 -> -1
+#   cmp('1.2.3',   '1.x.3')   ===  1   # i=1: na=2, nb=NaN -> R3 -> 1
+#   cmp('1.x.3',   '1.x.3')   ===  0   # i=1: both NaN -> tie (continue); i=2: 3==3 -> 0
+#   cmp('',        '1.0.0')   === -1   # i=0: na=Number('')=0, nb=1 -> R2 -> -1
+#   cmp('1.0.0',   '')        ===  1   # i=0: na=1, nb=0 -> R1 -> 1
+#   cmp('',        '')        ===  0   # i=0: 0==0; i=1,i=2: both NaN tie -> 0
+#   cmp('1..2',    '1.0.2')   ===  0   # i=1: Number('')=0 == 0; i=2: 2==2 -> 0
+#   cmp('1..2',    '1..2')    ===  0
+#   cmp('5',       '10')      === -1   # i=0: 5 < 10 numerically (R2)
+#   cmp('10',      '5')       ===  1   # i=0: 10 > 5 (R1)
+#   cmp('1.2.3.4', '1.2.3.5') ===  0   # 4th segment ignored (loop stops after i=2); first 3 tie -> 0
+#   cmp('1.2.3.9', '1.2.3.0') ===  0   # 4th segment ignored -> 0
+#   cmp('x',       'y')       ===  0   # i=0: both NaN tie; i=1,2: both NaN tie -> 0
+#   cmp('1',       '1.0.0')   === -1   # i=1: na=NaN, nb=0 -> R4 -> -1
+#   cmp('NaN',     '1')       === -1   # i=0: na=NaN, nb=1 -> R4 -> -1
+#   cmp('Infinity','1')       ===  1   # i=0: Infinity > 1 -> R1 -> 1 (Infinity is finite-comparison max, not NaN)
+#   cmp('1',       'Infinity')=== -1   # i=0: 1 < Infinity -> R2 -> -1
+#   cmp('1e3',     '999')     ===  1   # i=0: 1000 > 999 -> R1 -> 1
+#   cmp(' 1 ',     '1')       ===  0   # i=0: 1 == 1 -> tie; rest tie -> 0
+#   cmp('0x10',    '16')      ===  0   # i=0: 16 == 16 -> tie -> 0
+
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Plain value oracle: for each [a,b] input the expected is the integer cmp(a,b)
+# in {-1, 0, 1}. No seam, no clock, no RNG, no IO. Fully deterministic.
+
+# ---------------------------------------------------------------------------
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire unit. split('.'),
+#     the fixed 3-iteration ladder, the four ordered guarded returns (R1..R4
+#     using numeric `>` and isNaN), the standard Number() string coercion, the
+#     trailing `return 0`. Return value is exactly the integer -1, 0, or 1.
+#   CARRIED DATA: none. No literal tables embedded.
+#   OUT-OF-CONTRACT: none. No side effects, no mutation, no ambient reads.
+#   OUT-OF-ENVELOPE (documented, NOT emitted by genInputs): passing a non-string
+#     arg (e.g. number/null/undefined) reaches `a.split` / `b.split` and would
+#     throw a TypeError; the generator emits only strings, so this is not graded.
+#     Float-valued segments (containing '.') cannot occur because split removes
+#     all dots.
+
+# ---------------------------------------------------------------------------
+PROVENANCE
+#   package: semver-compare@1.0.0
+#   repo:    git://github.com/substack/semver-compare  (substack/semver-compare)
+#   license: MIT (James Halliday / substack)
+#   source:  index.js  (13 lines; module.exports = function cmp(a, b){ ... })
+#   verified-by: executed semver-compare@1.0.0 against all WORKED OUTCOMES above on node, 2026-06-24

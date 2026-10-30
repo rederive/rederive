@@ -1,0 +1,188 @@
+{
+ "status": "ok",
+ "unit": "decode_value",
+ "primary": "selfhost/units/decode_value/sir/decode_value.sir",
+ "primarySha256": "741b65d5c687491faec1852fd5d337c19407512a0f7146fd04f2a2fe7e5a3667",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "A node is a map whose t entry is text. A tree or nested element that is not a node (none, bool, f64, text, list, a map without t, a map whose t is not text) throws. A node whose t is not exactly (case-sensitive) one of TAGS throws, including a t that names a built-in member of a host object (\"constructor\", \"__proto__\", \"toString\"). A node holding any entry its tag's row of NODE-KEYS does not list throws. A listed entry that is missing throws wherever the tag's rule reads it.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R2",
+   "text": "none -> none.",
+   "ambiguity": 0.08
+  },
+  {
+   "id": "R3",
+   "text": "text -> v, which must be text, with a cu entry that must be exactly \"utf8\" or \"utf16\" (else throws). With \"utf8\", v must be well-formed (no unpaired surrogate code unit), else throws. With \"utf16\", v must NOT be well-formed (it holds at least one unpaired surrogate; js only), else throws: a well-formed text has one spelling, cu \"utf8\", so a \"utf16\" empty text, ASCII text or properly paired astral text throws. The result is v.",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R4",
+   "text": "bool -> v, which must be a bool, else throws.",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "R5",
+   "text": "\"undefined\" (the js extension's tag) -> the absent value (js only).",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "R6",
+   "text": "bigint (the js extension's tag) -> v must be DECIMAL text, else throws; the result is that integer as a big integer (js only), never a host number, at any magnitude; no range check.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R7",
+   "text": "i64 and u64 -> v must be DECIMAL text, else throws. Its integer n must lie in the tag's range, else throws: i64 -2^63 <= n <= 2^63-1, u64 0 <= n <= 2^64-1. When -2^53 <= n <= 2^53, BOTH bounds inclusive -> the f64 equal to n; otherwise -> n as a big integer (js only).",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R8",
+   "text": "bytes -> v must be text matching BASE64-CANONICAL, else throws, and the final group's unused low bits must be zero, else throws: \"base64:AR==\" and \"base64:AQJ=\" throw, \"base64:AQ==\" decodes to the one byte 1. The result (js only) is the bytes the base64 after the prefix encodes; \"base64:\" alone is no bytes.",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "R9",
+   "text": "f64 -> v must be text (else throws; its content is a display hint and is never compared with bits: \"banana\" and the empty text are accepted CITED FIDELITY package). bits must be text of exactly 16 characters, each a digit or a lowercase a-f, nothing before or after, else throws. The result is the binary64 whose IEEE-754 bit pattern, sign bit first, those digits spell; 8000000000000000 is -0, 7ff0000000000000 and fff0000000000000 are the infinities. A NaN pattern is accepted only as exactly 7ff8000000000000; every other NaN pattern (any other payload, the sign bit set) throws.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R10",
+   "text": "list and tuple (identical) -> v must be a list, else throws; each element is decoded by R1 in order; the result is the list of results. A tuple's arity is not checked.",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "R11",
+   "text": "map -> v must be a list, else throws. Each entry must be a list of exactly two elements, else throws. The first is decoded by R1 and must decode to text (only a text node does, so a utf16 key is one holding a lone surrogate), else throws; it is the key. A key equal to an earlier key throws. Each key must be strictly greater than the previous key under KEY-ORDER, else throws. The second element decoded by R1 is the value. Every key is an ordinary key of the result, including \"__proto__\" and the names of a host object's built-in members. Entry order is not part of the result (a json map is unordered).",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R12",
+   "text": "record -> v must be a list, else throws. Each field must be a list of exactly two elements whose first is well-formed text (the name, NOT decoded; a name holding an unpaired surrogate throws), else throws; the second decoded by R1 is the value. A name equal to an earlier name throws. Field order is NOT checked (the encoder writes the SIG's order, which the decoder does not know). The result is a map from names to values, every name an ordinary key as in R11. CITED FIDELITY package",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R13",
+   "text": "throw -> msg must be text, else throws (a missing msg too). The result is a VALUE, never a throw: the map with exactly one entry, named __threw, whose value is msg (the empty msg included), at the top level and nested alike. Decoding a throw node returns that map; it does not raise.",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R14",
+   "text": "A throw anywhere in the tree aborts the whole call: there is no partial result. A throw's message is a display hint, never part of the contract.",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R15",
+   "text": "Nesting cap, MAX-VALUE-DEPTH = 100: the root is at depth 0; every element of a list or tuple, every map key and every map value, and every record value is one deeper than the node holding it (a record name is not a node). A position at depth greater than 100 throws, whatever it holds (a node, a non-node, a throw node); depth 100 itself is legal: a chain of 101 nested nodes (the innermost at depth 100) decodes, a chain of 102 throws. Only positions that exist count: an empty list, map, tuple or record at depth 100 decodes, while one holding any element, entry or field throws. A throw node at depth 100 decodes to its one-entry map (R13), whose msg then sits one value deeper than the cap. CITED FIDELITY package",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "TABLE TAGS row 1",
+   "text": "\"none\" | \"bool\" | \"text\" | \"f64\" | \"i64\" | \"u64\" | \"bytes\" | \"list\" | \"tuple\" | \"map\" | \"record\" | \"throw\" | \"undefined\" | \"bigint\"",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE NODE-KEYS row 1",
+   "text": "\"none\" \"undefined\"                           | t",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE NODE-KEYS row 2",
+   "text": "\"bool\" \"bigint\" \"bytes\" \"i64\" \"u64\"          | t, v",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE NODE-KEYS row 3",
+   "text": "\"list\" \"tuple\" \"map\" \"record\"                | t, v",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE NODE-KEYS row 4",
+   "text": "\"text\"                                       | t, v, cu",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE NODE-KEYS row 5",
+   "text": "\"f64\"                                        | t, v, bits",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE NODE-KEYS row 6",
+   "text": "\"throw\"                                      | t, msg",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE DECIMAL row 1",
+   "text": "\"0\"                                                       | zero",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE DECIMAL row 2",
+   "text": "an optional \"-\", then a digit 1-9, then any ASCII digits  | that integer",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE DECIMAL row 3",
+   "text": "anything else: \"-0\", a \"+\", a leading zero (\"007\"), whitespace or a line break anywhere (a trailing one included), an exponent, a fraction, a hex prefix, a non-text v, the empty text | throws",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "TABLE BASE64-CANONICAL row 1",
+   "text": "the prefix \"base64:\" (required, exactly once)                                     |",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE BASE64-CANONICAL row 2",
+   "text": "then zero or more groups of 4 characters of the standard alphabet A-Z a-z 0-9 + / |",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE BASE64-CANONICAL row 3",
+   "text": "then optionally ONE final padded group: 2 alphabet characters and \"==\", or 3 alphabet characters and \"=\" |",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "TABLE BASE64-CANONICAL row 4",
+   "text": "anything else: no prefix, the url-safe alphabet - _, whitespace or a line break anywhere, a missing or extra \"=\", a group of 1 character | throws",
+   "ambiguity": 0.59
+  }
+ ],
+ "ranked": [
+  "R7",
+  "TABLE BASE64-CANONICAL row 4",
+  "R8",
+  "R5",
+  "R11",
+  "TABLE BASE64-CANONICAL row 3",
+  "R3",
+  "R14",
+  "TABLE BASE64-CANONICAL row 2",
+  "R12",
+  "TABLE DECIMAL row 3",
+  "R15",
+  "R9",
+  "R1",
+  "R6",
+  "TABLE NODE-KEYS row 5",
+  "R13",
+  "TABLE BASE64-CANONICAL row 1",
+  "R10",
+  "TABLE DECIMAL row 2",
+  "TABLE NODE-KEYS row 2",
+  "TABLE NODE-KEYS row 3",
+  "TABLE NODE-KEYS row 4",
+  "R4",
+  "TABLE NODE-KEYS row 1",
+  "TABLE TAGS row 1",
+  "TABLE NODE-KEYS row 6",
+  "TABLE DECIMAL row 1",
+  "R2"
+ ],
+ "at": "2026-10-28T02:41:16Z"
+}

@@ -1,0 +1,205 @@
+UNIT extend
+KIND STATE
+# STATE = MUTATING. The unit mutates its `target` argument IN PLACE and returns the SAME reference.
+# The observable graded by the oracle is the RETURNED value (the mutated target), serialized
+# through the harness codec (own-enumerable string keys; value-tags for the edge types below).
+ORACLE-CLASS deterministic
+# Pure-ish: no clock / RNG / fs / net / env. No seam. Fully deterministic given its arguments.
+# (It is "STATE" only because it mutates an argument, not because it touches ambient state.)
+
+SIG extend([deep: boolean], target: any, ...sources: any[]) -> target (the mutated first/second arg)
+# Implemented as a variadic `function extend()` reading `arguments`. The default export.
+# EMITTER NOTE: this is the module's DEFAULT export -> emit `export default <fn>` (function is the default export).
+
+DEPENDS-ON none
+# Self-contained. Internally calls itself recursively (extend(deep, clone, copy)) for deep merge.
+# Uses only built-ins: Object.prototype.hasOwnProperty, Object.prototype.toString, Array.isArray,
+# Object.defineProperty, Object.getOwnPropertyDescriptor.
+
+BEHAVIOR
+# ============================================================================================
+# Helpers (define exactly; they govern the deep-recurse branch and the __proto__ guard).
+# --------------------------------------------------------------------------------------------
+# hasOwn  = Object.prototype.hasOwnProperty   (call form: hasOwn.call(o, k))
+# toStr   = Object.prototype.toString         (call form: toStr.call(o))
+# defineProperty = Object.defineProperty
+# gOPD    = Object.getOwnPropertyDescriptor
+#
+# isArray(arr):
+#   if typeof Array.isArray === 'function' -> return Array.isArray(arr)
+#   else -> return toStr.call(arr) === '[object Array]'
+#   (In any modern runtime this is simply Array.isArray(arr).)
+#
+# isPlainObject(obj) -> boolean:
+#   1. if (!obj || toStr.call(obj) !== '[object Object]') return false
+#        # falsy (null/undefined/0/""/false/NaN) -> false; anything whose [[Class]] tag is not
+#        # exactly "[object Object]" -> false. So: Array -> '[object Array]' -> false;
+#        # Date -> '[object Date]' -> false; RegExp -> false; Map -> '[object Map]' -> false;
+#        # Set -> false; Uint8Array -> '[object Uint8Array]' -> false; function -> false;
+#        # boxed Number/String/Boolean -> '[object Number]'/... -> false.
+#        # PLAIN object literals AND Object.create(null) objects -> '[object Object]' -> continue.
+#   2. hasOwnConstructor = hasOwn.call(obj, 'constructor')
+#      hasIsPrototypeOf  = obj.constructor && obj.constructor.prototype
+#                          && hasOwn.call(obj.constructor.prototype, 'isPrototypeOf')
+#   3. if (obj.constructor && !hasOwnConstructor && !hasIsPrototypeOf) return false
+#        # An object whose constructor exists but is NOT Object (and didn't bring its own
+#        # 'constructor' / whose proto lacks own 'isPrototypeOf') -> not plain.
+#        # NOTE: Object.create(null) has obj.constructor === undefined -> this guard is skipped
+#        # -> such objects ARE treated as plain (and thus deep-recursed/cloned). CONFIRMED live.
+#   4. let key; for (key in obj) { /* empty */ }    # key ends as the LAST enumerated key (or undefined)
+#   5. return typeof key === 'undefined' || hasOwn.call(obj, key)
+#        # Empty object -> key undefined -> true. Otherwise: plain iff the LAST enumerated key is own.
+#
+# setProperty(target, { name, newValue }):
+#   if (defineProperty && name === '__proto__'):
+#       defineProperty(target, '__proto__', { enumerable:true, configurable:true,
+#                                              value:newValue, writable:true })
+#       # Defines '__proto__' as an OWN data property (prevents prototype-chain pollution).
+#   else:
+#       target[name] = newValue
+#
+# getProperty(obj, name):
+#   if (name === '__proto__'):
+#       if (!hasOwn.call(obj, name)) return undefined
+#       else if (gOPD) return gOPD(obj, name).value   # read own __proto__ data prop reliably
+#   return obj[name]
+#   # For every name OTHER THAN '__proto__' this is just obj[name].
+#
+# ============================================================================================
+# Main pipeline — extend():  (variadic, reads arguments[])
+# --------------------------------------------------------------------------------------------
+# Locals: options, name, src, copy, copyIsArray, clone.
+# NODE 1 — argument shifting / deep detection:
+#   target = arguments[0]
+#   i = 1
+#   length = arguments.length
+#   deep = false
+#   if (typeof arguments[0] === 'boolean'):       # ONLY a literal boolean (true OR false) triggers the shift
+#       deep   = arguments[0]                       # deep takes the boolean's VALUE (true=>deep, false=>shallow)
+#       target = arguments[1] || {}                 # NOTE: `|| {}` -> any FALSY arguments[1]
+#                                                   #   (undefined/null/0/""/false/NaN/-0) becomes a fresh {}
+#       i = 2                                        # skip the boolean and the (now-consumed) target
+#   # IMPORTANT: a non-boolean first arg (object/array/number/string/null/undefined/function) is NOT a flag;
+#   #   it is the target, deep stays false, i stays 1.
+# NODE 2 — target coercion to an object:
+#   if (target == null || (typeof target !== 'object' && typeof target !== 'function')):
+#       target = {}                                 # null/undefined OR any primitive (number/string/boolean/
+#                                                   #   bigint/symbol) target -> fresh {}.
+#                                                   # Arrays and functions ARE objects/functions -> kept as-is.
+# NODE 3 — source loop:  for (; i < length; ++i):
+#   options = arguments[i]
+#   if (options != null):                           # null AND undefined sources are SKIPPED ENTIRELY.
+#                                                   #   (false/0/""/NaN are != null -> they "pass", but a
+#                                                   #    primitive has no own/inherited enumerable string keys
+#                                                   #    except String which exposes index keys -> see below.)
+#       for (name in options):                      # !!! for...in -> iterates ALL ENUMERABLE keys, INCLUDING
+#                                                   #     INHERITED enumerable keys. This is NOT a hasOwnProperty
+#                                                   #     filter. (A class instance's enumerable prototype props
+#                                                   #     ARE copied onto target; non-enumerable proto props are NOT.
+#                                                   #     See SCOPE out-of-envelope (5): inherited-key sources are
+#                                                   #     not codec-faithful, so genInputs only emits OWN-key
+#                                                   #     sources, but a faithful re-emit MUST still use for...in.)
+#                                                   #     For a STRING source, for...in yields index keys "0".."n-1".
+#                                                   #     For an ARRAY source, for...in yields its index keys (+ any
+#                                                   #     own enumerable string keys) — copied onto target by key.
+#           src  = getProperty(target, name)        # current value at target[name] (with __proto__ handling)
+#           copy = getProperty(options, name)       # value to merge in (with __proto__ handling)
+#           if (target !== copy):                   # NODE 3a SELF-REFERENCE GUARD: if the value to copy IS the
+#                                                   #   target object itself, SKIP it (prevents infinite loop).
+#               if (deep && copy && (isPlainObject(copy) || (copyIsArray = isArray(copy)))):
+#                   # NODE 3b DEEP-RECURSE BRANCH. Entered only when:
+#                   #   deep is truthy AND copy is truthy AND (copy is a plain object OR copy is an array).
+#                   #   (Note `copyIsArray = isArray(copy)` is an ASSIGNMENT inside the condition — copyIsArray
+#                   #    becomes true iff copy is an array; left false/undefined when copy is a plain object.)
+#                   if (copyIsArray):
+#                       copyIsArray = false                       # reset for next iteration
+#                       clone = (src && isArray(src)) ? src : []   # MERGE BASE: reuse target's existing value
+#                                                                  #   if it is an array, else a FRESH [].
+#                   else:                                          # copy is a plain object
+#                       clone = (src && isPlainObject(src)) ? src : {}  # reuse target's value if it's a plain
+#                                                                       #   object, else a FRESH {}.
+#                   # Recurse: deep-merge copy INTO clone, then store the result under name.
+#                   setProperty(target, { name: name, newValue: extend(deep, clone, copy) })
+#                   # CLONE SEMANTICS: original source objects/arrays are NEVER stored by reference in deep mode;
+#                   #   their contents are merged into `clone`. When `clone` is the reused target value (src),
+#                   #   that EXISTING target sub-object/array is mutated in place and kept (same reference).
+#                   #   When target had no compatible value, a fresh {}/[] is created -> the source is effectively
+#                   #   deep-copied (the source object itself is NOT shared into target).
+#               else if (typeof copy !== 'undefined'):
+#                   # NODE 3c SHALLOW / LEAF SET. Reached when NOT deep-recursing.
+#                   #   Skips copy === undefined ("Don't bring in undefined values"). copy === null IS copied.
+#                   #   In SHALLOW mode, plain-object/array VALUES are copied BY REFERENCE (shared with source).
+#                   #   In DEEP mode, this branch handles all NON-plain-object/non-array values (primitives,
+#                   #   null, Date, RegExp, Map, Set, Uint8Array, boxed primitives, functions) -> copied BY VALUE/REF
+#                   #   (the value itself is assigned; non-plain objects are shared by reference, not cloned).
+#                   setProperty(target, { name: name, newValue: copy })
+#               # else (deep-branch not taken AND copy === undefined): do nothing (undefined skipped).
+# NODE 4 — return target   (the SAME object reference passed/derived in NODE 1/2, now mutated).
+#
+# ============================================================================================
+# CONFIRMED-LIVE FACTS (extend@3.0.2, verified by running the real package):
+#   - extend(true, t, s)  -> deep; t mutated & returned; nested plain objects/arrays merged recursively.
+#   - extend(false, t, s) -> shallow; the boolean `false` IS consumed as the deep flag; target = arguments[1].
+#   - extend(t, s)        -> shallow (no leading boolean); whole sub-objects overwritten by reference.
+#   - for...in copies INHERITED enumerable source keys (e.g. Base.prototype.inherited = 99 IS copied).
+#     Non-enumerable prototype keys are NOT copied. (Out-of-envelope for the oracle — see SCOPE(5).)
+#   - undefined source VALUES are skipped (both shallow and deep). null source VALUES ARE copied.
+#   - null / undefined SOURCES (whole arg) are skipped (options != null guard).
+#   - Self-reference (a source value === the target object) is skipped (target !== copy guard).
+#   - target===null/undefined/primitive -> coerced to {}. target array/function kept. `true||{}`/`false||{}` etc.
+#   - Multiple sources: later sources override earlier; deep merges accumulate across sources.
+#   - Date/RegExp/Map/Set/Uint8Array/Buffer/boxed-Number-String-Boolean source values are NOT plain objects
+#     -> in deep mode they are copied BY REFERENCE (NOT recursed/cloned). NaN/-0/Infinity/bigint copied as-is.
+#   - Object.create(null) source value IS treated as plain -> deep-recursed/cloned in deep mode.
+#   - Deep merge reuses an EXISTING compatible target value as the merge base (same reference, mutated in place):
+#     array<-array, plainObject<-plainObject; otherwise a fresh []/{} is created.
+#   - Sparse-array source values: for...in skips holes -> only present indices are merged onto the clone.
+#   - String source (shallow or deep): for...in yields index keys "0".."n-1" -> {0:'a',1:'b',...}. Number/boolean
+#     sources: no enumerable keys -> no effect.
+#   - __proto__ keys (see SCOPE / out-of-envelope): handled via setProperty/getProperty to avoid prototype
+#     pollution; does NOT mutate Object.prototype. (Not exercised by genInputs — see SCOPE.)
+
+ORACLE value -> oracle.json
+# Differential / held-out: run real extend on each tuple, capture the RETURNED (mutated) target,
+# encode via the harness codec, store as `expected`. A blind re-emit is graded by structural eq of
+# its returned target vs `expected`. KIND STATE: the harness DEEP-CLONES each tuple before each call
+# (genInputs also returns independent graphs) so no fixture is shared/poisoned across emissions.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — argument shifting & deep detection
+#   (boolean-only flag, `|| {}` falsy-target fallback), target primitive->{} coercion, the for...in
+#   (inherited-enumerable) source iteration, getProperty/setProperty (incl. __proto__ own-property handling),
+#   the self-reference guard (target !== copy), the deep-recurse branch (isPlainObject / isArray discrimination,
+#   merge-base reuse, recursive clone), the undefined-skip leaf set, and mutate-and-return-target.
+# CARRIED DATA: none. No constant tables.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (described here, NOT emitted by genInputs because the harness codec
+#   does not round-trip them — documented so a blind engineer still reconstructs the behavior):
+#   (1) __proto__ as an own key in a SOURCE or TARGET. extend defends against prototype pollution via
+#       getProperty (returns undefined for a non-own __proto__) and setProperty (defines __proto__ as an OWN
+#       enumerable data property rather than walking the prototype). VERIFIED: extend(true,{},JSON.parse(
+#       '{"__proto__":{"a":1}}')) yields an object with an OWN '__proto__' key and does NOT pollute
+#       Object.prototype (({}).a === undefined). EXCLUDED FROM genInputs because the codec's reviveArg/enc
+#       assign to o['__proto__'] (which sets the prototype, not an own key) -> the '__proto__' own-key is lost
+#       on round-trip -> a generated case would be non-reproducible/non-discriminating. Reconstruct from this
+#       spec, do not expect it in the frozen oracle.
+#   (2) Function VALUES in sources: codec.enc SKIPS function-valued keys (functions aren't JSON-comparable);
+#       extend itself copies them (shallow) or, since a function is not a plain object/array, copies by ref in
+#       deep mode. EXCLUDED from genInputs (would be dropped by the codec on both sides). Behavior: a function
+#       value is assigned to target[name] like any non-plain value.
+#   (3) Symbol keys: for...in does NOT enumerate Symbol keys -> extend never copies them. Not representable in
+#       JSON inputs anyway. EXCLUDED.
+#   (4) Boxed primitives (new Number/String/Boolean) as source VALUES round-trip via the codec ({__t:'boxed'})
+#       and ARE in-envelope; they are non-plain -> copied by reference/value (deep mode does NOT recurse them).
+#       Generated sparingly (codec-faithful).
+#   (5) INHERITED (prototype-chain) enumerable source keys. extend's for...in DOES copy them (CONFIRMED live:
+#       a value on the source's prototype that is enumerable is copied onto target as an OWN key). BUT the harness
+#       codec.encode serializes args with Object.keys (OWN keys only), so a prototype-inherited key is STRIPPED at
+#       persist time -> the frozen oracle's stored input would carry only the own keys, and `expected` is computed
+#       on that stripped input. Therefore inherited-key sources are NOT codec-faithful and are EXCLUDED from
+#       genInputs (genInputs emits only OWN-key source objects). A faithful re-emit MUST still implement the loop
+#       as `for (name in options)` (not hasOwnProperty) — the inherited-vs-own distinction is simply never
+#       exercised by the oracle because the codec cannot carry an inherited key across the persist boundary.
+
+PROVENANCE extend@3.0.2, repo https://github.com/justmoon/node-extend (justmoon/node-extend), MIT license,
+# source file: index.js (single file; module.exports = function extend() { ... }).
+# Read from: /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-extend-gRbVAI/node_modules/extend/index.js

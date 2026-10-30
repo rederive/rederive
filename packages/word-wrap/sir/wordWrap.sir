@@ -1,0 +1,255 @@
+UNIT wordWrap
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# The DEFAULT (module.exports) export of word-wrap@1.2.5. Pure function, zero deps,
+# no ambient seam (no clock/RNG/io/net). A given (str, options) always maps to the
+# same string. ORACLE value mode.
+
+SIG wordWrap(str: string | null | undefined, options?: {
+      width?: number,           # default 50
+      indent?: string,          # default '  ' (two spaces)
+      newline?: string,         # default '\n' + indent
+      escape?: (line: string) => string,   # default identity (NOT codec-faithful; see SCOPE)
+      trim?: boolean,           # default false (see NOTE-trim below)
+      cut?: boolean             # default false
+   }) -> string | null | undefined
+
+DEPENDS-ON none
+
+# ============================================================================
+# EMISSION TARGET (re-emitter MUST honor this)
+# ============================================================================
+# This is a DEFAULT-export unit (exportName === null). The emitted .mjs MUST do:
+#     export default function wordWrap(str, options) { ... }
+# NOT a named export. The harness calls the default export with arg-arrays
+# [str] or [str, options].
+
+# ============================================================================
+# BEHAVIOR  (exact, ordered pipeline — reproduce verbatim)
+# ============================================================================
+#
+# Reference helpers (define exactly):
+#
+#   identity(s)  = s
+#
+#   trimEnd(str):
+#     # Strips trailing ' ' (U+0020 space) and '\t' (U+0009 tab) ONLY. Not \n, \r, etc.
+#     lastCharPos = str.length - 1
+#     lastChar    = str[lastCharPos]
+#     while (lastChar === ' ' || lastChar === '\t'):
+#       lastChar = str[--lastCharPos]      # pre-decrement, then read
+#     return str.substring(0, lastCharPos + 1)
+#     # NOTE: if str is empty, lastCharPos = -1, lastChar = undefined, loop body skipped,
+#     #       returns str.substring(0, 0) = ''. For an all-spaces/tabs string, lastCharPos
+#     #       walks to -1 and returns '' (substring(0,0)).
+#
+#   trimTabAndSpaces(str):
+#     # Split on '\n', trimEnd each line, rejoin with '\n'. Preserves internal \n count.
+#     return str.split('\n').map(trimEnd).join('\n')
+#
+# MAIN:
+#
+# NODE 1 — option defaulting
+#   options = options || {}
+#
+# NODE 2 — null/undefined short-circuit
+#   if (str == null) return str           # LOOSE equality: matches BOTH null and undefined.
+#                                          # Returns the SAME value passed in (null -> null,
+#                                          # undefined -> undefined). No string produced.
+#
+#   # (If str is a non-string, non-null value, e.g. a number, execution proceeds and
+#   #  str.match(...) THROWS TypeError "str.match is not a function". See SCOPE: out-of-envelope.)
+#
+# NODE 3 — resolve width
+#   width = options.width || 50            # falsy (0, NaN, '', null, undefined, false) -> 50.
+#                                          # Any truthy number/string is used as-is.
+#
+# NODE 4 — resolve indent
+#   indent = (typeof options.indent === 'string') ? options.indent : '  '
+#                                          # ONLY a string value is honored (incl. '' empty string).
+#                                          # Any non-string (number, true, null, undefined) -> '  '.
+#
+# NODE 5 — resolve newline
+#   newline = options.newline || ('\n' + indent)
+#                                          # falsy (incl. '' empty string) -> '\n' + indent.
+#                                          # The default newline CARRIES the indent, which is how
+#                                          # wrapped lines get re-indented. A CUSTOM newline does
+#                                          # NOT include indent (only the FIRST line is indented).
+#
+# NODE 6 — resolve escape
+#   escape = (typeof options.escape === 'function') ? options.escape : identity
+#                                          # default identity. (See SCOPE: functions are not
+#                                          # codec-faithful; genInputs never emits escape.)
+#
+# NODE 7 — build the chunking regex
+#   regexString = '.{1,' + width + '}'     # STRING CONCATENATION of width into the pattern.
+#   if (options.cut !== true):             # strict !== : only literal boolean true disables this
+#     regexString += '([\\s​]+|$)|[^\\s​]+?([\\s​]+|$)'
+#   re = new RegExp(regexString, 'g')
+#
+#   # Resulting pattern when cut !== true (the common case), with U+200B written explicitly:
+#   #     .{1,WIDTH}([\s​]+|$)|[^\s​]+?([\s​]+|$)
+#   # When cut === true:
+#   #     .{1,WIDTH}
+#   #
+#   # CHARACTER CLASSES:
+#   #   '.'      = any char EXCEPT line terminators (\n \r    ). Does NOT match newline.
+#   #   '\s'     = JS whitespace: space \t \n \r \v \f   (nbsp),  ,  - ,
+#   #                      　 ﻿. (​ zero-width space is NOT in \s,
+#   #              which is exactly why it is added explicitly alongside it.)
+#   #   '​' = zero-width space, added as an extra word separator.
+#   # So a "separator run" = one-or-more of (\s OR ​). The 'word' alt [^\s​]+? is
+#   # lazy: it grabs the minimal non-separator run then a trailing separator-run or end-of-string.
+#
+# NODE 8 — chunk
+#   lines = str.match(re) || []            # global match -> array of chunks, or [] if no match.
+#                                          # (Empty string '' -> match returns null -> []. )
+#
+#   # SEMANTICS of the cut !== true pattern, per match attempt at the current position:
+#   #   ALT-A: .{1,WIDTH}([\s​]+|$)
+#   #     Greedily take up to WIDTH non-line-terminator chars, then REQUIRE either a
+#   #     separator-run (consumed INTO the chunk) or end-of-string. Because '.' excludes \n,
+#   #     ALT-A's '.{1,W}' run stops before any \n; the following [\s]+ alt CAN then consume
+#   #     a run that includes \n (\n is in \s).
+#   #   ALT-B: [^\s​]+?([\s​]+|$)
+#   #     Lazy non-separator run, used when ALT-A can't satisfy (e.g. a single word longer
+#   #     than WIDTH with no internal separator -> the WHOLE word is taken as one chunk that
+#   #     OVERFLOWS WIDTH). This is the "long word, no cut" behavior: long words are NOT broken.
+#   #   Each chunk INCLUDES its trailing separator-run (e.g. "aaa " keeps the space).
+#   #
+#   #   With cut === true: pattern is just .{1,WIDTH} (global). It slices the string into
+#   #   hard pieces of up to WIDTH non-line-terminator chars each, breaking words mid-letter.
+#   #   Separators are NOT special; they are just chars counted toward WIDTH. (A \n is a
+#   #   line terminator so '.' won't cross it; it forms a chunk boundary.)
+#   #
+#   #   INVALID-QUANTIFIER CASE: if width concatenates to a token that is NOT a valid regex
+#   #   quantifier upper bound (a non-integer like 2.5, a negative like -3, or Infinity ->
+#   #   '.{1,2.5}' / '.{1,-3}' / '.{1,Infinity}'; NaN never reaches here because NaN is falsy
+#   #   and NODE 3 substitutes 50), then '.{1,X}' is treated as the LITERAL characters
+#   #   '.', '{', '1', ',', ... so ALT-A's quantified-dot prefix never matches. With cut !== true,
+#   #   matching falls entirely to ALT-B: EACH WORD (its lazy non-separator run + trailing
+#   #   separator-run/end) becomes ITS OWN chunk, so a multi-word string is split per-word and
+#   #   newline-joined — width is effectively ignored for wrapping width but words are STILL
+#   #   separated onto their own lines. (A single word -> one chunk -> one line.) With cut ===
+#   #   true and an invalid quantifier, the pattern '.{1,2.5}' matches the literal substring and
+#   #   typically yields [] -> result = indent.
+#
+# NODE 9 — per-chunk transform + join
+#   result = indent + lines.map(function(line) {
+#       if (line.slice(-1) === '\n'):       # if chunk's LAST char is a single newline,
+#         line = line.slice(0, line.length - 1)   # drop exactly ONE trailing '\n'.
+#       return escape(line)                 # apply escape (default identity)
+#     }).join(newline)
+#
+#   # - The result ALWAYS starts with `indent` (even for a single chunk / empty match).
+#   # - The trailing-\n strip removes ONLY ONE \n and ONLY if it is the very last char of the
+#   #   chunk. A chunk ending in "...\n " (newline then space) is NOT stripped (last char is space),
+#   #   so its internal \n survives -> the default newline ('\n'+indent) joins around it, which is
+#   #   how a stray empty wrapped line can appear (see EXAMPLE foo-nl-bar below).
+#   # - When lines === [] (e.g. str === ''): indent + [].join(newline) === indent. So wrap('')
+#   #   === '  ' (default indent), and trim===true then strips it to ''.
+#
+# NODE 10 — optional trim
+#   if (options.trim === true):             # strict ===: only literal boolean true triggers it
+#     result = trimTabAndSpaces(result)     # strip trailing space/tab from EACH \n-delimited line
+#   return result
+#
+# ----------------------------------------------------------------------------
+# NOTE-trim (IMPORTANT — d.ts vs code disagreement):
+#   The TypeScript .d.ts comments claim `trim` defaults to TRUE. The ACTUAL CODE checks
+#   `options.trim === true`, so trim is effectively DEFAULT FALSE — trailing whitespace
+#   (the separator that each chunk carries) is RETAINED unless trim:true is explicitly passed.
+#   Reproduce the CODE behavior (default false). Verified: wrap('aaa bbb',{width:5}) ===
+#   '  aaa \n  bbb' (trailing space kept).
+#   Likewise the .d.ts `newline` default is described as '\n' but the code default is '\n'+indent.
+#   Reproduce the CODE.
+#
+# ============================================================================
+# WORKED EXAMPLES (canonical — a blind re-emitter must reproduce these EXACTLY)
+# ============================================================================
+# All strings shown JSON-escaped.
+#
+#   wrap("aaa bbb ccc ddd eee", {width:10})
+#     -> "  aaa bbb \n  ccc ddd \n  eee"
+#   wrap("")                       -> "  "
+#   wrap("", {trim:true})          -> ""
+#   wrap(null)                     -> null            # returns the argument unchanged
+#   wrap(undefined)                -> undefined
+#   wrap("     ")                  -> "       "        # indent(2) + "     " (one chunk, the
+#                                                      #   5-space separator-run, ALT-A end-of-str)
+#   wrap("a    b    c", {width:5}) -> "  a    \n  b    \n  c"
+#   wrap("foo bar\nbaz qux", {width:5})
+#     -> "  foo \n  bar\n  baz \n  qux"                # the "bar\n" chunk's trailing \n stripped
+#   wrap("aaa bbb ccc", {width:5, trim:true})  -> "  aaa\n  bbb\n  ccc"
+#   wrap("aaa bbb ccc", {width:5, trim:false}) -> "  aaa \n  bbb \n  ccc"
+#   wrap("supercalifragilistic abc", {width:10})          -> "  supercalifragilistic \n  abc"  # long word NOT cut
+#   wrap("supercalifragilistic abc", {width:10, cut:true})-> "  supercalif\n  ragilistic\n   abc"
+#   wrap("aaa bbb ccc", {width:5, indent:"->"})  -> "->aaa \n->bbb \n->ccc"
+#   wrap("aaa bbb ccc", {width:5, indent:""})    -> "aaa \nbbb \nccc"
+#   wrap("aaa bbb ccc", {width:5, newline:" | "}) -> "  aaa  | bbb  | ccc"  # first line still indented; newline has NO indent
+#   wrap("a\n\nb", {width:50})    -> "  a\n\n  b"      # chunk "a\n\n" ends in \n -> strip ONE -> "a\n"; join adds "\n  "
+#   wrap("foo \n bar", {width:50})-> "  foo \n \n  bar" # chunk "foo \n " ends in SPACE (not stripped); internal \n kept
+#   wrap("foo\r\nbar", {width:50})-> "  foo\r\n  bar"   # \r kept; \r\n separator-run consumed; chunk "foo\r\n" -> strip \n -> "foo\r"
+#   wrap("foo​bar baz", {width:5}) -> "  foo​\n  bar \n  baz"  # zero-width space is a separator
+#   wrap("foobarbaz", {width:5})  -> "  foobarbaz"      # single long word, no internal sep, NOT cut
+#   wrap("abcdefghij", {width:3, cut:true}) -> "  abc\n  def\n  ghi\n  j"
+#   wrap("aaa\tbbb", {width:50, trim:true})  -> "  aaa\tbbb"   # tab is INTERNAL here (one chunk "aaa\tbbb"); trimEnd only strips TRAILING tab/space
+#   wrap("aaa   \nbbb\t\t", {width:50, trim:true}) -> "  aaa\n  bbb"  # trim strips trailing space/tab per \n-line
+#
+#   # --- invalid-quantifier width (ALT-B per-word fallthrough) ---
+#   wrap("aaaaa", {width:-3})              -> "  aaaaa"                  # single word -> one chunk -> one line
+#   wrap("aaaaa", {width:2.5})             -> "  aaaaa"
+#   wrap("aaaaa bbbbb ccccc", {width:2.5}) -> "  aaaaa \n  bbbbb \n  ccccc"  # EACH word its own chunk, newline-joined
+#   wrap("aaaaa bbbbb", {width:-3})        -> "  aaaaa \n  bbbbb"
+#
+#   # --- falsy width -> default 50 ---
+#   wrap("aaa bbb ccc", {width:0})         -> "  aaa bbb ccc"           # 0 falsy -> width 50 (fits on one line)
+#
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic value oracle. For each generated [str] or [str, options], the expected is the
+# EXACT return string (or the unchanged null/undefined for the null-short-circuit inputs). The
+# harness computes expecteds from the real package; the re-emitter must converge byte-for-byte.
+
+# ============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full NODE 1..10 pipeline above: option defaulting (width||50, indent string-only,
+#     newline||'\n'+indent, escape function-only, strict cut===true / trim===true checks),
+#     the chunking regex (both cut and non-cut patterns, with the explicit ​ separator),
+#     the per-chunk single-trailing-\n strip, the join, and trimTabAndSpaces (space/tab-only,
+#     per \n-line). The result always begins with `indent`.
+#   - null/undefined short-circuit (loose == returns the argument unchanged).
+#   - Invalid-quantifier width fall-through (non-integer / negative / Infinity widths ->
+#     per-word ALT-B chunking).
+#
+# CARRIED DATA: none. (No large literal tables; the only constants are the regex fragment
+#   '([\\s​]+|$)|[^\\s​]+?([\\s​]+|$)' and the defaults 50 / '  ' / '\n'+indent,
+#   all inlined above. No carried.json is shipped.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for the blind engineer; NOT emitted by genInputs
+#   because they are not oracle-codec-faithful or are non-value behavior):
+#   - options.escape : a FUNCTION. Functions do not survive JSON.stringify(encode(args)), so
+#     genInputs never emits an escape. Behavior IS in-contract and reconstructable: each chunk
+#     (after the trailing-\n strip) is passed through escape; default is identity. A blind
+#     engineer reconstructs this from NODE 6/9.
+#   - str a NON-STRING, NON-NULL value (e.g. a number): str.match is undefined -> THROWS
+#     TypeError "str.match is not a function". A number IS codec-faithful, but this is a throw
+#     path; documented here. genInputs does NOT emit it (we keep the envelope to string |
+#     null | undefined per SIG). A blind engineer can reproduce the throw from NODE 2/8.
+#   - String OBJECT (new String('x')) vs primitive: identity-bearing boxed primitive, not
+#     codec-faithful; never emitted. Behavior would match the primitive (str.match exists).
+#   - width = NaN / Infinity as a STORED option value: not codec-faithful (do not survive the
+#     JSON round-trip as values), so genInputs never emits them. NaN's branch (-> default 50)
+#     is exercised via width:0; the invalid-quantifier branch is exercised via width:2.5 / -3.
+#   - No stateful/side-effecting behavior; no ambient seam; nothing quarantined.
+
+# ============================================================================
+PROVENANCE
+#   package: word-wrap@1.2.5
+#   author:  Jon Schlinkert (jonschlinkert)
+#   repo:    https://github.com/jonschlinkert/word-wrap
+#   license: MIT
+#   source:  node_modules/word-wrap/index.js  (module.exports default function)
+#   types:   node_modules/word-wrap/index.d.ts (note: d.ts trim/newline defaults disagree with code; code wins)

@@ -1,0 +1,202 @@
+UNIT flattenDepth
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG flattenDepth(array, depth = 1) -> Array   # default export; module.exports = flattenDepth
+DEPENDS-ON none   # zero runtime deps; all helpers (toInteger/toFinite/toNumber, isFlattenable,
+                  # isArray/isArguments/isArrayLikeObject, baseFlatten, arrayPush) are inlined in the unit
+
+# =============================================================================
+# EMITTER DIRECTIVE (codec / module shape)
+# =============================================================================
+# This is a DEFAULT export. The re-emitter MUST publish it as:  export default <fn>
+# The fn is pure (no seam): same args -> same NEW array, always. No clock/RNG/IO/net.
+# Inputs are persisted as JSON.stringify(encode(args)) and replayed via dynamic import().
+# Results are compared after the SAME codec round-trip on both sides, so the following
+# codec normalizations are SYMMETRIC and gradable (they affect real and re-emit identically):
+#   - sparse holes in any array            -> become the value `undefined`
+#   - `undefined` element                  -> serialized as JSON null
+#   - NaN / +Infinity / -Infinity element  -> serialized as JSON null
+#   - -0 element                           -> serialized as 0
+# These are NOT bugs to reproduce in your code; they are codec facts. Your job is only to
+# place the SAME value (a hole/undefined/NaN/-0) at the SAME position the real fn would.
+
+# =============================================================================
+# BEHAVIOR  (exact pipeline — ordered; reproduce precisely)
+# =============================================================================
+# flattenDepth(array, depth):
+#
+#   NODE 1 — empty/degenerate guard (runs BEFORE any depth coercion):
+#       length = array ? array.length : 0
+#         # `array ? ... : 0` is JS truthiness: null/undefined/false/0/""/NaN -> length 0.
+#         # For a non-nullish value, read its `.length` property (may be undefined).
+#       if (!length) return []        # !length is true when length is 0, undefined, NaN, or any falsy.
+#         # => null, undefined, [], "", 0, true, 5, {}, {length:0} all return a fresh [].
+#         # The returned [] is a NEW empty array every call.
+#
+#   NODE 2 — depth resolution (SHARP BRANCH — get this exactly right):
+#       depth = (depth === undefined) ? 1 : toInteger(depth)
+#         # *** depth === undefined  -> 1  (the DEFAULT; NOT coerced). ***
+#         # *** depth === null       -> toInteger(null) = 0  (null is NOT undefined). ***
+#         # Calling with one argument (arity 1) leaves depth === undefined -> default 1.
+#         # toInteger(depth) is defined in NODE 5.
+#
+#   NODE 3 — flatten:
+#       return baseFlatten(array, depth)        # see NODE 4. Always returns a NEW array.
+#
+# -----------------------------------------------------------------------------
+# NODE 4 — baseFlatten(array, depth, predicate=isFlattenable, isStrict=false, result=[])
+#   (the unit calls it with only array+depth; predicate=isFlattenable, isStrict undefined/false,
+#    result fresh []). Iterate index = 0 .. array.length-1 (ascending; reads array[index],
+#    so a hole yields `undefined`):
+#       value = array[index]
+#       if (depth > 0 AND isFlattenable(value)):
+#           if (depth > 1):
+#               # recurse: flatten `value` one level shallower, appending into the SAME result
+#               baseFlatten(value, depth - 1, isFlattenable, isStrict, result)
+#           else:   # depth === 1 (the last allowed level)
+#               # arrayPush: append EACH element of `value` (by index 0..value.length-1) onto
+#               # result, WITHOUT further flattening. (value's own elements are copied as-is,
+#               # including holes -> undefined.)
+#               for j in 0..value.length-1: result[result.length] = value[j]
+#       else:
+#           # not flattenable, OR depth <= 0: push the value itself (one slot)
+#           result[result.length] = value
+#       # NOTE: isStrict is false here, so the `else if (!isStrict)` branch always fires when the
+#       # `if` does not. There is NO strict-drop behavior in flattenDepth.
+#   return result
+#
+#   Consequences (verified):
+#     depth <= 0  -> NOTHING is flattenable (depth>0 fails for every value) => a one-level
+#                    SHALLOW COPY of `array` (each top element copied as-is into a new array).
+#                    depth 0, negative depth, null/NaN-coerced depth all hit this.
+#     depth = 1   -> flatten exactly one level: each flattenable top element has ITS elements
+#                    spliced in; non-flattenable top elements pass through.
+#     depth = k   -> flatten up to k levels; elements still nested deeper than k stay as arrays.
+#     depth huge  -> full flatten (any integer >= the array's max nesting depth).
+#
+# -----------------------------------------------------------------------------
+# NODE 5 — isFlattenable(value)  (the per-element predicate):
+#       return isArray(value)            # Array.isArray(value)
+#           OR isArguments(value)        # a JS `arguments` object (array-like w/ own 'callee')
+#           OR !!(spreadableSymbol && value && value[Symbol.isConcatSpreadable])
+#                                        # an object whose Symbol.isConcatSpreadable prop is truthy
+#   IN-ENVELOPE (what genInputs emits) reduces this to:  isFlattenable(value) === Array.isArray(value).
+#   i.e. ONLY real arrays are flattenable among codec-faithful values. Everything else passes
+#   through untouched: numbers, strings (NOT split — a string ELEMENT is pushed whole), booleans,
+#   null, plain objects {}, RegExp, Set, Map, Uint8Array/Buffer, bigint, nested objects.
+#   (See SCOPE for the OUT-OF-ENVELOPE arguments-object / Symbol.isConcatSpreadable cases, which are
+#    real but un-round-trippable across the process boundary and therefore documented, not tested.)
+#
+# -----------------------------------------------------------------------------
+# NODE 6 — toInteger(value)  (depth coercion; only reached when depth !== undefined):
+#       result = toFinite(value)
+#       remainder = result % 1
+#       return (result === result)
+#                 ? (remainder ? result - remainder : result)   # truncate fraction TOWARD ZERO
+#                 : 0                                            # (unreachable: toFinite never NaN)
+#   => fractional part is dropped toward zero: 2.9 -> 2 ; -2.9 -> -2 ; -0.5 -> -0(==0).
+#
+# NODE 7 — toFinite(value):
+#       if (!value) return value === 0 ? value : 0
+#           # falsy fast-path: 0 -> 0 ; -0 -> -0 ; otherwise (null,undefined,false,"",NaN) -> 0.
+#       value = toNumber(value)
+#       if (value === Infinity || value === -Infinity) return sign * 1.7976931348623157e+308
+#           # (MAX_INTEGER, an enormous finite integer => full flatten in practice)
+#       return value === value ? value : 0      # NaN -> 0
+#
+# NODE 8 — toNumber(value):
+#       if typeof value === 'number': return value
+#       if isSymbol(value): return NaN
+#       if isObject(value):                       # object/function/array
+#           other = (typeof value.valueOf === 'function') ? value.valueOf() : value
+#           value = isObject(other) ? (other + '') : other
+#           # i.e. take valueOf(); if still object, stringify it (String(other))
+#       if typeof value !== 'string': return value === 0 ? value : +value
+#       value = value.replace(/^\s+|\s+$/g, '')   # TRIM leading/trailing whitespace
+#       isBinary = /^0b[01]+$/i.test(value)
+#       if (isBinary || /^0o[0-7]+$/i.test(value)):
+#             return parseInt(value.slice(2), isBinary ? 2 : 8)    # "0b101"->5, "0o17"->15
+#       if (/^[-+]0x[0-9a-f]+$/i.test(value)): return NaN          # SIGNED hex is bad -> NaN
+#       return +value                                              # else Number(value)
+#                                                                  # ("0x10"->16, "2.9"->2.9,
+#                                                                  #  "abc"->NaN, ""->0, "  3 "->3)
+#
+#   Depth coercion table (VERIFIED on the real package; codec-faithful depths in genInputs):
+#       undefined -> 1 (DEFAULT, bypasses toInteger)   null -> 0      true -> 1     false -> 0
+#       0 -> 0     1 -> 1     2 -> 2     -2 -> -2       2.9 -> 2       -2.9 -> -2
+#       "2" -> 2   "2.9" -> 2 "  3  " -> 3              "+2" -> 2      "" -> 0       "abc" -> 0
+#       "0x10" -> 16   "0b11" -> 3   "0o17" -> 15       "-0x10" -> 0 (bad signed hex -> NaN -> 0)
+#       []  -> 0  (String([])=""  -> 0)                 [3] -> 3  (String([3])="3" -> 3)
+#       {}  -> 0  (String({})="[object Object]" -> NaN -> 0)
+#       1e9 / 1000000 -> full flatten
+#     (depth <= 0  => shallow one-level copy;  depth >= maxNesting => full flatten.)
+
+# =============================================================================
+# WORKED EXAMPLES (oracle-anchored; A = [1,[2,[3,[4]]]])
+# =============================================================================
+#   flattenDepth([1,[2,[3,[4]],5]])           => [1,2,[3,[4]],5]      # default depth 1
+#   flattenDepth([1,[2,[3,[4]],5]], 2)        => [1,2,3,[4],5]
+#   flattenDepth(A, 0)                         => [1,[2,[3,[4]]]]      # shallow copy
+#   flattenDepth(A, 100)                       => [1,2,3,4]            # full
+#   flattenDepth(A, -2)                        => [1,[2,[3,[4]]]]      # negative -> shallow
+#   flattenDepth(A, null)                      => [1,[2,[3,[4]]]]      # null -> 0 -> shallow
+#   flattenDepth(A)            (1 arg)          => [1,2,[3,[4]]]        # undefined -> default 1
+#   flattenDepth([1,[2,{a:1}],[[3]]], 1)       => [1,2,{a:1},[3]]      # object passes through
+#   flattenDepth([1,null,[null,2]], 1)         => [1,null,null,2]
+#   flattenDepth(['ab',['cd']], 1)             => ['ab','cd']          # strings NOT split
+#   flattenDepth([1,,3], 1)                    => [1,undefined,3]      # top hole -> undefined value
+#   flattenDepth([1,[2,,4]], 1)                => [1,2,undefined,4]    # nested hole copied
+#   flattenDepth([[],[[]],1], 2)               => [1]                  # empties vanish
+#   flattenDepth(null) / (undefined) / ([])    => []                   # fresh empty array
+#   flattenDepth('hello')                      => ['h','e','l','l','o'] # string array-like by index
+#   flattenDepth(5) / ({}) / (true)            => []                   # length 0/undefined
+#   flattenDepth({length:2, 0:'a', 1:'b'})     => ['a','b']            # array-like object
+
+# =============================================================================
+# IDENTITY / PURITY INVARIANTS
+# =============================================================================
+#   - The result is ALWAYS a brand-new array (result !== array), including depth 0.
+#   - Input `array` is never mutated.
+#   - At depth 0 the shallow copy shares element references with the source (no deep clone),
+#     but the top-level container is new. (Reference identity is not graded across the JSON
+#     codec; structural value equality is.)
+
+ORACLE value -> oracle.json
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly — all of NODES 1-8 above):
+#   the empty guard, the depth===undefined default-1 vs toInteger branch, baseFlatten's
+#   per-depth recursion + arrayPush splice at depth 1 + shallow push at depth<=0, isFlattenable
+#   (reduced to Array.isArray within-envelope), and the full toInteger/toFinite/toNumber
+#   coercion chain incl. trim, binary/octal parse, bad-signed-hex -> NaN, Infinity -> MAX_INTEGER.
+#
+# CARRIED DATA: none. (The only literal constants are inline number/regex constants documented
+#   verbatim above: INFINITY, MAX_INTEGER=1.7976931348623157e+308, MAX_SAFE_INTEGER, and the
+#   reTrim/reIsBinary/reIsOctal/reIsBadHex regexes. No table to extract; no carried.json.)
+#
+# OUT-OF-ENVELOPE (real behavior documented; NOT emitted by genInputs because the value cannot
+#   survive JSON.stringify(encode(args)) faithfully across the process boundary — a blind
+#   re-emitter still reconstructs these from this spec, they are just not differentially tested):
+#   - arguments objects: a JS `arguments` object element IS flattenable (isArguments true) and
+#       is spliced in like an array. e.g. flattenDepth([1, (function(){return arguments})(2,3)], 1)
+#       => [1,2,3]. Not codec-faithful (becomes a plain object on round-trip), so not tested.
+#   - Symbol.isConcatSpreadable: an object with a truthy [Symbol.isConcatSpreadable] property IS
+#       flattenable and is spliced by index over its .length. e.g.
+#       flattenDepth([1, {0:'x',1:'y',length:2,[Symbol.isConcatSpreadable]:true}], 1) => [1,'x','y'].
+#       Symbols don't survive JSON; not tested.
+#   - function elements / Symbol elements: functions and Symbols are not codec-faithful as
+#       array elements. A function element is non-flattenable and would pass through; a Symbol
+#       element likewise. Not emitted.
+#   - raw NaN / +Infinity / -Infinity / -0 / boxed-Number as the DEPTH argument: not JSON-faithful
+#       as a raw arg. Their BEHAVIOR is fully covered via codec-faithful proxies that coerce
+#       identically: Infinity-full-flatten via large integers / "0x10"; NaN-or-null-or-(-0)->0
+#       (shallow) via literal 0 and null and "abc"/"" ; boxed/valueOf depths via the string and
+#       array forms ("[3]"->3, "2.9"->2). The depth coercion table above documents the raw forms
+#       for a blind re-emitter even though genInputs uses the proxies.
+#
+# OUT-OF-CONTRACT (stateful/side APIs): none. Pure value function.
+
+PROVENANCE lodash.flattendepth@4.7.0 (lodash Custom Build, modularized);
+  repo lodash/lodash; license MIT; source file index.js (module.exports = flattenDepth, line 512).

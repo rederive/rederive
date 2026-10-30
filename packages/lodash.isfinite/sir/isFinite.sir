@@ -1,0 +1,98 @@
+UNIT isFinite
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# Pure predicate. No seam (no clock/RNG/env/io/net). Deterministic on its
+# single argument. No mutation, no side effects, no carried data, zero deps.
+# ---------------------------------------------------------------------------
+
+SIG isFinite(value: any) -> boolean
+
+DEPENDS-ON none
+
+EMISSION-INTERFACE
+  # The original unit is the DEFAULT export (module.exports = isFinite).
+  # The blind re-emitter MUST `export default <fn>` from the .mjs:
+  #     export default function isFinite(value) { ... }
+  #   -- or --
+  #     function isFinite(value) { ... }
+  #     export default isFinite;
+  # The harness loads the module via dynamic import() and calls the default
+  # export as a unary function. Return value is a strict JS boolean (true/false).
+
+BEHAVIOR
+  # The EXACT 3.3.2 implementation (verified by reading index.js AND by running
+  # the installed package on every edge below):
+  #
+  #     var nativeIsFinite = root.isFinite;          # the GLOBAL isFinite, NOT Number.isFinite
+  #     function isFinite(value) {
+  #       return typeof value == 'number' && nativeIsFinite(value);
+  #     }
+  #
+  # Behavioral contract (this is what the blind re-emitter must satisfy):
+  #
+  # NODE 1 (type gate, short-circuit AND):
+  #   If `typeof value !== 'number'`  -> return false IMMEDIATELY.
+  #   Because of the short-circuit, the value is NEVER coerced and the inner
+  #   finite-check is never reached for non-number inputs. This is THE
+  #   discriminator vs the global `isFinite`: lodash isFinite does NOT coerce.
+  #   In particular:
+  #     - numeric STRINGS ('3', '0', '1e3', '') -> false   # NOT coerced to a number
+  #     - bigint (3n, 0n)                        -> false   # typeof is 'bigint'
+  #     - boolean (true, false)                  -> false
+  #     - null, undefined (incl. NO ARGUMENT)    -> false
+  #     - objects/arrays/RegExp/Set/Map/         -> false
+  #       Uint8Array/Buffer/Date/boxed
+  #       (new Number/new String/new Boolean)            # typeof is 'object'
+  #     - Symbol                                 -> false   # typeof is 'symbol'
+  #     - function                               -> false   # typeof is 'function'
+  #
+  # NODE 2 (finite-number check), reached ONLY when typeof value === 'number':
+  #   Return the result of the GLOBAL isFinite applied to the number.
+  #   For a value that is already a NUMBER primitive, global isFinite(x) and
+  #   Number.isFinite(x) agree exactly (no coercion happens on a number), so:
+  #     true  iff x is a finite number primitive
+  #     false iff x is NaN, +Infinity, or -Infinity
+  #   Concretely:
+  #     - any finite number incl. 0, -0, negatives, fractions,
+  #       Number.MAX_VALUE, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER,
+  #       1e3, 1e308                              -> true
+  #     - NaN                                     -> false
+  #     - Infinity / +Infinity / Number.POSITIVE_INFINITY -> false
+  #     - -Infinity / Number.NEGATIVE_INFINITY    -> false
+  #     - a numeric LITERAL that overflows to Infinity at parse time
+  #       (e.g. 1e309 === Infinity) is already the number Infinity -> false
+  #
+  # RESULT TYPE: a primitive boolean. (true && finite-check yields the boolean
+  # returned by global isFinite, which is always a primitive boolean; the
+  # false branch yields the primitive false from the typeof comparison.)
+  # -0 is a finite number -> true (Object.is(-0,-0) irrelevant; value-equal to a
+  # finite number, global isFinite(-0) === true).
+
+ORACLE value -> oracle.json
+  # Single boolean output graded by strict equality. No seam, no trace.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the typeof === 'number' gate (short-circuit, no coercion)
+    - the finite check (false for NaN / +-Infinity, true otherwise) on number primitives
+  CARRIED DATA: none.
+  OUT-OF-CONTRACT: none (no stateful mutators, no side APIs).
+  OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because they do not
+  survive the input codec's JSON.stringify(encode(args)) round-trip):
+    - Symbol  -> behavior is false (typeof 'symbol'); documented here so a blind
+      re-emitter reconstructs it, but Symbols are not codec-faithful so the
+      generator does not emit them.
+    - function values -> behavior is false (typeof 'function'); not codec-faithful,
+      not emitted.
+    All other JS edge values used by genInputs (RegExp, Set, Map, Uint8Array,
+    Buffer, bigint, -0, NaN, +/-Infinity, boxed Number/String/Boolean) ARE
+    round-trippable by the factory codec and are exercised explicitly.
+
+PROVENANCE
+  package: lodash.isfinite@3.3.2 (npm)
+  repo: lodash/lodash (Custom Build: `lodash modularize exports="npm" -o ./`)
+  license: MIT
+  source file: node_modules/lodash.isfinite/index.js  (function isFinite, lines 49-51;
+    module.exports = isFinite, line 53)

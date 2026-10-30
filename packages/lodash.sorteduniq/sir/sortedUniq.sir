@@ -1,0 +1,131 @@
+UNIT sortedUniq
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG sortedUniq(array: Array | null | undefined | array-like) -> Array   # NEW array
+
+DEPENDS-ON none
+# Self-contained single file. Inlines two private helpers: baseSortedUniq and eq.
+# Zero runtime dependencies. No ambient seam (no clock/RNG/env/io/net) — purely value-mode.
+
+MODULE-SHAPE
+# This unit is a DEFAULT export. The original is `module.exports = sortedUniq`.
+# The blind re-emitter MUST ship the function as the module's DEFAULT export:
+#     export default function sortedUniq(array) { ... }
+# (loaded by the harness via dynamic import(); exportName is null / importKind 'default').
+
+BEHAVIOR
+# ---- Top-level guard (function sortedUniq) ----
+# node-1  GUARD: evaluate truthiness of (array && array.length).
+#           - If `array` is null or undefined           -> the && short-circuits falsy  -> return []  (a fresh empty array)
+#           - If `array.length` is 0 / absent / falsy    -> falsy                         -> return []  (a fresh empty array)
+#           - Otherwise (array present AND array.length is truthy) -> proceed to node-2 (baseSortedUniq(array)).
+#         NOTE on the operand: the test is `array.length` (a numeric-truthiness test), NOT Array.isArray.
+#           Any array-LIKE object with a truthy numeric `.length` and integer-indexed elements is processed
+#           the same way (e.g. a string is array-like: 'aabbc' -> ['a','b','c']). The IN-CONTRACT envelope of
+#           this unit is real Arrays (see SCOPE); array-like behavior is documented but NOT exercised by genInputs.
+#         NOTE: `.length` truthiness means length must be a nonzero number. length 0 -> []. A negative or NaN
+#           length is falsy-or-the-loop-never-runs; for in-scope Array inputs length is always a non-negative int.
+#
+# ---- baseSortedUniq(array)  (the dedup core; iteratee is always undefined for sortedUniq) ----
+# node-2  INIT: index = -1; length = array.length; resIndex = 0; result = [] (a brand-new array).
+#         There is a local `seen` that is ONLY assigned inside the keep-branch (node-4); it starts undeclared.
+#
+# node-3  LOOP: pre-increment index (++index), iterate while index < length, i.e. for index = 0,1,...,length-1.
+#           value    = array[index]
+#           computed = value           # iteratee is undefined for sortedUniq, so computed === value (no transform)
+#
+# node-4  KEEP TEST: keep the element iff  ( index === 0 )  OR  ( NOT eq(computed, seen) ).
+#           - The very first element (index 0) is ALWAYS kept (the `!index` term; `seen` is undefined there but
+#             short-circuited away — it is never compared on the first iteration).
+#           - For index >= 1, keep iff eq(value, seen) is FALSE, where `seen` is the value KEPT on the most recent
+#             keep (i.e. the LAST KEPT value). Because `seen` is updated to `computed` on every keep, and on a
+#             non-keep `seen` is unchanged, `seen` always holds the most-recently-EMITTED value.
+#           CONSEQUENCE — ADJACENCY: this compares each element only against the previous KEPT (= previous emitted)
+#             value. It is a LINEAR run-length dedup of CONSECUTIVE equal values, NOT a global set dedup.
+#             * [1,1,2,2,3]  -> [1,2,3]        (adjacent runs collapsed)
+#             * [1,2,1]      -> [1,2,1]        (the trailing 1 is NOT adjacent to the leading 1 -> KEPT)
+#             * [3,1,3,1]    -> [3,1,3,1]      (no two equal values are adjacent -> nothing removed)
+#           When kept:
+#             node-4a  seen = computed   (= value)
+#             node-4b  EMIT: result[resIndex++] = (value === 0 ? 0 : value)
+#                      # -0 NORMALIZATION: if the kept value is === 0 (which is true for BOTH +0 and -0, since
+#                      #   +0 === -0), the emitted element is the literal +0, NOT the original value. So any kept
+#                      #   -0 is written to the result as +0. This is the ONLY value transformation applied; every
+#                      #   other kept value (including NaN, Infinity, strings, objects, bigint) is emitted as-is
+#                      #   (same reference for objects). Verified: every output element has Object.is(x,-0)===false.
+#           When NOT kept: do nothing (skip; `seen` unchanged, resIndex unchanged).
+#
+# node-5  RETURN: return `result` (the new array). Input array is never read beyond indexed reads and is NEVER
+#           mutated. sortedUniq([1,1,2]) returns a DIFFERENT array object than its input (verified same-ref? false).
+#
+# ---- eq(value, other)  (SameValueZero) ----
+# node-eq  return  value === other  ||  ( value !== value  &&  other !== other ).
+#           This is ECMAScript SameValueZero:
+#             * Strict-equal values are equal (so +0 === -0 => +0 and -0 are EQUAL under eq).
+#             * NaN equals NaN (the `value !== value && other !== other` term: NaN is the only value not equal to
+#               itself, so this term is true exactly when BOTH operands are NaN).
+#             * Different types are NOT coerced: 1 (number) vs '1' (string) -> NOT equal (both kept if adjacent).
+#               1n (bigint) vs 1 (number) -> NOT equal (1n === 1 is false) -> both kept if adjacent.
+#             * Reference types compare by IDENTITY: two distinct objects {a:1} and {a:1} are NOT equal; the same
+#               object reference IS equal to itself.
+#
+# ---- Concrete VERIFIED edge outputs (observed by running the real package@4.2.0) ----
+#   sortedUniq([1,1,2,2,3])            -> [1,2,3]
+#   sortedUniq([1,2,1])                -> [1,2,1]
+#   sortedUniq([3,1,3,1])              -> [3,1,3,1]
+#   sortedUniq([NaN,NaN,1])            -> [NaN,1]                  # adjacent NaNs collapse (eq treats NaN==NaN)
+#   sortedUniq([NaN,1,NaN])            -> [NaN,1,NaN]              # non-adjacent NaNs kept
+#   sortedUniq([NaN])                  -> [NaN]
+#   sortedUniq([+0,-0])                -> [0]   (Object.is(out[0],-0)===false)   # collapse + normalize to +0
+#   sortedUniq([-0,+0])                -> [0]   (Object.is(out[0],-0)===false)
+#   sortedUniq([-0])                   -> [0]   (Object.is(out[0],-0)===false)   # lone -0 normalized to +0
+#   sortedUniq([-0,-0])                -> [0]   (Object.is(out[0],-0)===false)
+#   sortedUniq([0,1,-0])               -> [0,1,0]  (both zeros normalized to +0; both kept — non-adjacent)
+#   sortedUniq([5,5,5])                -> [5]                      # all-same -> single
+#   sortedUniq([1,2,3])                -> [1,2,3]                  # no dupes -> unchanged (new array)
+#   sortedUniq([])                     -> []
+#   sortedUniq(null)                   -> []
+#   sortedUniq(undefined)              -> []
+#   sortedUniq([42])                   -> [42]                     # single element -> copy
+#   sortedUniq(['a','a','b'])          -> ['a','b']
+#   sortedUniq([1,'1'])                -> [1,'1']                  # mixed type kept
+#   sortedUniq([1,1,'1','1'])          -> [1,'1']                  # runs collapse, type boundary kept
+#   sortedUniq([1n,1n,2n,2n,3n])       -> [1n,2n,3n]               # bigint SameValueZero via ===
+#   sortedUniq([1n,1])                 -> [1n,1]                   # bigint vs number kept (1n===1 false)
+#   sortedUniq([Infinity,Infinity,-Infinity]) -> [Infinity,-Infinity]
+#   sortedUniq([true,true,false])      -> [true,false]
+#   sortedUniq([null,null,1])          -> [null,1]                 # null elements: null===null collapse
+#   sortedUniq([undefined,undefined,1])-> [undefined,1]            # undefined elements collapse (undefined===undefined)
+#   sortedUniq([1,null,undefined])     -> [1,null,undefined]       # null !== undefined -> both kept
+#   reference identity:
+#     sortedUniq([o1,o1,o2])  -> length 2  (adjacent same-ref collapse; distinct-but-equal ref kept)
+#     sortedUniq([o1,o2,o1])  -> length 3  (no adjacent same-ref)
+#     sortedUniq([set1,set1,set2]) -> length 2 ; sortedUniq([u8,u8]) -> length 1   (identity)
+
+ORACLE value -> oracle.json
+# Pure deterministic value oracle: expected = sortedUniq(args[0]). The harness records the returned array.
+# Equality grading is structural value equality where -0 in the expected is +0 (the unit normalizes it), NaN
+# positions match by NaN, and reference elements that were not collapsed appear in order. No seam to inject.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire unit. The null/length guard, the linear adjacency dedup
+#   over baseSortedUniq, the SameValueZero `eq` predicate, the -0->+0 emit normalization, the new-array/no-mutation
+#   contract. All reconstructable from this SIR alone.
+# CARRIED DATA: none. No tables, no constants beyond the literal 0 in the normalization.
+# IN-SCOPE INPUT ENVELOPE (self-consistent with genInputs): single argument `array` that is one of
+#   { null, undefined, [] , Array of codec-faithful elements }. Codec-faithful elements emitted by genInputs:
+#   JSON numbers (incl. integers, floats), +0, -0, NaN, +Infinity, -Infinity, strings, booleans, null, the value
+#   undefined (as an element), bigint, plain objects, arrays-as-elements, RegExp, Set, Map, Uint8Array/Buffer.
+#   Every such element-kind's comparison behavior is DEFINED above (SameValueZero: === for primitives & identity
+#   for reference types; NaN==NaN; +0==-0).
+# OUT-OF-ENVELOPE (DOCUMENTED, NOT emitted by genInputs — would corrupt the persisted oracle codec):
+#   - Function-valued elements and Symbol-valued elements: not round-trippable through JSON.stringify(encode(args)),
+#     so genInputs never emits them. Behavior would still follow SameValueZero by identity (=== ), reconstructable
+#     from this SIR, but they are excluded from the held-out to keep stored expecteds reproducible.
+#   - Array-LIKE non-array arguments (e.g. a String primitive, {length:n,...}) are accepted by the real guard
+#     (string 'aabbc' -> ['a','b','c']) but are OUT of the declared Array envelope and are NOT emitted by genInputs.
+# OUT-OF-CONTRACT: none (no side effects, no statefulness, no external APIs).
+
+PROVENANCE lodash.sorteduniq@4.2.0 (lodash Custom Build, modularized export of _.sortedUniq);
+  repo https://github.com/lodash/lodash ; license MIT ;
+  source file: index.js (functions baseSortedUniq, sortedUniq, eq; module.exports = sortedUniq).

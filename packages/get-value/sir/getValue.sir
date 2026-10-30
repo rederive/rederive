@@ -1,0 +1,276 @@
+UNIT getValue
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG getValue(target: any, path?: string | string[] | number, options?: object | any) -> any
+DEPENDS-ON none   # zero runtime dependencies; pure read-only logic
+
+# ============================================================================
+# OVERVIEW
+# ----------------------------------------------------------------------------
+# get-value@4.1.0 default export. Resolves the value at a (possibly dotted)
+# property path inside `target`. Its distinguishing feature: it correctly
+# resolves keys that THEMSELVES contain the separator (e.g. {'a.b': {c:1}}
+# accessed by 'a.b.c') by greedily re-joining path segments. It also supports
+# Map-like targets (objects exposing a .get(key) method) as a SECONDARY lookup
+# when a direct bracket access yields undefined.
+#
+# The function is PURE: it NEVER mutates `target`, `path`, or `options`.
+# (verified: deep-equal snapshot of target unchanged after direct hit, miss,
+#  and array-path calls.) The blind re-emitter does NOT need to clone inputs.
+#
+# DETERMINISM: no clock / RNG / env / io / network. No seam. Pure value oracle.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# INTERNAL HELPERS (exact semantics — reproduce precisely)
+# ----------------------------------------------------------------------------
+# isObject(v)        := v !== null && typeof v === "object"
+#                       # true for plain objects, arrays, Map, Set, Date,
+#                       # Uint8Array/Buffer, RegExp, boxed objects, etc.
+#                       # false for null, undefined, number, string, boolean,
+#                       # bigint, symbol, function.
+#
+# isValidObject(v)   := isObject(v) || typeof v === "function"
+#                       # i.e. anything that can carry properties EXCEPT
+#                       # primitives and null/undefined. Functions ARE valid.
+#
+# split(path, splitChar, options):
+#     if typeof options.split === "function"  -> return options.split(path)
+#     else                                     -> return path.split(splitChar)
+#                       # NOTE: path.split accepts a string OR RegExp splitChar.
+#
+# join(segs, joinChar, options):
+#     if typeof options.join === "function"    -> return options.join(segs)
+#     else                                     -> return segs[0] + joinChar + segs[1]
+#                       # default join is STRING CONCATENATION of exactly the
+#                       # first two elements with joinChar between them
+#                       # (NOT Array.prototype.join over all elements).
+#
+# isValid(key, target, options):
+#     if typeof options?.isValid === "function" -> return options.isValid(key, target)
+#     else                                       -> return true
+#                       # When invoked, `target` defaults to {} if undefined.
+#                       # `key` is whatever the caller passes (may be the raw
+#                       # path, a segment string, or a combined key — see below).
+#
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — EXACT)
+# ----------------------------------------------------------------------------
+#
+# NODE 1 — normalize options (the "bare default" convention):
+#   if !isObject(options):
+#       options = { default: options }
+#   # So a NON-OBJECT options arg (string, number, boolean, null, undefined,
+#   # bigint, symbol, function) is reinterpreted as options.default = that value.
+#   # default options when omitted is {} (so options is {} -> isObject true).
+#   # NOTE: an ARRAY passed as options IS an object (isObject true) -> used
+#   #       as-is; arrays have no .default/.separator/... so it behaves like {}.
+#   #       (verified: getValue({a:1},'zzz',['x']) -> undefined; [] has no .default)
+#
+# NODE 2 — non-object target guard:
+#   if !isValidObject(target):
+#       return (typeof options.default !== "undefined") ? options.default : target
+#   # i.e. when target is a primitive / null / undefined:
+#   #   - if a default was provided (and is not literally undefined) -> default
+#   #   - otherwise return target UNCHANGED (returns null as null, 5 as 5,
+#   #     "hello" as "hello", true as true, undefined as undefined).
+#   # FUNCTIONS pass this guard (isValidObject true) and proceed.
+#   # verified: target null/undefined/number/string/bool all per above;
+#   #           with {default:9} all return 9; function target descends normally.
+#
+# NODE 3 — number-path coercion:
+#   if typeof path === "number":
+#       path = String(path)
+#   # 0 -> "0", 1 -> "1", -1 -> "-1", 1.5 -> "1.5". Then treated as a string path.
+#
+# NODE 4 — compute flags and separators:
+#   pathIsArray  = Array.isArray(path)
+#   pathIsString = typeof path === "string"
+#   splitChar = options.separator || "."        # truthy-OR: "" / 0 / null fall to "."
+#   joinChar  = options.joinChar || (typeof splitChar === "string" ? splitChar : ".")
+#   # joinChar precedence:
+#   #   1. options.joinChar if truthy
+#   #   2. else splitChar if splitChar is a STRING (so a custom string separator
+#   #      is also used as the rejoin char)
+#   #   3. else "."  (this is the case when separator is a RegExp)
+#   # verified: separator '/' rejoins keys with '/'; separator /re/ rejoins with '.'.
+#
+# NODE 5 — non-(string|array) path guard:
+#   if !pathIsString && !pathIsArray:
+#       return target
+#   # path is an object / boolean / null / undefined (and was NOT a number,
+#   # which Node 3 already stringified) -> return the WHOLE target unchanged.
+#   # This is the documented getValue(obj) "return target" behavior, since the
+#   # default path (omitted) is `undefined`.
+#   # verified: getValue({a:1}) === {a:1}; path true/null/{} -> target.
+#
+# NODE 6 — TOP-LEVEL direct lookup (short-circuit before any splitting):
+#   value = target[path]
+#       # For an ARRAY path, target[path] coerces the array to a string key:
+#       # target[['a','b']] === target['a,b'] (Array.prototype.toString).
+#       # For a STRING path, this is the literal key access — so a key that
+#       # contains separators (e.g. {'a.b.c': 99}) is found DIRECTLY here.
+#   if value === undefined && typeof target.get === "function":
+#       value = target.get(path)
+#       # Map-like SECONDARY lookup: e.g. new Map([['a.b.c',77]]).get('a.b.c').
+#       # For an array path, target.get(['a','b']) is called with the raw array.
+#   if value !== undefined:
+#       return isValid(path, target, options) ? value : options.default
+#       # isValid receives the RAW path here (the full string, or the raw array
+#       # for an array path — NOT coerced). If isValid -> the value; else default.
+#   # verified: {'a.b.c':99} 'a.b.c' -> 99; Map whole-key -> 77;
+#   #           array top-level coercion {'a,b':'X'} ['a','b'] -> 'X' (isValid
+#   #           receives ['a','b']); isValid()=>false at top -> options.default.
+#
+# NODE 7 — segment the path:
+#   segs = pathIsArray ? path : split(path, splitChar, options)
+#   len  = segs.length
+#   idx  = 0
+#   # For string paths this calls split() (custom options.split or .split(splitChar)).
+#   # For array paths, segs IS the array (segment elements may be non-strings).
+#
+# NODE 8 — main descent loop (do/while):
+#   do:
+#     prop = segs[idx]
+#     if typeof prop !== "string":
+#         prop = String(prop)
+#         # array-path numeric segments stringify: 1 -> "1", etc.
+#
+#     # 8a — BACKSLASH ESCAPE re-join: while current prop ends with a literal "\",
+#     # drop the trailing "\" and join it with the NEXT segment using join().
+#     while prop && prop.slice(-1) === "\\":
+#         idx = idx + 1                       # consume the next segment (pre-increment)
+#         prop = join([prop.slice(0,-1), segs[idx] || ""], joinChar, options)
+#         # default join => prop.slice(0,-1) + joinChar + (segs[idx] || "")
+#         # e.g. path 'a\.b.c' with sep '.' splits to ['a\\','b','c'];
+#         #      seg 'a\\' ends with '\' -> 'a' + '.' + 'b' = 'a.b', idx now 1.
+#         # If there is no next segment, segs[idx] is undefined -> "" used.
+#         # verified: {'a.b':{c:'d'}} 'a\.b.c' -> 'd';
+#         #           {'a.b.c':7} 'a\.b\.c' -> 7;
+#         #           {'a':{b:1}} 'a\' -> undefined (becomes 'a'+'.'+'' = 'a.',
+#         #             which is not a key; see Node 8c miss handling).
+#
+#     # 8b — current-segment lookup:
+#     value = target[prop]
+#     if value === undefined && typeof target.get === "function":
+#         value = target.get(prop)
+#     if value !== undefined:
+#         if !isValid(prop, target, options): return options.default
+#         target = value                       # descend
+#     else:
+#         # 8c — GREEDY COMBINE: prop not found; try joining it with each
+#         # subsequent segment (one at a time) to find a key that contains
+#         # the separator. n starts at idx+1.
+#         hasProp = false
+#         n = idx + 1
+#         while n < len:
+#             prop = join([prop, segs[n]], joinChar, options)   # n then increments
+#             n = n + 1
+#             value = target[prop]
+#             if value === undefined && typeof target.get === "function":
+#                 value = target.get(prop)
+#             hasProp = (value !== undefined)
+#             if hasProp:
+#                 if !isValid(prop, target, options): return options.default
+#                 target = value               # descend into the combined key
+#                 idx = n - 1                  # advance idx to the last consumed seg
+#                 break
+#         if !hasProp:
+#             return options.default           # no combined key matched -> default
+#         # verified combine: {'a.b':{c:1}} 'a.b.c': segs ['a','b','c'];
+#         #   'a' miss -> combine 'a'+'.'+'b'='a.b' HIT -> target={c:1}, idx=1;
+#         #   isValid keys observed in order: ['a.b','c'].
+#
+#   while (++idx < len && isValidObject(target))
+#     # loop continues to the next segment ONLY while there are more segments
+#     # AND the freshly-descended target is still a property-bearing value.
+#     # If target became a primitive (e.g. a leaf number) mid-path, the loop
+#     # stops; see Node 9.
+#
+# NODE 9 — terminal:
+#   if idx === len:
+#       return target          # consumed all segments successfully -> the value
+#   return options.default     # ran out of object to descend into before
+#                              # consuming all segments -> default (undefined if none)
+#   # verified: {a:{b:5}} 'a.b.c' default 'D' -> 'D' (descended to 5, then
+#   #           loop guard isValidObject(5)=false stops with idx<len).
+#
+# ----------------------------------------------------------------------------
+# OPTION PRECEDENCE / SEMANTICS SUMMARY (self-consistent with the above)
+# ----------------------------------------------------------------------------
+# options is normalized FIRST (Node 1). If options is not an object it becomes
+# { default: options }. Then, in evaluation order, options fields are consulted:
+#   1. options.default  — returned on every miss path AND on isValid-rejection.
+#                         "miss" means: the resolved bracket/get value was
+#                         `undefined`. A stored value of `undefined` is therefore
+#                         INDISTINGUISHABLE from "missing" -> default applies.
+#                         (verified: {a:undefined} 'a' {default:'D'} -> 'D').
+#                         At the non-object-target guard (Node 2) the default is
+#                         ONLY used if it is not literally `undefined`.
+#                         Falsy-but-defined values (0,false,'',null) are returned
+#                         as the value, NOT replaced by default.
+#   2. options.separator — splitChar for string paths; "" falls back to ".".
+#                         May be a string or RegExp. (Ignored for array paths
+#                         and when options.split is a function.)
+#   3. options.split    — function(path)->string[]; OVERRIDES separator-based
+#                         splitting entirely (string paths only).
+#   4. options.joinChar — rejoin char for default join + escape-rejoin;
+#                         precedence per Node 4. "" falls back.
+#   5. options.join     — function(segs)->string; OVERRIDES default join (which
+#                         is segs[0]+joinChar+segs[1]) everywhere join() is used.
+#   6. options.isValid  — function(key, target)->boolean; called on EACH resolved
+#                         value with the resolving key and the PARENT target.
+#                         Returning false short-circuits to options.default.
+#                         When absent, always true (no own-property filtering).
+#
+# OWN vs INHERITED: there is NO own-property check. Lookups use plain bracket
+#   access `target[prop]`, so INHERITED properties resolve by default
+#   (verified: getValue({},'hasOwnProperty') -> [Function], getValue({},'constructor')
+#   -> [Function Object]). To restrict to own properties the caller supplies
+#   options.isValid (e.g. (k,o)=>Object.hasOwnProperty.call(o,k)).
+#
+# MAP-LIKE (.get) SUPPORT: at EVERY lookup site (top-level, per-segment,
+#   combine) when `target[prop] === undefined` and `typeof target.get ===
+#   "function"`, the unit falls back to `target.get(prop)`. This makes real Map
+#   instances and any object exposing a .get(key) method resolvable.
+#   (verified: Map nested descend, whole dotted Map key, object with .get).
+#   A DATA property literally named "get" (a non-function) does not trigger this
+#   and is itself resolvable as a key (verified: {get:5} 'get' -> 5).
+#
+# ----------------------------------------------------------------------------
+# ORACLE value -> oracle.json
+#   Pure deterministic function; expecteds are the literal return values
+#   (including `undefined`, recorded by the harness codec).
+# ----------------------------------------------------------------------------
+#
+# SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire Node 1–9 pipeline above,
+#     all helper semantics, all SERIALIZABLE option fields (default, separator
+#     [string and RegExp], joinChar), number/array/string path handling, the
+#     backslash-escape rejoin, the greedy combine, the Map-like .get fallback,
+#     the non-object/nullish guards, falsy-value passthrough, inherited-property
+#     resolution. No carried data tables — this unit is pure logic.
+#
+#   OUT-OF-ENVELOPE (documented here; NOT emitted by genInputs because the
+#     codec cannot round-trip them — a blind re-emitter still reconstructs the
+#     behavior from this spec, but the frozen oracle will not contain them):
+#       * options.isValid : FUNCTION  — key validator; cannot be JSON-serialized.
+#       * options.split   : FUNCTION  — custom splitter; cannot be serialized.
+#       * options.join    : FUNCTION  — custom joiner; cannot be serialized.
+#       * a Symbol path or symbol-keyed target — Symbols do not round-trip.
+#       * a target whose own `.get` is a function defined inline (Map-like via a
+#         literal `{get(k){...}}`) — the function does not serialize; real Map
+#         instances DO round-trip and ARE exercised in genInputs.
+#     (All of the above ARE verified above against the real package; they are
+#      excluded from the oracle ONLY for codec-faithfulness, per the contract.)
+#
+#   OUT-OF-CONTRACT (side APIs / mutators): none — pure, no side effects, no
+#     ambient reads, no mutation of any argument.
+#
+# PROVENANCE
+#   get-value@4.1.0  (jonschlinkert)  MIT
+#   repo: https://github.com/jonschlinkert/get-value
+#   source files: dist/index.mjs (ESM) and dist/index.js (CJS) — byte-identical
+#     logic; the default export is `getValue` (also exported named `getValue`).
+#   index.d.ts documents the Options interface (default, isValid, split,
+#     separator, join, joinChar).

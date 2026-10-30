@@ -1,0 +1,14 @@
+UNIT cmp_ver
+LANG ts
+PRIMARY-SHA256 b2087b4c7c8740ff879851f7acb0fbd2767c3584f9eb5f2dd8f3e7abf547ad8b
+SIG export function cmpVer(a: string, b: string): number
+ABI TypeScript compiles to the js runtime: text = string (UTF-16); the result = number, exactly -1, 0 or 1; a throw (R1) is
+  a thrown Error, message not graded. STRICT: the artifact must type-check under strict: true against this SIG, with no
+  any, no non-null assertions (!), and no @ts-ignore / @ts-expect-error. BigInt needs target ES2020 or later.
+ENVELOPE as the primary: string arguments only.
+MECHANISM (restated from js — language files are self-contained) R1 = the VERSION pin below with test(); an unflagged $
+  matches only at the very end, so a trailing line feed fails. R2 = split('.') then BigInt(segment); never Number or
+  parseInt. R3 = a missing index is 0n. R4 compares the BigInts.
+DEPENDS-ON none
+PINNED regex VERSION = /^(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))*$/ CITED R1 — features.mjs VERSION
+PROVENANCE rederive@b15b56613f9d cli/features.mjs cmpVer. Language file re-cut 2026-10-26 (round 2) with the primary.

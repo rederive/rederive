@@ -1,0 +1,22 @@
+UNIT display_value
+LANG rust
+PRIMARY-SHA256 591b9b343cbc8fb26f23c7863113229a2bc06db31202e34d28b70950cfdd2746
+SIG pub fn display_value(tv: &serde_json::Value) -> Result<Option<String>, String>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn display_value) depending on serde_json only — no main,
+  no I/O, no unsafe. The verifier's harness parses each args line with serde_json and passes the json arg as
+  &serde_json::Value. Mapping: text = Value::String; bool = Value::Bool; none = Value::Null; list = Value::Array; map =
+  Value::Object; a number = Value::Number (never printed inside the envelope). "absent" (TABLE NODE, R5) = map.get(key) is
+  None; "none" = Some(Value::Null). Result: Ok(Some(text)), Ok(None) for R5's top-level ABSENT, Err(_) for a throw (R2, R6,
+  R7; the message is not graded). Never panic.
+ENVELOPE narrowing: a lone surrogate has no String form (OUT, as in the primary). The harness's serde_json parse has the
+  default recursion limit of 128, so a tree nesting deeper than that cannot reach the artifact; every oracle vector nests
+  far less.
+MECHANISM QUOTE (R4) = serde_json::to_string(&Value::String(s)) — serde_json writes exactly TABLE ESCAPE (short escapes
+  for " \ \b \f \n \r \t, \u00XX lowercase for the other controls, everything else raw, "/" not escaped); or hand-write
+  the table — never format!("{:?}", s), which escapes differently (\u{1f}, non-ASCII). FIELDNAME (R11): test PLAIN-IDENTIFIER on the bytes of the name
+  (non-empty, first byte b'A'..=b'Z' | b'a'..=b'z' | b'_', the rest also b'0'..=b'9'), never char::is_alphanumeric (Unicode)
+  and never a regex with a multi-line $; a non-identifier name is QUOTE'd like a text. A bigint v (TABLE NODE): a String
+  -> s + "n", a Bool -> "truen"/"falsen", Null -> "nulln", absent -> "undefinedn". A text entry (R6) = s.chars() (scalar
+  values); a one-scalar text has fewer than two items -> Err. Recurse on &Value; build the output in a String.
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs display; language file cut 2026-10-27 with the primary.

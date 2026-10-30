@@ -1,0 +1,16 @@
+UNIT cmp_ver
+LANG js
+PRIMARY-SHA256 b2087b4c7c8740ff879851f7acb0fbd2767c3584f9eb5f2dd8f3e7abf547ad8b
+SIG export const cmpVer = (a, b) => number
+NOTE named export cmpVer
+ABI text = string; the result = number, exactly -1, 0 or 1. A throw (R1) is a thrown Error; the message is not graded.
+  The artifact is an ES module that imports nothing. The driver passes both arguments positionally.
+ENVELOPE widening, unverified: a non-string argument (a number, none, a boolean, an Array, an object) is not a VERSION
+  and throws — it is never coerced to text first.
+MECHANISM R1 = a typeof-string check, then the VERSION pin below with test(). In this dialect an unflagged $ matches
+  only at the very end of the text, so "0.4\n" fails — do not add the m flag. R2 = String.prototype.split('.') then
+  BigInt(segment) per segment; never Number or parseInt (a segment above 2^53 must stay exact). R3 = a missing index is 0n.
+  R4 compares the BigInts with !== and >.
+DEPENDS-ON none
+PINNED regex VERSION = /^(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))*$/ CITED R1 — features.mjs VERSION; [0-9] not \d
+PROVENANCE rederive@b15b56613f9d cli/features.mjs cmpVer. Language file re-cut 2026-10-26 (round 2) with the primary.

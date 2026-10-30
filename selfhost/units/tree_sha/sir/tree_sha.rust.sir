@@ -1,0 +1,22 @@
+UNIT tree_sha
+LANG rust
+PRIMARY-SHA256 e12613dad5808632c7fe28510214c96c79e264473e10d7833fc2a007d5805be8
+SIG pub fn tree_sha(files: &serde_json::Value) -> String
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn tree_sha) depending on serde_json only — no main, no
+  I/O, no file system, no binary. The verifier's harness binds the map argument as a serde_json::Value::Object whose values
+  are Value::String; the result is a String of 64 lowercase hex characters. A throw (R2) is a panic; the message is not
+  graded. Inside the envelope a non-object or a non-string value never arrives; panic if one does.
+MECHANISM SHA-256 (R4, R6, R7) is NOT in std and no hashing crate is allowed: implement FIPS 180-4 SHA-256 in the crate
+  (the standard initial hash values and 64 round constants, big-endian words, the 0x80 / zero / 64-bit big-endian
+  bit-length padding), hashing str::as_bytes — those bytes ARE the UTF-8 bytes R4 and R6 name. HEX = format!("{:02x}") per byte.
+MECHANISM the sort (R5) is the trap: Rust's String and &str Ord compare UTF-8 BYTES, which disagrees with UTF-16 code-unit
+  order whenever one path has a supplementary character (U+10000 and up) where the other has U+E000..U+FFFF. Sort by the
+  key s.encode_utf16().collect::<Vec<u16>>() (or a comparator over encode_utf16 iterators), over the WHOLE path. Never sort
+  std::path::PathBuf / Path values (their Ord is component-wise, putting "a/b" before "a.b"), and never sort NAME by NAME
+  while recursing. A serde_json::Map's own iteration order (sorted bytes, or insertion with preserve_order) is NOT R5.
+MECHANISM NAMES (R1, R3) = path.split('/') (it keeps empty NAMES, which R1 needs). R3 = names.len() >= 2 && names[0] ==
+  "target". Validate every key (R1, R2) before hashing; never normalize a path (no std::path joining or canonicalizing).
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@b15b56613f9d cli/tree-sha.mjs + selfhost/seams/tree_sha.mjs. Language file cut 2026-10-26 with the
+  primary, before any blind re-emission (round 2 re-cut); the ABI follows the lab's rust driver (a map argument crosses as
+  &serde_json::Value).

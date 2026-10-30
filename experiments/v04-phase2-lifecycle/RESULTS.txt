@@ -1,0 +1,24 @@
+§21 — can value or trace see a dropped clearTimer?
+
+  request wins the race (the happy path)
+    value channel      IDENTICAL — blind to the leak   {"ok":"body:https://x/a"}
+    trace channel      IDENTICAL — blind to the leak   ["request","response"]
+    lifecycle channel  DIFFERS — the leak is caught
+        correct: ["armed(100ms)","cancelled"]  leaked=0
+        leaky:   ["armed(100ms)","fired"]  leaked=0
+
+  request wins, slow but in time
+    value channel      IDENTICAL — blind to the leak   {"ok":"body:https://x/b"}
+    trace channel      IDENTICAL — blind to the leak   ["request","response"]
+    lifecycle channel  DIFFERS — the leak is caught
+        correct: ["armed(100ms)","cancelled"]  leaked=0
+        leaky:   ["armed(100ms)","fired"]  leaked=0
+
+  timeout wins
+    value channel      IDENTICAL — blind to the leak   {"err":"timeout after 50ms"}
+    trace channel      IDENTICAL — blind to the leak   ["request","timeout"]
+    lifecycle channel  identical (no leak here)
+        correct: ["armed(50ms)","fired"]  leaked=0
+        leaky:   ["armed(50ms)","fired"]  leaked=0
+
+PHASE 2 (§21): PASS — the leak is invisible to value and trace, and caught only on lifecycle.

@@ -1,0 +1,216 @@
+UNIT toPairs
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure, read-only object-introspection utility. No seam (no clock/RNG/io/net), no
+# argument mutation. Output is a deterministic function of the input's own-property
+# structure and (for Map/Set) iteration order, both of which are fixed by ECMAScript.
+
+SIG  toPairs(object) -> Array<[key, value]>
+     # Single positional argument `object` (any value). Returns a fresh array of
+     # two-element [key, value] pair-arrays. The argument is never mutated.
+
+DEPENDS-ON none
+     # Zero runtime dependencies. Self-contained. No carried-data table.
+
+# =============================================================================
+# BEHAVIOR  (ordered pipeline / BRANCH nodes — exact + complete)
+# =============================================================================
+#
+# toPairs is `createToPairs(keys)` — i.e. a "type-tag dispatch" wrapped around the
+# lodash `keys` collector. Evaluate the branches in THIS order:
+#
+# BRANCH-1  MAP:
+#   If `object` is a Map (its internal Object.prototype.toString tag is
+#   "[object Map]"), return its entries as [key, value] pairs in the Map's own
+#   INSERTION order (Map.prototype.forEach order). Keys and values are taken
+#   VERBATIM — a non-string key stays its original type (e.g. the number 3 stays
+#   the number 3; an object key stays that object by reference). Empty Map -> [].
+#     pair[i] = [key_i, value_i]  for the i-th entry in forEach order.
+#
+# BRANCH-2  SET:
+#   Else if `object` is a Set (toString tag "[object Set]"), return one pair PER
+#   MEMBER, each pair being [value, value] (the lodash Set convention — the member
+#   is duplicated into both positions), in the Set's own INSERTION order
+#   (Set.prototype.forEach order). Members are taken VERBATIM (a number member
+#   stays a number). Empty Set -> [].
+#     pair[i] = [member_i, member_i]
+#
+# BRANCH-3  EVERYTHING ELSE (the default / baseToPairs path):
+#   Collect the key list K = keys(object)  (see KEY-COLLECTION below), then return
+#   exactly  K.map(k => [k, object[k]]) , preserving K's order. Every key in K is a
+#   STRING. The value is read with a plain property access `object[k]`; for a sparse
+#   array hole this yields `undefined` (the pair is still emitted — see SPARSE).
+#     pair[i] = [k_i, object[k_i]]
+#
+#   Note: WeakMap, Promise, DataView, RegExp, Date, plain objects, arrays, strings,
+#   primitives, boxed primitives, typed arrays, arguments, array-like objects — ALL
+#   fall into BRANCH-3 (only the exact Map and Set tags divert to 1/2).
+#
+# -----------------------------------------------------------------------------
+# KEY-COLLECTION  K = keys(object)   (the BRANCH-3 key list)
+# -----------------------------------------------------------------------------
+# `keys` itself branches on array-likeness:
+#
+#   keys(object):
+#     if isArrayLike(object):  K = arrayLikeKeys(object)
+#     else:                    K = baseKeys(object)
+#
+#   isArrayLike(object) is TRUE iff:
+#       object != null
+#       AND typeof object.length == "number" with 0 <= length, length % 1 == 0,
+#           length <= 9007199254740991 (MAX_SAFE_INTEGER)   [isLength]
+#       AND object is NOT a function (toString tag not "[object Function]"/"[object GeneratorFunction]")
+#   (Strings ARE array-like: a primitive string has a numeric .length. So is a real
+#    Array, an arguments object, a typed array, and any plain object that happens to
+#    carry a numeric `length`.)
+#
+#   -- arrayLikeKeys(value): used when isArrayLike is TRUE --
+#     Step A: if value is a true Array (Array.isArray) OR an arguments object
+#             (isArguments), seed result = ["0","1",...,String(value.length-1)]
+#             (one string index per slot, INCLUDING sparse-hole slots), and set
+#             skipIndexes = true.
+#             Otherwise (e.g. a string primitive, a typed array, or a plain object
+#             with a numeric length) seed result = [] and skipIndexes = false.
+#       NOTE on strings & typed arrays: their per-index properties are OWN +
+#       ENUMERABLE, so they are picked up by Step B's for-in even though Step A
+#       did not seed them. Net effect: a string "abc" -> ["0","1","2"]; a
+#       Uint8Array of len 3 -> ["0","1","2"].
+#     Step B: for each key produced by a for-in enumeration of `value` (own +
+#             inherited enumerable string keys, in JS for-in order):
+#               include it IFF hasOwnProperty(value, key)
+#                 AND NOT ( skipIndexes AND ( key == "length"
+#                                             OR isIndex(key, result.length) ) )
+#             i.e. when skipIndexes is true (real Array / arguments) the literal
+#             "length" key and any canonical array-index key < length are NOT
+#             re-added (they were already seeded / are structural); all OTHER own
+#             enumerable keys (e.g. a named property "x" added onto an array) ARE
+#             appended after the index keys.
+#       isIndex(key, length): true iff key is a canonical unsigned-integer string
+#             (regex ^(?:0|[1-9]\d*)$) or a number, with value > -1, integer, and
+#             value < length.
+#       CONSEQUENCE for a plain array-like object that is NOT a true Array/arguments
+#       (skipIndexes = false): its own enumerable "length" and its index keys ARE
+#       included, alongside all other own enumerable keys, in for-in order.
+#       Example: {length:3, 0:"a", 1:"b", foo:"bar"} -> keys
+#                ["0","1","length","foo"].
+#
+#   -- baseKeys(object): used when isArrayLike is FALSE --
+#     if object is NOT a prototype object (isPrototype false):
+#        K = Object.keys(Object(object))   # own ENUMERABLE string keys
+#     else (object IS its constructor's .prototype, the rare prototype case):
+#        K = for-in own enumerable string keys EXCEPT the literal key "constructor".
+#     Object.keys order = ECMAScript OwnPropertyKeys order: integer-index keys
+#     first in ASCENDING numeric order, then the remaining string keys in
+#     property-INSERTION order. (Symbol keys are never included.)
+#
+# -----------------------------------------------------------------------------
+# ORDERING (definitive, self-consistent with the generator)
+# -----------------------------------------------------------------------------
+#   * Plain object (BRANCH-3, baseKeys): integer-like keys ascending numerically,
+#     THEN non-integer string keys in insertion order.
+#       e.g. {z:1, a:2, "10":3, "2":4} -> keys ["2","10","z","a"].
+#   * True Array / arguments: index keys "0".."length-1" in order, then any extra
+#     own enumerable named keys in for-in order.
+#   * String primitive / typed array: per-index "0".."length-1".
+#   * Map / Set: own forEach (insertion) order.
+#
+# -----------------------------------------------------------------------------
+# EDGE / DEGENERATE CASES (all verified against the real package)
+# -----------------------------------------------------------------------------
+#   * null        -> []   (isArrayLike false; baseKeys -> Object.keys path is not
+#                          reached because... actually keys(null): isArrayLike(null)
+#                          is false, baseKeys(null): isPrototype(null) false ->
+#                          nativeKeys(null) = Object.keys(Object(null)) = [] ). NET: [].
+#   * undefined   -> []   (same: Object.keys(Object(undefined)) == []).
+#   * {}          -> []
+#   * ""          -> []   (string of length 0 -> no index keys).
+#   * number/boolean primitive (e.g. 42, true) -> []   (boxed, no own enum keys).
+#   * new Number(5)  -> []   (Number wrapper has no own enumerable index props).
+#   * new String("ab") -> [["0","a"],["1","b"]]  (String wrapper DOES expose own
+#                          enumerable index props).
+#   * RegExp /abc/g  -> []   (no own enumerable keys).
+#   * empty Map -> []   ;   empty Set -> [].
+#   * SPARSE arrays (see below) emit a pair for every slot, hole value = undefined.
+#
+# -----------------------------------------------------------------------------
+# SPARSE  (load-bearing)
+# -----------------------------------------------------------------------------
+#   For a true Array, the key list is "0".."length-1" REGARDLESS of holes
+#   (seeded by Step A from value.length). The value for a hole index is read as
+#   `object[k]` which is `undefined`. So  [1, <hole>, 3]  ->
+#     [["0",1], ["1",undefined], ["2",3]]   (result length == array length == 3).
+#   new Array(3) with [0]="a" -> [["0","a"], ["1",undefined], ["2",undefined]].
+#   (Note: the held-out is captured via the real package, so the `undefined` second
+#    element is part of the expected; a re-emitter that drops it diverges.)
+#
+# -----------------------------------------------------------------------------
+# INCLUSION / EXCLUSION RULES (BRANCH-3)
+# -----------------------------------------------------------------------------
+#   INCLUDED:  own + ENUMERABLE STRING-keyed properties.
+#   EXCLUDED:  inherited/prototype properties (e.g. Foo.prototype.c when querying
+#              new Foo); non-enumerable own properties; Symbol-keyed properties;
+#              for true Array/arguments the structural "length" key; for a
+#              prototype object the literal "constructor" key.
+#     Verified: new Foo (this.a=1,this.b=2; proto.c=3) -> [["a",1],["b",2]].
+#     Verified: {hidden non-enum, visible:1} -> [["visible",1]].
+#     Verified: {[Symbol]:1, normal:2} -> [["normal",2]].
+#
+# -----------------------------------------------------------------------------
+# VALUE FIDELITY
+# -----------------------------------------------------------------------------
+#   Values are passed THROUGH unchanged (identity preserved): object/array values
+#   are the SAME references; -0 stays -0 (Object.is); NaN stays NaN; bigint stays
+#   bigint. No coercion of values. Keys in BRANCH-3 are always strings; Map/Set
+#   keys/members keep their original type.
+
+# =============================================================================
+ORACLE value -> oracle.json
+# Pure deterministic value oracle: expected = real-package output for each emitted
+# input. No seam injection needed (no ambient reads). Differential/quorum on the
+# returned pair-array (deep structural equality, including the literal `undefined`
+# hole values and key/value types).
+
+# =============================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — the Map/Set
+#   tag dispatch, the keys-collection rule (isArrayLike split, arrayLikeKeys with
+#   skipIndexes, baseKeys with the prototype/constructor special-case), the own-
+#   enumerable-string-key rule, the ECMAScript key ordering, sparse-hole emission,
+#   the [k,v] vs [v,v] output shapes, and the empty/null/undefined/primitive
+#   degenerate results.
+# CARRIED DATA: none. (No literal tables; the only constants are MAX_SAFE_INTEGER
+#   = 9007199254740991 and the uint-index regex /^(?:0|[1-9]\d*)$/, both stated
+#   inline above — they are logic constants, not a carried table.)
+# OUT-OF-CONTRACT: none. The unit performs no mutation, no side effect, no ambient
+#   read. MUTATION-SAFETY: N/A — toPairs is read-only and never writes to its
+#   argument.
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because they are not
+#   ORACLE-CODEC-faithful, yet a blind re-emitter still reconstructs them from the
+#   spec above): (a) function values as the argument -> toPairs returns [] for a
+#   bare function (isFunction true so isArrayLike false; baseKeys -> Object.keys of
+#   a function = its own enum string keys, usually none -> []); (b) Symbol-keyed
+#   properties -> always excluded; (c) raw `undefined` values reachable only via
+#   sparse holes ARE in-envelope (the array container round-trips and the hole is
+#   recreated by the codec); we DO emit those.
+
+# =============================================================================
+# EMISSION CONTRACT (for the blind re-emitter — READ THIS)
+# =============================================================================
+# The unit is the package's SINGLE DEFAULT export (CommonJS `module.exports = fn`).
+# The re-emitter MUST emit an ES module whose DEFAULT export is the single function
+# value:
+#       export default function toPairs(object) { ... }
+#   (or `const toPairs = ...; export default toPairs;`)
+# Exactly ONE function value is exported as the default. No named exports are
+# required. The function takes one positional argument and returns the pair array
+# as specified. It must NOT mutate the argument. It must NOT require('lodash') or
+# any dependency — reconstruct the logic inline.
+
+# =============================================================================
+PROVENANCE
+# Package:  lodash.topairs@4.3.0  (npm)
+# Repo:     lodash/lodash  (custom modularized build, exports="npm")
+# License:  MIT  (Copyright jQuery Foundation and other contributors)
+# Source:   node_modules/lodash.topairs/index.js
+#           default export = `var toPairs = createToPairs(keys); module.exports = toPairs;`

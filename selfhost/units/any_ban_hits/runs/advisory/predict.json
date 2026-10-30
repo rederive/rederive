@@ -1,0 +1,128 @@
+{
+ "status": "ok",
+ "unit": "any_ban_hits",
+ "primary": "selfhost/units/any_ban_hits/sir/any_ban_hits.sir",
+ "primarySha256": "38a09b24bccfa0114557d5ea8f265f266ff76a8348b83562c85dcddb45f2b533",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "State. The cursor starts at the first character of src, LINE at 1, CONTEXT empty, DEPTH (a brace depth, may go negative) at 0, and STACK (the template-interpolation stack, of depths) empty. HITS is an empty list. Recording a hit (label, LINE) appends the entry label \"@\" LINE in decimal, unless that exact entry is already in HITS. At the end of src the result is HITS sorted by line number, ascending and STABLE: entries of one line keep their recording order (R8's REST SCAN records later lines early, so the recording order alone is not line order). In CODE mode the character at the cursor (with the one after it, when the rule needs two) selects the first applicable rule of R2-R9.",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R2",
+   "text": "LF (U+000A): LINE increases by 1, CONTEXT becomes empty, the cursor advances one.",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "R3",
+   "text": "LINE COMMENT \"//\": the comment runs from the \"//\" up to, not including, the next LINE BREAK (LF, CR, U+2028 or U+2029), or to the end of src. If it contains a DIRECTIVE (TABLE DIRECTIVE) record (\"@ts-ignore\", LINE). The cursor moves to that LINE BREAK (or the end); CONTEXT is unchanged. An LF is then R2; a CR, U+2028 or U+2029 is then R9(e): appended to CONTEXT, LINE unchanged (LINE counts LF only, so \"// c<CR>x: any\" reports line 1).",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R4",
+   "text": "BLOCK COMMENT \"/*\": the comment runs from the \"/*\" through the first \"*/\" that begins after the opener's two characters (\"/*/\" does not close itself); with no such \"*/\" it runs to the end of src. Let RAW be the comment text, LOW its LOWERED form (TABLE DIRECTIVE), P the code-unit index of the first directive match in RAW and Q that in LOW (none = -1). When either is found, record (\"@ts-ignore\", L): AT = the larger of P and Q, BASE = RAW when P is found else LOW, and L = LINE at the opener plus the number of LF among the first AT code units of BASE. So a directive is normally reported at its own line, but when both are found and Q > P (a U+0130 before the match lengthens LOW) or P > Q (a U+212A directive before an ASCII one) AT is the later index read in RAW, and may land past an LF CITED FIDELITY package. One record per comment at most. Then LINE increases by the number of LF in the comment; if there was at least one, CONTEXT becomes empty; then one space is appended to CONTEXT. The cursor moves past the comment.",
+   "ambiguity": 0.48
+  },
+  {
+   "id": "R5",
+   "text": "STRING, at a QUOTATION MARK (U+0022) or APOSTROPHE (U+0027), Q. The body is scanned from the next character: a BACKSLASH (U+005C) followed by CR then LF consumes all three, LINE increases by 1 and CONTEXT is NOT emptied; any other BACKSLASH consumes itself and the one character after it, whatever that is (when it is an LF, LINE increases by 1 but CONTEXT is NOT emptied, as in R7; a BACKSLASH then a lone CR consumes the CR only); any other character is consumed unless it is Q or LF. The scan stops at the first unconsumed Q, an LF, or the end of src. A stopping Q is consumed (the literal is closed); a stopping LF is left for R2. One QUOTATION MARK (U+0022) is appended to CONTEXT, whatever Q was. CR, U+2028 and U+2029 are ordinary body characters.",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R6",
+   "text": "TEMPLATE, at a GRAVE ACCENT (U+0060): the cursor moves past it and the scan enters TEXT mode (R7).",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R7",
+   "text": "TEXT mode, character by character until it returns to CODE mode: a BACKSLASH consumes itself and the next character; if that next character is LF, LINE increases by 1 but CONTEXT is NOT emptied CITED FIDELITY package. An unescaped LF increases LINE by 1 and empties CONTEXT. A GRAVE ACCENT is consumed, one GRAVE ACCENT is appended to CONTEXT (the template is an operand: it ends no REGEX POSITION and is not in OPERAND END), and CODE mode resumes. The two characters \"${\" are consumed, the current DEPTH is pushed on STACK, DEPTH increases by 1, one space is appended to CONTEXT, and CODE mode resumes (the interpolation is code). Any other character is consumed and appends nothing. The end of src ends the scan (an unterminated template swallows the rest).",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R8",
+   "text": "REGEX, at a SOLIDUS (U+002F) not starting a comment, when CONTEXT is a REGEX POSITION (TABLE REGEX POSITION) AND CONTEXT does not end with \"++\" or \"--\" followed by zero or more WS characters (\"n++ / 2\" divides). The candidate body is scanned from the next character with an in-class flag, initially off: a BACKSLASH skips itself and the next character, whatever it is (so an escaped LF is passed over, uncounted); \"[\" turns the flag on; \"]\" turns it off; a SOLIDUS with the flag off ends the body; an unescaped LF or the end of src ends the scan WITHOUT a body end. When the body ends at a SOLIDUS: FIRST, when the regex was GUESSED, i.e. CONTEXT is a REGEX POSITION by the \"empty\" or the \"keyword\" row of TABLE REGEX POSITION (a keyword may really be an identifier: \"of / b\", \"o.in / b\"), the REST SCAN: the whole rest of src from the character after the opening SOLIDUS (the body, the closing SOLIDUS and everything after it, over all later lines) is run through R1-R9 as a src of its own, with fresh state, and each entry it returns, in its order, is recorded as (its label, LINE + its line - 1). Such a guessed regex may really be a divide whose \"closing\" SOLIDUS sits in a string or template; the REST SCAN reads the source the other way, and both readings count. After the \"punctuator\" row the regex is certain and there is NO REST SCAN (\"= /\\\"/; x: any\" reports only the \": any\" after the regex, once). A REST SCAN result depends only on the suffix it scans, so an implementation should compute each suffix once (keyed by its length or start) and reuse it: nested REST SCANs are otherwise exponential in the number of such slashes. NEXT, the BODY (the text strictly between the two SOLIDUS characters, escaped LF included) is FIRST run through R1-R9 as a src of its own, with fresh state, and each entry it returns is recorded, in its order, as (its label, the LINE at the opening SOLIDUS) — a guessed regex never hides code (\"/x: any/\" is a \": any\" hit, \"/any: 1/\" is not, \"/a!/\" records \"non-null assertion\"); the body's own regexes recurse the same way. Then that SOLIDUS and every directly following ASCII letter (the flags) are consumed with the body, one space is appended to CONTEXT, and the cursor moves past them; an LF the body skipped is NOT counted in LINE CITED FIDELITY package. When no body end is found the SOLIDUS is not a regex and falls through to R9 as an ordinary character.",
+   "ambiguity": 0.57
+  },
+  {
+   "id": "R9",
+   "text": "Everything else, in this order. (a) \"{\": DEPTH increases by 1, then as (e). (b) \"}\": when STACK is not empty and its top equals DEPTH minus 1, the top is popped, DEPTH decreases by 1, the \"}\" is consumed WITHOUT appending to CONTEXT, and TEXT mode (R7) resumes. Otherwise DEPTH decreases by 1, then as (e). (c) a WORD CHAR: the word is the maximal run of WORD CHAR characters starting there (so \"9any\", \"éany\", \"any9\" and \"\\u180eany\" are not the word any, while \"x:\\u00a0any\", \"as\\u3000any\", \"x:\\u0085any\" and \"\\u200bany\\ufeff\" contain it: a WS character, U+0085 or U+200B ends a word). If the word is exactly \"any\" it is a candidate. It is EXCUSED as a MEMBER when CONTEXT ends with a \".\" that is not itself directly preceded by \".\" , then zero or more WS characters (\"o.any\", \"o?.any\" excused; \"...any\" and \"..any\" are not). It is EXCUSED as a KEY when BOTH the source text directly after the word is zero or more characters each in WS other than LF, CR, U+2028 and U+2029, or U+0085 or U+200B (never a line break), an optional \"!\" or \"?\", then \":\", AND CONTEXT with its trailing WS characters removed is empty or ends with \"{\", \"(\", \",\" or \";\" (\"{ any: 1 }\", \"f(any?: T)\" and \"{ any\\u00a0: 1 }\" excused; \"c ? any : d\" and a line \"  any\" whose next line starts \": never\" are not). A candidate not excused is recorded with the label from TABLE ANY LABEL. The word is appended to CONTEXT (excused or not, any or not) and the cursor moves past it. (d) \"!\" not directly followed by \"=\": let B be CONTEXT with every trailing SPACE and TAB removed. Record (\"non-null assertion\", LINE) when B is not empty, its last character is in OPERAND END, and B does not end with a maximal run of IDENT characters that is one of the PREFIX KEYWORDS. Then as (e). (e) any other character (a \"!\" before \"=\", a WS character other than LF, U+0085, U+200B, a SOLIDUS that is not a regex, ASCII punctuation, BACKSLASH): it is appended to CONTEXT and the cursor advances one.",
+   "ambiguity": 0.63
+  },
+  {
+   "id": "TABLE ANY row 1",
+   "text": "\"as any\"   | CONTEXT ends with \"as\", the \"a\" being at the start of CONTEXT or after a character not in WORD, followed by zero or more WS characters",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE ANY row 2",
+   "text": "\"<any>\"    | CONTEXT ends with \"<\" followed by zero or more WS characters, AND AFTER begins with zero or more WS characters (LF included) then \">\"",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "TABLE ANY row 3",
+   "text": "\": any\"    | CONTEXT ends with \":\" followed by zero or more WS characters",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "TABLE ANY row 4",
+   "text": "\"any\"      | otherwise",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE REGEX row 1",
+   "text": "empty          | T is empty",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE REGEX row 2",
+   "text": "punctuator     | the last character of T is one of ( , = : [ ! & | ? { } ; + - * % < > ~ ^",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE REGEX row 3",
+   "text": "keyword        | T ends with one of return typeof case do else in of void yield await throw delete new, which is either all of T or preceded by a character not in IDENT",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "TABLE DIRECTIVE row 1",
+   "text": "directive | \"@ts-ignore\", \"@ts-expect-error\" or \"@ts-nocheck\", in any mix of ASCII letter case (\"@TS-Ignore\"), anywhere in the text, with no boundary on either side (\"x@ts-nocheck$\", \"@ts-ignored\", \"@ts-expect-errors\" all contain one)",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "TABLE DIRECTIVE row 2",
+   "text": "lowered   | the same test on the LOWERED text: the full, locale-independent Unicode lowercase mapping of the whole text. Of all non-ASCII characters only U+212A KELVIN SIGN lowers to an ASCII letter (\"k\", so \"@ts-nochec\\u212a\" is a directive) and only U+0130 changes length (to \"i\" U+0307, two code units, never itself part of a directive); U+017F is still not \"s\", U+0131 not \"i\"",
+   "ambiguity": 0.61
+  },
+  {
+   "id": "TABLE DIRECTIVE row 3",
+   "text": "R3 records when either row holds; R4 uses the first match index of each row",
+   "ambiguity": 0.48
+  }
+ ],
+ "ranked": [
+  "R9",
+  "TABLE DIRECTIVE row 2",
+  "R3",
+  "R7",
+  "R8",
+  "R4",
+  "TABLE DIRECTIVE row 3",
+  "R5",
+  "TABLE ANY row 2",
+  "TABLE ANY row 1",
+  "TABLE ANY row 4",
+  "TABLE DIRECTIVE row 1",
+  "TABLE REGEX row 3",
+  "TABLE ANY row 3",
+  "TABLE REGEX row 2",
+  "R1",
+  "TABLE REGEX row 1",
+  "R6",
+  "R2"
+ ],
+ "at": "2026-10-28T02:54:38Z"
+}

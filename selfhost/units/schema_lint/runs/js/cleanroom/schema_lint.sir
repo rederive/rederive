@@ -1,0 +1,92 @@
+UNIT schema_lint
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs schemaLint over cli/sir/sir-parse.mjs parse (legacy mode) — lint 4 of the v0.5 pack gate; reproduce it exactly, accidents included
+ORACLE-CLASS deterministic
+SIG schema_lint(text: text, carried_name: text | none) -> record[hits: list[record[line: u64, what: text, text: text]]]
+ENVELOPE text is any well-formed text (line breaks of every kind, any Unicode). carried_name is none or any well-formed text,
+  the empty text included; the only caller passes none or the identifier of the primary's CARRIED line, but the rule below
+  reads every name literally, so no name is OUT. Inside the envelope nothing throws.
+DEPENDS-ON none
+DESCRIPTION The pack gate's lint against carried data smuggled under a dependency declaration. The file is read the way the
+  SIR parser reads it (R1 to R8): directives, their arguments, continuation lines, attribute values and comments. The lint
+  OVER-reads: every DEPENDS-ON directive whose CONTENT (R9) — all of those parts, quoted text included — mentions carried
+  data, either by the word carried or by carried_name as a whole word, is reported. The result is a record with one field,
+  hits: the reported directives in file order, each a record of line (the directive's 1-based line number), what (the WHAT
+  pin) and text (R11).
+BEHAVIOR
+R1 LINES: text is split at every CRLF pair, every other CR and every other LF; n breaks give n + 1 lines, numbered from 1.
+  On each line, every U+FEFF inside the line's leading run of SP and U+FEFF characters (in any mix) is removed, then the
+  trailing run of SP characters is removed. "The line" below always means this trimmed line. CITED FIDELITY package
+R2 BLANK: an empty line is skipped. It ends nothing: lines after it still belong to the directive before it.
+R3 COMMENT LINE: a line whose first character after its leading SP run is "#" opens nothing and ends nothing. Its COMMENT
+  TEXT is that part with its leading run of "#" removed and then at most one SP character removed; it is appended to the
+  comments of the current directive (the last one opened), or ignored before the first directive.
+R4 CODE: on any other line, take the part after the leading SP run and cut it at its COMMENT MARKER: the first "#" that is
+  preceded by an SP character, is followed by an SP character or the end, and is not inside a quoted span (R8) of that part.
+  The code is the part before the marker with its trailing SP run removed, or the whole part when there is no marker; the
+  text after the marker with its leading and trailing SP runs removed (possibly empty) is a TRAILING COMMENT, appended to the
+  comments of the directive the line opens or continues (R5, R6).
+R5 DIRECTIVE LINE: a line with no leading SP character opens a new directive when its NAME — its code up to the first SP
+  character, or all of it — is a directive name, i.e. an uppercase ASCII letter followed by any number of uppercase ASCII
+  letters, ASCII digits and "-", other than the word CITED. A name that is such a word followed by one ":" counts as that
+  word (except CITED followed by ":"). The opened directive's ARGUMENTS are the attribute body (R7) of the code after the
+  name, and that code's attribute values begin its attribute list; the directive ends where the next directive opens. It is
+  a DEPENDS-ON directive when the name is exactly DEPENDS-ON (case-sensitive; so DEPENDS-ON: also is, while DEPENDS-ON-X,
+  DEPENDS-ONX and depends-on are other directives). CITED FIDELITY package
+R6 CONTINUATION: every other line — an indented line, or a column-0 line that does not open a directive (prose, a
+  lowercase word, a name glued to its text by a character that is not SP, a CITED line) — belongs to the current directive:
+  the attribute body (R7) of its code, when not empty, is appended to that directive's continuations, and its attribute
+  values to its attribute list. A line before the first directive belongs to nothing and is ignored, so an indented
+  DEPENDS-ON line is never a directive.
+R7 ATTRIBUTES of a piece of code: read the piece with one space put in front. An ATTRIBUTE MARKER is a run of SP
+  characters, then one of the words CITED, EARNED or ANCHOR (case-sensitive), then an SP character or the end, where the
+  word does not lie inside a quoted span (R8) of the piece. The BODY is everything before the first marker's SP run (the
+  whole piece when there is none), with its leading and trailing SP runs removed. Each marker's VALUE is the text after its
+  word up to the next marker's SP run (or the end), with its leading and trailing SP runs removed — possibly empty, and kept
+  even when empty. The marker itself (its SP run and its word) is in no part.
+R8 QUOTED SPAN: scan left to right. A '"' opens a span when it is the first character, or the character before it is one
+  of the OPENERS, or it directly follows the closing quote of the span before it. The span closes at the next '"' that is
+  not escaped, where a backslash escapes the one character (code point) after it. An opening quote with no closing quote
+  opens nothing, and no later quote opens either. A position is inside a span when it lies strictly between its two quotes.
+  Spans only hide a "#" or an attribute word from R4 and R7; their text is content like any other. CITED FIDELITY package —
+  so an inch mark (12"), a quote after a letter, after "/" or "." or after * + ? opens nothing
+R9 CONTENT of a DEPENDS-ON directive: its arguments (possibly empty), then each of its continuations in line order, then each
+  value of its attribute list in order (the directive line's first, left to right), then each of its comments in line order,
+  joined with one space between each two (an empty piece still contributes its joining space). Nothing is blanked.
+R10 HIT: a DEPENDS-ON directive is a hit when its content contains the seven letters carried in any mix of ASCII case at a
+  place whose preceding character is absent or not an ASCII letter and whose following character is absent or not an ASCII
+  letter (so carried_x, carried2 and écarried count while miscarried and carriedX do not; a non-ASCII look-alike such as
+  U+017F or U+0130 never matches a letter), or when carried_name is not none, not empty and not exactly the text none, and
+  the content contains carried_name, compared exactly (case-sensitive, character by character, every character literal) at
+  any place, overlapping occurrences included, whose preceding character is absent or not WORD and whose following
+  character is absent or not WORD. A name that starts or ends with a non-WORD character still needs those neighbours to be
+  non-WORD. CITED FIDELITY package — a name none is never tested (None and NONE are), as it reads like no dependency
+R11 Each hit contributes one entry, in ascending line order: line = the directive's line number (R1); what = the WHAT pin;
+  text = the directive's line (R1, so with any attribute and trailing comment it holds), cut to its first 96 Unicode code
+  points (all of it when shorter). A directive gives at most one entry. No hits gives hits as the empty list.
+PINNED charset SP = U+0020 U+0009 CITED FIDELITY package — the parser's one whitespace rule: only space and tab separate, indent and trim; NBSP, U+3000, U+2028, U+FEFF elsewhere are content
+PINNED charset WORD = A-Z a-z 0-9 _ CITED FIDELITY package — ASCII only, the R10 name boundaries
+PINNED charset LETTER = A-Z a-z CITED FIDELITY package — ASCII only, the R10 carried-word boundaries (digits and _ are not letters)
+PINNED charset OPENERS = U+0020 U+0009 ( [ { , = : ; | < > ! & - ~ CITED FIDELITY package — the R8 token starts; not * + ? (regex quantifiers)
+PINNED text WHAT = "carried data declared under DEPENDS-ON — use CARRIED (§18)" CITED FIDELITY package — the exact message, an em dash U+2014 and a section sign U+00A7
+INVARIANT every hit's line is between 1 and the number of lines (R1) and that line opens a DEPENDS-ON directive; every hit's text
+  has at most 96 code points, starts with DEPENDS-ON and has no trailing SP character. The word part of R10 depends on no
+  split: it holds exactly when some line of the directive — its own line after the name, a continuation line or a comment
+  line, up to the next directive — contains the word; R4, R7 and R8 matter only for a carried_name that holds an SP
+  character, a "#" or an attribute word.
+OUT-OF-DOMAIN a text or a carried_name that is not text (a number, a list) throws a host type error in the package; a truthy
+  non-text name throws even when no DEPENDS-ON directive exists, the number 0 reads as none. A text
+  with an unpaired surrogate is OUT (the package reads it by code units and cuts R11 by code points, keeping lone halves).
+  None of this is reproduced.
+ORACLE value -> oracles/schema_lint.json  CANONICAL-SHA256 0a0916d12c07d545826d2813aaf5d3246311e79169468c5db03e530958430540
+SCOPE IN: R1-R11 over ENVELOPE — the parser's directive, continuation, comment, attribute and quoted-span reading only as far
+  as DEPENDS-ON content needs it. OUT: OUT-OF-DOMAIN; the parser's errors and warnings (unknown names, glued names, an
+  orphan line — all observable only as what R5 and R6 make of the line); strict mode; the pack gate around the lint
+  (lintFamily, carriedDeclared, the validator's E_CARRIED_AS_DEPENDENCY mapping).
+PROVENANCE rederive@6199e2cc8b75 (pinned selfhost authority), cli/sir/v05.mjs: export function schemaLint(text, carriedName),
+  called from lintFamily with carriedDeclared(primary)?.name; it reads parse(text).ast (args, cont, attrList, comments) and
+  sirLines(text) from cli/sir/sir-parse.mjs and cut96 from v05.mjs. Round-5b delta re-cut 2026-10-27 (FINDINGS #109: the
+  over-read, the carried word, the name none; the parser's U+FEFF lead and opener set); an independent model of R1-R11
+  agreed with it on 460,000 inputs (400 generator seeds and a 300,000-input character fuzz), and the INVARIANT's line form
+  of the word test on 60,000 more.

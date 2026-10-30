@@ -1,0 +1,219 @@
+UNIT unzip
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# unzip is a PURE, read-only array regrouping function (the inverse of zip).
+# No clock / RNG / env / fs / net seam. No mutation of the input.
+# Deterministic for all inputs -> ORACLE-CLASS deterministic, value mode.
+# ---------------------------------------------------------------------------
+
+SIG  unzip(array) -> Array
+     # `array` is the array of grouped elements to regroup. Single positional arg.
+     # Returns a new Array of regrouped (transposed) arrays. Output and every
+     # row are plain Arrays. The input array and its groups are NOT mutated.
+
+DEPENDS-ON none
+     # Self-contained module. The published file inlines its own private helpers
+     # (arrayFilter, arrayMap, baseProperty, baseTimes, isArrayLikeObject,
+     # isArrayLike, isFunction, isLength, isObject, isObjectLike). These are
+     # OBSERVABLE-BEHAVIOR-ONLY; the SIR below specifies their net effect, so a
+     # blind re-emitter reconstructs the behavior, not the helper names.
+
+# ===========================================================================
+# BEHAVIOR  (exact ordered pipeline; verified against lodash.unzip@3.4.0)
+# ===========================================================================
+#
+# Let MAX_SAFE_INTEGER = 9007199254740991 (2^53 - 1).
+#
+# NODE 1  TOP-LEVEL GUARD
+#   if NOT (array AND array.length)   # i.e. array is falsy (null, undefined,
+#                                     # 0, "", NaN, false) OR array.length is
+#                                     # falsy (0, undefined, null, NaN):
+#       return []                     # a fresh empty array
+#   # Notes on the guard, observed:
+#   #   unzip()            -> []   (array === undefined)
+#   #   unzip(null)        -> []
+#   #   unzip(undefined)   -> []
+#   #   unzip(0)           -> []   (0 is falsy)
+#   #   unzip({})          -> []   ({}.length === undefined -> falsy)
+#   #   unzip([])          -> []   ([].length === 0 -> falsy)
+#   #   unzip("abc")       -> []   passes the guard ("abc".length === 3, truthy),
+#   #                              but see NODE 2: every element is a primitive
+#   #                              string char, all filtered out -> length 0 -> [].
+#   #   unzip({length:2, 0:[1,2], 1:[3,4]}) -> [[1,3],[2,4]]
+#   #                              an array-like object passes the guard and is
+#   #                              indexed [0..length-1] as the list of groups.
+#   # The argument is treated AS IF an array-like list of groups; it is read via
+#   # numeric index 0..length-1. (genInputs only emits genuine Arrays at the top
+#   # level; the array-like-object-top path is OUT-OF-ENVELOPE — spec-only.)
+#
+# NODE 2  FILTER GROUPS + COMPUTE MAX LENGTH   (single left-to-right pass)
+#   length := 0
+#   kept   := []            # order-preserving compaction
+#   for index from 0 to array.length-1:           # 0..length-1, in order
+#       group := array[index]
+#       if isArrayLikeObject(group):              # predicate defined below
+#           length := max(group.length, length)   # numeric Math.max
+#           append group to kept
+#       # else: group is DROPPED (not represented in the output at all)
+#   # `length` is the MAXIMUM `.length` over the KEPT groups (ragged-safe).
+#   # `kept` preserves the relative order of the surviving groups; dropped
+#   # groups leave NO gap (the columns are read from the COMPACTED `kept` list).
+#
+#   PREDICATE  isArrayLikeObject(value):
+#       returns TRUE  iff  ALL of:
+#         (a) value is object-like:  value is truthy AND typeof value === "object"
+#             # excludes: null, undefined, numbers, strings (primitive),
+#             #           booleans, bigint, symbols, functions.
+#             # includes: Array, plain object, Uint8Array/Buffer, boxed String,
+#             #           boxed Number/Boolean, RegExp, Date, Set, Map, Error, ...
+#         (b) value is array-like:
+#               value != null
+#               AND isLength(value.length):
+#                     typeof value.length === "number"
+#                     AND value.length > -1
+#                     AND value.length % 1 === 0          # integer
+#                     AND value.length <= MAX_SAFE_INTEGER
+#               AND NOT isFunction(value):
+#                     # isFunction uses Object.prototype.toString(value);
+#                     # true iff tag is "[object Function]" or
+#                     # "[object GeneratorFunction]".
+#     NET EFFECT on the kinds genInputs can emit (verified):
+#         KEPT  (isArrayLikeObject === true):
+#             - a real Array (incl. empty array [] and sparse arrays)
+#             - a typed array (Uint8Array) / Buffer  (numeric .length)
+#         DROPPED (isArrayLikeObject === false):
+#             - null
+#             - undefined
+#             - a number  (e.g. 5, NaN, Infinity)           -> not object-like
+#             - a primitive string  (e.g. "xy")             -> not object-like
+#             - a boolean (true/false)                      -> not object-like
+#             - a bigint  (e.g. 7n)                          -> not object-like
+#             - a plain object {}                            -> object-like but
+#                   .length is undefined -> isLength false -> DROPPED
+#             - a RegExp /x/                                 -> .length undefined
+#             - a Set / Map                                 -> .length undefined
+#             - a function                                  -> isFunction true
+#         OUT-OF-ENVELOPE (spec-only; NOT emitted by genInputs):
+#             - a boxed String  new String("ab")  -> KEPT (object-like, numeric
+#                   .length 2, not function); indexed by char.
+#             - a plain array-like object {length:n, 0:.., 1:..}  -> KEPT.
+#             (Both are specified here for completeness; the codec does not
+#              round-trip boxed primitives, and array-like plain objects depend
+#              on a faithful encode, so genInputs excludes them.)
+#
+# NODE 3  REGROUP / TRANSPOSE
+#   result := []
+#   for i from 0 to length-1:                  # length from NODE 2
+#       row := []
+#       for each group g in kept (compacted order):
+#           row.push( g[i] )                   # plain property read at numeric
+#                                              # index i; missing index -> the
+#                                              # JS value `undefined`.
+#       result.push(row)
+#   return result
+#   # Equivalently: result has exactly `length` rows; row i has exactly
+#   # kept.length columns; result[i][j] === kept[j][i] (or undefined if group j
+#   # has no index i, e.g. ragged groups or sparse-array holes).
+#
+# ---------------------------------------------------------------------------
+# OBSERVED EDGE-CASE TABLE (each verified by running lodash.unzip@3.4.0).
+# `U` denotes the JS value `undefined`.
+# ---------------------------------------------------------------------------
+#   unzip([])                                  -> []
+#   unzip()                                    -> []
+#   unzip(null)                                -> []
+#   unzip(undefined)                           -> []
+#   unzip(0)                                   -> []
+#   unzip("abc")                               -> []
+#   unzip([[]])                                -> []          # one empty group, length 0
+#   unzip([[],[]])                             -> []          # all empty, length 0
+#   unzip([[1,2],[3,4]])                       -> [[1,3],[2,4]]
+#   unzip([[1,2,3]])                           -> [[1],[2],[3]]      # single group -> one col
+#   unzip([["a",1],["b",2],["c",3]])           -> [["a","b","c"],[1,2,3]]
+#   unzip([[1,2,3],[4,5]])                     -> [[1,4],[2,5],[3,U]]   # ragged: U fill
+#   unzip([[1],[2,3,4]])                       -> [[1,2],[U,3],[U,4]]   # front-short: U fill
+#   unzip([[],[1,2]])                          -> [[U,1],[U,2]]        # empty kept contributes U col
+#   unzip([[1,2],[]])                          -> [[1,U],[2,U]]
+#   unzip([[],[],[1]])                         -> [[U,U,1]]
+#   unzip([[1,2,3],[4,5]]) length              == 3                   # = MAX inner length
+#   # filtering (non-array-like inner groups DROPPED, columns compacted):
+#   unzip([null,[1,2]])                        -> [[1],[2]]
+#   unzip([undefined,[1,2]])                   -> [[1],[2]]
+#   unzip([[1,2],5,[3,4]])                     -> [[1,3],[2,4]]        # number dropped
+#   unzip([[1,2],"xy",[3,4]])                  -> [[1,3],[2,4]]        # primitive string dropped
+#   unzip([true,[1,2]])                        -> [[1],[2]]            # boolean dropped
+#   unzip([{}, [1,2]])                         -> [[1],[2]]            # plain {} dropped
+#   unzip([/x/,[1,2]])                         -> [[1],[2]]            # regex dropped (no numeric length)
+#   unzip([new Set([1,2]),[3,4]])              -> [[3],[4]]            # Set dropped (no .length)
+#   unzip([new Map(),[3,4]])                   -> [[3],[4]]            # Map dropped (no .length)
+#   unzip([function(){}, [1,2]])               -> [[1],[2]]            # function dropped
+#   unzip([1,2,3])                             -> []                   # all dropped -> length 0
+#   unzip([null,null])                         -> []
+#   unzip([[1],5,[2,3,4]])                     -> [[1,2],[U,3],[U,4]]  # MAX over kept (1,3)->3
+#   unzip([[10,11],99,[20,21,22]])             -> [[10,20],[11,21],[U,22]]
+#   unzip([[1,2],null,[3,4],undefined,[5,6]])  -> [[1,3,5],[2,4,6]]    # compacted order
+#   unzip([new Uint8Array([1,2]),[3,4]])       -> [[1,3],[2,4]]        # typed array KEPT
+#   # element value passthrough (elements are returned by-reference / by-value):
+#   unzip([[1,2,3],[4,5,6]] with hole at inner[0][1]) -> [[1,4],[U,5],[3,6]]  # sparse hole -> U
+#   unzip([[NaN,Infinity],[-Infinity,-0]])     -> [[NaN,-Infinity],[Infinity,-0]]   # specials preserved (-0 stays -0)
+#   unzip([[null,undefined],[1,2]])            -> [[null,1],[U,2]]
+#   unzip([[1n,2n],[3n,4n]])                   -> [[1n,3n],[2n,4n]]    # bigint elements preserved
+#   unzip([[[1],[2]],[[3],[4]]])               -> [[[1],[3]],[[2],[4]]]  # nested-array elements preserved
+#   unzip([[1,"a"],[true,null]])               -> [[1,true],["a",null]]  # heterogeneous columns
+#   # Set/Map AS ELEMENTS (not as groups) are preserved by reference:
+#   unzip([[new Set([1]),2],[3,4]])            -> [[Set{1},3],[2,4]]   # Set element passes through
+#
+# ===========================================================================
+# ORACLE
+# ===========================================================================
+ORACLE value -> oracle.json
+# Pure deterministic value oracle. For each input tuple [arrayArg], the
+# expected is unzip(arrayArg). The harness records the return value; on a
+# throw it records {__throw}. unzip itself never throws for any codec-faithful
+# input documented here (the top-level guard absorbs null/undefined/0/non-array;
+# inner non-array-likes are filtered). Output is a deep value comparison,
+# with `undefined` array holes / fills compared faithfully.
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The top-level falsy/empty guard (NODE 1) -> [].
+    - The isArrayLikeObject group filter (NODE 2): object-like AND integer
+      length in [0, 2^53-1] AND not a function; order-preserving compaction.
+    - max-length over kept groups; ragged / sparse / empty-group -> undefined fill.
+    - The transpose (NODE 3): result[i][j] = kept[j][i] (undefined if absent).
+    - Element passthrough (by value/reference), specials preserved (-0, NaN,
+      Infinity, null, bigint, nested arrays, Set/Map-as-element).
+  CARRIED DATA: none. (No literal tables; the only constant is
+    MAX_SAFE_INTEGER = 9007199254740991, stated inline.)
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (specified, NOT emitted by genInputs):
+    - Boxed primitive groups (new String("ab")) -> KEPT and indexed by char;
+      codec does not round-trip boxed primitives.
+    - Plain array-like-object groups ({length:n, 0:..,..}) -> KEPT; depends on a
+      faithful encode of a length-bearing plain object.
+    - Array-like-object as the TOP-LEVEL argument -> treated as the group list.
+    - Function elements / Symbol elements inside a group -> not codec-faithful,
+      excluded; (a function as a GROUP is in-contract = dropped, and IS exercised
+      via genInputs since a function value need not round-trip when the result
+      drops it — but to stay strictly codec-faithful genInputs uses only
+      round-trippable group kinds; the drop behavior is covered by null/number/
+      string/bool/object/regex/Set/Map group cases instead).
+    - No statefulness, no side effects, no I/O: nothing to quarantine.
+
+# ===========================================================================
+# RE-EMITTER DIRECTION
+# ===========================================================================
+# This is the DEFAULT export. The emitted .mjs MUST `export default <fn>` where
+# <fn> is `function unzip(array){ ... }` implementing NODE 1..3 above. Do NOT
+# add a named export. The signature is a single positional argument.
+
+PROVENANCE lodash.unzip@3.4.0  (npm)
+  repo: lodash/lodash  (modularized build: `lodash modularize exports="npm" -o ./`)
+  license: MIT
+  source file: node_modules/lodash.unzip/index.js  (function `unzip`, lines 125-139,
+    with helpers arrayFilter/arrayMap/baseProperty/baseTimes/isArrayLikeObject/
+    isArrayLike/isFunction/isLength/isObject/isObjectLike in the same file)

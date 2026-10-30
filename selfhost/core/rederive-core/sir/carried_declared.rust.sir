@@ -1,0 +1,25 @@
+UNIT carried_declared
+LANG rust
+PRIMARY-SHA256 f22b9eea6d3d89d34dd82f453c33f79a5960dfe8f916c84e69e917bf852490cc
+SIG pub fn carried_declared(text: &str) -> Result<Option<(String, String, Option<String>, Option<String>, Vec<(String, serde_json::Value)>)>, String>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn carried_declared) — no main, no I/O, no unsafe. The
+  verifier's harness depends on it by path. The record is a tuple in declared field order (name, from, sha, shape,
+  assertions); an assertion is (expr, equals). text = &str in, String out (UTF-8; every rule is over chars = code points,
+  never bytes). none = None. json = serde_json::Value (Null, Bool, Number, String, Array, Object). A throw is Err(message);
+  the message is not graded.
+ABI dependency: serde_json = { version = "1", features = ["float_roundtrip"] } and nothing else — the json result is the one
+  route that admits it. Without float_roundtrip serde_json's float parse is not correctly rounded (R12).
+MECHANISM write the line split, comment cut, attribute split and quoted-span scan by hand over chars; do not use the regex
+  crate. SP is ' ' and '\t' only, and every trim is an SP trim — never str::trim. The R11 expr test uses the primary's PINNED charset
+  INVISIBLE spelled out — not char::is_whitespace (it adds U+0085 and drops U+FEFF) and no Unicode crate. Split lines at "\r\n", '\r', '\n' only (not str::lines).
+MECHANISM R11: serde_json::from_str::<String> on STRING and from_str::<Value> on E; any Err -> Err (serde_json rejects
+  numerals beyond the double range and raw control characters in strings, as R11 needs). Then scan E outside its JSON
+  strings for numerals (optional minus, digits, optional fraction, optional exponent): each parses (str::parse::<f64>,
+  correctly rounded) to x; Err unless x is finite, x.abs() <= 2^53, x != 0.0 or the part before e/E has no digit 1-9, and,
+  for an integer-form numeral, its digits (sign dropped) equal (x.abs() as u64).to_string().
+MECHANISM R12 numbers: rebuild every Number in the parsed value as an f64 Number — Value::from(n.as_f64()) — never keep a
+  u64/i64 Number. serde_json reads -0 as the f64 -0.0 and keeps it. A repeated object key keeps its last value (serde_json
+  Map insert), as R12 says.
+ENVELOPE narrowing: none beyond the primary's (its json nests under serde_json's 128-level recursion limit).
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs carriedDeclared + cli/sir/sir-parse.mjs, cut by the sighted selfhost decomposer 2026-10-27 (round 5b).

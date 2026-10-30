@@ -1,0 +1,225 @@
+UNIT kindOf
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# kindOf(val) -> a lowercase native-type NAME string. Pure, total (never throws on any
+# JS value reachable here), zero deps, single positional argument. The default/main export
+# (module.exports = function kindOf). Output is always a non-empty lowercase string with no
+# whitespace.
+
+SIG kindOf(val: any) -> string
+DEPENDS-ON none
+
+# ============================================================================================
+# BEHAVIOR  — the discrimination LADDER, in EXACT source order. ORDER IS SEMANTIC: the first
+# matching node wins and returns immediately. Reproduce every node in this sequence. Helper
+# predicates are defined at the bottom and are invoked exactly where the ladder references them.
+# ============================================================================================
+#
+# Pre-bind once:  toString = Object.prototype.toString   (the built-in, not val's own toString)
+#
+# --- A. void / null fast paths (checked BEFORE typeof) ---
+#   NODE A1: if val === undefined            -> return 'undefined'
+#            (strict ===; the value undefined, i.e. `void 0`. NOT a typeof check — a plain
+#             missing/explicit-undefined value short-circuits here.)
+#   NODE A2: if val === null                 -> return 'null'
+#
+# --- B. typeof fast paths ---
+#   Let type = typeof val.
+#   NODE B1: if type === 'boolean'           -> return 'boolean'
+#   NODE B2: if type === 'string'            -> return 'string'
+#   NODE B3: if type === 'number'            -> return 'number'   # INCLUDES NaN, Infinity, -Infinity, -0
+#   NODE B4: if type === 'symbol'            -> return 'symbol'   # a Symbol PRIMITIVE
+#   NODE B5: if type === 'function'          ->
+#                 return isGeneratorFn(val) ? 'generatorfunction' : 'function'
+#            # Note: typeof 'bigint' is NOT handled here. A bigint primitive (typeof==='bigint')
+#            # falls through ALL of B1..B5 and is resolved later in section F (tail slice -> 'bigint').
+#            # Async functions and arrow functions are typeof 'function' and are NOT generator
+#            # functions -> 'function'.
+#
+#   After this point `val` is a non-null object (or a bigint primitive). Helper predicates below
+#   read members off `val` (val.constructor, val.length, val.flags, ...). On a bigint primitive
+#   these member reads auto-box to a BigInt wrapper and return undefined for the probed members,
+#   so every duck-typed predicate C2..C6 is false for a bigint, and it survives to section F.
+#
+# --- C. instance / duck-typed object predicates (each returns immediately on match) ---
+#   NODE C1: if isArray(val)                 -> return 'array'
+#   NODE C2: if isBuffer(val)                -> return 'buffer'
+#   NODE C3: if isArguments(val)             -> return 'arguments'
+#   NODE C4: if isDate(val)                  -> return 'date'
+#   NODE C5: if isError(val)                 -> return 'error'
+#   NODE C6: if isRegexp(val)                -> return 'regexp'
+#
+# --- D. constructor-name switch (ctorName(val)) ---
+#   Let cn = ctorName(val)  # val.constructor.name if val.constructor is a function, else null.
+#   switch (cn) {
+#     case 'Symbol':             return 'symbol'     # e.g. Object(Symbol()) — a boxed symbol object
+#     case 'Promise':            return 'promise'
+#     case 'WeakMap':            return 'weakmap'
+#     case 'WeakSet':            return 'weakset'
+#     case 'Map':                return 'map'
+#     case 'Set':                return 'set'
+#     case 'Int8Array':          return 'int8array'
+#     case 'Uint8Array':         return 'uint8array'
+#     case 'Uint8ClampedArray':  return 'uint8clampedarray'
+#     case 'Int16Array':         return 'int16array'
+#     case 'Uint16Array':        return 'uint16array'
+#     case 'Int32Array':         return 'int32array'
+#     case 'Uint32Array':        return 'uint32array'
+#     case 'Float32Array':       return 'float32array'
+#     case 'Float64Array':       return 'float64array'
+#     # no default — falls through on any other ctor name (incl null, 'Object', 'BigInt',
+#     # 'Number'/'String'/'Boolean' wrapper ctors, user class names, 'ArrayBuffer', 'DataView',
+#     # 'BigInt64Array', 'BigUint64Array', ...). Those continue to E then F.
+#   }
+#
+# --- E. generator-object duck check ---
+#   NODE E1: if isGeneratorObj(val)          -> return 'generator'
+#            # an object exposing .throw, .return, .next all as functions (e.g. a running generator).
+#
+# --- F. Object.prototype.toString tail dispatch ---
+#   Let tag = toString.call(val)   # e.g. '[object Object]', '[object Number]', '[object BigInt]'
+#   switch (tag) {
+#     case '[object Object]':          return 'object'   # PLAIN objects AND any class instance
+#                                                         # whose ctor is not in D and whose toString
+#                                                         # tag is the default Object tag (user classes,
+#                                                         # Object.create(null), frozen plain objects).
+#     case '[object Map Iterator]':    return 'mapiterator'
+#     case '[object Set Iterator]':    return 'setiterator'
+#     case '[object String Iterator]': return 'stringiterator'
+#     case '[object Array Iterator]':  return 'arrayiterator'
+#   }
+#
+# --- G. final tail-slice fallback (for any tag NOT matched in F) ---
+#   return tag.slice(8, -1).toLowerCase().replace(/\s/g, '')
+#   # tag has the exact form '[object XXXX]'. slice(8,-1) drops the leading '[object ' (8 chars)
+#   # and the trailing ']' (1 char), leaving 'XXXX'. Lowercase it, then remove ALL whitespace
+#   # (the regex /\s/g, global). Examples (VERIFIED against the real package):
+#   #   '[object BigInt]'         -> 'bigint'          # the bigint PRIMITIVE resolves HERE
+#   #   '[object Number]'         -> 'number'          # boxed Number object (new Number(x))
+#   #   '[object String]'         -> 'string'          # boxed String object (new String(x))
+#   #   '[object Boolean]'        -> 'boolean'         # boxed Boolean object (new Boolean(x))
+#   #   '[object ArrayBuffer]'    -> 'arraybuffer'
+#   #   '[object DataView]'       -> 'dataview'
+#   #   '[object BigInt64Array]'  -> 'bigint64array'
+#   #   '[object BigUint64Array]' -> 'biguint64array'
+#   #   '[object SharedArrayBuffer]' -> 'sharedarraybuffer'
+#   #   a custom Symbol.toStringTag 'My Custom Thing' -> tag '[object My Custom Thing]'
+#   #        -> slice -> 'My Custom Thing' -> lower 'my custom thing' -> \s-strip -> 'mycustomthing'
+#   #   a custom Symbol.toStringTag 'CustomTag' -> 'customtag'
+#
+# ============================================================================================
+# HELPER PREDICATES (reproduce exactly; invoked at the ladder nodes above)
+# ============================================================================================
+#   ctorName(val):
+#       return (typeof val.constructor === 'function') ? val.constructor.name : null
+#
+#   isArray(val):
+#       if Array.isArray exists -> return Array.isArray(val)
+#       else                    -> return (val instanceof Array)
+#
+#   isBuffer(val):
+#       if (val.constructor && typeof val.constructor.isBuffer === 'function')
+#           return val.constructor.isBuffer(val)      # Node Buffer ctor exposes a static isBuffer
+#       return false
+#
+#   isArguments(val):
+#       try { if (typeof val.length === 'number' && typeof val.callee === 'function') return true }
+#       catch (err) { if (err.message.indexOf('callee') !== -1) return true }   # strict-mode poison-pill
+#       return false
+#
+#   isDate(val):
+#       if (val instanceof Date) return true
+#       return typeof val.toDateString === 'function'
+#           && typeof val.getDate     === 'function'
+#           && typeof val.setDate     === 'function'   # duck-typed Date
+#
+#   isError(val):
+#       return (val instanceof Error)
+#           || (typeof val.message === 'string'
+#               && val.constructor
+#               && typeof val.constructor.stackTraceLimit === 'number')   # duck-typed Error
+#
+#   isRegexp(val):
+#       if (val instanceof RegExp) return true
+#       return typeof val.flags      === 'string'
+#           && typeof val.ignoreCase === 'boolean'
+#           && typeof val.multiline  === 'boolean'
+#           && typeof val.global     === 'boolean'     # duck-typed RegExp
+#
+#   isGeneratorFn(val):     # called with the function value; ctorName of a GeneratorFunction is 'GeneratorFunction'
+#       return ctorName(val) === 'GeneratorFunction'
+#
+#   isGeneratorObj(val):
+#       return typeof val.throw  === 'function'
+#           && typeof val.return === 'function'
+#           && typeof val.next   === 'function'
+#
+# IMPORTANT precedence consequences (a blind re-emitter MUST preserve these):
+#   * Buffer (Node) matches C2 (isBuffer) BEFORE the ctorName switch, so a Buffer -> 'buffer'
+#     even though it is a Uint8Array subclass (ctorName would say 'Buffer', unmatched anyway).
+#   * A plain Uint8Array -> 'uint8array' via the D switch (ctorName 'Uint8Array').
+#   * Subclasses of Date/RegExp/Error are caught by the instanceof arms of C4/C5/C6.
+#   * Boxed primitives (new Number/String/Boolean) are NOT caught by B (they are objects, not
+#     typeof number/string/boolean), NOT by C, NOT by D (ctor name Number/String/Boolean absent
+#     from the switch), NOT by E -> they reach F, miss '[object Object]', and resolve in G via
+#     their '[object Number|String|Boolean]' tag to 'number'/'string'/'boolean'.
+
+ORACLE value -> oracle.json
+
+# ============================================================================================
+# SCOPE
+# ============================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire ladder A..G and all helper predicates above.
+#   No carried data. No external table. Output is computed purely from the structure/typeof/tag
+#   of the single argument.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (the unit's TRUE behavior on these is documented here for a
+#   blind re-emitter, but they are NOT emitted by genInputs because the oracle CODEC cannot carry
+#   them faithfully across the clean-room boundary — they would corrupt the stored expected. The
+#   codec (encode/decode in orchestrator/lib/codec.mjs) round-trips ONLY: JSON primitives,
+#   undefined, NaN/±Infinity, arrays, plain objects, RegExp, Set, Map, Uint8Array, Buffer (via a
+#   `buf` flag), bigint, and boxed Number/String/Boolean. Anything else is lost.):
+#
+#   - Symbol PRIMITIVE  (true kindOf -> 'symbol'):  encode passes it through, then
+#       JSON.stringify(symbol) yields `undefined`, persisted as array-element `null`.
+#       Round-trips to null -> kindOf 'null'. NOT codec-faithful. OUT.
+#   - live `function` / arrow / async function  (-> 'function'):  JSON.stringify(fn) -> undefined
+#       -> array-element null -> 'null'. OUT.
+#   - generator FUNCTION  (-> 'generatorfunction') and generator OBJECT (-> 'generator'):
+#       functions don't serialize; a generator object is identity/closure-bearing. OUT.
+#   - the `arguments` object  (-> 'arguments'):  not constructible by the codec (no tag); it would
+#       encode as a plain object {0:..,1:..,length:..} losing the .callee function, decoding to a
+#       plain object -> 'object'. NOT faithful. OUT.
+#   - Date  (-> 'date'):  codec has NO Date tag; Date is not instanceof any handled codec type, so
+#       it encodes as a plain object {} (no enumerable own keys) and decodes to {} -> 'object'.
+#       NOT faithful. OUT. (Date IS in the codec's general type list as "Date (as object)" — meaning
+#       it is carried AS a plain object, which for kind-of changes the answer; therefore excluded.)
+#   - Error and Error subclasses (-> 'error'), Promise (-> 'promise'), WeakMap (-> 'weakmap'),
+#       WeakSet (-> 'weakset'):  none have a codec tag; each encodes to {} (no enumerable own keys)
+#       and decodes to a plain object -> 'object'. NOT faithful. OUT.
+#   - typed arrays OTHER THAN Uint8Array — Int8Array, Uint8ClampedArray, Int16Array, Uint16Array,
+#       Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array
+#       (-> '<name>array'):  the codec's typed-array arm is `v instanceof Uint8Array` ONLY; these
+#       are NOT Uint8Array, so they encode as a plain index object {0:..,1:..} and decode to a
+#       plain object -> 'object'. NOT faithful. OUT.  (Uint8Array AND Node Buffer ARE faithful:
+#       Buffer.isBuffer drives a `buf` flag that reconstructs a real Buffer -> 'buffer'.)
+#   - ArrayBuffer, SharedArrayBuffer, DataView (-> 'arraybuffer'/'sharedarraybuffer'/'dataview'):
+#       no codec tag; encode to {} -> decode {} -> 'object'. OUT.
+#   - boxed Symbol object Object(Symbol()) (-> 'symbol' via D), custom Symbol.toStringTag objects
+#       (-> tag-derived name via G), Map/Set/String/Array ITERATORS (-> '...iterator' via F):
+#       not constructible/identity-bearing through the codec. OUT.
+#   - Plain objects whose key set begins with `__t` equal to a codec tag value ('set','map',
+#       'bigint','num','boxed','regex','u8','undef') are reinterpreted by the codec's decode
+#       reviver as a tagged value (NOT a plain object). genInputs MUST NOT emit such objects.
+#
+#   IN-ENVELOPE (codec-faithful) values genInputs DOES emit, and the kindOf result each verifies to:
+#     undefined->'undefined'; null->'null'; boolean prim & boxed Boolean->'boolean';
+#     string prim & boxed String->'string'; number prim incl NaN/Infinity/-Infinity/-0 & boxed
+#     Number->'number'; bigint->'bigint'; array->'array'; plain object & user-class instance->
+#     'object'; RegExp->'regexp'; Set->'set'; Map->'map'; Uint8Array->'uint8array'; Buffer->'buffer'.
+
+PROVENANCE kind-of@6.0.3, repo github.com/jonschlinkert/kind-of, MIT license,
+           source file index.js (lines 1-129; module.exports = function kindOf).

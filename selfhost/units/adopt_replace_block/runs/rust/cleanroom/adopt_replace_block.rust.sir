@@ -1,0 +1,22 @@
+UNIT adopt_replace_block
+LANG rust
+PRIMARY-SHA256 e6eeba5909802787e54f046addbade224098d3b0b3de51c2fb1aa0cc6d286cb5
+SIG pub fn adopt_replace_block(existing: &str, block: (&str, i64, i64), managed: &str, kept: &[&str]) -> String
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn adopt_replace_block), no dependencies, no main, no
+  I/O, no unsafe; the verifier generates the harness from the abstract SIG. text = &str (UTF-8; well-formed by the
+  envelope); the record arrives BY VALUE as a tuple in declared field order (heading, startLine, endLine); i64 = i64;
+  list[text] = a slice of &str. The result is an owned String. A throw (R2, R3) is a panic; the message is not graded.
+  Nothing else panics.
+MECHANISM R1 = existing.split('\n') collected (N = count of LF + 1, the empty first and last pieces kept; never
+  str::lines, which also cuts at CR LF and drops a final empty line). R2 compares in i64 before any cast to usize (a
+  negative or huge value must reach the panic, not wrap). LF and CR are ASCII, so byte offsets at line starts and ends and
+  around a CR are char boundaries. WS is NOT char::is_whitespace (that set holds U+0085 and lacks U+FEFF) and NOT
+  char::is_ascii_whitespace: test membership in the WS pin explicitly and trim with trim_matches over that predicate (R9).
+  std has no General_Category: CF is the explicit CF pin; VISIBLE (R3, R10) is "any char in neither WS nor CF", per char
+  (a char is a scalar, so astral CF members are single chars). R5 BLANK is the three chars ' ' '\t' '\r' only. R10's
+  tail strip is trim_end_matches(['\r', '\n']). R8 is a hand scan (no regex crate). The HEADER pin is a literal with the
+  EM DASH written \u{2014}.
+DEPENDS-ON none
+PINNED charset WS = '\u{9}' '\u{a}' '\u{b}' '\u{c}' '\u{d}' '\u{20}' '\u{a0}' '\u{1680}' '\u{2000}'..='\u{200a}' '\u{2028}' '\u{2029}' '\u{202f}' '\u{205f}' '\u{3000}' '\u{feff}' CITED R3 R9 — the primary's WS, written as Rust char literals
+PINNED charset CF = '\u{ad}' '\u{600}'..='\u{605}' '\u{61c}' '\u{6dd}' '\u{70f}' '\u{890}'..='\u{891}' '\u{8e2}' '\u{180e}' '\u{200b}'..='\u{200f}' '\u{202a}'..='\u{202e}' '\u{2060}'..='\u{2064}' '\u{2066}'..='\u{206f}' '\u{feff}' '\u{fff9}'..='\u{fffb}' '\u{110bd}' '\u{110cd}' '\u{13430}'..='\u{1343f}' '\u{1bca0}'..='\u{1bca3}' '\u{1d173}'..='\u{1d17a}' '\u{e0001}' '\u{e0020}'..='\u{e007f}' CITED R3 R10 — the primary's CF, written as Rust char literals
+PROVENANCE rederive@6199e2cc8b75 cli/lib/adopt.mts — this file states the native SIG and the mechanism only; no behavior.

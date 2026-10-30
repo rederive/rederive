@@ -1,0 +1,207 @@
+UNIT arrDiff
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG diff(arr, ...arrays) -> any
+    # Variadic. Called as diff(arr), diff(arr, b), diff(arr, b, c, ...).
+    # `arr` is conventionally an array; `arrays` are zero or more additional arguments.
+    # Returns: see BEHAVIOR. Pure: never mutates any argument.
+DEPENDS-ON none   # zero runtime dependencies
+
+# ============================================================================
+# BEHAVIOR  (exact pipeline; reconstructed from the real arr-diff@4.0.0 source)
+# ============================================================================
+#
+# The function is variadic and driven by the live `arguments` object (the
+# ACTUAL arity of the call), NOT by a fixed parameter list.
+#
+# Let N = number of arguments actually passed at the call site (arguments.length).
+# Let arg[0], arg[1], ... arg[N-1] be those arguments in order.
+#
+# NODE 0  (no-argument call):
+#   If N == 0  (diff() called with zero args):
+#     The accumulator `arr` is never assigned -> return undefined.
+#     (undefined does NOT round-trip the input codec, so this path is documented
+#      here but is NOT emitted by genInputs. A blind engineer reconstructs it
+#      from this spec.)
+#
+# NODE 1  (accumulator init):
+#   acc = arg[0]            # the first argument, used as-is (NO copy at this stage)
+#
+# NODE 2  (fold over the remaining arguments, left to right):
+#   for idx = 1 .. N-1:                       # i.e. arg[1], arg[2], ... arg[N-1]
+#     acc = diffArray(acc, arg[idx])          # each step REPLACES acc with a value
+#                                             # computed by diffArray (see below)
+#   return acc
+#
+#   Consequence — IDENTITY/COPY semantics (load-bearing, but see EMISSION note):
+#     * If N == 1 (only arg[0] given): the fold body never runs.
+#       return arg[0] ITSELF (the SAME reference; no copy is made).
+#       So diff([1,2,3]) returns the very same array object that was passed in,
+#       and diff("abc") returns the string "abc", diff(42) returns 42, etc.
+#     * If N >= 2: acc is reassigned at least once by diffArray, and EVERY return
+#       value of diffArray is a FRESH array (see diffArray). So the result is a
+#       new array, never the input reference.
+#     NOTE on grading: the SIR oracle is VALUE-mode (deep structural equality of
+#     the returned value), so reference-identity of the result is not itself
+#     graded; it is documented to fully explain the algorithm. What IS graded is
+#     the returned VALUE (shape + element values), which is identical regardless.
+#
+# ----------------------------------------------------------------------------
+# diffArray(one, two)  -- the per-step removal of `two`'s members from `one`
+# ----------------------------------------------------------------------------
+#
+#   BRANCH A  (two is NOT an array, tested by Array.isArray(two) === false):
+#       return a SHALLOW COPY of `one`  ==  one.slice()
+#       # i.e. `two` is IGNORED entirely; no elements removed; result is a fresh
+#       #      array that is a shallow copy of `one`.
+#       # IMPORTANT: this requires `one` to have a .slice() method. If `one` is an
+#       #   array (the normal case) this yields a copy of its elements. If `one`
+#       #   is a string, String.prototype.slice() yields a copy of the STRING (a
+#       #   string, not an array) -- see EDGE cases.
+#       # This branch fires for ANY non-array `two`: a number, string, boolean,
+#       #   null, undefined, a plain object, a Set, a Map, a Uint8Array, an
+#       #   array-LIKE object ({length:n,...}) -- none are Array.isArray, so all
+#       #   are ignored and `one` is copied through unchanged.
+#
+#   BRANCH B  (two IS an array, Array.isArray(two) === true):
+#       result = []   # a FRESH array
+#       for oi = 0 .. one.length - 1:          # iterate `one` by index, in order
+#         ele = one[oi]                         # the element (sparse holes read as undefined)
+#         hasEle = false
+#         for ti = 0 .. two.length - 1:         # linear scan of `two`
+#           if ele === two[ti]:                 # STRICT EQUALITY (===), see SEMANTICS
+#             hasEle = true
+#             break                             # stop at first match
+#         if hasEle === false:
+#           result.push(ele)                    # keep elements NOT found in `two`
+#       return result
+#       # Order is preserved from `one`. Each element of `one` is tested
+#       #   independently, so DUPLICATES in `one` are each kept-or-removed by the
+#       #   same rule (all duplicates of a removed value are removed; all
+#       #   duplicates of a kept value are kept). `one`'s elements are never
+#       #   de-duplicated against each other.
+#       # This branch reads one.length and one[oi]; if `one` is undefined or null
+#       #   it THROWS a TypeError (cannot read properties of undefined/null) --
+#       #   see EDGE cases.
+#
+# ----------------------------------------------------------------------------
+# COMPARISON SEMANTICS  (the `===` operator, exhaustively)
+# ----------------------------------------------------------------------------
+#   Membership uses JavaScript STRICT EQUALITY (===), with NO coercion:
+#     * Numbers compared by value:  2 === 2 -> remove.
+#     * +0 === -0  is TRUE: a 0 in `one` is removed if `two` contains 0 OR -0,
+#         and a -0 in `one` is removed if `two` contains 0 OR -0.
+#     * NaN === NaN is FALSE: a NaN in `one` is NEVER removed, even if `two`
+#         also contains NaN. NaN always survives. (NaN does not round-trip the
+#         codec as an array element either; documented, emitted sparingly only
+#         where the codec permits -- see EMISSION/codec note.)
+#     * Strings compared by value: "a" === "a" -> remove.
+#     * NO cross-type coercion: "2" === 2 is FALSE; 1 === true is FALSE;
+#         null === undefined is FALSE; 0 === "" is FALSE; 0 === false is FALSE.
+#     * undefined === undefined is TRUE (so an undefined element, incl. a sparse
+#         hole, is removed iff `two` contains undefined).
+#     * null === null is TRUE.
+#     * true === true / false === false: booleans removed by value.
+#     * bigint compared by value: 2n === 2n is TRUE; 2n === 2 is FALSE (no
+#         cross bigint/number coercion).
+#     * OBJECTS / ARRAYS / Set / Map / RegExp / Uint8Array AS ELEMENTS are
+#         compared by REFERENCE IDENTITY (=== on objects is reference equality).
+#         Two structurally-equal-but-distinct objects are NOT equal. CRUCIAL for
+#         the wire codec: after the input is serialized and re-decoded, an object
+#         appearing in `arr` and a structurally identical object appearing in a
+#         later array arg are DISTINCT references, hence NOT equal, hence the
+#         element in `arr` is KEPT. Therefore, across the persisted-input
+#         boundary, object/array elements are effectively never removed by a
+#         later arg. (genInputs uses object elements ONLY to demonstrate the
+#         "kept" path; it uses primitives for the "removed" path.)
+#
+# ----------------------------------------------------------------------------
+# EDGE / DEGENERATE CASES  (all verified by executing arr-diff@4.0.0)
+# ----------------------------------------------------------------------------
+#   E1  diff([])                 -> [] (same empty array ref; value [])
+#   E2  diff([], [1,2])          -> []         (BRANCH B over empty one)
+#   E3  diff([1,2,3], [])        -> [1,2,3]    (BRANCH B, two empty -> nothing removed; fresh copy)
+#   E4  diff([1,2,3], [1,2,3])   -> []         (all removed)
+#   E5  diff([1,2,3], [4,5])     -> [1,2,3]    (none removed)
+#   E6  diff([1,2,3,4], [2,4])   -> [1,3]      (order preserved)
+#   E7  diff([1,1,2,2,3], [3])   -> [1,1,2,2]  (duplicates kept)
+#   E8  diff([1,1,2,2,3], [1])   -> [2,2,3]    (all duplicate 1s removed)
+#   E9  diff([NaN,1], [NaN])     -> [NaN,1]    (NaN survives)
+#   E10 diff([1,2,3,4,5],[2],[4])-> [1,3,5]    (chained array args)
+#   E11 diff([1,2,3], "23")      -> [1,2,3]    (non-array extra ignored; fresh copy)
+#   E12 diff([1,2,3], 2)         -> [1,2,3]    (non-array number extra ignored)
+#   E13 diff([1,2,3], null)      -> [1,2,3]    (null extra ignored)
+#   E14 diff([1,2,3], {0:2})     -> [1,2,3]    (plain object extra ignored)
+#   E15 diff([1,2,3], new Set([2])) -> [1,2,3] (Set is NOT Array.isArray -> ignored)
+#   E16 diff([1,2,3], {length:1,0:2}) -> [1,2,3] (array-LIKE object ignored)
+#   E17 diff([1,"2",2,3], [2])   -> [1,"2",3]  (strict: "2" !== 2)
+#   E18 diff([true,false,null,0,"",1],[false,null]) -> [true,0,"",1] (no coercion)
+#   E19 diff([0], [-0])          -> []         (+0 === -0)
+#   E20 diff([10n,20n,30n],[20n])-> [10n,30n]  (bigint by value)
+#   E21 diff([1n,2,3n],[2n])     -> [1n,2,3n]  (2 !== 2n, 1n !== 1)
+#   E22 diff([1,2,3,4],[2],"x")  -> [1,3,4]    (array then non-array: 2 removed, then copy)
+#   E23 diff([1,2,3,4],"x",[3])  -> [1,2,4]    (non-array then array: copy, then 3 removed)
+#   E24 diff([{a:1}], [{a:1}])   -> [{a:1}]    (object element kept: reference inequality)
+#   E25 diff()                   -> undefined  (N==0; NOT emitted, see NODE 0)
+#   E26 diff("abc")              -> "abc"      (N==1, returns arg[0] as-is, a STRING)
+#   E27 diff(42)                 -> 42         (N==1, returns the number as-is)
+#   E28 diff(null)               -> null       (N==1, returns null as-is)
+#   E29 diff("abc", ["b"])       -> ["a","c"]  (THROW-free: String has .length & index
+#                                               access; BRANCH B iterates chars, === per char)
+#   E30 diff(undefined, [1])     -> THROWS TypeError (BRANCH B reads undefined.length)
+#                                   (undefined first-arg WITH an array extra. The throw is
+#                                    recorded as {__throw} by the harness and is gradable.)
+#   E31 diff([1,,3], [undefined]) -> [1,3]     (sparse hole reads as undefined; removed)
+#
+# ----------------------------------------------------------------------------
+# PURITY / MUTATION
+# ----------------------------------------------------------------------------
+#   The function NEVER mutates any argument. `arr` is read-only; each diffArray
+#   step builds a new array (BRANCH B) or returns one.slice() (BRANCH A). The
+#   only "shared" output is the N==1 fast path, which returns arg[0] by
+#   reference without copying (read-only, no mutation).
+
+# ============================================================================
+# ORACLE value -> oracle.json
+# ============================================================================
+#   Grading is value-mode: deep structural equality of the RETURNED value.
+#   For throw-paths (E30), the harness records {__throw: <error info>} and grades
+#   that the call throws (TypeError). Reference identity of the result is NOT
+#   graded (and need not be reproduced); only the value is.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire algorithm above. No tables,
+#     no external data, no seams (deterministic pure function).
+#   CARRIED DATA: none. No literal tables; no carried.json needed.
+#   OUT-OF-CONTRACT: none. (No side effects, no ambient reads, no I/O.)
+#   OUT-OF-ENVELOPE (documented, NOT emitted by genInputs, reconstructed from spec):
+#     * N==0 returning undefined (E25) -- undefined is not a codec-emittable arg list edge.
+#     * Array ELEMENTS that are `undefined` / NaN as raw values inside `arr` or an
+#       extra array: undefined array elements and NaN do not round-trip JSON
+#       faithfully (undefined -> null, NaN -> null). genInputs AVOIDS placing raw
+#       `undefined`/`NaN` as ARRAY ELEMENTS in emitted inputs. The behavior for
+#       these is fully specified above (E9, E31) for blind reconstruction.
+#     * Symbols, live functions: not codec-faithful; never emitted. (=== on a
+#       symbol is by identity, same object-reference reasoning as E24.)
+
+# ============================================================================
+# EMISSION CONTRACT  (how a blind re-emitter must package the unit)
+# ============================================================================
+#   This unit is the DEFAULT export of a CommonJS module (module.exports = diff).
+#   The re-emitted artifact is an ES module loaded via dynamic import(). Therefore
+#   the emission MUST expose the function as the ESM default export:
+#        export default function diff(arr) { ... }     # or  export default diff;
+#   A bare `module.exports = ...` will NOT load as an ESM default and MUST NOT be
+#   used. The exported function must be variadic over `arguments` (read the live
+#   argument count, not a fixed parameter list) to reproduce NODE 0 / N==1 / fold
+#   semantics exactly.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+#   arr-diff@4.0.0  (jonschlinkert)
+#   repo:    https://github.com/jonschlinkert/arr-diff
+#   license: MIT
+#   source:  index.js  (module.exports = function diff; helper function diffArray)

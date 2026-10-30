@@ -1,0 +1,275 @@
+UNIT omit
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG omit(object, ...paths) -> Object
+    # default export of lodash.omit@4.18.0; module.exports = omit.
+    # `paths` is variadic: zero or more arguments, each a property name (string|number|
+    # boolean|null|undefined|symbol) OR an array of such (possibly nested-array deep-path).
+DEPENDS-ON none   # self-contained; no carried data, no constants table, no external module.
+
+# =====================================================================================
+# OVERVIEW
+# =====================================================================================
+# `omit(object, ...paths)` returns a NEW plain object that contains the own AND inherited
+# enumerable string-keyed AND symbol-keyed properties of `object`, EXCEPT those named by
+# `paths`. Each path may be a top-level key (shallow) or a multi-segment property path
+# (deep, e.g. 'a.b' or ['a','b']). It NEVER mutates the input.
+#
+# DETERMINISM: output is fully deterministic from the inputs. Output key order is the
+# standard ECMAScript OwnPropertyKeys order of the *collected* keys (integer-index keys
+# ascending, then string keys in insertion order, then symbols in insertion order),
+# preserved through the copy/clone/unset pipeline. Value comparison is by deep structural
+# equality after codec round-trip (reference identity is NOT observable; see CLONE NOTE).
+
+# =====================================================================================
+# BEHAVIOR  (exact ordered pipeline — this IS the 4.18.0 implementation)
+# =====================================================================================
+#
+# STEP 0 — VARIADIC PATH COLLECTION + ONE-LEVEL FLATTEN ("flatRest").
+#   The implementation is `var omit = flatRest(function(object, paths){...})` where the
+#   inner function takes exactly (object, paths). flatRest collects ALL call arguments
+#   from index 1 onward into an array `rest`, then sets `paths = flatten(rest)` where
+#   `flatten` flattens EXACTLY ONE level (baseFlatten depth 1; an element is flattened iff
+#   it is an Array or arguments-object).
+#     rest = [ arg1, arg2, ... argK ]            # every arg after `object`
+#     paths = flatten(rest)                       # one level
+#   CONSEQUENCES (verify each against examples below):
+#     - omit(o)                  -> rest=[]            -> paths=[]
+#     - omit(o, 'a', 'b')        -> rest=['a','b']     -> paths=['a','b']            (2 paths)
+#     - omit(o, ['a','b'])       -> rest=[['a','b']]   -> paths=['a','b']            (2 paths)
+#     - omit(o, ['a'], 'b')      -> rest=[['a'],'b']   -> paths=['a','b']            (2 paths)
+#     - omit(o, [['a','b']])     -> rest=[[['a','b']]] -> paths=[['a','b']]          (1 DEEP path)
+#     - omit(o, [['a','x'],'b']) -> rest=[[['a','x'],'b']] -> paths=[['a','x'],'b']  (1 deep + 1 shallow)
+#     - omit(o, [[['a']]])       -> rest=[[[['a']]]]  -> flatten 1 level -> [[['a']]] ...
+#         NOTE: flatten([ [[['a']]] ], 1) -> push elements of [[['a']]] -> [['a']]?
+#         CORRECTION — trace precisely: rest = [ [[['a']]] ] has ONE element [[['a']]].
+#         That element is an Array (flattenable) so its OWN elements are pushed: the single
+#         element [['a']]. So paths = [ [['a']] ]. Then castPath([['a']]) keeps it an array
+#         -> path = [['a']] -> toKey(['a']) -> String(['a']) = 'a' -> removes top-level 'a'.
+#         (Empirically omit({a:1,b:2},[[['a']]]) -> {b:2}; documented edge, generator does
+#          not rely on triple nesting.)
+#     - omit(o, null)            -> rest=[null]        -> flatten -> [null]  (null NOT flattenable)
+#     - omit(o, undefined)       -> rest=[undefined]   -> flatten -> [undefined]
+#   RULE OF THUMB: a top-level array argument is "spread" into individual paths; an array
+#   nested one deeper (i.e. an array element that is itself an array) is preserved as a
+#   single multi-segment deep path.
+#
+# STEP 1 — NULLISH OBJECT GUARD.
+#   result = {}                               # fresh empty plain object
+#   if (object == null) return result          # object === null OR object === undefined
+#       -> returns {} for both null and undefined. (Loose ==: only null/undefined hit this.)
+#
+# STEP 2 — NORMALIZE EACH PATH + DETECT DEEPNESS.
+#   isDeep = false
+#   for each `path` in `paths` (in order):
+#       path = castPath(path, object)          # -> array of segments (see castPath rules)
+#       if (path.length > 1) isDeep = true
+#   replace `paths` with the array of normalized segment-arrays.
+#
+#   castPath(value, object):
+#       if isArray(value): return value                       # arrays pass through unchanged
+#       if isKey(value, object): return [value]               # single-segment path
+#       else: return stringToPath(toString(value))            # parse string into segments
+#
+#   isKey(value, object) returns TRUE (=> treat as a SINGLE literal key, no deep parse) iff:
+#       - value is NOT an array, AND one of:
+#           * typeof value is number | symbol | boolean,  OR value is null,  OR isSymbol(value); OR
+#           * /^\w*$/.test(value)               # value is a plain word (letters/digits/_ only, incl. '')
+#           * OR NOT /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/.test(value)  # has no '.' or '[...]'
+#           * OR (object != null AND value in Object(object))  # the literal string is an OWN/INHERITED key of object
+#   So: 'abc' is a key; 'a.b' is NOT a key (it has a dot) UNLESS object literally has key 'a.b'
+#   (then 'a.b' is treated as the single literal key, NOT a deep path). Numbers/booleans/null
+#   coerce to their toKey string ('1', 'true', 'null', etc.) as single keys.
+#
+#   stringToPath(string): parses a dotted/bracket path string into segments using rePropName
+#       rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g
+#     - 'a.b'        -> ['a','b']
+#     - 'a.b.c'      -> ['a','b','c']
+#     - 'a[1]'       -> ['a','1']           (bracketed unquoted number captured as the number text)
+#     - 'a[-1]'      -> ['a','-1']
+#     - 'a["x.y"]'   -> ['a','x.y']         (quoted bracket -> literal segment, quotes/escapes stripped)
+#     - if string starts with '.' (charCodeAt(0)===46): a leading '' segment is pushed first.
+#     - memoized (cache up to 500 distinct strings; pure — caching is not observable).
+#
+#   toKey(value): the per-segment key coercion applied later (STEP 5):
+#       - if typeof value === 'string' OR isSymbol(value): return value as-is
+#       - else result = String(value); if result === '0' and 1/value === -Infinity return '-0'
+#         (i.e. numeric -0 stringifies to '-0'); otherwise return result.
+#
+# STEP 3 — COPY ALL ENUMERABLE KEYS (own + inherited, strings + symbols) INTO result.
+#   copyObject(object, getAllKeysIn(object), result)
+#   getAllKeysIn(object) = keysIn(object) concatenated with getSymbolsIn(object):
+#       keysIn      = ALL enumerable STRING keys, OWN and INHERITED (walks the prototype
+#                     chain via `for..in`), excluding 'constructor' only when it is the
+#                     prototype's own constructor. For array-like objects integer indices
+#                     are produced as string keys '0','1',...
+#       getSymbolsIn= ALL enumerable SYMBOL keys, OWN and INHERITED (walks prototype chain,
+#                     own-enumerable symbols at each level).
+#   copyObject writes each collected key's CURRENT value from `object` onto `result` (top
+#   level only — values are copied by reference at this point; nested objects are shared).
+#   A key whose value is `undefined` is still copied (the key exists in result with value
+#   undefined). Order of keys in result follows getAllKeysIn order (see KEY ORDER below).
+#
+# STEP 4 — CONDITIONAL DEEP CLONE (only if any path is multi-segment).
+#   if (isDeep):
+#       result = baseClone(result, CLONE_DEEP|CLONE_FLAT|CLONE_SYMBOLS, customOmitClone)
+#     where customOmitClone(value) = isPlainObject(value) ? undefined : value.
+#   EFFECT: deep-clones result, but the customizer SHORT-CIRCUITS cloning for any value that
+#   is NOT a plain object — returning that value AS-IS (shared reference). Therefore, under a
+#   deep path:
+#       - PLAIN OBJECTS (created by Object / null-proto / object literal) along the retained
+#         tree are FRESHLY CLONED (new references), with inherited string+symbol props
+#         flattened onto own (CLONE_FLAT). This is what lets a deep unset (STEP 5) delete a
+#         nested key WITHOUT mutating the caller's input.
+#       - NON-PLAIN values (Arrays, Date, RegExp, Map, Set, typed arrays/Uint8Array/Buffer,
+#         class instances, functions, primitives) are NOT cloned — the SAME reference is kept
+#         in result. (Verified: result.arr === input.arr, result.dt === input.dt, etc.)
+#   if (NOT isDeep): result is NOT cloned at all; nested object/array/etc. values in result
+#   are the SAME references as in `object` (shallow copy only).
+#   CLONE NOTE for the oracle: because the oracle compares by deep STRUCTURAL equality after
+#   a value-codec round-trip, reference identity is invisible — both the shallow-shared and
+#   deep-cloned cases serialize to the same structure. The re-emitter need not reproduce
+#   reference identity, ONLY the structural content (and the array-hole behavior in STEP 5).
+#
+# STEP 5 — UNSET EACH PATH (delete the targeted keys) — iterate paths in REVERSE order.
+#   length = paths.length
+#   while (length--):  baseUnset(result, paths[length])
+#   baseUnset(object, path):   # path already a segment array here
+#       if path.length === 0: return true   (no-op; empty path removes nothing)
+#       PROTOTYPE-POLLUTION GUARDS (applied to every segment, in order):
+#         - for any segment === '__proto__' (after toKey): if result does NOT have an OWN
+#           '__proto__' property, ABORT this unset (return false, delete nothing). I.e. you
+#           may only traverse/delete a '__proto__' key that is a real own data property.
+#         - for any NON-TERMINAL segment === 'constructor' OR === 'prototype' (i.e. index <
+#           length-1): ABORT this unset (return false, delete nothing).
+#       Otherwise:
+#         obj = parent(object, path)         # navigate to the container of the last segment:
+#             parent = (path.length < 2) ? object : baseGet(object, path[0 .. length-2])
+#             baseGet walks: for each segment key=toKey(seg), obj = obj[key]; returns the
+#               value reached IFF the full prefix path resolved (every step non-null & present),
+#               else undefined. If parent resolves to null/undefined -> nothing deleted.
+#         if obj != null: delete obj[ toKey(last(path)) ]   # delete the final key
+#   DELETE SEMANTICS:
+#       - On a plain object, `delete` removes the key.
+#       - On an ARRAY container (deep path into an array, e.g. 'list.1'), `delete obj[idx]`
+#         leaves a HOLE: the array length is unchanged and the slot becomes empty. Under JSON
+#         serialization an empty array slot renders as `null`. (Verified: omit({list:[10,20,
+#         30]}, 'list.1') -> {list:[10, <empty>, 30]} -> JSON {"list":[10,null,30]}.) The
+#         re-emitter MUST use `delete arr[idx]` (NOT splice) so the hole/null is reproduced.
+#       - Deleting a missing key is a harmless no-op.
+#
+# RETURN result.
+
+# =====================================================================================
+# KEY ORDER (must be reproduced for the oracle to compare object key sequences)
+# =====================================================================================
+# result keys follow getAllKeysIn(object) order, threaded through copyObject (and, if deep,
+# baseClone which re-collects via getAllKeysIn). This equals the standard ECMAScript
+# OwnPropertyKeys ordering at each level:
+#   1. integer-index string keys ('0','1','2',...) in ASCENDING numeric order, THEN
+#   2. remaining string keys in property INSERTION order, THEN
+#   3. symbol keys in insertion order.
+# Inherited keys: keysIn/getSymbolsIn append inherited enumerable keys AFTER the own keys of
+# the nearest object as the prototype chain is walked (own level first, then each ancestor).
+# Within the standalone build this matches a `for..in` enumeration filtered to enumerable.
+# Removing keys (STEP 5) does not reorder the survivors. Determinism holds for all
+# codec-faithful inputs.
+
+# =====================================================================================
+# WORKED EXAMPLES (oracle-faithful; each is reproducible from the rules above)
+# =====================================================================================
+#   omit({a:1,b:2,c:3}, ['a','c'])              == {b:2}
+#   omit({a:1,b:2,c:3}, 'a', 'c')               == {b:2}
+#   omit({a:1,b:2,c:3}, ['a'], 'c')             == {b:2}
+#   omit(null, ['a'])                           == {}
+#   omit(undefined, ['a'])                      == {}
+#   omit({a:1,b:2})                             == {a:1,b:2}                # no paths
+#   omit({a:1,b:2}, [])                         == {a:1,b:2}
+#   omit({a:1}, ['z'])                          == {a:1}                    # missing key
+#   omit({'1':'x','2':'y','3':'z'}, [2])        == {'1':'x','3':'z'}        # number path -> '2'
+#   omit({'1':'x','2':'y','3':'z'}, ['2'])      == {'1':'x','3':'z'}
+#   omit({a:{b:1,c:2},d:3}, 'a.b')              == {a:{c:2},d:3}            # deep path
+#   omit({a:{b:1,c:2},d:3}, [['a','b']])        == {a:{c:2},d:3}            # array deep path
+#   omit({a:1}, 'a.b')                          == {a:1}                    # deep into non-object: no-op
+#   omit({a:{x:1,y:2},b:2}, [['a','x'],'b'])    == {a:{y:2}}               # 1 deep + 1 shallow
+#   omit({a:1,b:2,c:3}, [['a','b']])            == {a:1,b:2,c:3}           # single deep path 'a'->'b' absent
+#   omit({'a.b':1, a:{b:2}}, ['a.b'])           == {a:{b:2}}               # 'a.b' is a LITERAL own key -> removed
+#   omit({a:{b:2}}, ['a.b'])                    == {a:{}}                   # 'a.b' not literal -> deep, removes a.b
+#   omit({a:[1,2,3]}, ['a[1]'])                 == {a:[1,<hole>,3]}         # JSON {"a":[1,null,3]}
+#   omit({a:[1,2,3]}, ['a.1'])                  == {a:[1,<hole>,3]}
+#   omit({a:{'x.y':5,z:6}}, ['a["x.y"]'])       == {a:{z:6}}               # quoted bracket literal segment
+#   omit({a:[1,2,3]}, ['a[-1]'])                == {a:[1,2,3]}             # index -1 absent -> no-op
+#   omit({a:1,b:2}, null)                       == {b:2}                   # path null -> key 'null' removed -> here removes 'null' key if present; with {a,b} removes nothing of {a:1,b:2}? -> NO 'null' key, so == {a:1,b:2}
+#                                                  # (precisely: omit({a:1,'null':2}, null) == {a:1})
+#   omit({a:1,'undefined':2}, undefined)        == {a:1}                   # path undefined -> key 'undefined'
+#   omit({a:1,'true':2,'false':3}, [true,false])== {a:1}                   # boolean paths -> 'true','false'
+#   omit([10,20,30], [1])                       == {'0':10,'2':30}         # array input -> plain object out, idx 1 omitted
+#   omit('hi', [0])                             == {'1':'i'}               # string input: enumerable char indices
+#   omit(42, ['a'])                             == {}                      # primitive number: no enumerable keys
+#   omit(true, ['a'])                           == {}                      # primitive boolean
+#   omit({a:1,b:2}, ['a','a'])                  == {b:2}                   # duplicate paths fine
+#   # Reference (structural-only — oracle compares structure, not identity):
+#   omit({a:{x:1},b:2}, ['b']).a   shares ref with input.a (shallow, not deep) -> structurally {x:1}
+#   omit({a:{x:1},b:2}, ['b.y']).a is a FRESH clone (deep path present)        -> structurally {x:1}
+#   omit({s:new Set([1,2]), a:{b:1}}, ['a.b']).s shares ref with input.s (non-plain, not cloned)
+
+# =====================================================================================
+# EDGE / DEGENERATE CASES (all confirmed by running 4.18.0)
+# =====================================================================================
+#   - object === null OR undefined            -> {} (STEP 1 guard).
+#   - no paths / empty path arrays            -> shallow copy of all enumerable own+inherited
+#                                                string+symbol keys (no deletions).
+#   - omitting a missing/absent key           -> no-op.
+#   - deep path whose parent does not resolve -> no-op (baseGet returns undefined -> obj null).
+#   - deleting an array index via a deep path -> leaves a hole (JSON null); array length kept.
+#   - input is an Array                       -> result is a PLAIN object keyed by the array's
+#                                                enumerable string indices (length is NOT a key).
+#   - input is a primitive string             -> result keyed by '0'.. char indices.
+#   - input is a primitive number/boolean/bigint/symbol -> {} (no own/inherited enum keys).
+#   - inherited enumerable string keys        -> COPIED into result (keysIn).
+#   - own + inherited enumerable SYMBOL keys  -> COPIED into result (getSymbolsIn).
+#   - property value === undefined            -> key copied, present in result with value undefined.
+#   - prototype-pollution guards (baseUnset)  -> '__proto__' segment only traversable as an own
+#                                                data prop; non-terminal 'constructor'/'prototype'
+#                                                aborts the unset; Object.prototype is never polluted.
+#   - 'a.b' string when object literally owns key 'a.b' -> removes that literal key (isKey true).
+
+# =====================================================================================
+# OUT-OF-ENVELOPE  (documented for the blind re-emitter; NOT emitted by genInputs because
+#                   the value-codec cannot faithfully round-trip them — behavior is still
+#                   defined here so a re-emitter reconstructs it if ever exercised)
+# =====================================================================================
+#   - Function-valued properties: copied by reference when no deep path (shallow); under a
+#     deep path, customOmitClone treats a function as non-plain -> shared ref (not cloned).
+#     Functions do not survive JSON.stringify(encode(...)) -> excluded from genInputs.
+#   - Symbol VALUES (a property whose VALUE is a Symbol): kept by reference; not JSON-codec
+#     faithful as a value -> excluded from genInputs. (Symbol KEYS via Set/Map/codec are fine
+#     where the codec supports them, but a bare object with a Symbol key is not codec-round-
+#     trippable as a plain-object arg, so symbol-key cases are documented, not generated.)
+#   - A bare numeric -0 used as a PATH component: toKey coerces -0 to '-0' (distinct from '0').
+#     -0 does not survive JSON round-trip (becomes 0) -> excluded from genInputs; documented.
+#   - NaN / +Infinity / -Infinity as property VALUES: behavior is "copied as-is", but these
+#     do not survive JSON round-trip -> excluded from genInputs; documented.
+#   - Boxed primitives / class instances as values: kept (shared ref); identity-bearing and
+#     not codec-faithful -> excluded from genInputs; documented.
+
+# =====================================================================================
+# SCOPE
+# =====================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the full pipeline STEP 0..5 above: variadic one-level flatten; nullish guard returning
+#     {}; getAllKeysIn (own+inherited, strings+symbols) shallow copy; conditional deep clone
+#     with the plain-object-only customizer; reverse-order baseUnset with castPath/stringToPath
+#     parsing, toKey coercion, prototype-pollution guards, array-hole delete semantics; and the
+#     ECMAScript key-ordering of the result.
+# CARRIED DATA: NONE. There are no large literal tables / constants. (No carried.json.)
+# OUT-OF-CONTRACT: NONE. `omit` is pure: no clock, RNG, env, fs, net, or global mutation.
+#   It reads only its arguments and returns a fresh value. No seam.
+
+ORACLE value -> oracle.json
+
+PROVENANCE lodash.omit@4.18.0 ; repo lodash/lodash (standalone modularized build,
+  "lodash modularize exports=npm") ; MIT license ; source file:
+  node_modules/lodash.omit/index.js (module.exports = omit). Author John-David Dalton.
+  Behavior pinned by reading index.js AND by executing the installed 4.18.0 package
+  (Node v24) across the worked examples and edge cases listed above.

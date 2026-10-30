@@ -1,0 +1,184 @@
+UNIT pullAt
+KIND STATE
+ORACLE-CLASS deterministic
+SIG pullAt(array, ...indexes) -> Array   # module.exports default; variadic; each `indexes` arg may be a number, a numeric-string, or an Array of such (flattened ONE level)
+
+DEPENDS-ON none   # self-contained: all helpers (baseRest, baseFlatten, baseAt, basePullAt, get, isIndex, arrayMap, compareAscending) are bundled in the single source file and reproduced as in-contract logic below
+
+# =====================================================================
+# OBSERVATION CONTRACT  (SIR v0.2 §11 — KIND STATE, RETURN != POST)
+# =====================================================================
+# The factory auto-stamps observe='result+post'. The observable is the PAIR:
+#     result = the RETURNED array of removed-element VALUES (a NEW array)
+#     post   = the SAME `array` object after IN-PLACE mutation (elements removed)
+# Both must match. The whole reason this unit exists in the differential is that
+# RETURN != POST: a do-nothing impostor that returns the right `result` but does
+# NOT mutate `array` (post unchanged) MUST FAIL on `post`. Conversely an impostor
+# that mutates correctly but returns the wrong removed-values MUST FAIL on `result`.
+#
+# IDENTITY: the EXACT array object passed in is mutated (Array.prototype.splice is
+# called on it / properties deleted from it); a fresh array is NOT substituted.
+# `result` is a brand-new Array distinct from `array`.
+
+# =====================================================================
+# BEHAVIOR  (ordered pipeline — exact + complete)
+# =====================================================================
+# Let the call be  pullAt(array, arg1, arg2, ..., argK).
+#
+# NODE 1 — REST GATHER (baseRest, start = func.length-1 = 1):
+#   Collect every argument after `array` into one array:
+#       indexes = [arg1, arg2, ..., argK]
+#   (If only `array` is passed, indexes = [].)
+#
+# NODE 2 — FLATTEN ONE LEVEL (baseFlatten(indexes, 1)):
+#   Replace `indexes` with a one-level flatten. For each element E of indexes:
+#     - if E is "flattenable" (E is an Array, OR an `arguments` object, OR a
+#       Symbol.isConcatSpreadable object): SPREAD its elements into the result
+#       (one level only — nested arrays are NOT recursively flattened; a nested
+#       array element survives as an array element).
+#     - otherwise: push E unchanged.
+#   Result is a flat list `idxs` whose elements are the actual index values.
+#   # In-scope generator inputs use only numbers / numeric-strings, optionally
+#   # wrapped one level in a plain Array. So this node turns e.g. [0,[2,3],5]
+#   # into [0,2,3,5]. (See OUT-OF-ENVELOPE for the array-valued-element path.)
+#
+# NODE 3 — CAPTURE LENGTH (BEFORE any mutation):
+#       length = array ? array.length : 0
+#
+# NODE 4 — COMPUTE result  (baseAt(array, idxs)) — RETURN VALUE, computed PRE-mutation:
+#   result = new Array of the SAME length as idxs, where for k = 0..idxs.length-1:
+#       result[k] = get(array, idxs[k])
+#   `get(array, idx)` semantics for in-scope idx values:
+#       - idx a number n that is an integer in [0, length):  result[k] = array[n]
+#       - idx a numeric STRING "n" naming an existing own index: result[k] = array[n]
+#       - idx out-of-range (n >= length), NEGATIVE (n < 0), fractional (1.5),
+#         or otherwise not an own property: result[k] = undefined
+#   *** result PRESERVES THE ORIGINAL (post-flatten) ORDER OF idxs — it is NOT sorted. ***
+#   *** undefined elements ARE produced for out-of-range / negative / fractional /
+#       missing indexes (one undefined per such index). They are real `undefined`
+#       array elements (JSON-serialize to null). ***
+#   *** No array element is read after removal: every read here uses the ORIGINAL,
+#       still-unmutated `array`. ***
+#
+# NODE 5 — BUILD SORTED REMOVAL LIST:
+#   sorted = arrayMap(idxs, idx => isIndex(idx, length) ? +idx : idx)
+#            .sort(compareAscending)
+#   - isIndex(value, length):  length != 0  AND
+#       (typeof value == 'number'  OR  /^(?:0|[1-9]\d*)$/.test(String(value)))  AND
+#       (value > -1  AND  value % 1 == 0  AND  value < length)
+#       # i.e. value is a non-negative integer strictly < length (numbers, or
+#       # canonical unsigned-integer strings like "0","1","12"; NOT "01", NOT
+#       # "-1", NOT "1.5"). For an in-range index this maps it to its NUMBER form (+idx).
+#       # Out-of-range / negative / fractional / non-canonical-string indexes are
+#       # left AS-IS (not coerced).
+#   - compareAscending(a, b): ascending total order. For the in-scope value set
+#     (numbers + numeric strings, all mapped to numbers when in range) it is plain
+#     ascending by `<`/`>`; equal values compare 0; undefined / NaN / null sort to
+#     the END (return 1 when `a` is the "greater"/non-reflexive side). For in-scope
+#     numeric indexes this is just an ascending numeric sort.
+#   # Net effect: in-range indexes become numbers and are sorted ascending; they are
+#   # then consumed back-to-front in NODE 6 (largest index first).
+#
+# NODE 6 — IN-PLACE REMOVAL  (basePullAt(array, sorted)) — MUTATES `array`:
+#   Walk `sorted` from its LAST element to its FIRST (descending position):
+#       length = array ? sorted.length : 0; lastIndex = length - 1
+#       for pos = lastIndex down to 0:
+#           index = sorted[pos]
+#           if (pos == lastIndex) OR (index !== previous):   # skip ADJACENT duplicates
+#               previous = index
+#               if isIndex(index):                            # valid array index (length defaulted to MAX_SAFE_INTEGER here)
+#                   array.splice(index, 1)                    # remove 1 element, shifting tail left
+#               else if not isKey(index, array):              # deep path string  (NOT in-scope; see OUT-OF-ENVELOPE)
+#                   delete deep property via castPath/parent
+#               else:                                         # shallow non-index key
+#                   delete array[index]                       # for an OOR/negative number this deletes a NON-existent prop => NO-OP
+#   *** Because `sorted` is ascending and we walk back-to-front, we splice the
+#       HIGHEST index FIRST, so removing it does NOT shift the positions of the
+#       lower indexes still to be removed. This is the load-bearing ordering. ***
+#   *** Consecutive-equal sorted entries are DEDUPED (a duplicated index removes
+#       only ONCE), but the duplicate STILL contributed its value to `result` in
+#       NODE 4. e.g. pullAt(['a','b','c','d'], 1, 1):
+#           result = ['b','b']  (value read twice)
+#           post   = ['a','c','d']  (removed once)
+#       Dedup is ONLY of ADJACENT-equal entries in the SORTED list; a value that
+#       appears non-adjacently after sort is removed each non-adjacent occurrence.  ***
+#   *** Out-of-range / negative / fractional indexes fail isIndex AND (being
+#       numbers) are isKey-true, so they hit the `delete array[index]` branch which
+#       deletes a NON-EXISTENT property => NO observable change to `array`. So they
+#       contribute `undefined` to `result` and remove NOTHING. ***
+#   For an EMPTY `array` ([]): length capture = 0, isIndex(_, 0) is always false
+#   (length falsy), so NODE 5 leaves every index uncoerced; in NODE 6 isIndex(index)
+#   with default length is still false for non-integer/OOR but TRUE for a plain
+#   non-negative-integer number (e.g. 0) — however splice(0,1) on [] is a no-op, so
+#   post stays []; every requested index yields undefined in `result`.
+#
+# NODE 7 — RETURN `result` (the removed-values array from NODE 4). NOT `array`.
+
+# =====================================================================
+# WORKED EXAMPLES (verified against the real package — see PROVENANCE)
+# =====================================================================
+#   pullAt([5,10,15,20], 1, 3)        -> result [10,20]        post [5,15]
+#   pullAt([5,10,15,20], [1,3])       -> result [10,20]        post [5,15]        # array-form flattened one level
+#   pullAt([0,1,2,3,4], 0, 2, 4)      -> result [0,2,4]        post [1,3]         # descending removal, no shift bug
+#   pullAt([0,1,2,3,4], 4, 2, 0)      -> result [4,2,0]        post [1,3]         # result keeps INPUT order; post identical to above
+#   pullAt(['w','x','y','z'], 3,0,1)  -> result ['z','w','x']  post ['y']         # result order = input order, NOT sorted
+#   pullAt(['a','b','c','d'], 1, 1)   -> result ['b','b']      post ['a','c','d'] # dup: read twice, removed once
+#   pullAt([0,1,2,3], 0, 2, 0)        -> result [0,2,0]        post [1,3]         # sort->[0,0,2]; back-to-front: splice 2, splice 0, skip adjacent 0
+#   pullAt([10,20,30,40], 2, 2)       -> result [30,30]        post [10,20,40]    # adjacent dup removed once
+#   pullAt(['a','b','c'], 10)         -> result [undefined]    post ['a','b','c'] # out-of-range: undef, no removal
+#   pullAt(['a','b','c'], 3)          -> result [undefined]    post ['a','b','c'] # index == length is out-of-range
+#   pullAt(['a','b','c'], -1)         -> result [undefined]    post ['a','b','c'] # NEGATIVE does NOT count from end; out-of-range
+#   pullAt(['a','b','c'], 1.5)        -> result [undefined]    post ['a','b','c'] # fractional: not an index
+#   pullAt(['a','b','c'], '1')        -> result ['b']          post ['a','c']     # numeric-string index works
+#   pullAt(['a','b','c','d'], -1, 1)  -> result [undefined,'b'] post ['a','c','d']
+#   pullAt([], 0, 1)                  -> result [undefined,undefined] post []
+#   pullAt(['a','b','c'])             -> result []             post ['a','b','c'] # no indexes: nothing removed
+#   pullAt(['a','b','c'], 0, 1, 2)    -> result ['a','b','c']  post []            # remove everything
+#   pullAt([1,'foo',true,null,2.5],0,4,2) -> result [1,2.5,true] post ['foo',null] # mixed value types; result follows input order
+#
+# NOTE ON SEMANTIC HINT: the upstream task hint said "negative indexes count from
+# the end". That is FALSE for _.pullAt (verified): a negative index is out-of-range,
+# yields `undefined`, and removes nothing. The SOURCE is authoritative.
+
+ORACLE value -> oracle.json   # observe = result+post (auto-stamped by factory; KIND STATE)
+
+# =====================================================================
+# SCOPE
+# =====================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the whole NODE 1..7 pipeline above —
+#   rest-gather, flatten-one-level, baseAt result (PRE-mutation, original order,
+#   undefined for missing/OOR/negative/fractional), isIndex test, ascending sort,
+#   back-to-front splice with adjacent-dedup, in-place mutation of the SAME array,
+#   return of the new removed-values array.
+#
+# CARRIED DATA: none. (No tables; the only constants are MAX_SAFE_INTEGER =
+#   9007199254740991 and the regex /^(?:0|[1-9]\d*)$/ used by isIndex, both inlined
+#   above. No carried.json.)
+#
+# DEMONSTRATED IN-SCOPE INPUT SET (self-consistent with genInputs):
+#   - `array`: a real Array of JSON-round-trippable primitives / nested plain
+#     arrays / plain objects (numbers, strings, booleans, null). May be empty.
+#   - each index arg: a non-negative integer number, a negative integer number,
+#     a fractional number, a numeric STRING ("1"), OR a one-level Array of such.
+#   Every such value's behavior is fully defined by NODES 1..7 above.
+#
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#   - `array` being null/undefined/non-array: baseRest still runs; length=0; result
+#     is all-undefined; basePullAt no-ops. Excluded to keep the observable a clean
+#     {result, post} over a real array.
+#   - Deep STRING path indexes (e.g. 'a.b.c') and non-numeric string keys: drive the
+#     isKey/castPath/parent/delete branch in NODE 6. In scope of the algorithm but
+#     NOT emitted (pullAt on an Array with a string path is a degenerate lodash use).
+#   - Array-VALUED index elements that SURVIVE flatten as arrays (e.g. a doubly
+#     nested [[ [1], 2 ]]): isIndex coerces them via String() (e.g. [1] -> "1"),
+#     producing exotic but defined behavior. Documented, NOT emitted.
+#   - Element VALUES that are functions / Symbols / undefined: not JSON-codec-faithful
+#     for `result`/`post` capture. NOT emitted. (null, booleans, numbers, strings,
+#     nested plain arrays/objects of primitives ARE fine.)
+
+PROVENANCE lodash.pullat@4.6.0  (repo lodash/lodash, tag 4.6.0-npm-packages/lodash.pullat, MIT)
+  source file: node_modules/lodash.pullat/index.js
+  key sites: pullAt=baseRest(...) L982-993; baseFlatten L549-570; baseAt L526-536;
+             basePullAt L617-642; isIndex L820-825; compareAscending L742-770;
+             arrayMap L85-94; get L1390-1393.
+  Behavior in WORKED EXAMPLES verified by running the real package under node.

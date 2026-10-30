@@ -1,0 +1,247 @@
+UNIT defaults
+KIND STATE                 # MUTATES `options` in place and RETURNS THE SAME REFERENCE (verified: d(o,{a:1})===o is true)
+ORACLE-CLASS deterministic # pure given (options, defaultsObj); no clock/RNG/io/net seam
+SIG defaults(options, defaultsObj) -> options   # the mutated `options` (or a fresh {} when options was falsy)
+DEPENDS-ON clone@1.0.4 (INLINED, deep-clone semantics reproduced below; zero require in the emitted module)
+           # The real module is `require('clone')(defaultsObj[key])` called with ONE argument, so clone runs
+           # with circular=true (default), depth=Infinity (default), prototype=undefined. Only the SUBSET of
+           # clone's type ladder that a clone(value, /*circular*/undefined) call exercises is inlined below.
+
+# =====================================================================================================
+# EMITTER DIRECTIVE
+#   This unit is the DEFAULT export (module.exports = the function). The blind re-emitter MUST
+#   `export default <fn>` where <fn> has the signature above. There are NO named exports in scope.
+#   The emitted module MUST contain NO `require('clone')` and NO external dependency — the deep-clone
+#   behavior is fully specified in INLINED CLONE SEMANTICS below.
+# =====================================================================================================
+
+# =====================================================================================================
+# SOURCE (verbatim, defaults@1.0.4 index.js)
+# =====================================================================================================
+#   var clone = require('clone');
+#   module.exports = function(options, defaults) {
+#     options = options || {};
+#     Object.keys(defaults).forEach(function(key) {
+#       if (typeof options[key] === 'undefined') {
+#         options[key] = clone(defaults[key]);
+#       }
+#     });
+#     return options;
+#   };
+
+# =====================================================================================================
+# BEHAVIOR  (ordered pipeline — exact + complete)
+# =====================================================================================================
+#
+# defaults(options, defaultsObj):
+#
+# B0  options-FALSY GUARD:
+#       options = options || {}
+#     If `options` is FALSY (null, undefined, 0, false, '', NaN), it is REPLACED with a FRESH empty object {}.
+#     The returned reference is then this fresh {} (NOT the falsy arg). For a TRUTHY options object/array,
+#     the SAME reference is kept and mutated.  (Verified: d(null,{a:1}) -> {a:1}; d(undefined,{a:1}) -> {a:1}.)
+#       Edge: options === 0 / false / '' / NaN all hit this branch and yield a fresh {} merged with all defaults.
+#
+# B1  ITERATION SET = Object.keys(defaultsObj)  (the SECOND argument's OWN ENUMERABLE STRING keys ONLY):
+#       Object.keys(defaultsObj).forEach(key => ...)
+#     - The keys iterated are EXACTLY the own enumerable string keys of `defaultsObj`, in JS Object.keys
+#       order: integer-index keys first in ascending numeric order, then remaining string keys in insertion
+#       order. (e.g. {z:1,a:2,m:3} -> z,a,m ; {b:1,"2":2,"1":3,a:4} -> 1,2,b,a.)
+#     - Keys present ONLY in `options` (not in defaultsObj) are NEVER iterated -> they are LEFT UNTOUCHED
+#       (extra option keys are kept verbatim). Verified: d({x:1},{y:2}) -> {x:1,y:2}.
+#     - `defaultsObj` is treated read-only by `defaults` itself (it is never written). Its VALUES are deep-
+#       cloned before being placed into `options` (see B2/B3), so `defaultsObj` and its nested graph are
+#       NOT shared by reference with the result. Verified: mutating result.nested.deep does not touch the
+#       original defaultsObj.
+#     - If `defaultsObj` is null or undefined, Object.keys(defaultsObj) THROWS
+#       `TypeError: Cannot convert undefined or null to object` (see ERROR PATHS). This throw happens AFTER B0.
+#
+# B2  PER-KEY UNDEFINED-FALLBACK TEST (the ONLY condition that triggers a default):
+#       if (typeof options[key] === 'undefined') { options[key] = clone(defaultsObj[key]) }
+#     - The test is `typeof options[key] === 'undefined'`. It is TRUE when:
+#         * the key is ABSENT from options (own or inherited), OR
+#         * options[key] is explicitly the value `undefined`.
+#       It reads through the PROTOTYPE CHAIN: an INHERITED enumerable/data property named `key` makes
+#       options[key] defined -> the default is SKIPPED. (Verified: an inherited prototype prop suppresses
+#       the default. The generator keeps options to plain own-property objects to keep this unambiguous.)
+#     - The test is FALSE (default NOT applied; existing option value KEPT) for EVERY non-undefined value,
+#       INCLUDING the falsy-but-defined values:  null, 0, -0, false, '' (empty string), NaN.
+#       Verified: d({a:null,b:0,c:false,e:''}, {a:1,b:1,c:1,e:1}) -> {a:null,b:0,c:false,e:''}.
+#       ONLY `undefined` (or absence) triggers the default.  This is the central semantic of the unit.
+#     - When the test is TRUE, options[key] is SET to clone(defaultsObj[key]) — a DEEP CLONE of the default
+#       value (see INLINED CLONE SEMANTICS / B3). When FALSE, options[key] is left exactly as-is.
+#
+# B3  RETURN: return options.  (The SAME object reference that B0 settled on — the original options when it
+#     was truthy, else the fresh {}. It has been mutated in place to carry the cloned defaults.)
+#
+# Combined effect: the result is `options` augmented with a DEEP CLONE of each defaultsObj value whose key
+# was absent/undefined in options; pre-existing (defined, even if falsy) option values win; extra option
+# keys are preserved.
+
+# =====================================================================================================
+# INLINED CLONE SEMANTICS  (clone@1.0.4 clone.js, called as clone(value) i.e. circular=true, depth=Infinity,
+#   prototype=undefined). A blind re-emitter MUST reproduce this deep-clone EXACTLY — do NOT require('clone').
+#   Define an inner recursive helper, e.g. deepClone(parent), with allParents/allChildren registers shared
+#   across one top-level clone call (for shared-ref / cycle handling). `defaults` makes a SEPARATE top-level
+#   clone() call per default key, so the registers are per-key (sharing is only preserved WITHIN one default
+#   value's subgraph, not across sibling keys — verified: two keys pointing at the same object clone to two
+#   distinct copies; the same object referenced twice INSIDE one default value clones to ONE shared copy).
+# =====================================================================================================
+#
+# deepClone(parent, depth = Infinity):
+#
+#   C1  if parent === null            -> return null.                  # cloning null yields null
+#   C2  if depth === 0                -> return parent (same ref).     # never fires with default depth=Infinity
+#                                                                      #   (Infinity - 1 === Infinity)
+#   C3  if typeof parent !== 'object' -> return parent (as-is).        # ALL primitives pass through UNCLONED:
+#                                                                      #   number (incl. NaN/+-Infinity/+-0),
+#                                                                      #   string, boolean, undefined, bigint,
+#                                                                      #   symbol, AND functions (typeof
+#                                                                      #   'function' != 'object' -> by ref).
+#       # -- from here parent is a non-null object. TYPE LADDER (first match wins): --
+#   C4  if isArray(parent)            -> child = []                    # detection: Object.prototype.toString
+#                                                                      #   .call(p) === '[object Array]'
+#   C5  else if isRegExp(parent)      -> # detection: toString tag === '[object RegExp]'
+#         flags = ''; if p.global flags+='g'; if p.ignoreCase flags+='i'; if p.multiline flags+='m'
+#         child = new RegExp(parent.source, flags)
+#         if (parent.lastIndex) child.lastIndex = parent.lastIndex     # copied only when truthy (nonzero)
+#         # ONLY g,i,m flags reconstructed, in that fixed order. s/u/y flags are NOT preserved by 1.0.4.
+#   C6  else if isDate(parent)        -> child = new Date(parent.getTime())   # tag === '[object Date]'
+#   C7  else if useBuffer && Buffer.isBuffer(parent):                  # useBuffer = (typeof Buffer != 'undefined')
+#         child = Buffer.allocUnsafe(parent.length); parent.copy(child); RETURN child  # EARLY return:
+#                                                                      #   no circular tracking, no for-in copy.
+#                                                                      #   A real independent Buffer, same bytes.
+#   C8  else (PLAIN OBJECT / everything else not matched above — plain {}, class instances, objects with custom
+#            prototypes, AND typed arrays / ArrayBuffer views which are NOT special-cased):
+#         proto = Object.getPrototypeOf(parent)
+#         child = Object.create(proto)                                 # clone inherits parent's prototype
+#         # (prototype arg is undefined in this unit, so the else-branch with caller prototype never runs.)
+#
+#   CIRCULAR / SHARED-REF TRACKING (circular = true here; skipped for Buffer which already returned at C7):
+#   C9  index = allParents.indexOf(parent)
+#       if index != -1 -> return allChildren[index]                    # already cloned this exact ref ->
+#                                                                      #   return the SAME clone (preserves
+#                                                                      #   cycles AND shared subgraphs as shared)
+#       allParents.push(parent); allChildren.push(child)               # register BEFORE recursing
+#
+#   OWN+INHERITED ENUMERABLE STRING-KEY COPY  (the `for (var i in parent)` loop):
+#   C10 for each string key `i` enumerated by for-in over parent (own + inherited enumerable string keys;
+#         integer-index keys first ascending, then string keys in insertion order, walking proto chain):
+#           attrs = (proto is set, i.e. only the C8 plain-object branch sets `proto`) ?
+#                   Object.getOwnPropertyDescriptor(proto, i) : undefined
+#           if (attrs && attrs.set == null):  continue                 # PROTO-COLLISION SKIP (see below)
+#           child[i] = deepClone(parent[i], depth - 1)                 # recurse at depth-1
+#       NOTE: for the ARRAY branch (C4) `proto` is NOT set, so attrs stays undefined and NO skip occurs —
+#         all array index keys + any extra string props on the array are copied.
+#
+#     PROTO-COLLISION SKIP (critical, verified — applies to the C8 plain-object branch):
+#       Because plain objects clone via child = Object.create(Object.getPrototypeOf(parent)) and for a plain
+#       object literal that proto is Object.prototype, any input key that NAMES an Object.prototype OWN
+#       DATA-property (descriptor.set == null) is SKIPPED — the clone does NOT receive an own property; it
+#       inherits the Object.prototype version. The skipped key set is EXACTLY:
+#         constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toString, toLocaleString,
+#         valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__
+#       So clone({toString:1, valueOf:2, a:3}) -> own keys ['a'] only (JSON: {"a":3}); the toString/valueOf
+#       defaults are DROPPED from the cloned default value.  VERIFIED: d({},{cfg:{toString:1,valueOf:2,a:3}})
+#       -> {"cfg":{"a":3}}.  The key `__proto__` is the EXCEPTION: Object.prototype's `__proto__` descriptor
+#       HAS a setter (set != null), so `__proto__` is NOT skipped — `child.__proto__ = clonedValue` fires the
+#       magic setter and REASSIGNS the clone's prototype rather than creating an own key (the key vanishes
+#       from the output). VERIFIED via JSON.parse('{"__proto__":{...},"y":2}') default value -> clone keeps
+#       only ['y']. (These are footguns; the generator's RANDOM fill uses only SAFE keys that collide with
+#       none of the skip set, and includes CURATED cases for the skip behavior so the branch is graded.)
+#
+#   C11 return child.
+#
+#   NOTE on what `defaults` actually exercises: clone is called on each default VALUE. In practice for
+#   codec-faithful default values this reduces to: primitives pass through (C3); arrays deep-clone element-
+#   wise (C4 + C10, no skip); plain nested objects deep-clone key-wise WITH the proto-collision skip (C8 +
+#   C10); Dates -> new Date(getTime) (C6); RegExp -> g/i/m-only reconstruction (C5). The Map/Set/Promise/
+#   Error branches of clone 1.0.4 (which use instanceof) are NOT in clone@1.0.4's ladder at all (1.0.4
+#   predates them) — see the SOURCE: the only special tags are Array/RegExp/Date/Buffer, everything else is
+#   the C8 plain-object path. (Confirmed against the installed clone@1.0.4 clone.js.) Therefore a Set/Map
+#   passed AS a default value takes C8: child = Object.create(Set.prototype) with for-in copying the (zero)
+#   enumerable own keys -> a BROKEN pseudo-Set (instanceof Set true, no internal slots, JSON {}). This is
+#   OUT-OF-ENVELOPE for the codec (see SCOPE) and not emitted by the generator.
+
+# =====================================================================================================
+# ERROR / THROW PATHS  (codec-faithful inputs CAN reach these; recorded as {__throw})
+# =====================================================================================================
+#   - defaultsObj is null OR undefined  -> Object.keys(defaultsObj) THROWS
+#       TypeError: 'Cannot convert undefined or null to object'.  (Happens after the B0 options guard.)
+#       VERIFIED: d({}, undefined) and d({}, null) both throw TypeError.
+#   - defaultsObj a primitive (number/string/boolean/bigint/symbol): Object.keys boxes it.
+#       * Object.keys(5) -> [] (no enumerable own keys) -> returns options unchanged (NO throw).
+#       * Object.keys('ab') -> ['0','1'] (string index keys) -> iterates them. (Out-of-scope shape; the
+#         generator never passes a primitive as defaultsObj.)
+#   (No other throw paths. The undefined-fallback test and clone never throw for in-scope inputs.)
+
+# =====================================================================================================
+# DETERMINISM / SEAM
+#   NO seams. `defaults` reads no clock, RNG, env, fs, or net. Output is a pure deterministic function of
+#   (options, defaultsObj). It is NOT side-effect-free with respect to its INPUT: it MUTATES `options` in
+#   place (KIND STATE). ORACLE value mode: the harness records the RETURNED object (which IS the mutated
+#   options) and grades structural equality. Each generated tuple is DEEP-CLONED by genInputs so every
+#   emitter/oracle run starts from an independent object graph (no shared mutable state across runs or the
+#   curated/random split).
+# =====================================================================================================
+
+# =====================================================================================================
+# ORACLE
+# =====================================================================================================
+ORACLE value -> oracle.json
+  # OBSERVABLE = the RETURN VALUE of defaults(options, defaultsObj) — i.e. the mutated `options` object (same
+  # reference when options was truthy; the fresh {} when options was falsy). Because the unit MUTATES the
+  # input, the oracle MUST compare the RETURNED object (capture return), not a separate copy of the input.
+  # The returned object is value-distinguishable: it reflects BOTH the pre-existing option values (kept) AND
+  # the cloned defaults (added for absent/undefined keys). Grading is structural deep-equality on the result.
+  # Throw paths (defaultsObj null/undefined) are recorded as {__throw: <message-or-class>}.
+
+# =====================================================================================================
+# SCOPE
+# =====================================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the full pipeline above —
+#   (B0) options = options || {} falsy-guard producing a fresh {} for falsy options;
+#   (B1) iterate Object.keys(defaultsObj) ONLY, in Object.keys order, leaving extra option keys untouched;
+#   (B2) per-key fallback gated SOLELY on `typeof options[key] === 'undefined'` (absence or explicit
+#        undefined), reading through the prototype chain, KEEPING all defined values incl. null/0/false/''/NaN;
+#   (B3) mutate-in-place + return the same reference;
+#   and the INLINED deep clone of each default value: primitive passthrough, array/object deep copy with the
+#   proto-collision skip set, Date(getTime), RegExp(g/i/m + truthy lastIndex), Buffer(allocUnsafe+copy),
+#   shared-ref/cycle preservation within one default value's subgraph (circular=true), depth=Infinity.
+#
+# CARRIED DATA: none. No literal tables; nothing to attest.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for the blind re-emitter; genInputs does NOT emit these for
+# the differential because the oracle JSON-ish codec cannot round-trip them or they are degenerate):
+#   - FUNCTION as a default VALUE: clone returns it BY REFERENCE (C3) — not codec-faithful; not emitted.
+#     (Behavior: options[key] gets the SAME function reference; documented, re-derivable from spec.)
+#   - SYMBOL as a value, or SYMBOL KEYS: clone@1.0.4's for-in loop copies only string keys (no symbol phase
+#     in 1.0.4); symbols don't survive the JSON codec -> not emitted.
+#   - `undefined` as a default VALUE: clone(undefined) returns undefined (C3); options[key] is then SET to
+#     undefined (an own key with value undefined). This is IN-CONTRACT but `undefined` is not codec-faithful
+#     as an object value -> not emitted; re-derivable from spec.
+#   - Map / Set / Promise / Error / typed-array / boxed-primitive (new Number/String/Boolean) as a default
+#     value: takes the C8 plain-object path -> a structurally-degenerate clone (e.g. broken pseudo-Set with
+#     empty JSON, ArrayBuffer-less typed array). Not codec-stable / not meaningfully gradable -> not emitted.
+#   - A default value object whose OWN key is literally `__proto__` (only constructible via JSON.parse or
+#     Object.defineProperty): clone reassigns the clone's prototype instead of setting an own key (C10 note)
+#     -> documented, not emitted by the generator (which uses safe object literals).
+#   - defaultsObj being a PRIMITIVE: out-of-scope shape (string yields index keys, number yields []); not
+#     emitted. The null/undefined defaultsObj THROW case IS emitted (codec-faithful, gradable as {__throw}).
+#   - options being a NON-plain object (array, class instance, object with inherited props): in-contract
+#     (array options ARE mutated by Object.keys(defaults) index assignment; inherited props suppress
+#     defaults). The generator emits a curated array-options case and otherwise keeps options to plain own-
+#     property literals so the inherited-prop suppression stays unambiguous.
+
+# =====================================================================================================
+# PROVENANCE
+# =====================================================================================================
+PROVENANCE defaults@1.0.4 (sindresorhus / git://github.com/sindresorhus/node-defaults.git, CJS), MIT.
+  source: <node_modules>/defaults/index.js  (module.exports = the default-export function)
+  inlined dep: clone@1.0.4 (pvorb/node-clone, MIT, clone.js — module.exports = clone). Called as clone(value)
+               -> circular=true, depth=Infinity, prototype=undefined. Only the exercised subset of clone's
+               type ladder (Array/RegExp/Date/Buffer/plain-object + proto-collision skip + circular tracking)
+               is inlined; clone@1.0.4 has NO Map/Set/Promise/Error branches (those were added in clone@2.x).
+  All cited behaviors VERIFIED by executing the real defaults+clone packages (Node v24.16.0, 2026-06-26):
+  same-ref mutation, iteration set, undefined-only fallback (null/0/false/'' kept), deep clone of nested
+  objects/arrays/Dates/RegExp, proto-collision skip-set, and the null/undefined-defaultsObj TypeError.

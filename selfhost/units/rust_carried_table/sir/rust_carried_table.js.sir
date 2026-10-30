@@ -1,0 +1,25 @@
+UNIT rust_carried_table
+LANG js
+PRIMARY-SHA256 b54a3ed7077e52f9f806a114c3b438b12912312756bbc114692a863b763fbfec
+SIG rust_carried_table(src: string, shape: string | null): object
+NOTE default export
+ABI text = string (UTF-16; only well-formed text is ever sent); none = null (shape null for none, and a None value is
+  null); the result is a fresh plain object whose own enumerable keys are the table keys, each holding a json value:
+  string, number (IEEE-754 double; -0 kept), boolean, null, or an Array of those, nested. The driver calls
+  rust_carried_table(src, shape). A throw (R3, R4, R6, R7, R9, R10, R11, R12, R13) is a thrown Error; the message is not
+  graded. The artifact is an ES module default-exporting the function and imports nothing.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM tokenize over the string by index (UTF-16 code units are fine: every window in R1/R5 is counted over ASCII-only
+  matches, and a lone non-ASCII unit outside a literal is a punctuation token that no rule ever matches). R5's value: strip
+  underscores and the suffix, then Number(body) — it reads 0x / 0o / 0b and decimals correctly rounded; EXACT for an
+  integer-shaped body is BigInt(body) === BigInt(n) with n finite (a non-finite n is INEXACT); an f32 suffix on a non-hex literal is ALSO INEXACT when Math.fround(n) !== n; keep the flag on the token
+  and throw only when R6 reads it. TABLE CAST f32: Math.fround(x) === x. R4 "\u{…}": parse the hex text with
+  parseInt(hex, 16) only AFTER checking it is non-empty and starts with a hex digit, then String.fromCodePoint (it throws
+  RangeError above U+10FFFF, which is the throw R4 wants). R11: trim with the TRIM-ST pin (NOT String.prototype.trim — the shape trims only space, tab, CR and LF); the arrow split may use the ARROW pin, the width rewrite the WIDTH pin. R13: test
+  presence with Object.hasOwn and store with Object.defineProperty (an assignment of "__proto__" would set the prototype);
+  SAME is Object.is for a non-list earlier value, else both lists with equal JSON.stringify (it writes -0 as 0 inside).
+DEPENDS-ON none
+PINNED regex TRIM-ST = /^[ \t\r\n]+|[ \t\r\n]+$/g CITED R11 step 2 — space, tab, CR, LF only
+PINNED regex ARROW = /^map[ \t\r\n]+(.+?)[ \t\r\n]*->[ \t\r\n]*(.+)$/s CITED R11 step 2 — K lazy, V greedy, both re-normalized
+PINNED regex WIDTH = /(^|[[,|:][ \t\r\n]*)([ui])(8|16|32)(?=[ \t\r\n]*(?:[\],|]|$))/g CITED R11 step 3 — keep the prefix, the sign letter, then 64
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs. Language file re-cut 2026-10-27 (round 5b) with the primary, before any blind re-emission.

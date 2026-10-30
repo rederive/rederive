@@ -1,0 +1,18 @@
+UNIT pin_lint
+LANG js
+PRIMARY-SHA256 71b5c53b93026436f6ad4f4694173c0bedc8007608077a347838df9dd49e5e92
+SIG export default function pin_lint(text: string): { hits: { line: number, what: string, text: string }[], pins: number }
+ABI text = string (UTF-16). i64 = number (an integer, far below 2^53). A record = a fresh plain object with exactly the
+  named own properties; the result is { hits, pins } and each hit is { line, what, text }. The artifact is an ES module
+  default-exporting the function and importing nothing.
+MECHANISM SP (R1-R5) is exactly the two characters space and tab: never \s, trim() or trimEnd(), which also take the
+  no-break space, U+FEFF, U+2028 and the rest. The cut (R7) counts code points: Array.from(line).slice(0, 96), never
+  String.prototype.slice, which counts UTF-16 code units. The escape of R4 skips one code point (two code units for a
+  supplementary character). Names (R3) and attribute words (R5) compare case-sensitively. VISIBLE (R6) tests against the
+  primary's INVISIBLE range list as written, never \s, \p{Cf} or \p{White_Space} (host Unicode tables move, and White_Space
+  takes U+0085, which is visible here).
+ENVELOPE as the primary; no widening is claimed.
+DEPENDS-ON none
+PINNED regex LINE-BREAK = /\r\n|\r|\n/ CITED R1, the split
+PINNED regex ATTRIBUTE = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R5, matched over the piece
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs pinLint over cli/sir/sir-parse.mjs. Language file re-cut 2026-10-27 with the primary; round 5b delta.

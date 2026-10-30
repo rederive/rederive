@@ -1,0 +1,879 @@
+{
+  "mode": "vectors",
+  "exportName": "sign",
+  "unit": "sign",
+  "vectors": [
+    {
+      "name": "v0",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "extraHeadersToInclude": {
+            "user-agent": 1
+          },
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "User-Agent": "myagent/1.0"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "extraHeadersToInclude": {
+          "user-agent": 1
+        },
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "User-Agent": "myagent/1.0",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;user-agent;x-amz-date, Signature=0d5803a8a3f4f1ece0955648b12520c41f06ce33b3a3a908547e979e9e596b02"
+        }
+      }
+    },
+    {
+      "name": "v1",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "extraHeadersToInclude": {
+            "user-agent": 1,
+            "connection": 1
+          },
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "User-Agent": "agent/2",
+            "Connection": "keep-alive"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "extraHeadersToInclude": {
+          "user-agent": 1,
+          "connection": 1
+        },
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "User-Agent": "agent/2",
+          "Connection": "keep-alive",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=connection;host;user-agent;x-amz-date, Signature=480a8412c657fa5b5fcf83c68905e0538a8b093da030760ca65fa2ecde86585d"
+        }
+      }
+    },
+    {
+      "name": "v2",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "extraHeadersToIgnore": {
+            "x-custom": 1
+          },
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "X-Custom": "foo"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "extraHeadersToIgnore": {
+          "x-custom": 1
+        },
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "X-Custom": "foo",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;x-amz-date, Signature=2010d0fbfba835b750622701b4a827333cb12833a5c8aa086159ec0b549e8dfd"
+        }
+      }
+    },
+    {
+      "name": "v3",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "extraHeadersToInclude": {
+            "user-agent": 1
+          },
+          "extraHeadersToIgnore": {
+            "x-skip": 1
+          },
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "User-Agent": "a/1",
+            "X-Skip": "q",
+            "X-Keep": "k"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "extraHeadersToInclude": {
+          "user-agent": 1
+        },
+        "extraHeadersToIgnore": {
+          "x-skip": 1
+        },
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "User-Agent": "a/1",
+          "X-Skip": "q",
+          "X-Keep": "k",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;user-agent;x-amz-date;x-keep, Signature=730b42a7e48e58c0b7148bfa949dddf10f139c0db6d8627611b1a8cc02208a21"
+        }
+      }
+    },
+    {
+      "name": "v4",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/?Action=ListUsers&X-Amz-Date=20150830T123600Z",
+          "signQuery": true,
+          "headers": {}
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/?Action=ListUsers&X-Amz-Date=20150830T123600Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDEXAMPLE%2F20150830%2Fus-east-1%2Fiam%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=4a77587665679b48774eee13fb82bbcf400e26b0691e71716ad4c9f2a6032724",
+        "signQuery": true,
+        "headers": {
+          "Host": "iam.amazonaws.com"
+        }
+      }
+    },
+    {
+      "name": "v5",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/?Action=ListUsers&X-Amz-Date=20150830T123600Z",
+          "signQuery": true,
+          "headers": {}
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          "sessionToken": "SESSIONTOKEN123"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/?Action=ListUsers&X-Amz-Date=20150830T123600Z&X-Amz-Security-Token=SESSIONTOKEN123&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDEXAMPLE%2F20150830%2Fus-east-1%2Fiam%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=727788df8eb6b9f39781c921867267792b9c77f94da25891fcdc0b6889e38b5b",
+        "signQuery": true,
+        "headers": {
+          "Host": "iam.amazonaws.com"
+        }
+      }
+    },
+    {
+      "name": "v6",
+      "args": [
+        {
+          "host": "examplebucket.s3.amazonaws.com",
+          "method": "GET",
+          "path": "/test.txt?X-Amz-Date=20150830T123600Z",
+          "signQuery": true,
+          "headers": {}
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "examplebucket.s3.amazonaws.com",
+        "method": "GET",
+        "path": "/test.txt?X-Amz-Date=20150830T123600Z&X-Amz-Expires=86400&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDEXAMPLE%2F20150830%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=3e06918c20a2f376548699c2a3312dbf05d1d2c561e98a4718b4a2e3aece2e88",
+        "signQuery": true,
+        "headers": {
+          "Host": "examplebucket.s3.amazonaws.com"
+        }
+      }
+    },
+    {
+      "name": "v7",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "doNotModifyHeaders": true,
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "Date": "Sun, 30 Aug 2015 12:36:00 GMT"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "doNotModifyHeaders": true,
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Date": "Sun, 30 Aug 2015 12:36:00 GMT",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=date;host;x-amz-date, Signature=91d8c0d2717c5c25e1b56df90048664849fe7d6bd75b23b9b11e15afca37b11c"
+        }
+      }
+    },
+    {
+      "name": "v8",
+      "args": [
+        {
+          "host": "dynamodb.us-east-1.amazonaws.com",
+          "method": "POST",
+          "path": "/",
+          "body": "X=1",
+          "doNotModifyHeaders": true,
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "Date": "Sun, 30 Aug 2015 12:36:00 GMT"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "dynamodb.us-east-1.amazonaws.com",
+        "method": "POST",
+        "path": "/",
+        "body": "X=1",
+        "doNotModifyHeaders": true,
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Date": "Sun, 30 Aug 2015 12:36:00 GMT",
+          "Host": "dynamodb.us-east-1.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/dynamodb/aws4_request, SignedHeaders=date;host;x-amz-date, Signature=566bacc30208f0c025763c8a57bf2fa915dd948422dbb3fe2bdafe085078a85a"
+        }
+      }
+    },
+    {
+      "name": "v9",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          "sessionToken": "SESSIONTOKEN123"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "iam.amazonaws.com",
+          "X-Amz-Security-Token": "SESSIONTOKEN123",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;x-amz-date;x-amz-security-token, Signature=415fb1f2d587baa66f362a5b6779b1ac98a083e41685cc6b1860a3f458172c51"
+        }
+      }
+    },
+    {
+      "name": "v10",
+      "args": [
+        {
+          "host": "s3.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "s3.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "s3.amazonaws.com",
+          "X-Amz-Content-Sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=f597a3d17e9c7e47c27e40ed52154bf0454553605696631914e8f0b03c7b0807"
+        }
+      }
+    },
+    {
+      "name": "v11",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;x-amz-date, Signature=f5ed81aa94edaa62b23627b4ac852d94b3b42312a4cc7072231858b156531482"
+        }
+      }
+    },
+    {
+      "name": "v12",
+      "args": [
+        {
+          "host": "dynamodb.us-west-2.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "dynamodb.us-west-2.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "dynamodb.us-west-2.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-west-2/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=42e775450493d3765436cc20022fcd70f3788a52cf45a7dbd593f867a477dde7"
+        }
+      }
+    },
+    {
+      "name": "v13",
+      "args": [
+        {
+          "host": "examplebucket.s3.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "examplebucket.s3.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "examplebucket.s3.amazonaws.com",
+          "X-Amz-Content-Sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=b5fa017b78c0827e861c262692e27a576ee36a9570991255cf14ee26a544331f"
+        }
+      }
+    },
+    {
+      "name": "v14",
+      "args": [
+        {
+          "host": "email.us-east-1.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "email.us-east-1.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "email.us-east-1.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/ses/aws4_request, SignedHeaders=host;x-amz-date, Signature=ad9cfbf8542bb7f0af49845740c9bcb1727650defee4e6b16ee2d800858bb518"
+        }
+      }
+    },
+    {
+      "name": "v15",
+      "args": [
+        {
+          "host": "search-foo.us-east-1.es.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "search-foo.us-east-1.es.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "search-foo.us-east-1.es.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/es/aws4_request, SignedHeaders=host;x-amz-date, Signature=1cc707c833a91c04737a514cc53e7034699c86bc5ad6e9e6d8548b8d14754a29"
+        }
+      }
+    }
+  ],
+  "heldout": [
+    {
+      "name": "v16",
+      "args": [
+        {
+          "host": "dynamodb.cn-north-1.amazonaws.com.cn",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "dynamodb.cn-north-1.amazonaws.com.cn",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "dynamodb.cn-north-1.amazonaws.com.cn",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/cn-north-1/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=726606b43b6d206a7901826545ff8b7786a098864adb852efc6c7352b097a899"
+        }
+      }
+    },
+    {
+      "name": "v17",
+      "args": [
+        {
+          "host": "s3-eu-west-1.amazonaws.com",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "s3-eu-west-1.amazonaws.com",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "s3-eu-west-1.amazonaws.com",
+          "X-Amz-Content-Sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/eu-west-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=c62befec6368586ef75cf1b6beefed5f1721c23f00f7e68b1e8cc300db79476a"
+        }
+      }
+    },
+    {
+      "name": "v18",
+      "args": [
+        {
+          "host": "foo.example.com",
+          "service": "myservice",
+          "region": "eu-west-1",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "foo.example.com",
+        "service": "myservice",
+        "region": "eu-west-1",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "foo.example.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/eu-west-1/myservice/aws4_request, SignedHeaders=host;x-amz-date, Signature=07c69bad80cd3d49cf1de01c0a9e097f4dd3c109fbb561f2cd14e29577e4a663"
+        }
+      }
+    },
+    {
+      "name": "v19",
+      "args": [
+        {
+          "service": "dynamodb",
+          "region": "us-west-2",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "service": "dynamodb",
+        "region": "us-west-2",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "dynamodb.us-west-2.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-west-2/dynamodb/aws4_request, SignedHeaders=host;x-amz-date, Signature=42e775450493d3765436cc20022fcd70f3788a52cf45a7dbd593f867a477dde7"
+        },
+        "hostname": "dynamodb.us-west-2.amazonaws.com"
+      }
+    },
+    {
+      "name": "v20",
+      "args": [
+        {
+          "service": "iam",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "service": "iam",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;x-amz-date, Signature=f5ed81aa94edaa62b23627b4ac852d94b3b42312a4cc7072231858b156531482"
+        },
+        "hostname": "iam.amazonaws.com"
+      }
+    },
+    {
+      "name": "v21",
+      "args": [
+        {
+          "service": "s3",
+          "region": "us-east-1",
+          "method": "GET",
+          "path": "/",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "service": "s3",
+        "region": "us-east-1",
+        "method": "GET",
+        "path": "/",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "s3.amazonaws.com",
+          "X-Amz-Content-Sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=f597a3d17e9c7e47c27e40ed52154bf0454553605696631914e8f0b03c7b0807"
+        },
+        "hostname": "s3.amazonaws.com"
+      }
+    },
+    {
+      "name": "v22",
+      "args": [
+        {
+          "host": "dynamodb.us-east-1.amazonaws.com",
+          "method": "POST",
+          "path": "/",
+          "body": "Action=Foo",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "dynamodb.us-east-1.amazonaws.com",
+        "method": "POST",
+        "path": "/",
+        "body": "Action=Foo",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "dynamodb.us-east-1.amazonaws.com",
+          "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+          "Content-Length": 10,
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/dynamodb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date, Signature=0dfede1ba715f4b3e567de9ff592e3b9253c6a60fb50ae7ca1a9d4b58c701374"
+        }
+      }
+    },
+    {
+      "name": "v23",
+      "args": [
+        {
+          "host": "dynamodb.us-east-1.amazonaws.com",
+          "path": "/",
+          "body": "Action=Bar",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "dynamodb.us-east-1.amazonaws.com",
+        "path": "/",
+        "body": "Action=Bar",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "dynamodb.us-east-1.amazonaws.com",
+          "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+          "Content-Length": 10,
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/dynamodb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date, Signature=e1a6532ced1e312effb740882eeeba46327866b5c70059eb364e8aa2b1cc6186"
+        },
+        "method": "POST"
+      }
+    },
+    {
+      "name": "v24",
+      "args": [
+        {
+          "host": "examplebucket.s3.amazonaws.com",
+          "method": "PUT",
+          "path": "/test.txt",
+          "body": "hello",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "examplebucket.s3.amazonaws.com",
+        "method": "PUT",
+        "path": "/test.txt",
+        "body": "hello",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "examplebucket.s3.amazonaws.com",
+          "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+          "Content-Length": 5,
+          "X-Amz-Content-Sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date, Signature=b29d29ef272af89e47ac61544fd49ea51ae232db2dd14b89eb727fca8b65cc87"
+        }
+      }
+    },
+    {
+      "name": "v25",
+      "args": [
+        {
+          "host": "dynamodb.us-east-1.amazonaws.com",
+          "method": "POST",
+          "path": "/",
+          "body": "abc",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z",
+            "Content-Type": "application/json",
+            "Content-Length": 3
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "dynamodb.us-east-1.amazonaws.com",
+        "method": "POST",
+        "path": "/",
+        "body": "abc",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Content-Type": "application/json",
+          "Content-Length": 3,
+          "Host": "dynamodb.us-east-1.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/dynamodb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date, Signature=fea2ba19e8e6d6c65311820446d20df0a24bae547430e66ee7796b0ccd154cf2"
+        }
+      }
+    },
+    {
+      "name": "v26",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/foo//bar/../baz?b=2&a=1",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/foo//bar/../baz?b=2&a=1",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;x-amz-date, Signature=57648242e9e101a136c55af118ea891408b8f49b081a6744587577a3a41b6322"
+        }
+      }
+    },
+    {
+      "name": "v27",
+      "args": [
+        {
+          "host": "examplebucket.s3.amazonaws.com",
+          "method": "GET",
+          "path": "/foo//bar/../baz",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "examplebucket.s3.amazonaws.com",
+        "method": "GET",
+        "path": "/foo//bar/../baz",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "examplebucket.s3.amazonaws.com",
+          "X-Amz-Content-Sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=ebb933b3071b97265a035c1e237a7357341084437d16a69acbef619e09c55f27"
+        }
+      }
+    },
+    {
+      "name": "v28",
+      "args": [
+        {
+          "host": "iam.amazonaws.com",
+          "method": "GET",
+          "path": "/foo bar/ba/?x=a b",
+          "headers": {
+            "X-Amz-Date": "20150830T123600Z"
+          }
+        },
+        {
+          "accessKeyId": "AKIDEXAMPLE",
+          "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }
+      ],
+      "expected": {
+        "host": "iam.amazonaws.com",
+        "method": "GET",
+        "path": "/foo%20bar/ba/?x=a%20b",
+        "headers": {
+          "X-Amz-Date": "20150830T123600Z",
+          "Host": "iam.amazonaws.com",
+          "Authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=host;x-amz-date, Signature=435b7328cb46c49014acb43db06f04f2bc42046416b8eacf85f8291d74d62d04"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,196 @@
+UNIT tail
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG tail(array) -> Array          # single positional arg; returns a NEW Array
+
+DEPENDS-ON none
+# Zero runtime dependencies. The unit's only internal helper, baseSlice, is
+# defined IN THE SAME source file and is reproduced inline below (it is
+# in-contract logic, not a carried-data table and not an external dep).
+
+# ---------------------------------------------------------------------------
+# RECONSTRUCTION TARGET (read this first)
+# ---------------------------------------------------------------------------
+# The original is a CommonJS module whose sole export is the function:
+#     module.exports = tail
+# The re-emitter MUST produce an ES module whose DEFAULT export is the function:
+#     export default tail
+# There is exactly ONE public symbol. Do not export baseSlice; it is private.
+# Arity is 1 (tail.length === 1). The function name is "tail".
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact, ordered; verified by executing lodash.tail@4.1.1)
+# ---------------------------------------------------------------------------
+#
+# tail(array):
+#   NODE 1 (truthiness gate on the argument):
+#       length = array ? array.length : 0
+#     - If `array` is falsy (null, undefined, 0, -0, NaN, "", false), the
+#       ternary short-circuits to length = 0. The argument is NEVER indexed
+#       for property `.length` when falsy, so NO TypeError is thrown for
+#       null/undefined. (tail(null) and tail(undefined) return [] cleanly.)
+#     - Otherwise length = array.length  (whatever value that property holds;
+#       it is NOT coerced here — coercion happens inside baseSlice).
+#
+#   NODE 2 (empty gate on length):
+#       return length ? baseSlice(array, 1, length) : []
+#     - If `length` is falsy (0, -0, NaN, undefined, "", false, null), return
+#       a fresh EMPTY array []  (a NEW [] each call).
+#     - Else delegate to baseSlice(array, start=1, end=length).
+#
+# baseSlice(array, start, end):   # start is always 1, end is always `length`
+#   here, because tail only ever calls baseSlice(array, 1, length).
+#       index = -1
+#       len   = array.length            # re-read; same property as NODE 1
+#       # start = 1 (not < 0, so the `start < 0` branch never fires for tail)
+#       if (end > len) end = len         # clamp end down to len
+#       if (end < 0)  end += len         # (cannot fire for tail: end===length===len>0)
+#       resultLen = (start > end) ? 0 : ((end - start) >>> 0)
+#                 = (1 > end) ? 0 : ((end - 1) >>> 0)
+#       start = start >>> 0              # = 1
+#       result = new Array(resultLen)
+#       for (i = 0; i < resultLen; i++) result[i] = array[i + 1]
+#       return result
+#
+#   Net effect of the >>> 0 (ToUint32) on resultLen:
+#     - end (=== length) is ToUint32-truncated via (end - 1) >>> 0.
+#     - Fractional length 2.9 -> (2.9 - 1) >>> 0 = 1.9 >>> 0 = 1.
+#     - length === Infinity -> (Infinity - 1) >>> 0 = Infinity >>> 0 = 0 -> [].
+#     - length === negative -> NODE 2 gate: a negative number is truthy, so
+#       baseSlice runs; (negEnd - 1) >>> 0 with start(1) > negEnd makes
+#       resultLen 0 -> []. (Verified: length:-1 -> [].)
+#
+# RESULT SHAPE / GUARANTEES (all verified):
+#   - The return value is ALWAYS a freshly-allocated Array (Array.isArray ===
+#     true), even when the argument was a string / typed array / arguments /
+#     plain array-like object. tail never returns the same reference as the
+#     input and never returns a string.
+#   - Elements are SHALLOW-COPIED: result[i] === array[i+1] by reference for
+#     object/array/regexp/Set/Map/Date elements. No deep clone.
+#   - The result is DENSE: baseSlice does `while (++index < resultLen)
+#     result[index] = array[index + 1]`, writing result[index] for EVERY index
+#     in [0, resultLen). Consequences for "missing" source positions:
+#       (a) ARRAY HOLE in the source range (a genuine sparse-array hole, e.g.
+#           the gap in [0,1,,3]) -> array[index+1] reads `undefined`, and
+#           baseSlice WRITES that as an OWN property of result. So the hole is
+#           DENSIFIED: `i in result` is true and result[i] === undefined, even
+#           though `i in source` was false. tail([0,1,,3]) === [1, undefined, 3]
+#           with all three indices present as own props.   *** This exact input
+#           class is OUT-OF-ENVELOPE for the generated oracle — see SCOPE. The
+#           behavior is fully specified here; it is just not graded, because a
+#           hole has no JSON representation and collapses to null on persist. ***
+#       (b) ABSENT NUMERIC KEY on an array-LIKE object (a plain object with a
+#           numeric `.length` but a missing index, e.g. {length:4,0:'a',1:'b'})
+#           -> obj[index+1] reads `undefined` (genuinely-absent own property),
+#           and baseSlice writes that own undefined. tail({length:4,0:'a',1:'b'})
+#           === ["b", undefined, undefined]. This is IN-ENVELOPE and graded: the
+#           missing keys are genuinely absent on BOTH the original and the
+#           JSON-revived object, so both sides compute the identical result.
+#     (a) and (b) produce the same *shape* of result, but differ in codec
+#     fidelity: a hole does not survive JSON; an absent own key does. That is
+#     the ONLY reason (a) is excluded and (b) is kept.
+#   - NON-MUTATION: the input `array` is never modified. Verified: a [1,2,3]
+#     argument is byte-identical before and after the call.
+#
+# ARRAY-LIKE AWARENESS (in-scope; verified by execution):
+#   tail treats ANY value with a usable `.length` and integer-indexed access
+#   as array-like. It does not check Array.isArray.
+#     - tail("hello")             -> ["e","l","l","o"]   (string sliced by char)
+#     - tail("")  -> []   tail("a") -> []   (boundary)
+#     - tail(Uint8Array[10,20,30])-> [20,30]   (returns a plain Array, not a TA)
+#     - tail(Buffer.from([5,6,7]))-> [6,7]      (Buffer is array-like)
+#     - tail(arguments a,b,c)     -> ["b","c"]  (arguments object)
+#     - tail({length:3,0:'a',1:'b',2:'c'}) -> ["b","c"]
+#     - tail({length:2.9,...})    -> ["y"]      (fractional length truncates)
+#     - tail({length:4,0:'a',1:'b'}) -> ["b", undefined, undefined] (DENSE fill
+#                                       past the present indices; the missing
+#                                       keys are genuinely-absent own props on a
+#                                       plain object -> codec-faithful, IN-ENVELOPE)
+#     - tail({a:1}) (no length)   -> []         (length undefined -> falsy)
+#     - tail("3"-as-length): {length:'3',...}   -> ["b","c"] (string length
+#                                       coerces inside baseSlice arithmetic)
+#
+# VALUES WITH NO USABLE .length  ->  [] :
+#   - tail(5), tail(true), tail(false), tail(0), tail(NaN) -> []
+#       (numbers/booleans: either falsy in NODE 1, or .length is undefined ->
+#        falsy in NODE 2). Verified each -> [].
+#   - tail(new Map([...])) -> []   tail(new Set([...])) -> []
+#       (Map/Set expose NO `.length` property -> undefined -> NODE 2 -> []).
+#       NOTE: Map/Set as the ARGUMENT yield []. (They round-trip fine as
+#       ELEMENTS of an array argument and are then shallow-copied by ref.)
+#
+# THROW BEHAVIOR: tail throws for NO codec-faithful input in scope. There is
+#   no input here that reaches a TypeError (the null/undefined guard is the
+#   only place one could, and it is guarded). No __throw expecteds expected.
+
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Pure deterministic value function. For each generated [arg] the oracle is
+# the exact Array the real lodash.tail@4.1.1 returns (compared structurally:
+# length + each element, with an own-`undefined` element encoded as {__t:undef}
+# and distinguished from null). No seam.
+
+# ---------------------------------------------------------------------------
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire tail + inlined baseSlice
+#   pipeline above, including the two falsy gates, the array-like .length
+#   handling, the (end-1) >>> 0 / ToUint32 length truncation, dense fill of
+#   missing positions, shallow element copy, fresh-Array result, and
+#   non-mutation.
+#
+# CARRIED DATA: none. No embedded tables, no S-boxes, no charmaps.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs
+#   because they are not codec-round-trippable as persisted args, OR their
+#   behavior depends on identity the codec drops). The behavior of each is
+#   FULLY SPECIFIED above so a blind engineer can reconstruct it; they are
+#   simply excluded from the GENERATED, graded oracle:
+#
+#     - SPARSE ARRAYS WITH HOLES  (e.g. tail([0,1,,3]) or tail([1,,3])):
+#         BEHAVIOR (specified, see RESULT SHAPE (a)): the real tail densely
+#         fills each hole that falls in the result range into an OWN `undefined`
+#         property -> tail([0,1,,3]) === [1, undefined, 3] (all three own).
+#         WHY EXCLUDED: a hole has NO JSON representation. The oracle persists
+#         each input as JSON.stringify(encode(args)); the hole collapses to
+#         `null`, so the input the blind re-emitter receives is the DENSE
+#         [0,1,null,3] — a genuine null, not a hole. The stored `expected`
+#         (computed on the LIVE sparse value before persist) is [1,undefined,3]
+#         ({__t:undef} at index 1), but ANY correct emitter run on the revived
+#         [0,1,null,3] computes [1,null,3]. undefined !== null, so expected can
+#         NEVER match — the divergence is structural in JSON persistence, NOT an
+#         emitter error. This is the SAME codec class as function/Symbol
+#         elements below. (Confirmed: round-1 held-out v21/v22 split 0/3 for
+#         exactly this reason; the fix is to NOT emit them.)
+#         CONTRAST: an array-LIKE object with an absent numeric key
+#         ({length:4,0:'a',1:'b'}) produces the same-shaped result but DOES
+#         round-trip (absent own key survives JSON on both sides) and is KEPT
+#         in-envelope — see RESULT SHAPE (b).
+#
+#     - FUNCTION elements (e.g. tail([1, ()=>2])): a function is shallow-copied
+#       by reference exactly like any object element, but functions do not
+#       survive JSON.stringify(encode(args)) round-trip, so they are NOT
+#       generated. (Behavior, were it reconstructed: result[i] is the same
+#       function reference.)
+#     - SYMBOL elements (e.g. tail([1, Symbol()])): same — copied by reference,
+#       but Symbols are not codec-faithful, so NOT generated. (Behavior: the
+#       Symbol reference is shallow-copied.)
+#     - Whole-argument identity types whose `.length` is absent are covered
+#       in-envelope above (Map/Set -> []); only ELEMENT-position function/symbol
+#       are excluded.
+#   These are reconstructable by a blind engineer from this spec; they are
+#   simply not in the generated input set.
+#
+#   NOTE on EXPLICIT-undefined ELEMENTS (IN-ENVELOPE, kept): an array with an
+#   explicitly-assigned undefined element (e.g. [1, undefined, 3], an OWN
+#   property whose value is undefined — NOT a hole) IS codec-faithful: the
+#   encoder represents undefined as {__t:undef} and it round-trips. tail
+#   preserves it as an own undefined. This case stays in the generated set and
+#   must NOT be confused with the excluded sparse-hole case.
+
+# ---------------------------------------------------------------------------
+PROVENANCE lodash.tail@4.1.1
+#   repo: lodash/lodash (custom modularized build, `lodash modularize
+#         exports="npm" -o ./`)
+#   license: MIT (Copyright jQuery Foundation and other contributors)
+#   source file: node_modules/lodash.tail/index.js  (lines 19-59:
+#         baseSlice + tail + module.exports = tail)

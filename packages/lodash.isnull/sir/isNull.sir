@@ -1,0 +1,106 @@
+UNIT isNull
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG isNull(value: any) -> boolean
+# Default export of the module: `module.exports = isNull`.
+# The function takes exactly one logical parameter, `value`, of ANY JS type.
+# Additional positional arguments are accepted by JS but IGNORED (not read).
+# Calling with no argument binds `value` to `undefined`.
+
+DEPENDS-ON none
+# Zero runtime dependencies. Pure, total, read-only. No seam (no clock/RNG/env/io/net).
+# No mutation of the argument or any external state. No throw path on ANY input.
+
+BEHAVIOR
+# The ENTIRE unit is a single strict-equality predicate. Source body (verified):
+#
+#     function isNull(value) {
+#       return value === null;
+#     }
+#
+# Node 1 (the only node): return the result of the STRICT equality comparison
+#   `value === null` (the JS `===` Strict Equality operator, NOT loose `==`).
+#
+# Semantics of `value === null` (ECMAScript Strict Equality, the contract to reproduce):
+#   - Returns boolean `true` IF AND ONLY IF `value` is the `null` value itself.
+#   - Returns boolean `false` for EVERY other value, with NO type coercion.
+#
+# CRITICAL DISTINCTION (isNull, NOT isNil):
+#   The comparison is STRICT (`===`). It must NOT be loose (`==`).
+#   With loose `==`, `null == undefined` would be `true` — that would be isNil
+#   semantics and is WRONG here. Under strict `===`, `undefined === null` is
+#   `false`. Therefore:
+#       isNull(undefined) === false      # <-- THE discriminating case
+#   A re-emitter that returns `true` for `undefined` has used loose equality and
+#   is incorrect.
+#
+# FULL TRUTH TABLE (verified against the real package, lodash.isnull@3.0.0):
+#   value                         -> result
+#   ------------------------------------------
+#   null                          -> true      # the ONLY true-producing input
+#   undefined                     -> false     # strict !==; discriminates from isNil
+#   (no argument given)           -> false     # value bound to undefined
+#   0                             -> false
+#   -0                            -> false
+#   NaN                           -> false     # note: NaN === null is false (also NaN===NaN is false, irrelevant here)
+#   +Infinity                     -> false
+#   -Infinity                     -> false
+#   "" (empty string)             -> false
+#   any non-empty string          -> false
+#   false                         -> false
+#   true                          -> false
+#   0n (and any bigint)           -> false
+#   {} (plain object)             -> false
+#   [] (array)                    -> false
+#   [null] (array containing null)-> false     # the array is not itself null
+#   new Date(...)                 -> false
+#   RegExp (e.g. /re/)            -> false
+#   Object.create(null)           -> false     # null-prototype object is an object, not null
+#   Map / Set                     -> false
+#   Uint8Array / Buffer           -> false
+#   function                      -> false     # (DOCUMENT-as-OUT: not codec-serializable, see SCOPE)
+#   Symbol                        -> false     # (DOCUMENT-as-OUT: not codec-serializable, see SCOPE)
+#   boxed new Number/String/Bool  -> false     # boxed objects are objects, not null
+#
+# Return type: a primitive JS boolean (`true` or `false`). Never returns a
+# truthy/falsy non-boolean — `===` always yields a boolean.
+#
+# Arity / extra args: `isNull(null, 1, 2)` -> true; `isNull(0, null)` -> false.
+# Only the FIRST positional argument is consulted; the rest are ignored.
+
+ORACLE value -> oracle.json
+# The harness records the boolean return for each generated input arg-tuple.
+# Each input is a single-element arg array `[value]` (the function reads only arg 0).
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   The strict-equality predicate `value === null` over all of `value`'s type
+#   space. The full truth table above is the complete in-contract specification —
+#   there is no hidden table, no locale, no option, no branch beyond the single
+#   strict comparison.
+#
+# CARRIED DATA: none. No literal tables, no constants beyond the language-level
+#   `null` value itself.
+#
+# OUT-OF-CONTRACT: none (no side effects, no stateful APIs, no seam).
+#
+# DOCUMENT-as-OUT-of-ENVELOPE (behavior fully specified, but NOT emitted by the
+#   generator because the oracle codec cannot round-trip them through
+#   JSON.stringify(encode(args))):
+#     - functions       -> isNull(fn) is false       # specified; not serializable
+#     - Symbols         -> isNull(Symbol()) is false  # specified; not serializable
+#   A blind re-emitter still reconstructs these from the strict-=== contract:
+#   neither a function nor a Symbol is the `null` value, so both yield false.
+#   These are intentionally excluded from genInputs to avoid poisoning held-out
+#   expecteds with un-round-trippable args.
+#
+# IN-ENVELOPE codec-faithful values the generator DOES emit (all round-trip
+#   through the oracle codec, which handles JSON primitives/arrays/objects/RegExp/
+#   Set/Map/Uint8Array/Buffer/bigint/undefined/NaN/±Infinity/-0/boxed-primitive):
+#   every truth-table row above EXCEPT functions and Symbols.
+
+PROVENANCE lodash.isnull@3.0.0
+# repo: lodash/lodash (modularized build: `lodash modern modularize exports="npm"`)
+# license: MIT (Copyright 2012-2015 The Dojo Foundation; based on Underscore.js 1.7.0)
+# source file: index.js (lines 26-30: `function isNull(value){ return value === null; }`)

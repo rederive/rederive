@@ -1,0 +1,16 @@
+UNIT tree_sha
+LANG js
+PRIMARY-SHA256 e12613dad5808632c7fe28510214c96c79e264473e10d7833fc2a007d5805be8
+SIG tree_sha(files: Record<string, string>): string
+NOTE named export tree_sha
+ABI map[text, text] = a plain object with own enumerable string keys (path) and string values (text); text = string
+  (UTF-16). The result is a string of 64 lowercase hex characters. A throw (R2) is a thrown Error; the message is not
+  graded. The artifact is an ES module exporting tree_sha; it may import node:crypto and nothing else. It never touches
+  the file system: the map IS the tree.
+MECHANISM SHA-256 (R4, R6, R7) = createHash('sha256').update(text, 'utf8').digest('hex') from node:crypto. NAMES (R1, R3) =
+  path.split('/'). Validate every key (R1, R2) before hashing anything. The sort (R5) = Array.prototype.sort with no
+  comparator, on the lines or on the paths — the host's default comparison IS UTF-16 code-unit order; never localeCompare,
+  never Intl.Collator. The R2 message's path = JSON.stringify(path).
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/tree-sha.mjs + selfhost/seams/tree_sha.mjs. Language file cut 2026-10-26 with the
+  primary, before any blind re-emission; round 2 re-cut.

@@ -1,0 +1,21 @@
+UNIT ts_sig_of
+LANG rust
+PRIMARY-SHA256 4a45cda772a4dd1f2eb7e95ebef5fad3180eff927793e041bd127916194064bf
+SIG pub fn ts_sig_of(sig: &str) -> Result<(Option<String>, String), String>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn ts_sig_of) with no dependencies — no main, no I/O,
+  no unsafe. The verifier's harness passes sig as &str (UTF-8) and reads the result: the record crosses as the tuple
+  (exportName, fnType) in declared field order; none = None. A refusal (R10) is Err(message) — the harness records an Err
+  as a throw; the message is not graded. Never panic.
+MECHANISM BLANK (R1, R7, R9) is exactly ' ' and '\t': trim_matches(|c| c == ' ' || c == '\t'), never str::trim. R9's
+  emptiness test uses the WS pin as an explicit char predicate — NOT char::is_whitespace, whose set includes U+0085 and
+  excludes U+FEFF. NAME's classes are ASCII (is_ascii_alphabetic, is_ascii_digit, '_', '$'). The mask (R3) may be built
+  over bytes — blank every interior byte with b' ' so M and S stay byte-aligned; the line-terminator exception after a
+  backslash must recognise U+2028 and U+2029 as their three-byte UTF-8 sequences, and so must R4's refusal of an unmasked
+  U+2028 / U+2029 (E2 80 A8 / E2 80 A9 left in M). Every other structural test (R4 to R8) looks only at ASCII bytes of M,
+  and every cut lands on an ASCII byte, so slicing S at those byte offsets is safe. In R5 a non-ASCII character before or
+  after any of the five words counts as "not A-Z a-z 0-9 _ $". No regex crate is needed.
+MECHANISM R4's T is one pass over M's bytes: b'{' increments a depth counter, b'}' decrements it with saturating_sub (never
+  below zero), and a b';' at depth above zero is written as b' ' (all ASCII, so T stays byte-aligned with M and S). The
+  R4 tests read T; R5 to R8 read M.
+DEPENDS-ON none
+PROVENANCE rederive@7f015c4d1023 cli/lang-ts.mts sigOf; language file re-cut 2026-10-27 (round 5k delta, #158) with the primary.

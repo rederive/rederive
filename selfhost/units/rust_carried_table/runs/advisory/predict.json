@@ -1,0 +1,392 @@
+{
+ "status": "ok",
+ "unit": "rust_carried_table",
+ "primary": "selfhost/units/rust_carried_table/sir/rust_carried_table.sir",
+ "primarySha256": "b54a3ed7077e52f9f806a114c3b438b12912312756bbc114692a863b763fbfec",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Tokens. src is read left to right as a sequence of characters; at each position the FIRST matching row of TABLE LEX applies, then reading continues after what it consumed. Whitespace and comments make no token.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "TABLE LEX row 1",
+   "text": "space, tab, CR or LF                                                                     | skipped",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE LEX row 2",
+   "text": "two slashes                                                                              | a LINE COMMENT, skipped up to (not including) the next LF, or to the end of src",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE LEX row 3",
+   "text": "slash then star                                                                          | a BLOCK COMMENT, skipped: depth starts at 1; \"/*\" adds one, \"*/\" subtracts one (each consumes two characters); it ends when depth is 0 — or silently at the end of src when it never closes",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE LEX row 4",
+   "text": "an optional \"b\", then \"r\", then zero or more hash marks, then a double quote — all within the next 32 characters | a RAW STRING: STR token, its text is everything up to the first double quote followed by the same number of hash marks, verbatim (no escapes); none such -> throws",
+   "ambiguity": 0.65
+  },
+  {
+   "id": "TABLE LEX row 5",
+   "text": "a double quote, or \"b\" then a double quote                                               | a STRING: STR token, R3",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE LEX row 6",
+   "text": "an apostrophe                                                                            | a CHAR literal when R2 accepts: CHR token; otherwise the punctuation token APOSTROPHE (a lifetime or label)",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE LEX row 7",
+   "text": "an ASCII digit                                                                           | a NUMBER: NUM token, R5",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE LEX row 8",
+   "text": "an ASCII letter or underscore                                                            | a WORD: the longest run of ASCII letters, digits and underscores; \"true\" / \"false\" are BOOL tokens, any other run an IDENT token",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE LEX row 9",
+   "text": "\"=>\", \"->\", \"::\" or \"..\"                                                                 | that two-character punctuation token",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE LEX row 10",
+   "text": "any other character                                                                      | a one-character punctuation token (a non-ASCII character outside a literal included; \"||\" is two \"|\" tokens)",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R2",
+   "text": "CHAR literal: an apostrophe, then exactly one of — a single character that is neither an apostrophe nor a backslash (any code point, LF included); or a backslash followed by one of n r t 0 \\ ' or the double quote; or \"\\x\" and exactly two hex digits; or \"\\u{\" then 1 to 8 characters each a hex digit or underscore, then \"}\" — then a closing apostrophe. Anything else (a lifetime such as 'a or 'static, a two-character body) is not a char literal. The body is decoded by R4.",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "R3",
+   "text": "STRING: after the opening double quote (and its \"b\"), the body runs to the next double quote not consumed by an escape — a backslash always consumes itself and the ONE character after it. No closing quote before the end of src -> throws. The body is decoded by R4. A byte string is read as text exactly like a string.",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R4",
+   "text": "ESCAPES (strings and char bodies), by TABLE ESCAPE; every other character stands for itself. A bad or unknown escape anywhere in src — inside any string, not only a table entry — -> throws; escapes inside comments are never read.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE ESCAPE row 1",
+   "text": "n, r, t, 0                    | LF, CR, tab, U+0000",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE ESCAPE row 2",
+   "text": "backslash, apostrophe, double quote | that character",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE ESCAPE row 3",
+   "text": "x and two hex digits          | the character whose code is those two digits (0x00..0xFF; \"\\xFF\" is U+00FF, never a byte)",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE ESCAPE row 4",
+   "text": "u, then \"{\"                   | HEX = the text up to the next \"}\" in the body, underscores removed. No \"}\" -> throws; HEX empty, or starting with a character that is not a hex digit, a TRIM character, \"+\" or \"-\" -> throws; HEX all hex digits -> the code point it names, a value above U+10FFFF -> throws",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "TABLE ESCAPE row 5",
+   "text": "LF or CR                      | a LINE CONTINUATION: nothing, and every following space, tab, CR and LF is skipped",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "TABLE ESCAPE row 6",
+   "text": "anything else (u without \"{\" included) | throws",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R5",
+   "text": "NUMBER: the longest prefix, within the next 64 characters, of the form BODY then an optional SUFFIX, where BODY is \"0x\" then one or more of hex digits and underscores, or \"0o\" then octal digits and underscores, or \"0b\" then binary digits and underscores, or else DECIMAL = an ASCII digit then digits and underscores, an optional fraction (\".\" then a digit, then digits and underscores), an optional exponent (e or E, an optional sign, a digit, then digits and underscores); and SUFFIX is an optional underscore then one of u8 u16 u32 u64 u128 usize i8 i16 i32 i64 i128 isize f32 f64. The radix prefixes are lowercase only (\"0X10\" is the number 0 then the word X10). The hex digits of BODY absorb a following f32 or f64 (\"0x1f64\" is the hex value 0x1F64 = 8036). A numeral longer than 64 characters is cut there; the rest starts a new token. A \".\" not followed by a digit ends the numeral (\"1.\" is NUM 1 then the punctuation \".\"). VALUE: drop every underscore and the suffix. An INTEGER-SHAPED body (a radix prefix with at least one digit, or decimal digits with no fraction and no exponent — whatever the suffix, f32 / f64 included) names an integer N: the literal is EXACT when N is exactly a double (N is 0, or N = m × 2^k with m odd, m < 2^53 and N < 2^1024 — so 2^53, 2^60 and 2^64 are exact, 2^53+1 and 2^64-1 are not), and its value is N. Any other body (a fraction or an exponent) has the nearest double as its value, correctly rounded (\"9007199254740993.0\" is 2^53); it is INEXACT only when that is infinite (\"1e400\"). A radix prefix left with no digit (\"0x_\") is INEXACT. An f32 SUFFIX on a decimal, octal or binary body (never hex: there it is digits) narrows: the literal is ALSO INEXACT when its value is not exactly a finite IEEE-754 binary32 value (\"0.1f32\", \"16777217f32\", \"1e-50f32\", \"1e39f32\" and \"3.4028235e38f32\" are INEXACT; \"0.5f32\", \"16777216f32\", \"0b1f32\" are exact), so an f32 literal that reads keeps its value. An INEXACT literal is harmless until R6 reads it as a value; then it throws. CITED FIDELITY package — exactness is judged per entry value",
+   "ambiguity": 0.58
+  },
+  {
+   "id": "R6",
+   "text": "VALUE — a table value starting at a token, by TABLE VALUE (first matching row); when no row applies there is no value. A value is read left to right and stops at the first token where it fails; a throw (an INEXACT literal, a CAST) happens when reading reaches that token, even inside a candidate R7 then rejects (\"(\\\"a\\\", 99999999999999999 + 1)\" throws by R6, \"(\\\"a\\\", 1 + 99999999999999999)\" does not: reading stopped at \"+\" before the numeral).",
+   "ambiguity": 0.48
+  },
+  {
+   "id": "TABLE VALUE row 1",
+   "text": "punctuation \"&\"                         | the value after it (any number of \"&\" are skipped)",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "TABLE VALUE row 2",
+   "text": "STR, CHR or BOOL                        | its text / text / bool",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE VALUE row 3",
+   "text": "NUM                                     | its value (INEXACT -> throws), then TABLE CAST",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "TABLE VALUE row 4",
+   "text": "punctuation \"-\" then NUM                | the negated value (INEXACT -> throws; negating 0 gives -0), then TABLE CAST",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE VALUE row 5",
+   "text": "IDENT \"None\"                            | none",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE VALUE row 6",
+   "text": "IDENT \"Some\", \"(\" , IDENT Some or None  | throws (a nested Option: \"Some(None)\", \"Some(Some(1))\", \"Some(Some)\") — only when that IDENT is the very next token: \"Some(&None)\" and \"Some((None))\" are none, \"Some(&Some(1))\" is 1",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "TABLE VALUE row 7",
+   "text": "IDENT \"Some\", \"(\" , a value, \")\"        | that value (nothing else may stand inside)",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "TABLE VALUE row 8",
+   "text": "\"[\" or \"(\"                              | a SEQUENCE: values separated by \",\", an optional trailing \",\", closed by the matching \"]\" or \")\". A list of the items, except that \"(\" with exactly one item and no comma is that item itself (\"(1)\" is 1, \"(1,)\" is [1], \"()\" is []). Any item without a value, or anything but \",\" or the closer after an item -> no value",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "TABLE VALUE row 9",
+   "text": "anything else                           | no value (\"vec!\", \"b'a'\", \"c\\\"x\\\"\", a block, \"1 + 2\")",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "TABLE CAST row 1",
+   "text": "not IDENT \"as\"                          | x, unchanged",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE CAST row 2",
+   "text": "\"as\" then anything but an IDENT         | throws",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE CAST row 3",
+   "text": "\"as\" f64                                | x",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE CAST row 4",
+   "text": "\"as\" f32                                | x when x is exactly an IEEE-754 binary32 value (finite); otherwise throws (\"0.1 as f32\")",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "TABLE CAST row 5",
+   "text": "\"as\" u8 u16 u32 i8 i16 i32              | x when x is an integer (no fractional part; -0, 1.0 and 1e3 are integers) within the type's range (u8 0..255, u16 0..65535, u32 0..4294967295, i8 -128..127, i16 -32768..32767, i32 -2147483648..2147483647); otherwise throws (\"255 as i8\", \"1.9 as u8\", \"-1 as u8\")",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE CAST row 6",
+   "text": "\"as\" u64 usize u128                     | x when an integer within 0..2^53 (2^53 included); otherwise throws (\"18014398509481984 as u64\", though that literal alone reads)",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE CAST row 7",
+   "text": "\"as\" i64 isize i128                     | x when an integer within -2^53..2^53; otherwise throws",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE CAST row 8",
+   "text": "(every integer-cast row above)          | a -0 that passes gives 0 (\"-0 as i64\", \"-0.0 as u8\" are 0); \"as f64\" / \"as f32\" keep -0, and an uncast \"-0\" or \"-0i64\" stays -0",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "TABLE CAST row 9",
+   "text": "\"as\" any other IDENT                    | throws (\"1 as char\", \"1 as U8\"); a cast after a non-number (\"true as u8\", \"'a' as u8\", \"(1) as u8\") is no cast: that value ends before \"as\"",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R7",
+   "text": "ENTRY scan: the token stream is scanned from the first token. At each token, in this order: (a) TUPLE candidate — the token is \"(\" followed by a STR token K and \",\", a value V starts after the comma, and the token after V is \")\": the entry (K, V) joins the TUPLES and the scan resumes after that \")\"; when NO value starts after the comma (an IDENT, \"b'a'\", a sequence with an item that has none, the end of src) -> throws; when a value starts but the token after it is not \")\" (\"(\\\"a\\\", 1 + 2)\", \"(\\\"a\\\", true as u8)\", \"(\\\"a\\\", 1, 2)\") the candidate is silently rejected and the scan moves one token on; (b) OR-PATTERN — the token is a STR token, the next is the punctuation \"|\" and the one after it is a STR token -> throws (\"s == \\\"a\\\" || t\" and \"\\\"a\\\" | x\" do not); (c) ARM candidate — the token is a STR token K followed by \"=>\": when a value V starts after it and the token after V is \",\" or \"}\", the entry (K, V) joins the ARMS and the scan resumes at that \",\" or \"}\" token; otherwise (no value, or anything else after it, the end of src included: \"\\\"a\\\" => 1\" alone) -> throws. Otherwise the scan moves one token on. Tokens inside a value an accepted candidate consumed are never visited; tokens of a rejected candidate are: \"(\\\"a\\\", (\\\"b\\\", 1), 3)\" yields only the entry b: 1. The scan covers the WHOLE token stream, and its throws fire even when R8 later discards the form: any call shaped (\"text\", value) anywhere in src is a tuple entry, a (\"text\", name) call such as format!(\"{}\", n) throws, and so does a \"text\" => arm whose value is not one R6 reads. CITED FIDELITY package",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R8",
+   "text": "FORM: when TUPLES is non-empty the entries are TUPLES, in order, and ARMS are discarded entirely; otherwise the entries are ARMS, in order. A single stray tuple therefore replaces a whole arm table. CITED FIDELITY package",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "R9",
+   "text": "No entries -> throws.",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "R10",
+   "text": "SHAPE given: shape is none or the empty text -> no shape check (R11–R12 skipped). Otherwise the DECLARED TYPE is read from shape by R11; when it is not a map type -> throws.",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "R11",
+   "text": "Reading shape. WS = space, tab, CR, LF (the grammar's own whitespace; never VT, FF, NBSP or other Unicode space). (1) keep the text before its first \";\"; (2) NORM: remove WS from both ends; when the result is \"map\", then one or more WS, then K, optional WS, \"->\", optional WS, V — K the SHORTEST non-empty piece for which such a split exists, V the rest (at least one character) — the text becomes \"map[\" NORM(K) \", \" NORM(V) \"]\"; otherwise it stays as it is; (3) WIDTH: every u8, u16, u32 standing as a TYPE becomes u64 and every i8, i16, i32 so standing becomes i64 — standing as a type means: at the start of the text or right after one of \"[\" \",\" \"|\" \":\" (WS between allowed), and followed (WS between allowed) by \"]\", \",\", \"|\" or the end of the text (\"record[u8: u8]\" renames only the field's type; \"map[text,\\nu8]\" is renamed); (4) the result is read by GRAMMAR TYPE over the whole text; a text it does not accept -> throws (a shape of only WS reads as the empty text, which throws).",
+   "ambiguity": 0.69
+  },
+  {
+   "id": "TABLE COVERS row 1",
+   "text": "same type                     | A and B are the same type, unions compared as SETS of alternatives and records as SETS of named fields (tuples in order)",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "TABLE COVERS row 2",
+   "text": "json                          | A is json and B is JSON-ACCEPTED: none, bool, f64, text or json; a list, or a tuple, of JSON-ACCEPTED parts; a map with a text key and a JSON-ACCEPTED value; a record whose fields are all JSON-ACCEPTED; a union of JSON-ACCEPTED alternatives",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "TABLE COVERS row 3",
+   "text": "pointwise                     | both lists and A's item covers B's; both tuples of one length, each A item covering B's at its place; both maps, A's key covering B's key and A's value covering B's value",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "TABLE COVERS row 4",
+   "text": "record                        | both records and every field of A has a field of B with the same name that it covers (B may have more fields)",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "TABLE COVERS row 5",
+   "text": "union                         | A is a union and one of its alternatives covers B; or B is a union and A covers every alternative of B",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "R12",
+   "text": "FIT, for every entry in order under the declared type map[KT, VT]: the key text must fit KT and the value must fit VT, by TABLE FIT; a misfit -> throws.",
+   "ambiguity": 0.5
+  },
+  {
+   "id": "TABLE FIT row 1",
+   "text": "text              | v is text",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE FIT row 2",
+   "text": "bool              | v is a bool",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE FIT row 3",
+   "text": "none              | v is none",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE FIT row 4",
+   "text": "f64               | v is a number",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE FIT row 5",
+   "text": "i64 / u64         | v is a number with no fractional part (\"1.0\", \"1e3\" and -0 fit) within -2^63..2^63-1 / 0..2^64-1, compared exactly (\"1e19\" fits u64, \"9.3e18\" misfits i64)",
+   "ambiguity": 0.56
+  },
+  {
+   "id": "TABLE FIT row 6",
+   "text": "json              | always",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE FIT row 7",
+   "text": "list[I]           | v is a list and every item fits I",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE FIT row 8",
+   "text": "tuple[T1..Tn]     | v is a list of exactly n items, item k fitting Tk",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE FIT row 9",
+   "text": "union             | v fits at least one alternative",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "TABLE FIT row 10",
+   "text": "bytes, map[…], record[…] | never (the reader yields no bytes and no map)",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R13",
+   "text": "DUPLICATES, in entry order, building the result: an entry whose key is already a key of the result must carry the SAME value, else -> throws. SAME: two non-lists are the same when they are one value (one text, one bool, both none, or one number where -0 and 0 DIFFER); an earlier list is the same as a later list with the same items at every depth where, inside a list, -0 and 0 are equal; a list and a non-list differ. When the same, the later value replaces the earlier ([0] then [-0] leaves [-0]). Every key is ordinary text: \"constructor\", \"__proto__\", \"toString\" are keys like any other.",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R14",
+   "text": "The result: every key of the entries with its value from R13. Key order is immaterial (the canonical form sorts).",
+   "ambiguity": 0.5
+  }
+ ],
+ "ranked": [
+  "R11",
+  "TABLE LEX row 4",
+  "R5",
+  "TABLE FIT row 5",
+  "TABLE VALUE row 8",
+  "TABLE COVERS row 2",
+  "R12",
+  "R14",
+  "TABLE VALUE row 7",
+  "TABLE COVERS row 1",
+  "TABLE COVERS row 5",
+  "R6",
+  "TABLE COVERS row 4",
+  "TABLE COVERS row 3",
+  "TABLE VALUE row 6",
+  "TABLE ESCAPE row 5",
+  "TABLE VALUE row 9",
+  "R7",
+  "R4",
+  "TABLE CAST row 4",
+  "R1",
+  "TABLE VALUE row 1",
+  "R13",
+  "TABLE ESCAPE row 4",
+  "TABLE CAST row 8",
+  "R10",
+  "TABLE FIT row 9",
+  "TABLE VALUE row 3",
+  "TABLE LEX row 5",
+  "TABLE CAST row 7",
+  "R2",
+  "TABLE CAST row 5",
+  "TABLE CAST row 6",
+  "R3",
+  "TABLE VALUE row 4",
+  "TABLE CAST row 2",
+  "TABLE FIT row 4",
+  "TABLE LEX row 3",
+  "TABLE LEX row 7",
+  "TABLE CAST row 9",
+  "TABLE LEX row 2",
+  "TABLE LEX row 10",
+  "TABLE VALUE row 5",
+  "TABLE FIT row 7",
+  "TABLE FIT row 8",
+  "TABLE LEX row 8",
+  "TABLE LEX row 9",
+  "TABLE CAST row 3",
+  "TABLE LEX row 6",
+  "TABLE VALUE row 2",
+  "TABLE CAST row 1",
+  "TABLE ESCAPE row 1",
+  "TABLE ESCAPE row 3",
+  "TABLE ESCAPE row 6",
+  "TABLE FIT row 10",
+  "TABLE LEX row 1",
+  "R9",
+  "TABLE FIT row 2",
+  "TABLE ESCAPE row 2",
+  "R8",
+  "TABLE FIT row 3",
+  "TABLE FIT row 1",
+  "TABLE FIT row 6"
+ ],
+ "at": "2026-10-28T03:14:37Z"
+}

@@ -1,0 +1,73 @@
+UNIT diff_hint
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/lib/profile.mts diffHint (lines 76-100) and INVISIBLE (line 78, from cli/sir/sir-parse.mjs
+  GLUE, line 73), driven through seams/diff_hint.mjs with both sides as UTF-8 text
+ORACLE-CLASS deterministic
+SIG diff_hint(existing: text, profile: text) -> text
+ENVELOPE two well-formed texts (Unicode scalar values; a lone surrogate is out). Every such pair is in scope; there is no
+  error path, and every result is well-formed text. Non-text arguments are out of the envelope.
+DEPENDS-ON none
+DESCRIPTION The one-line "what differs" hint rdv init --refresh prints for a tools/ script that differs from the
+  profile's copy: the first line where the two disagree (a line one side lacks counts), the first column where the
+  lines differ, and an escaped window of each side's line from that column; or a fixed sentence when the texts are equal.
+  Every count and position below is in CODE POINTS (Unicode scalar values), never bytes, UTF-16 units or graphemes.
+BEHAVIOR
+R1 Each text is split into lines on U+000A (LINE FEED) only. Every other character, U+000D, U+2028, U+2029 and U+FEFF
+  included, is ordinary line content. A text with k line feeds has k + 1 lines; the empty text is one empty line, and a
+  text ending in a line feed ends with an empty line.
+R2 Lines are visited at the same index from index 0 up to the larger line count; the FIRST index where the two sides
+  disagree decides, with i its 0-based index. They disagree when one side has no line at i (R3) or both have one and
+  the two lines are different sequences of code points (R4).
+R3 MISSING LINE. When existing has no line i -> "line " + decimal(i + 1) + ": existing has no line " + decimal(i + 1) +
+  ", profile has " + WINDOW(the profile line, 0). Symmetrically, when profile has no line i -> "line " + decimal(i + 1) +
+  ": profile has no line " + decimal(i + 1) + ", existing has " + WINDOW(the existing line, 0). Since each side has at
+  least one line, i >= 1 here. A trailing line feed on one side only is reported this way (the present line is empty).
+R4 DIFFERING LINES. c = the length of the longest common prefix of the two lines in code points (0-based; c never exceeds
+  the shorter line's length). Result -> "line " + decimal(i + 1) + ", col " + decimal(c + 1) + ": existing " +
+  WINDOW(the existing line, c) + " vs profile " + WINDOW(the profile line, c).
+R5 EQUAL. When no index disagrees (the texts are identical) -> the text
+  "binary difference (the texts decode to the same UTF-8)". CITED FIDELITY package
+R6 WINDOW(s, c) for a line s of L code points = QUOTE, then ELLIPSIS when c > 0, then ESCAPE of each code point of s at
+  positions c up to but excluding min(c + WIDTH, L), in order, then ELLIPSIS when c + WIDTH < L, then QUOTE. When c = L the
+  middle is empty: the shorter side of a prefix pair renders as QUOTE ELLIPSIS QUOTE when c > 0. The two ELLIPSIS marks are
+  added, never escaped; WIDTH counts source code points, not the escaped length.
+R7 ESCAPE maps one code point to text by the first row of TABLE ESCAPE that applies. Escapes are per code point and
+  context-free; hex digits are lowercase; the four-digit and braced forms are chosen by the row. The window is a
+  supplementary character's whole encoding or none of it (positions are code points), but a cut may fall inside a
+  grapheme: between regional indicators, before a combining mark, a variation selector or a zero width joiner. CITED FIDELITY package
+TABLE ESCAPE — code point -> text (R7); first row that applies
+  U+0022 QUOTATION MARK                      -> backslash, then U+0022
+  U+005C REVERSE SOLIDUS                     -> two backslashes
+  U+0008                                     -> backslash, "b"
+  U+0009                                     -> backslash, "t"
+  U+000C                                     -> backslash, "f"
+  U+000D                                     -> backslash, "r"
+  any other code point U+0000 through U+001F -> backslash, "u", four lowercase hex digits of the code point
+  a code point in INVISIBLE at or below U+FFFF -> backslash, "u", four lowercase hex digits of the code point
+  a code point in INVISIBLE above U+FFFF     -> backslash, "u", "{", the lowercase hex digits of the code point with no
+                                                leading zero (five here), "}"
+  anything else                              -> the code point itself, unchanged
+PINNED charset INVISIBLE = { U+000A..U+000D, U+007F..U+00A0, U+00AD, U+034F, U+0600..U+0605, U+061C, U+06DD, U+070F,
+  U+0890, U+0891, U+08E2, U+115F, U+1160, U+1680, U+180B..U+180E, U+2000..U+200F, U+2028..U+202F, U+205F..U+2064,
+  U+2066..U+206F, U+2800, U+3000, U+3164, U+FE00..U+FE0F, U+FEFF, U+FFA0, U+FFF9..U+FFFB, U+110BD, U+110CD,
+  U+13430..U+1343F, U+1BCA0..U+1BCA3, U+1D173..U+1D17A, U+E0001, U+E0020..U+E007F, U+E0100..U+E01EF } CITED FIDELITY
+  package — profile.mts line 78: the parser's pinned GLUE set (Unicode White_Space other than space and tab, and
+  General_Category Cf, as of Unicode 17.0, never the host's tables) plus U+007F..U+009F, U+034F, U+115F, U+1160,
+  U+180B..U+180D, U+2800, U+3164, U+FE00..U+FE0F, U+FFA0, U+E0100..U+E01EF; inclusive ranges, matched per code point.
+  U+000A..U+000D never reach this row (U+000A splits lines, the C0 rows precede it). NOTHING outside it is escaped: U+2065,
+  U+180F, U+17B4, U+17B5, U+FFF0..U+FFF8, U+E0000, U+E0002..U+E001F, U+E0080..U+E00FF, U+E01F0 and up, U+2026, U+FFFD, the
+  solidus and combining marks are copied raw
+PINNED text ELLIPSIS = U+2026 HORIZONTAL ELLIPSIS (one code point, bytes E2 80 A6) CITED R6
+PINNED text QUOTE = U+0022 QUOTATION MARK CITED R6
+PINNED number WIDTH = 80 code points CITED R6
+INVARIANT the result never contains U+000A, U+000D or any other code point U+0000..U+001F: every window is a slice of one
+  line and TABLE ESCAPE rewrites the rest.
+INVARIANT decimal = base-10 digits of a positive integer, no sign, no separators, no leading zero.
+ORACLE value -> oracles/diff_hint.json  CANONICAL-SHA256 ec5493378df84c44c0e2ef7a2b659325aeaa76894e11a5ccf785f7f757198a68
+SCOPE IN: diffHint's computation over two texts, R1-R7. OUT: the caller's byte comparison and the decision to call it
+  (applyProfile, profile.mts); the Buffer-to-text decode (the seam passes text, so invalid UTF-8 never arrives; the real
+  code decodes each invalid sequence to U+FFFD, so two byte-different files can reach R5's sentence).
+PROVENANCE rederive@6199e2cc8b75 (MIT), cli/lib/profile.mts, function diffHint, and cli/sir/sir-parse.mjs GLUE; pinned authority
+  selfhost/.authority/6199e2cc8b75; seam selfhost/seams/diff_hint.mjs. Re-cut 2026-10-27 for round 5 (FINDINGS #95), round 5b
+  (FINDINGS #115).

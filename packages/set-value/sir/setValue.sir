@@ -1,0 +1,240 @@
+UNIT setValue
+KIND STATE                 # mutates `obj` in place; the returned value IS the (same-reference) mutated target
+ORACLE-CLASS deterministic # pure given (target, path, value, options); no clock/RNG/io/net seam
+SIG setValue(target, path, value, options?) -> target
+    # options? = { separator?, preservePaths?, split?, merge?, arrays? }   (all optional; `arrays` is read by createMemoKey only — see NOTE-CACHE)
+DEPENDS-ON is-primitive@3.0.1 (INLINED), is-plain-object@2.0.4 (INLINED, transitively isobject@3.0.1 INLINED)
+           # No `require` in the emitted module. The three deps are reduced to inline helpers below.
+
+# =====================================================================================================
+# INLINED DEP SEMANTICS  (a blind re-emitter MUST reproduce these helpers exactly; do NOT require originals)
+# =====================================================================================================
+#
+# isPrimitive(val)  [from is-primitive@3.0.1, verbatim semantics]:
+#     if typeof val === 'object'  -> return (val === null)      # null is primitive; all other objects are not
+#     return typeof val !== 'function'                          # function -> false; string/number/boolean/symbol/undefined/bigint -> true
+#   Truth table used by this unit:
+#     null            -> true        undefined       -> true
+#     'x' (string)    -> true        5 (number)      -> true
+#     true (boolean)  -> true        Symbol()        -> true        10n (bigint) -> true
+#     {} / [] (object)-> false       function        -> false
+#
+# isObjectObject(o)  [helper inside is-plain-object]:
+#     return isObject_iso(o) === true AND Object.prototype.toString.call(o) === '[object Object]'
+#   where isObject_iso(val)  [from isobject@3.0.1, verbatim]:
+#     return val != null AND typeof val === 'object' AND Array.isArray(val) === false
+#   So isObjectObject is true only for non-null, non-array objects whose internal [[Class]] tag is "Object"
+#   (plain object literals, Object.create(null), `new Object()`; NOT Date/RegExp/Map/etc., NOT arrays).
+#
+# isPlainObject(o)  [from is-plain-object@2.0.4, verbatim semantics]:
+#     if isObjectObject(o) === false        -> return false
+#     ctor = o.constructor
+#     if typeof ctor !== 'function'         -> return false      # e.g. Object.create(null): ctor undefined -> false
+#     prot = ctor.prototype
+#     if isObjectObject(prot) === false     -> return false
+#     if prot.hasOwnProperty('isPrototypeOf') === false -> return false
+#     return true
+#   Net effect for this unit: true for {} / object literals / new Object(); false for Object.create(null),
+#   arrays, class instances with custom prototypes, Date/RegExp/Map/Set, primitives, null, functions.
+#   NOTE: isPlainObject is consulted ONLY inside the merge branch (assignProp). It does NOT gate path traversal.
+#
+# isObject(value)  [LOCAL to set-value, distinct from isObject_iso above — note the difference!]:
+#     return (typeof value === 'object' && value !== null) || typeof value === 'function'
+#   i.e. TRUE for any non-null object INCLUDING arrays AND functions; FALSE for null and all primitives.
+#   This local isObject gates (a) whether `target` is traversable at the top, and (b) whether an existing
+#   intermediate obj[key] is reused vs. replaced with a fresh {}.
+
+# =====================================================================================================
+# CONSTANTS / HELPERS (in-contract logic — reproduce exactly)
+# =====================================================================================================
+#
+# isUnsafeKey(key):  key === '__proto__' || key === 'constructor' || key === 'prototype'
+#
+# validateKey(key):
+#     if !isPrimitive(key)   -> throw new TypeError('Object keys must be strings or symbols')
+#     if isUnsafeKey(key)    -> throw new Error(`Cannot set unsafe key: "${key}"`)
+#   (Two distinct error classes. The message for the unsafe case interpolates the key.)
+#
+# toStringKey(input):  Array.isArray(input) ? input.flat().map(String).join(',') : input
+#   (Used only to build the cache key; '.flat()' is a single-level flatten.)
+#
+# createMemoKey(input, options):  builds the cache string; only matters for the internal cache.
+#   if typeof input !== 'string' || !options  -> return input
+#   key = input + ';'
+#   append `arrays=<v>;`        if options.arrays        !== undefined
+#   append `separator=<v>;`     if options.separator     !== undefined
+#   append `split=<v>;`         if options.split         !== undefined
+#   append `merge=<v>;`         if options.merge         !== undefined
+#   append `preservePaths=<v>;` if options.preservePaths !== undefined
+#   return key
+#
+# NOTE-CACHE (memoization is OBSERVABLY TRANSPARENT — a re-emitter MAY omit it):
+#   The real module memoizes splitString results in a module-level Map (setValue.cache). The cache key is
+#   validateKey(toStringKey(createMemoKey(...))). Because a fresh module instance starts with an empty cache
+#   and the cache stores ONLY the deterministic split result for a (path,options) pair, it NEVER changes the
+#   observable return for a given call. The harness deep-clones each tuple, so there is no cross-run state.
+#   A blind re-emitter MAY implement memoize as identity (just call the split fn directly) AND STILL CONVERGE,
+#   EXCEPT for one validateKey side-effect that MUST be preserved (see BRANCH-PATH step b): the throw on an
+#   unsafe/non-primitive *joined* key happens during memoize when path is a STRING (validateKey on the memo
+#   key). For ARRAY paths memoize is bypassed, but the per-key validateKey in the main loop covers unsafe
+#   array elements (see BRANCH-LOOP). To be safe, a re-emitter should run validateKey(toStringKey(path-or-memokey))
+#   once before splitting a STRING path (it can never throw for an in-scope plain string path, but it is part
+#   of the contract). Whitelisted: it only throws if the memo key itself equals '__proto__'/'constructor'/
+#   'prototype' (impossible for in-scope strings that contain other chars).
+
+# =====================================================================================================
+# BEHAVIOR  (ordered pipeline)
+# =====================================================================================================
+#
+# setValue(target, path, value, options):
+#
+# BRANCH-GUARD (top):
+#   if (!path || !isObject(target))  -> return target  UNCHANGED.
+#     - `!path` is JS falsiness: returns unchanged for path === '' (empty string), 0, false, null, undefined, NaN.
+#       (An empty ARRAY [] is TRUTHY so it passes this guard, but produces no keys -> still returns unchanged
+#        via the loop; see BRANCH-LOOP.)
+#     - `!isObject(target)` returns unchanged when target is null/undefined or any primitive (string/number/
+#       boolean/symbol/bigint). target may be an array or a function (isObject true) and WILL be traversed.
+#
+# BRANCH-SPLIT (compute keys = split(path, options)):
+#   split(input, options):
+#     (a) if options && typeof options.split === 'function'  -> return options.split(input)     # custom splitter; result used as-is (array of keys)
+#     (b) if typeof input === 'symbol'                       -> return [input]                   # a symbol path is a single key; bypasses memoize+splitString
+#     (c) if Array.isArray(input)                            -> return input                     # ARRAY PATH used VERBATIM, element-by-element; NO dot-splitting, NO escape handling, NO number coercion of string elements
+#     (d) otherwise                                          -> memoize(input,options, () => splitString(input, options))
+#         memoize runs validateKey(toStringKey(createMemoKey(input,options))) [see NOTE-CACHE], then returns splitString(...).
+#
+#   splitString(input, options={}):
+#     sep      = options.separator || '.'                    # NOTE: '' or 0 separator falls back to '.' (falsy)
+#     preserve = (sep === '/') ? false : options.preservePaths
+#     # PRESERVE-PATHS RULE:
+#     if (typeof input === 'string' && preserve !== false && /\//.test(input))  -> return [input]
+#         i.e. if the path STRING contains a '/' AND preserve is not explicitly false, the ENTIRE string is
+#         returned as ONE literal key (NOT split). preserve is `options.preservePaths` (undefined by default),
+#         and `undefined !== false` is true, so BY DEFAULT any path containing '/' is preserved whole.
+#         Forced off when sep === '/' (then preserve is false) or when options.preservePaths === false.
+#     Otherwise tokenize:
+#       parts = []; part = ''
+#       for i in 0..input.length-1:
+#         ch = input[i]
+#         if ch === '\\':  part += input[++i]; continue       # ESCAPE: backslash consumes & appends the NEXT char literally (so '\\.' yields a literal '.', '\\\\' yields a literal '\\')
+#         if ch === sep:   push(part); part = ''; continue     # delimiter boundary
+#         part += ch
+#       if (part) push(part)                                   # trailing segment pushed only if non-empty string (so a trailing 'sep' produces NO empty trailing key)
+#       return parts
+#     push(part) helper (NUMBER COERCION of segments):
+#       number = Number(part)
+#       if (part.trim() !== '' && Number.isInteger(number))  -> parts.push(number)   # push as a NUMBER
+#       else                                                 -> parts.push(part)     # push the raw string segment
+#       # Coercion examples (segment -> pushed token):
+#       #   '0'->0  '5'->5  '10'->10  '00'->0  '0x1'->1  ' 1 '->1 (Number trims ws; ' 1 '.trim()!=='' )  '-1'->-1
+#       #   ''-> NOT pushed (empty 'part' is falsy at trailing; an interior empty segment from 'a..b' pushes '' )
+#       #   '  '(spaces)->'  ' (trim==='' so pushed as STRING)   '1.5'->'1.5' (not integer)   'a'->'a'   'NaN'->'NaN'
+#       #   '1e2'->100 (Number('1e2')=100 integer)   ' ' (single space)->' ' (trim==='' -> string)
+#
+# BRANCH-LOOP (walk keys, creating intermediates):
+#   obj = target
+#   for i in 0 .. keys.length-1:
+#       key  = keys[i]
+#       next = keys[i+1]                                       # undefined past the end
+#       validateKey(key)                                      # THROWS TypeError if key not primitive; THROWS Error if key is '__proto__'/'constructor'/'prototype' (this is the __proto__ pollution guard — checked PER KEY, anywhere in the path, for both array and string paths)
+#       if next === undefined:                                # LEAF
+#           assignProp(obj, key, value, options); break       # (see BRANCH-ASSIGN) then stop
+#       if typeof next === 'number' && !Array.isArray(obj[key]):
+#           obj = obj[key] = []                                # the NEXT segment is a number AND current slot is not already an array -> create a fresh ARRAY for this slot, descend; continue
+#           continue
+#       if !isObject(obj[key]):                                # current slot is null/undefined/primitive (NOT object/array/function)
+#           obj[key] = {}                                      # create a fresh plain object; overwrites any primitive sitting there
+#       obj = obj[key]                                         # descend into existing-or-new object/array/function
+#   return target
+#   # Notes:
+#   #  - If keys is empty (e.g. array path [], or a string path that tokenized to []), the loop never runs;
+#   #    target returned unchanged.
+#   #  - Existing intermediate objects/arrays/functions are REUSED (siblings preserved); only primitives in
+#   #    the path are replaced.
+#   #  - Numeric next-segment forces an ARRAY at the current slot even if a plain object would suffice; an
+#   #    EXISTING array at that slot is kept (the `!Array.isArray` guard). On a fresh array, a numeric leaf
+#   #    index N leaves indices 0..N-1 as empty slots (serialize to null in JSON); a negative integer index
+#   #    (e.g. -1) sets a non-index own property on the array (array length unaffected).
+#
+# BRANCH-ASSIGN (assignProp(obj, prop, value, options)) — leaf write:
+#   validateKey(prop)                                         # same guard (TypeError / unsafe Error) on the leaf key
+#   if value === undefined:
+#       Reflect.deleteProperty(obj, prop)                     # DELETE the own property (returns true even if absent; no-op if absent). The intermediate path was still created during the loop.
+#   else if options && options.merge:
+#       merge = (options.merge === 'function') ? options.merge : Object.assign
+#         # *** BEHAVIORAL QUIRK (faithfully preserved): the comparison is to the STRING 'function', NOT to
+#         #     `typeof options.merge === 'function'`. So a user-supplied merge FUNCTION is NEVER used as the
+#         #     merger — any truthy options.merge that is not the exact string 'function' selects Object.assign.
+#         #     If options.merge === 'function' (the string), `merge` becomes that string and the call below
+#         #     throws `TypeError: merge is not a function`. ***
+#       if merge && isPlainObject(obj[prop]) && isPlainObject(value):
+#           obj[prop] = merge(obj[prop], value)               # Object.assign is SHALLOW (top-level keys of `value` overwrite those of obj[prop]); both operands must be PLAIN objects (isPlainObject) or this branch is skipped
+#       else:
+#           obj[prop] = value                                 # plain assignment when either side is not a plain object
+#   else:
+#       obj[prop] = value                                     # default: plain assignment (overwrite)
+#   return obj
+#
+# RETURN: setValue returns `target` (the original top-level reference), now mutated in place.
+
+# =====================================================================================================
+# ERROR / THROW PATHS (codec-faithful inputs CAN reach these; recorded as {__throw})
+# =====================================================================================================
+#   - Any path key (array element, or a tokenized string segment, or the leaf) that equals '__proto__',
+#     'constructor', or 'prototype' (as a STRING; the number coercion does not apply to these)  -> throw Error
+#     'Cannot set unsafe key: "<key>"'.  (Pollution is prevented by throwing, NOT by silently skipping.)
+#       Examples that THROW: setValue({}, '__proto__', v); setValue({}, 'a.__proto__.b', v);
+#                            setValue({}, 'a.constructor', v); setValue({}, 'x.prototype.y', v);
+#                            setValue({}, ['a','__proto__'], v).
+#   - A path key that is not a primitive (an object/array element that is itself a non-null object, e.g.
+#     an array path containing {} ) -> throw TypeError 'Object keys must be strings or symbols'.
+#   - options.merge === 'function' (the literal string) on a leaf write where the assign-branch is entered
+#     -> throw TypeError 'merge is not a function' (only when value !== undefined and options.merge truthy).
+#   (Empty/whitespace path segments, numeric coercion, and array creation are NOT errors.)
+
+# =====================================================================================================
+# ORACLE
+# =====================================================================================================
+ORACLE value -> oracle.json
+  # The unit MUTATES `target` and returns it (same reference). The OBSERVABLE for grading is the returned
+  # object's STRUCTURE (deeply equal to the mutated input — same reference, so equivalent). The harness
+  # compares the returned value structurally. Throw paths are recorded as {__throw: <message-or-class>}.
+  # Each generated tuple is DEEP-CLONED by genInputs so every emitter/oracle run starts from an independent
+  # object graph (no shared mutable state across the curated/random split or across runs).
+  # ARRAYS appear in results (numeric path segments create arrays); the structural comparison treats arrays
+  # and their sparse-slot->null serialization faithfully.
+
+# =====================================================================================================
+# SCOPE
+# =====================================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the full pipeline above — falsy-path/non-object-target guard,
+#   split (custom-split / symbol / array-verbatim / memoized splitString), preservePaths '/' rule, backslash
+#   escape, separator default, number coercion of segments, per-key validateKey + unsafe-key throw, array
+#   auto-creation on numeric next-segment, fresh-{} creation over primitives, intermediate reuse, leaf
+#   assign / undefined-delete / merge(Object.assign-only, shallow, plain-only) branch incl. the
+#   'function'-string quirk, and the inlined isPrimitive / isPlainObject(+isobject) / local-isObject guards.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; genInputs does NOT emit these for the differential):
+#   - The attached statics setValue.split, setValue.cache, setValue.clear and the module-level memo cache:
+#     OUT-OF-CONTRACT side API / internal state; observably transparent (see NOTE-CACHE). Not exercised.
+#   - VALUE === function: traversable/assignable but a function does not survive JSON/codec round-trip ->
+#     excluded from genInputs. (Behavior: assigned as the leaf value like any non-undefined value; if used as
+#     a MID-PATH existing slot, local-isObject(fn)=true so it is traversed and a property is set ON the
+#     function object.) A blind re-emitter still reconstructs this from the spec.
+#   - VALUE === undefined: triggers DELETE — DOCUMENTED and IN-CONTRACT, but `undefined` is not codec-faithful
+#     as a standalone arg in some encoders; genInputs emits it ONLY via the explicit delete edge where the
+#     observable is the deletion on a cloned object (the tuple still round-trips because `undefined` as a top
+#     value is representable; if the codec drops it the delete edge is OUT-OF-ENVELOPE — re-derivable from spec).
+#   - SYMBOL path or SYMBOL value/key: a symbol path is single-key (in-contract) but symbols do NOT round-trip
+#     the JSON codec -> excluded from genInputs; documented here for the blind re-emitter.
+#   - BigInt values are codec-faithful but not exercised (behave as ordinary non-undefined leaf values).
+
+# =====================================================================================================
+# PROVENANCE
+# =====================================================================================================
+PROVENANCE set-value@4.1.0 (jonschlinkert/set-value, CJS), MIT.
+  source: <node_modules>/set-value/index.js  (module.exports default export `setValue`)
+  inlined deps: is-primitive@3.0.1 (MIT, index.js), is-plain-object@2.0.4 (MIT, index.js)
+                -> transitively isobject@3.0.1 (MIT, index.js)
+  Behaviors above VERIFIED by executing the real package on every cited example (Node v24, 2026-06-26).

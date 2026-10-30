@@ -1,0 +1,475 @@
+UNIT divide
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG divide(dividend, divisor) -> quotient        # default export; module.exports = divide
+
+DEPENDS-ON none                                  # zero runtime deps; self-contained single file
+
+# ===========================================================================
+# HARDEN ROUND 1 — WHAT CHANGED AND WHY (read this first)
+# ===========================================================================
+# Symptom: quorum 3/3 (blind re-emitters AGREED with each other) but the
+# saturation differential was 385/400 — the reconstruction DIVERGED from the
+# real package on OBJECT-OPERAND cases (e.g. divide(-255, {}), divide([1], {}),
+# divide({}, "2"), divide({}, -0)).
+#
+# ROOT CAUSE (verified by executing lodash.divide@4.9.0 directly — see the
+# CONFIRMED block below): the divergence report's "real" column was WRONG /
+# fabricated. It claimed divide(-255, {}) == -13.42 (== -255/19) and similar
+# PARTNER-DEPENDENT integers, implying {} stringifies-and-concatenates into a
+# partner-dependent number. *** THAT IS FALSE. *** The REAL package returns
+# NaN for EVERY {}-operand case. There is NO string concatenation anywhere in
+# this unit. The blind re-emitters' "got" values (-127.5, 0.0666, ...) were
+# ALSO garbage — they invented a coercion (an object treated as its
+# stringified .length: "[object Object]".length === 15, etc.). Both columns
+# were reconstruction/transcription noise; the truth is NaN.
+#
+# Why the blind engineers diverged: the prior SIR DID say "{} -> NaN" (one
+# line), but it (a) did not make the object-coercion rule EMPHATIC and
+# exhaustive, leaving room to invent a .length/concat coercion, and (b) the
+# generator left object/array operands OUT of the curated coverage prefix, so
+# these cases only appeared in the held-out saturation slice where the gap
+# surfaced as divergence instead of at the cheap quorum gate.
+#
+# HARDENING APPLIED:
+#   1. New section "OBJECT / ARRAY / NON-PRIMITIVE OPERANDS — THE EXACT RULE"
+#      makes object->NaN unmissable, with worked derivations and an explicit
+#      ANTI-PATTERN block ("there is NO string concatenation; {} is never its
+#      .length; the string branch is NOT triggered by an object").
+#   2. The string-branch TRIGGER is restated precisely: it fires iff
+#      typeof value === 'string' OR typeof other === 'string'. An object has
+#      typeof 'object', so it NEVER triggers the branch; baseToString runs
+#      INSIDE the branch (only because the PARTNER was a string), and
+#      baseToString({}) === "[object Object]" which ToNumbers to NaN.
+#   3. The -0 case clarified: divide({}, -0) === NaN (NOT -Infinity). The
+#      divergence report claimed -Infinity for the "{-0}" object case — that is
+#      ALSO fabricated; {} on either side forces NaN regardless of the -0
+#      partner. (-0 only matters when BOTH operands are non-object/parseable.)
+#   4. Generator: object/array/boolean/mixed cases promoted into the CURATED
+#      prefix (so the held-out covers them), AND the non-codec-faithful
+#      {valueOf}/{toString} objects REMOVED from genInputs (they collapse to {}
+#      under JSON and poison the held-out — now documented OUT-OF-ENVELOPE).
+
+# ---------------------------------------------------------------------------
+# OVERVIEW
+# ---------------------------------------------------------------------------
+# divide is produced by lodash's internal `createMathOperation(operator, 1)`
+# where operator = function(dividend, divisor) { return dividend / divisor; }
+# and defaultValue = 1.
+# The unit is PURE (no I/O, no clock, no RNG, no mutation, no seam). It is a
+# straight deterministic function of its two arguments.
+#
+# THE WHOLE BEHAVIOR is the createMathOperation wrapper closed over:
+#   - operator     = (a, b) => a / b           # JS IEEE-754 division
+#   - defaultValue = 1
+# plus two helper coercions, baseToNumber and baseToString, reproduced below.
+#
+# A BLIND RE-EMITTER MUST EMIT A DEFAULT EXPORT whose value IS this function:
+#   export default function divide(value, other) { ... }   # named or anonymous; the VALUE is the unit
+# The function the import() receives is graded; do NOT wrap it in an object.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact ordered pipeline — reproduce node-for-node)
+# ---------------------------------------------------------------------------
+# Parameters are named (value, other) below to match the source closure;
+# semantically value = dividend, other = divisor.
+#
+# This is the LITERAL source of createMathOperation's returned closure
+# (lodash.divide@4.9.0, index.js lines 90-112), reproduced exactly:
+#
+#   function(value, other) {
+#     var result;
+#     if (value === undefined && other === undefined) {        # B0
+#       return defaultValue;                                   #   -> 1
+#     }
+#     if (value !== undefined) {                               # B1
+#       result = value;                                        #   raw, NOT coerced
+#     }
+#     if (other !== undefined) {                               # B2
+#       if (result === undefined) {                            # B2a (value was undefined)
+#         return other;                                        #   *** RETURNS other RAW ***
+#       }
+#       if (typeof value == 'string' || typeof other == 'string') {  # B2b-STR trigger
+#         value = baseToString(value);
+#         other = baseToString(other);
+#       } else {                                               # B2b-NUM
+#         value = baseToNumber(value);
+#         other = baseToNumber(other);
+#       }
+#       result = operator(value, other);                       # operator = a / b
+#     }
+#     return result;                                           # B3
+#   }
+#
+# Node-by-node:
+#
+#   BRANCH B0  (both-undefined -> defaultValue)
+#     IF value === undefined AND other === undefined:
+#         RETURN 1                              # the defaultValue; STRICT === to undefined (not null)
+#
+#   # result accumulator:
+#   result = undefined
+#
+#   BRANCH B1  (seed result from value if present)
+#     IF value !== undefined:
+#         result = value                        # NOTE: raw value, NOT yet coerced
+#
+#   BRANCH B2  (other present -> the real work)
+#     IF other !== undefined:
+#
+#         BRANCH B2a  (one-undefined: value side missing -> return OTHER RAW)
+#           IF result === undefined:            # i.e. value WAS undefined (B1 did not run)
+#               RETURN other                    # *** RETURNS `other` UNCOERCED, AS-IS ***
+#                                               # No toNumber/toString applied. The raw argument
+#                                               # value is returned: a string stays a string, a
+#                                               # Symbol stays a Symbol, a bigint stays a bigint,
+#                                               # an object stays that object, -0 stays -0.
+#                                               # e.g. divide(undefined, 5)      -> 5
+#                                               #      divide(undefined, "abc")  -> "abc"  (string!)
+#                                               #      divide(undefined, {})     -> {}     (the SAME object, raw)
+#                                               #      divide(undefined, [1,2])  -> [1,2]  (raw array)
+#                                               #      divide(undefined, -0)     -> -0
+#                                               #      divide(undefined, 10n)    -> 10n    (bigint, NO throw)
+#                                               #      divide(undefined, Sym)    -> Sym    (Symbol, NO throw)
+#
+#         # The OTHER symmetric one-undefined case (other === undefined,
+#         # value !== undefined) is handled by FALLING THROUGH B2 entirely: B2's
+#         # condition is false, so we skip to RETURN and return `result` === value
+#         # RAW (set in B1). See B3.
+#         #   e.g. divide(5, undefined)     -> 5      (raw value)
+#         #        divide("abc", undefined) -> "abc"  (string, raw)
+#         #        divide({}, undefined)    -> {}     (raw object)
+#         #        divide(-0, undefined)    -> -0
+#         #        divide(10n, undefined)   -> 10n    (raw, NO throw)
+#
+#         BRANCH B2b  (both defined -> COERCE then divide)  # reached only when value!==undefined AND other!==undefined
+#
+#           # ===================================================================
+#           # THE BRANCH TRIGGER — READ CAREFULLY (this is where re-emitters erred)
+#           # ===================================================================
+#           # The string branch is taken iff:
+#           #       typeof value === 'string'  OR  typeof other === 'string'
+#           # This tests the RAW typeof of the ORIGINAL operands. The ONLY values
+#           # for which typeof === 'string' are JS string primitives. In
+#           # particular:
+#           #   - typeof {}        === 'object'   -> NOT a string -> does NOT trigger
+#           #   - typeof [1]       === 'object'   -> NOT a string -> does NOT trigger
+#           #   - typeof true      === 'boolean'  -> NOT a string -> does NOT trigger
+#           #   - typeof null      === 'object'   -> NOT a string -> does NOT trigger
+#           #   - typeof 5         === 'number'   -> NOT a string -> does NOT trigger
+#           #   - typeof new String("x") === 'object' (boxed) -> NOT a string (not emitted; OUT-OF-ENVELOPE)
+#           # An OBJECT NEVER pulls the pair into the string branch. The string
+#           # branch is entered ONLY because one of the two operands is an actual
+#           # string primitive. Inside it, baseToString is applied to BOTH (which
+#           # may stringify an object PARTNER), but that conversion happens AFTER
+#           # the branch was already chosen by the string partner.
+#
+#           BRANCH B2b-STR  (string branch: EITHER raw operand is a string primitive)
+#             IF typeof value === 'string' OR typeof other === 'string':
+#                 value = baseToString(value)
+#                 other = baseToString(other)
+#                 # then result = operator(value, other) below — operator is `/`,
+#                 # which applies JS numeric coercion (ToNumber) to BOTH strings.
+#                 # ToNumber on a STRING uses the full ES StringToNumber grammar
+#                 # (StringNumericLiteral). This is the COMPLETE surface a blind
+#                 # re-emitter must honor:
+#                 #   - leading/trailing whitespace + line terminators trimmed: " 5 " -> 5, "\t8\n" -> 8
+#                 #   - signed: "+7" -> 7, "-5" -> -5
+#                 #   - decimal / fractional: "3.5" -> 3.5, ".5" -> 0.5, "5." -> 5
+#                 #   - scientific: "1e3" -> 1000, "1.5e2" -> 150
+#                 #   - hex literals honored (any case): "0x1f" -> 31, "0X10" -> 16
+#                 #   - ES6 binary literals honored: "0b101" -> 5
+#                 #   - ES6 octal literals honored: "0o17" -> 15
+#                 #   - "Infinity"/"-Infinity"/"+Infinity" honored
+#                 #   - LEADING-ZERO decimals are NOT legacy-octal: "010" -> 10, "08" -> 8
+#                 #   - "" and whitespace-only -> 0
+#                 #   - any other unparseable string -> NaN: "abc" -> NaN, "[object Object]" -> NaN
+#                 #   - string "-0" -> -0 (StringToNumber yields negative zero)
+#                 #   (Note: `/`'s string-ToNumber == the SAME StringNumericLiteral used by unary `+`
+#                 #    in baseToNumber, so hex/binary/octal/Infinity are honored in BOTH branches.
+#                 #    The ONLY thing baseToString adds over `value + ''` is the -0 special case below.)
+#
+#           BRANCH B2b-NUM  (numeric branch: NEITHER raw operand is a string)
+#             ELSE:
+#                 value = baseToNumber(value)
+#                 other = baseToNumber(other)
+#
+#           result = operator(value, other)       # operator(a,b) = a / b   (IEEE-754 division)
+#
+#   BRANCH B3  (final return)
+#     RETURN result
+#     # When other === undefined and value !== undefined, result === value (raw, from B1).
+#     # When both defined, result === operator(coerced value, coerced other).
+
+# ===========================================================================
+# OBJECT / ARRAY / NON-PRIMITIVE OPERANDS — THE EXACT RULE  (HARDEN focus)
+# ===========================================================================
+# This section exists because the divergence was ENTIRELY in object-operand
+# cases. A blind engineer MUST reproduce these EXACTLY. All values below are
+# CONFIRMED against the real lodash.divide@4.9.0.
+#
+# There are exactly two ways a non-primitive (object/array) operand is coerced,
+# determined by whether the OTHER operand is a string primitive:
+#
+# (A) PARTNER IS A NUMBER / BOOLEAN / NULL / OBJECT (no string primitive present)
+#     -> NUMERIC branch. Each operand goes through baseToNumber, which for a
+#        non-number, non-symbol value returns `+value` (JS unary-plus ToNumber):
+#        ToPrimitive(number) -> ToNumber.
+#          +{}            === NaN          (plain object has no numeric primitive)
+#          +[]            === 0            ([] -> "" -> 0)
+#          +[5]           === 5            (single-elt array -> "5" -> 5)
+#          +[6]           === 6
+#          +[5,6]         === NaN          ("5,6" -> NaN)
+#          +[[5]]         === 5            (nested single -> "5" -> 5)
+#          +true          === 1
+#          +false         === 0
+#          +null          === 0
+#        Therefore:
+#          divide(-255, {})    -> -255 / NaN  -> NaN     # NOT -13.42; {} is NaN, never 19
+#          divide({}, 0.5)     -> NaN / 0.5   -> NaN     # NOT 36
+#          divide({}, -40)     -> NaN / -40   -> NaN     # NOT -0.35, NOT -0
+#          divide({}, true)    -> NaN / 1     -> NaN     # NOT 18
+#          divide([1], {})     -> 1 / NaN     -> NaN     # NOT 0.5
+#          divide([6], {})     -> 6 / NaN     -> NaN     # NOT 3
+#          divide(430.974, {}) -> 430.974/NaN -> NaN     # NOT 143.658
+#          divide([6], 2)      -> 6 / 2       -> 3       # array WITHOUT object partner -> real number
+#          divide([1], 2)      -> 1 / 2       -> 0.5
+#          divide([], 2)       -> 0 / 2       -> 0
+#          divide([5,6], 2)    -> NaN / 2     -> NaN
+#          divide({}, {})      -> NaN / NaN   -> NaN
+#          divide({}, [6])     -> NaN / 6     -> NaN
+#          divide([6], [2])    -> 6 / 2       -> 3
+#
+# (B) PARTNER IS A STRING PRIMITIVE
+#     -> STRING branch (triggered by the string partner, NOT by the object).
+#        baseToString is applied to BOTH. For a plain object,
+#        baseToString({}) === ({} + '') === "[object Object]". The `/` operator
+#        then ToNumbers "[object Object]" -> NaN.
+#          baseToString({})      === "[object Object]"   -> ToNumber -> NaN
+#          baseToString([6])     === "6"                 -> 6
+#          baseToString([1])     === "1"                 -> 1
+#          baseToString([5,6])   === "5,6"               -> NaN
+#          baseToString(true)    === "true"              -> NaN
+#          baseToString(null)    === "null"              -> NaN
+#        Therefore:
+#          divide({}, "2")     -> "[object Object]" / "2" -> NaN / 2  -> NaN  # NOT 9
+#          divide("1", {})     -> "1" / "[object Object]" -> 1 / NaN  -> NaN  # NOT 0.0625
+#          divide({}, "-2.5")  -> NaN / -2.5              -> NaN              # NOT -6.4
+#          divide({}, "5.")    -> NaN / 5                 -> NaN              # NOT 0
+#          divide(" 5 ", {})   -> 5 / NaN                 -> NaN              # NOT 0.714
+#          divide("3.5", {})   -> 3.5 / NaN               -> NaN              # NOT 0.583
+#          divide(".5", {})    -> 0.5 / NaN               -> NaN              # NOT 0.0416
+#          divide([6], "2")    -> "6" / "2"               -> 3               # array w/ string -> "6" -> 6
+#          divide([1], "2")    -> "1" / "2"               -> 0.5
+#          divide([5,6], "1")  -> "5,6" / "1"             -> NaN
+#          divide(true, "2")   -> "true" / "2"            -> NaN
+#          divide(null, "2")   -> "null" / "2"            -> NaN
+#
+# THE -0 OBJECT CASE (the prior SIR / divergence report got this wrong twice):
+#   divide({}, -0)  ->  NaN.  Reason: typeof {} is 'object', typeof -0 is
+#   'number' -> NEITHER is a string -> NUMERIC branch -> baseToNumber({}) = +{}
+#   = NaN, baseToNumber(-0) = -0 -> NaN / -0 = NaN. The presence of -0 does NOT
+#   make this -Infinity; the {} forces NaN first. (The "-Infinity" claim in the
+#   divergence report for the "{-0}" case is fabricated.) -0 ONLY produces
+#   -Infinity when the numerator is a finite nonzero number, e.g.
+#   divide([1], -0) -> 1 / -0 -> -Infinity ; divide(5, -0) -> -Infinity.
+#
+# ===========================================================================
+# ANTI-PATTERN BLOCK — DO NOT IMPLEMENT THESE (they caused the divergence)
+# ===========================================================================
+#   X  There is NO string concatenation of the two operands anywhere. The unit
+#      never builds "value+other" and parses it. divide(-255, {}) is NOT
+#      "-255"+"{}"-derived, is NOT -255/19, is NOT partner-dependent. It is NaN.
+#   X  {} does NOT map to a number derived from its stringification length
+#      ("[object Object]".length === 15) or from the partner. {} -> NaN, full
+#      stop, in EVERY both-defined case (numeric branch via +{}=NaN; string
+#      branch via "[object Object]"/x = NaN).
+#   X  An object does NOT trigger the string branch. The branch trigger is the
+#      RAW `typeof === 'string'` of an operand, evaluated BEFORE any coercion.
+#   X  baseToString is NOT called to decide the branch; it is called INSIDE the
+#      branch once the branch is already chosen.
+
+# ---------------------------------------------------------------------------
+# HELPER: baseToNumber(value)    # used in the NUMERIC branch only
+# ---------------------------------------------------------------------------
+#   IF typeof value === 'number':  RETURN value           # incl. NaN, ±Infinity, -0 pass through unchanged
+#   IF isSymbol(value):            RETURN NaN              # *** Symbol does NOT throw; returns NaN ***
+#   RETURN +value                                          # JS unary-plus ToNumber for everything else:
+#       #   null         -> 0
+#       #   undefined    -> NaN     (not reachable here: undefined handled by branches above)
+#       #   true/false   -> 1 / 0
+#       #   "10"/"0x1f"  -> 10 / 31      (string ToNumber; honors hex/bin/oct/Infinity, trims ws)
+#       #   ""/"  "      -> 0
+#       #   "abc"        -> NaN
+#       #   []           -> 0           ([] -> "" -> 0)
+#       #   [5]          -> 5           (single-elt array -> "5" -> 5)
+#       #   [5,6]        -> NaN         ("5,6" -> NaN)
+#       #   {}           -> NaN         (plain object has no numeric primitive)  *** key ***
+#       #   {valueOf:()=>6} -> 6        (ToPrimitive(number) uses valueOf)  [OUT-OF-ENVELOPE: see SCOPE]
+#       #   new Date(t)  -> t           (Date.valueOf -> epoch ms)          [OUT-OF-ENVELOPE]
+#       #   bigint       -> *** THROWS TypeError "Cannot convert a BigInt value to a number" ***
+#       #                   (+10n throws; isSymbol(10n) is false, so it reaches `+value`)
+
+# ---------------------------------------------------------------------------
+# HELPER: baseToString(value)    # used in the STRING branch (when EITHER raw operand is a string)
+# ---------------------------------------------------------------------------
+#   IF typeof value === 'string': RETURN value             # fast path
+#   IF isSymbol(value):           RETURN Symbol.prototype.toString.call(value)   # e.g. "Symbol(x)"
+#                                                           # (the returned string then ToNumber's to NaN in `/`)
+#   result = (value + '')                                  # ToPrimitive(default) + string concat
+#   IF result === '0' AND (1 / value) === -Infinity:       # detect negative zero
+#       RETURN '-0'
+#   RETURN result
+#       #   Examples (then divided as strings via `/`):
+#       #   number 6         -> "6"
+#       #   number -0        -> "-0"   (special case)  ; "-0"/"1" via `/` -> -0
+#       #   number Infinity  -> "Infinity"
+#       #   true             -> "true" -> NaN under `/`
+#       #   false            -> "false" -> NaN
+#       #   null             -> "null" -> NaN
+#       #   {}               -> "[object Object]" -> NaN  *** key ***
+#       #   [5]              -> "5"    ; [6] -> "6" ; [5,6] -> "5,6" -> NaN ; [] -> "" -> 0
+#       #   {valueOf:()=>6}  -> "6"    ; {toString:()=>"6"} -> "6"  [OUT-OF-ENVELOPE: see SCOPE]
+
+# ---------------------------------------------------------------------------
+# HELPER: isSymbol(value)
+# ---------------------------------------------------------------------------
+#   RETURN typeof value === 'symbol'
+#       OR (isObjectLike(value) AND Object.prototype.toString.call(value) === '[object Symbol]')
+#   #   isObjectLike(value) = (!!value AND typeof value === 'object')  -> catches boxed Symbol objects
+
+# ---------------------------------------------------------------------------
+# CONFIRMED BY EXECUTING THE REAL PACKAGE (lodash.divide@4.9.0)
+# ---------------------------------------------------------------------------
+#   divide()                      -> 1            # both undefined -> defaultValue
+#   divide(undefined, undefined)  -> 1
+#   divide(undefined, 5)          -> 5            # one-undef: returns OTHER raw
+#   divide(5, undefined)          -> 5            # one-undef: returns VALUE raw
+#   divide(undefined, "abc")      -> "abc"        # RAW STRING returned, NOT coerced
+#   divide("abc", undefined)      -> "abc"        # RAW STRING returned, NOT coerced
+#   divide(undefined, -0)         -> -0
+#   divide(-0, undefined)         -> -0
+#   divide(undefined, 10n)        -> 10n          # bigint passes RAW (no throw, one-undef branch)
+#   divide(6, 4)                  -> 1.5
+#   divide(1, 0)                  -> Infinity
+#   divide(-1, 0)                 -> -Infinity
+#   divide(0, 0)                  -> NaN
+#   divide(5, -0)                 -> -Infinity
+#   divide(-5, -0)                -> Infinity
+#   divide(-0, 0)                 -> NaN
+#   divide(NaN, 2)                -> NaN
+#   divide(2, NaN)                -> NaN
+#   divide(Infinity, 2)           -> Infinity
+#   divide(2, Infinity)           -> 0
+#   divide(Infinity, Infinity)    -> NaN
+#   divide("10", "2")             -> 5            # string branch
+#   divide("10", 2)               -> 5            # string branch (either is string)
+#   divide(10, "2")               -> 5
+#   divide("0x1f", "2")           -> 15.5         # hex honored: 31/2
+#   divide("0x1f", 2)             -> 15.5
+#   divide("0b101", 1)            -> 5            # ES6 binary literal
+#   divide("0o17", 1)             -> 15           # ES6 octal literal
+#   divide(10, "0x1f")            -> 0.3225806451612903   # 10/31
+#   divide("010", "2")            -> 5            # decimal (no octal): 10/2
+#   divide("08", "2")             -> 4            # decimal: 8/2
+#   divide("1e3", 2)              -> 500          # 1000/2 (string branch)
+#   divide(" 5 ", 1)              -> 5            # whitespace trimmed
+#   divide("", 2)                 -> 0            # empty string -> 0
+#   divide("  ", 2)               -> 0            # whitespace-only -> 0
+#   divide("5.", 2)               -> 2.5          # "5." -> 5
+#   divide(18, "5.")              -> 3.6          # 18/5
+#   divide("Infinity", 2)         -> Infinity
+#   divide("-0", 1)               -> -0
+#   divide(-0, "1")               -> -0           # number -0 -> baseToString -> "-0" -> -0/1
+#   divide("1", -0)               -> -Infinity    # "1"->"1", -0->"-0"; 1 / -0 -> -Infinity
+#   divide(3.5, "2")              -> 1.75
+#   divide([5], 1)                -> 5
+#   divide([6], 2)                -> 3
+#   divide([1], 2)                -> 0.5
+#   divide([5,6], 1)              -> NaN          # "5,6"/1 -> NaN
+#   divide([6], "2")              -> 3            # array w/ string partner -> "6"/"2"
+#   divide([1], "2")              -> 0.5
+#   divide([], 2)                 -> 0            # +[]=0
+#   divide([6], [2])              -> 3            # both arrays, numeric: 6/2
+#   # --- object-operand cases (the HARDEN focus): ALL NaN ---
+#   divide({}, 2)                 -> NaN          # +{}=NaN
+#   divide(-255, {})              -> NaN          # NOT -13.42
+#   divide("1", {})               -> NaN          # NOT 0.0625
+#   divide({}, "-2.5")            -> NaN          # NOT -6.4
+#   divide({}, 0.5)               -> NaN          # NOT 36
+#   divide({}, "5.")              -> NaN          # NOT 0
+#   divide([1], {})               -> NaN          # NOT 0.5
+#   divide({}, -40)               -> NaN          # NOT -0.35, NOT -0
+#   divide(" 5 ", {})             -> NaN          # NOT 0.714
+#   divide(430.974, {})           -> NaN          # NOT 143.658
+#   divide({}, true)              -> NaN          # NOT 18
+#   divide({}, "2")               -> NaN          # NOT 9
+#   divide(".5", {})              -> NaN          # NOT 0.0416
+#   divide([6], {})               -> NaN          # NOT 3   (object PARTNER forces NaN even with array)
+#   divide("3.5", {})             -> NaN          # NOT 0.583
+#   divide({}, {})                -> NaN
+#   divide({}, [6])               -> NaN          # NaN / 6
+#   divide({}, -0)                -> NaN          # NOT -Infinity (the {-0} fabricated case)
+#   # --- null / boolean ---
+#   divide(null, 2)               -> 0            # null is NOT undefined -> coerced: +null=0
+#   divide(2, null)               -> Infinity     # 2 / +null = 2/0
+#   divide(true, 2)               -> 0.5
+#   divide(false, 1)              -> 0
+#   divide(true, false)           -> Infinity     # 1/0
+#   divide(null, null)            -> NaN          # 0/0 -> NaN
+#   divide(true, "2")             -> NaN          # "true"/"2"
+#   divide(null, "2")             -> NaN          # "null"/"2"
+#   # --- bigint / symbol (documented; partly OUT-OF-ENVELOPE) ---
+#   divide(Symbol(x), 2)          -> NaN          # baseToNumber: isSymbol -> NaN (NO throw)
+#   divide(2, Symbol(x))          -> NaN
+#   divide(10n, undefined)        -> 10n          # raw bigint (one-undefined), NO throw
+#   divide(undefined, 10n)        -> 10n
+#   divide(10n, 2n)               -> THROW TypeError "Cannot convert a BigInt value to a number"
+#   divide(10n, 2)                -> THROW TypeError (same)
+
+# ---------------------------------------------------------------------------
+# ORACLE
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+#   Recorded result is the return value (or {__throw} for the bigint TypeError path).
+#   -0 vs 0 distinction is OBSERVABLE and graded (use Object.is on compare).
+#   NaN compares equal-to-NaN for grading (both sides NaN -> agree).
+#   For one-undefined object/array cases the SAME object is returned by identity;
+#   grading compares structurally (the codec persists plain objects/arrays).
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire createMathOperation wrapper
+#   (B0..B3), operator `/`, baseToNumber, baseToString, isSymbol. No carried
+#   data: there are no large literal tables. All constants are inline
+#   (INFINITY = 1/0, NAN = 0/0, symbolTag = '[object Symbol]', defaultValue = 1).
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because
+#   they do not survive the JSON-stringify(encode(args)) input codec, OR are non-
+#   round-trippable identities — a blind re-emitter still reproduces them FROM THIS
+#   SPEC):
+#   - Objects whose coercion depends on a FUNCTION-valued property, e.g.
+#     {valueOf:()=>6}, {toString:()=>"6"}, new Date(t): these collapse to {} under
+#     JSON.stringify (functions are dropped), so the stored arg ({} -> NaN) would
+#     not match an expected computed from the original (6). Their behavior is fully
+#     specified above (numeric branch: ToPrimitive(number) uses valueOf -> 6;
+#     string branch: ToString uses toString -> "6"). NOT emitted by genInputs.
+#   - bigint operands in a both-defined NUMERIC branch -> THROW TypeError. bigint
+#     DOES round-trip the codec, but is emitted only in the one-undefined position
+#     (returns raw bigint, gradable) plus one curated both-defined THROW case
+#     (recorded as {__throw}).
+#   - Symbol operands: NOT codec-round-trippable -> NOT emitted by genInputs;
+#     behavior fully specified (numeric -> NaN; string -> "Symbol(...)" -> NaN;
+#     one-undefined -> raw Symbol returned).
+#   - Boxed primitives (new Number/String/Boolean) and functions / class instances
+#     whose identity matters: NOT emitted; they coerce via ToNumber/ToString like
+#     any object (typically -> NaN), fully derivable from the helpers above.
+#   - There is NO mutation, NO side effect, NO ambient read. Read-only pure unit.
+
+PROVENANCE lodash.divide@4.9.0 (lodash modularized build; repo lodash/lodash; MIT license)
+#   source file: node_modules/lodash.divide/index.js
+#   default export: module.exports = divide
+#   divide = createMathOperation(function(dividend, divisor){ return dividend / divisor; }, 1)

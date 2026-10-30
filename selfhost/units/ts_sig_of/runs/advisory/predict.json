@@ -1,0 +1,80 @@
+{
+ "status": "ok",
+ "unit": "ts_sig_of",
+ "primary": "selfhost/units/ts_sig_of/sir/ts_sig_of.sir",
+ "primarySha256": "4a45cda772a4dd1f2eb7e95ebef5fad3180eff927793e041bd127916194064bf",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "BLANK means exactly the two characters U+0020 SPACE and U+0009 TAB; it is the only whitespace this unit knows outside R9's emptiness test. Let S be sig with every leading and every trailing BLANK removed (nothing else is trimmed: a line break, U+00A0 or U+FEFF at either end stays). Positions, cuts and counts below are in S, by character.",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "R2",
+   "text": "HEAD: S must begin with the literal \"export\", one or more BLANK, optionally the literal \"default\" followed by one or more BLANK, the literal \"function\", one or more BLANK, then NAME, then a possibly empty run of BLANK, taken as long as possible. Literals are case-sensitive and must be followed by BLANK (\"exportfunction\", \"export function\" and \"export async function\" have no HEAD). NAME = one character of A-Z a-z _ $, then every following character of A-Z a-z 0-9 _ $ (longest run: \"café\" gives NAME \"caf\" and the cursor on \"é\"). No HEAD -> throws. The cursor C is placed right after HEAD.",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R3",
+   "text": "MASK: M is S with the interior of every string literal replaced by spaces, one space per character, so M and S align position for position. Literals are found scanning S from the start: at a character \" or ' the scan tries a literal closed by the next same quote character, where a backslash consumes itself and the character after it (so an escaped quote does not close) unless that character is one of the four BREAKS LF, CR, U+2028, U+2029; a BREAK that does not follow a backslash is ordinary literal content. When it closes, both quotes stay, the interior becomes spaces and the scan resumes after the closing quote. When it cannot close (the end of S, a backslash at the end, or a backslash before a BREAK), that quote is ordinary text and the scan resumes at the very next character — which may itself open a literal. The other quote character inside a literal is ordinary content. Every structural test below (R4 to R8) reads M (R4 reads T, built from M); every cut is taken from S.",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "R4",
+   "text": "ONE DECLARATION: T is M with every \";\" that lies at BRACE DEPTH above zero replaced by a space (an object type's member separator). The depth is counted over M from its start: \"{\" adds one, \"}\" subtracts one but never goes below zero, and a \";\" is replaced when the depth from the characters before it is above zero. Braces are not required to balance: an extra \"}\" leaves the depth at zero (so a later \";\" is top level unless a later \"{\" opens again), and an unclosed \"{\" leaves every later \";\" inside. Braces inside string literals are blanked in M and never count. T containing any of the following throws: \";\" (so only a top-level \";\" refuses), a backtick, CR, LF, U+2028, U+2029, the pairs \"//\", \"/*\" or \"*/\", or an \"=\" whose next character is not \">\" (so \"=>\" is allowed, while \"=\", \"==>\", \">=\" and a final \"=\" throw, inside braces too). Inside a string literal all of these are content (a raw CR, LF, U+2028 or U+2029 between quotes is masked and passes); \",\" is not refused. T is used by R4 alone.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R5",
+   "text": "NO ANY, NEVER, TYPEOF, IMPORT OR INFER: M containing any of the five words \"any\", \"never\", \"typeof\", \"import\" or \"infer\" throws, where a word occurrence is one whose preceding character (if there is one) is not A-Z a-z 0-9 _ $ or \".\" and whose following character (if any) is not A-Z a-z 0-9 _ $. So \"x.any\", \"$never\", \"company\", \"x.typeof\", \"importer\" and \"infers\" pass, while \". any\", \"{ any: s }\", \"éany\", \"(a: typeof x)\", \"import('m').T\", \"infer U\" and a NAME that is one of the five words throw; inside a string literal the word is blanked and passes CITED FIDELITY package.",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "R6",
+   "text": "GENERICS: when M has \"<\" at C, find its CLOSE by counting over M from C: each \"<\" adds one; each \">\" subtracts one unless the character before it is \"=\" (the \">\" of an arrow is skipped, neither counted nor closing); the first counted \">\" that brings the count to zero is the close. None before the end -> throws. GENERICS = the text of S from \"<\" through the close, inclusive (an empty \"<>\" counts); C moves past it. Otherwise GENERICS is empty and C stays.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R7",
+   "text": "C then skips BLANK characters only (a U+00A0 or any other character before \"(\" is not skipped).",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R8",
+   "text": "PARAMS: M must have \"(\" at C (the end of S does not) -> otherwise throws. Find its close the R6 way over \"(\" and \")\" alone in M (every \"(\" adds one, every \")\" subtracts one, the first \")\" reaching zero closes); none -> throws. PARAMS = the text of S from that \"(\" through that \")\", inclusive.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R9",
+   "text": "REST = the text of S after PARAMS with its leading BLANK removed. REST must begin with \":\", and what follows the \":\" must hold at least one character outside the whitespace set WS (pinned below) -> otherwise throws (an empty REST, a REST that begins with anything else, and a \":\" followed only by WS characters such as U+000B, U+00A0 or U+FEFF all throw). RET = what follows that \":\" with its leading BLANK removed; leading non-BLANK whitespace, U+0085 and any interior text (\",\" or a second \":\") are kept.",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R10",
+   "text": "Every refusal of R2, R4, R5, R6, R8 and R9 is a throw; which one fires first affects only the message, which is not graded. The real messages begin \"SIG is not an exported function declaration\", \"SIG is more than one declaration\", \"SIG uses any or never\", \"SIG uses typeof / import / infer\", \"unbalanced <>\", \"SIG has no parameter list\", \"unbalanced ()\" and \"SIG declares no return type\".",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R11",
+   "text": "Result: exportName = none when HEAD held \"default\", else NAME; fnType = GENERICS, then PARAMS, then the four characters \" => \", then RET — taken from S, so string literal contents are kept exactly. Nothing else is checked: NAME is not reserved (\"export function default(): s\" reads), and PARAMS and RET are never parsed as TypeScript CITED FIDELITY package.",
+   "ambiguity": 0.18
+  }
+ ],
+ "ranked": [
+  "R9",
+  "R10",
+  "R2",
+  "R4",
+  "R5",
+  "R3",
+  "R6",
+  "R8",
+  "R7",
+  "R11",
+  "R1"
+ ],
+ "at": "2026-10-28T03:47:59Z"
+}

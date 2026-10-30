@@ -1,0 +1,14 @@
+UNIT cmp_ver
+LANG rust
+PRIMARY-SHA256 b2087b4c7c8740ff879851f7acb0fbd2767c3584f9eb5f2dd8f3e7abf547ad8b
+SIG pub fn cmp_ver(a: &str, b: &str) -> i64
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn cmp_ver), no main, no I/O, no dependencies; the
+  verifier owns the harness. text = &str; result = i64 in {-1, 0, 1}. A throw (R1) is a panic; the message is not graded.
+  Return a plain i64, not a Result (the harness records a panic as the throw).
+MECHANISM R1 needs no regex crate: split on the byte '.', and require every piece to be non-empty, all is_ascii_digit
+  bytes, and not to start with '0' unless it is exactly "0". Do NOT trim, and do NOT use char::is_numeric or
+  char::to_digit with a Unicode notion of digit.
+MECHANISM R2/R4 without a bignum: segments are digit strings with no leading zeros, so compare by length first, then
+  byte-lexicographically; a missing segment (R3) is "0". Never parse to u64 or u128 — segments may be hundreds of digits.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/features.mjs cmpVer. Language file re-cut 2026-10-26 (round 2) with the primary.

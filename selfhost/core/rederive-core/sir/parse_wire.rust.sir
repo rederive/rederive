@@ -1,0 +1,43 @@
+UNIT parse_wire
+LANG rust
+PRIMARY-SHA256 4c4e81554252a1204b31465947429f7ed248b5f7d92b440fde8d9c576c9ef1a6
+SIG pub fn parse_wire(line: &str) -> Result<serde_json::Value, String>
+ABI crate shape: the artifact is a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn parse_wire`) — no main, no I/O,
+  no binary. The verifier generates its own harness crate from the abstract SIG: one JSON array of args per stdin line, the
+  line bound as &str, then one {"ok": value} or {"throw": message} line. Compiling that harness against this SIG is the
+  signature check.
+ABI type mapping: json = serde_json::Value: none = Null; bool = Bool; text = String; list = Array; map = Object (last
+  duplicate kept, R4); f64 = Number. Ok(value) for a result; Err(message) for a throw (R1, R5, R8; the message is not
+  graded). The harness prints the Value and the verifier reads it back through the package's own parseWire, so a Number
+  keeps what it is: an integer's digits cross unchanged at any width (arbitrary_precision, MECHANISM), an f64 crosses as its
+  shortest round-trip form, and -0.0 is written "-0.0" and read back as negative zero (R5, R6).
+ENVELOPE narrowing: the vectors whose result holds an R6 exact integer or a lone surrogate are not in the shared oracle (the
+  neutral codec has no form for either; js and ts grade them) — yet the R6 integers are graded here too, by cross-verification
+  against js and ts on the same lines, so they must come back exact. OUT-OF-DOMAIN is js only.
+MECHANISM the reader is HAND-WRITTEN: recursive descent over the line, R1-R8 as the primary states them, building a
+  serde_json::Value. serde_json::from_str is NOT this unit, with or without features (checked on serde_json 1.0.154 against the
+  pinned parseWire): by default an integer past u64/i64 is rounded to the nearest f64 ("184467440573709551616" comes back
+  184467440573709550000, R6 forbids it) and one past the double range is Err (R6 never throws: a 401-digit integer overwritten by a
+  repeated key, '{"a":1000...0,"a":1}', must read as {a:1}); with arbitrary_precision it accepts "1e400" (R5 throws); and in every mode it rejects an unpaired
+  surrogate escape, which R3 reads ('{"a":"\ud800","a":1}' must read as {a:1}) EARNED round-1 cross 184467440573709551616
+MECHANISM numbers, by class (REQUIRED feature arbitrary_precision: without it serde_json::Number cannot hold an integer past
+  64 bits, and nothing else in the SIG can). The harness prints the returned Value and the verifier reads it back through the
+  package's own parseWire, which applies R5 and R6 to the printed digits — so the artifact's job is to hand over the RIGHT
+  DIGITS. An INTEGER-SPELLING numeral, of ANY width and either sign, "-0" included: Value::Number made from its source text
+  verbatim (text.parse::<serde_json::Number>(), which under arbitrary_precision keeps the digits) — never via i64, u64 or f64
+  first (i64 drops the sign of "-0"; f64 rounds 2^53 + 1, 2^64 + 1 and every wider integer; an overflowing parse turns
+  10^400 into an error). A numeral with a fraction or an exponent: str::parse::<f64>() (correctly rounded, ties to even, sign
+  of zero kept — R5); a non-finite result -> Err (R5); else Value::Number(Number::from_f64(x)), which prints the shortest form
+  that reads back as x ("-0.0" for negative zero) EARNED round-1 cross 115292150460684697636893488147419103232
+MECHANISM text: a Rust String holds no lone surrogate, so collect each string's UTF-16 code units (an escape's XXXX, and each
+  literal character's own units) and convert with String::from_utf16_lossy — an unpaired unit becomes U+FFFD and the read
+  CONTINUES, never Err (those results are js/ts only; an overwritten one must still read). Keys go through the same reader.
+  Maps: serde_json::Map, insert in order (a repeated key keeps its last value, R4), every value read first. Depth: R8's 128
+  checked on entry to each value. Err(message) for every throw; the message is not graded.
+DEPENDS-ON serde_json (crate, version 1, features = ["arbitrary_precision", "float_roundtrip"]) — the SIG's value type; the
+  reader itself is the artifact's own code. float_roundtrip matches the verifier's harness (Cargo unifies features), and
+  arbitrary_precision reaches the harness the same way, which prints the integer digits unchanged
+PROVENANCE rederive@f68cca701417 cli/lang/rust.mjs parseWire (byte-identical to 1d1861440f2c and 6199e2cc8b75). HARDEN round 1 (cross
+  1995/1998 on R6 integers past 64 bits): the serde_json claims were re-checked against serde_json 1.0.154 in three builds
+  (default + float_roundtrip, + arbitrary_precision, and the hand-written reader above) on 40,000 seeded lines; only the
+  hand-written reader agrees with parseWire on every line inside this ENVELOPE.

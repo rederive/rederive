@@ -1,0 +1,168 @@
+UNIT arrFlatten
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG arrFlatten(arr) -> Array            # default export: module.exports IS this function (no options)
+DEPENDS-ON none                         # zero runtime deps; uses only built-in Array.isArray + Array.prototype.push
+BEHAVIOR
+
+# ---------------------------------------------------------------------------
+# Recursively flatten `arr` to a SINGLE level, to ARBITRARY depth, returning a
+# NEW array. Only genuine Array instances are descended into; every other value
+# (objects, strings, numbers, null, typed arrays, Set/Map, RegExp, ...) is
+# pushed through AS-IS (by reference / identity, never spread or copied).
+#
+# Exact source (arr-flatten@1.1.0, index.js), reproduced for fidelity:
+#
+#   module.exports = function (arr) {
+#     return flat(arr, []);
+#   };
+#
+#   function flat(arr, res) {
+#     var i = 0, cur;
+#     var len = arr.length;
+#     for (; i < len; i++) {
+#       cur = arr[i];
+#       Array.isArray(cur) ? flat(cur, res) : res.push(cur);
+#     }
+#     return res;
+#   }
+# ---------------------------------------------------------------------------
+
+# NODE 1 (entry / accumulator allocation)
+#   - Allocate ONE fresh result array `res = []`.
+#   - Call the recursive worker flat(arr, res) and return its result.
+#   - The SAME `res` accumulator is threaded through every recursive call; there
+#     is NO per-level array allocation. Exactly ONE new array is produced per
+#     top-level invocation, and it is what is returned.
+#   - The returned array is ALWAYS a new array, distinct (by reference) from the
+#     input arg, even when the input is empty or already flat. Input is NEVER
+#     mutated.
+
+# NODE 2 (worker flat(arr, res) — the iteration)
+#   - len := arr.length            # read ONCE, before the loop (snapshot)
+#   - i := 0
+#   - LOOP for i in [0, len):      # ascending index order -> ORDER PRESERVED
+#       cur := arr[i]              # plain indexed read (holes -> undefined)
+#       BRANCH on Array.isArray(cur):
+#         TRUE  -> recurse flat(cur, res)          # descend; nothing pushed for
+#                                                  #   the array container itself
+#         FALSE -> res.push(cur)                   # push the element verbatim
+#   - return res
+
+# ---- BRANCH / EDGE SEMANTICS (exact) ----
+#
+# B1 ARRAY GATE IS Array.isArray, ELEMENTS ONLY.
+#    The descend decision uses Array.isArray(cur) for each ELEMENT. ONLY values
+#    for which Array.isArray returns true are flattened. Everything else is a
+#    leaf and is pushed unchanged:
+#      - plain objects  {a:1}                        -> pushed as-is (1 element)
+#      - array-like obj {length:2, 0:'a', 1:'b'}     -> pushed as-is (NOT spread)
+#      - strings        'ab'                          -> pushed as-is (NOT split)
+#      - numbers, bigint, boolean, null               -> pushed as-is
+#      - Uint8Array / Buffer / typed arrays           -> pushed as-is (NOT flattened)
+#      - Set, Map, RegExp, Date, functions, Symbol    -> pushed as-is
+#    Leaf identity is preserved: the pushed value === the original element (no
+#    clone). Order of leaves matches a left-to-right depth-first traversal.
+#
+# B2 ARBITRARY DEPTH. Recursion descends through ANY nesting depth fully to one
+#    level. [1,[2,[3,[4,[5]]]]] -> [1,2,3,4,5]. A 100-level-deep [[...[42]...]]
+#    -> [42]. There is no configurable / fixed depth limit.
+#
+# B3 EMPTY & NESTED-EMPTY ARRAYS CONTRIBUTE NOTHING. An empty array element []
+#    descends and pushes nothing. So [[],[],[1],[]] -> [1]; [[],[[]],[[[]]]] ->
+#    []; [[[[]]]] -> []. The array CONTAINERS never appear in the output, only
+#    their leaf contents.
+#
+# B4 EMPTY INPUT. arrFlatten([]) -> [] (a new empty array).
+#
+# B5 ALREADY-FLAT INPUT. arrFlatten([1,2,3]) -> [1,2,3] (new array, same order
+#    and values).
+#
+# B6 ORDER PRESERVATION. Leaves appear in input traversal order regardless of
+#    interspersed empties or nesting: [1,[],[2,[],3],[[],[4]],5] -> [1,2,3,4,5];
+#    [3,[1,2],[[4],5]] -> [3,1,2,4,5].
+#
+# B7 null / undefined AS ELEMENTS. Array.isArray(null)===false and
+#    Array.isArray(undefined)===false, so they are pushed verbatim. NaN, +/-Inf,
+#    null, undefined as elements survive unchanged (NaN stays NaN, undefined
+#    stays undefined). [null,undefined,[null],[undefined]] ->
+#    [null, undefined, null, undefined].
+#
+# B8 SPARSE HOLES. A hole in a sparse array (e.g. [1,,3]) is read as arr[i] ===
+#    undefined (Array.isArray(undefined)===false) and pushed as undefined. So
+#    [1,,3] -> [1, undefined, 3] (length 3). (NOTE: under the JSON oracle codec
+#    this serializes as null, but the runtime value is undefined; see OUT-OF-
+#    ENVELOPE.)
+#
+# B9 NO MUTATION. The input array and all nested arrays are read-only; only the
+#    fresh `res` accumulator is written. After the call the input is byte-for-
+#    byte identical to before.
+#
+# B10 NO-COPY OF LEAVES. Object/array-like/typed-array/Set/Map/RegExp leaves are
+#    pushed by reference; the output holds the SAME object identities as the
+#    input's leaves.
+
+# ---- TOP-LEVEL ARGUMENT (the function's own arg) — NOT GATED ----
+#
+# The Array.isArray gate is applied ONLY to elements inside the loop. The
+# TOP-LEVEL arg passed to module.exports is fed straight into flat(arr, []),
+# which immediately reads `arr.length` and iterates by numeric index WITHOUT any
+# isArray check. Therefore the top-level arg need not be a real Array; it is
+# duck-typed as "indexable by .length / [i]":
+#   T1 real Array            -> flattened as specified above (the normal case).
+#   T2 string 'abc'          -> 'abc'.length===3; arr[0..2] are 'a','b','c'
+#                               (each a non-array string) -> ['a','b','c'].
+#   T3 array-like object
+#      {length:2,0:9,1:8}    -> -> [9,8] (its indexed props, isArray-gated per
+#                               element as usual).
+#   T4 number / boolean      -> (5).length===undefined -> loop body never runs
+#                               -> [] (a new empty array). Same for true/false.
+#   T5 null / undefined      -> reading (null).length / (undefined).length
+#                               THROWS TypeError "Cannot read properties of
+#                               null/undefined (reading 'length')". This is the
+#                               ONLY throw path.
+# These top-level non-array cases are documented for completeness and fidelity.
+# The input-generator emits ONLY real Arrays (T1) as in-envelope inputs; T2-T5
+# are OUT-OF-ENVELOPE (a blind re-emitter reconstructs them from this spec) — see
+# SCOPE.
+
+ORACLE value -> oracle.json
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The flat(arr,res) recursion with the single threaded accumulator.
+#   - The Array.isArray ELEMENT gate (descend vs push); leaves pushed by identity.
+#   - Order preservation (left-to-right depth-first), arbitrary depth.
+#   - One fresh result array per call; no input mutation; empties contribute none.
+#   - The top-level non-array duck-typing (string/array-like/number) and the
+#     null/undefined TypeError throw path.
+#
+# CARRIED DATA: none. No tables, constants, or large literals. (No carried.json.)
+#
+# DEMONSTRATED IN-SCOPE INPUT SUBSET (self-consistent with genInputs — every
+# value the generator can emit is covered by the BEHAVIOR above):
+#   element kinds emitted: nested real Arrays (depths 0..~6), empty arrays,
+#     numbers (incl. 0, negatives, floats), bigint, strings (incl. ''),
+#     booleans, null, plain objects {..}, array-like objects {length,0,..}
+#     (pushed as-is, NOT flattened), Uint8Array, Set, Map, RegExp.
+#   top-level arg emitted by genInputs: ALWAYS a real Array (case T1).
+#   NOTE the generator does NOT emit `undefined`, `NaN`, `±Infinity`, boxed
+#     primitives, Symbols, or live functions AS ARRAY ELEMENTS, because the JSON
+#     oracle codec does not round-trip them (a stored input would be corrupted
+#     -> false divergence). Their behavior IS specified above (B7/B8) so a blind
+#     engineer can still reproduce it; they are simply not auto-generated.
+#
+# OUT-OF-ENVELOPE (specified, not generated):
+#   - Top-level non-array args T2-T5 (string/array-like/number/null/undefined),
+#     including the null/undefined TypeError throw.
+#   - `undefined`/`NaN`/`±Infinity` and identity-bearing/boxed values as elements
+#     (codec-unfaithful) — semantics given in B7/B8/B10.
+
+PROVENANCE arr-flatten@1.1.0  (jonschlinkert/arr-flatten, MIT)
+# repo: https://github.com/jonschlinkert/arr-flatten
+# source file: index.js (module.exports = function(arr){ return flat(arr, []); })
+# verified by executing the installed package on node v24.16.0:
+#   arbitrary-depth recursion, element-only Array.isArray gate, order preserved,
+#   no mutation / new array, empties contribute nothing, leaf identity preserved,
+#   array-likes/strings/typed-arrays/Set/Map/RegExp NOT flattened, null/undefined
+#   elements pushed verbatim, top-level null/undefined throws TypeError.

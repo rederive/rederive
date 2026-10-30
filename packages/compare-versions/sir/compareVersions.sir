@@ -1,0 +1,245 @@
+# SIR for compare-versions@3.6.0 default export (the bare `compareVersions(v1, v2)` function).
+# Comments use '#' only. This is a language-neutral IR, not JavaScript.
+# Every behavioral claim below was VERIFIED by RUNNING the real package (see PROVENANCE / VERIFIED-BY-EXECUTION).
+
+UNIT compareVersions
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG compareVersions(v1: string, v2: string) -> -1 | 0 | 1
+DEPENDS-ON none   # zero runtime deps; no embedded data tables; pure string/number logic
+
+# ---------------------------------------------------------------------------------------------------
+# RE-EMITTER NOTE (default export, value-mode)
+# The real package does `module.exports = compareVersions` (a bare function with .validate/.compare
+# attached as static methods; ONLY the call form `compareVersions(v1, v2)` is in contract here).
+# The blind re-emitter must `export default <fn>` where <fn> is exactly this two-argument function.
+# The generator sets exportName = 'compareVersions', importKind = 'default'.
+# The static methods compareVersions.validate / compareVersions.compare are OUT-OF-CONTRACT for this
+# unit (see SCOPE) — do NOT implement them to satisfy this oracle; only the call form is graded.
+# ---------------------------------------------------------------------------------------------------
+
+BEHAVIOR
+# Pipeline order is EXACT. Reproduce node-by-node.
+
+# ===== NODE 1 — VALIDATION (runs on BOTH args, v1 then v2, BEFORE any comparison) =====
+# Both arguments are validated, in the order [v1, v2]. Validation of v1 happens first; if v1 is
+# invalid the function throws before v2 is examined.
+#
+# 1a. TYPE CHECK: if typeof(arg) !== 'string'  -> THROW TypeError
+#       message EXACTLY: "Invalid argument expected string"
+#       (applies to number/null/undefined/object/boolean/symbol/array — anything not a primitive string)
+#
+# 1b. SEMVER REGEX CHECK: if the string does NOT match the regex below -> THROW Error (NOT TypeError)
+#       message EXACTLY (single-quote the offending string, interpolated verbatim):
+#         "Invalid argument not valid semver ('" + version + "' received)"
+#       e.g. for input "foo" the message is:  Invalid argument not valid semver ('foo' received)
+#
+#     THE EXACT REGEX (case-insensitive, ASCII; this is the literal source regex):
+#       /^v?(?:\d+)(\.(?:[x*]|\d+)(\.(?:[x*]|\d+)(\.(?:[x*]|\d+))?(?:-[\da-z\-]+(?:\.[\da-z\-]+)*)?(?:\+[\da-z\-]+(?:\.[\da-z\-]+)*)?)?)?$/i
+#
+#     REGEX SEMANTICS, decoded (the blind engineer MUST honor these exactly — verified by execution):
+#       - Optional single leading 'v' or 'V'  (the leading "v?", case-insensitive). Only ONE 'v' is
+#         optional here; a second 'v' is NOT stripped/allowed: "vv1.0.0" is INVALID.
+#       - MAJOR segment: one-or-more ASCII digits  (\d+). REQUIRED. Wildcards 'x'/'*' are NOT allowed
+#         in the MAJOR position. So "x", "*", "x.0.0", "*.0.0" are INVALID. (A bare "x" or "*" THROWS.)
+#       - MINOR segment (optional): a literal '.' then EITHER a single 'x'/'X'/'*' wildcard char OR \d+.
+#       - PATCH segment (optional, only if MINOR present): '.' then a single 'x'/'X'/'*' OR \d+.
+#       - FOURTH numeric segment (optional, only if PATCH present): '.' then 'x'/'X'/'*' OR \d+.
+#         At MOST FOUR dot-separated numeric/wildcard segments total. "1.2.3.4" is valid;
+#         "1.2.3.4.5" is INVALID.
+#       - A wildcard is exactly ONE of the characters x, X, or * occupying the WHOLE segment.
+#         "1.xx", "1.x0", "1.0x" are INVALID (wildcard must be a lone single char in its segment).
+#       - PRE-RELEASE (optional): "-" followed by one-or-more identifiers separated by '.', each
+#         identifier matching [\da-z\-]+ (ASCII digits, lowercase OR uppercase letters because of /i,
+#         and the hyphen). PRE-RELEASE is ONLY allowed when PATCH is present (it is nested inside the
+#         patch group). So "1.2.3-alpha" and "1.2.3.4-alpha" are valid, but "1-a" and "1.2-a" are
+#         INVALID. A trailing empty identifier is invalid: "1.2.3-" and "1.0.0-a." are INVALID.
+#         A lone hyphen identifier "1.0.0--" IS valid (hyphen is in the char class).
+#       - BUILD METADATA (optional): "+" followed by identifiers [\da-z\-]+(\.[\da-z\-]+)* . Same
+#         nesting: only allowed when PATCH is present. "1.2.3+b" valid; "1+b","1.2+b" INVALID;
+#         "1.0.0+" INVALID (empty). Build may appear with or without pre-release; pre-release then
+#         build is valid ("1.2.3-a+b").
+#       - Anchored ^...$ : NO leading/trailing whitespace allowed (" 1.0.0" and "1.0.0 " INVALID).
+#       - Leading zeros ARE allowed by \d+  ("01.2.3", "1.02.0" are VALID).
+#       - The character class is ASCII-only (\d and a-z under /i = ASCII letters). Non-ASCII letters
+#         and any other punctuation (",", "!", "/", space, etc.) make the string INVALID.
+#
+#     The static method compareVersions.validate(version) is exactly:
+#         typeof version === 'string' && regex.test(version)
+#     (returns boolean; does not throw). It is OUT-OF-CONTRACT for this unit but documents the same
+#     predicate used by NODE 1b. Mentioned only to keep the regex semantics anchored.
+
+# ===== NODE 2 — SPLIT each validated version into segments =====
+# Define split(v) producing a string[] (the LAST element is always the pre-release tail, possibly ""):
+#   c = v with a single leading 'v' removed (regex /^v/, lowercase v only — note: validation already
+#       accepted 'V' too, but the strip regex /^v/ is lowercase-only and NOT case-insensitive;
+#       in practice an uppercase 'V' prefix is left in place. Such inputs are NOT emitted by the
+#       generator — see SELF-CONSISTENCY — so this corner is documented, not graded.)
+#   c = c with build metadata removed: delete everything from the first '+' to end (regex /\+.*$/).
+#   patchIndex = index of first '-' in c, or c.length if no '-'.
+#   numericPart = c.substring(0, patchIndex)            # the dotted numeric/wildcard segments
+#   preRelease  = c.substring(patchIndex + 1)           # everything after the first '-', or "" if none.
+#                                                        # (If no '-', substring(len+1) = "".)
+#   arr = numericPart.split('.')                        # e.g. "1.2.3" -> ["1","2","3"]
+#   arr.push(preRelease)                                # append the pre-release tail as the LAST element
+#   return arr
+#
+# CONSEQUENCE — array shapes (verified):
+#   "1.2.3"            -> ["1","2","3",""]
+#   "1.2"              -> ["1","2",""]
+#   "1"                -> ["1",""]
+#   "v1.2.3"           -> ["1","2","3",""]
+#   "1.0.0-alpha"      -> ["1","0","0","alpha"]
+#   "1.0.0+build"      -> ["1","0","0",""]           # build stripped, no pre-release
+#   "1.0.0-alpha.1+m"  -> ["1","0","0","alpha.1"]    # build stripped from the tail
+#   "1.x.0"            -> ["1","x","0",""]
+#   "1.2.3.4"          -> ["1","2","3","4",""]
+#   "1.0.0-"           -> ["1","0","0",""]           # NOTE "1.0.0-" is actually INVALID at NODE 1b, never reaches here
+# The numeric segments are arr[0 .. length-2]; the pre-release string is arr[length-1].
+
+# ===== NODE 3 — NUMERIC SEGMENT COMPARISON =====
+# Let s1 = split(v1), s2 = split(v2).
+# Loop i from 0 to (max(s1.length - 1, s2.length - 1) - 1)  inclusive  # i.e. over every numeric slot,
+#   excluding the last (pre-release) element of each. The bound uses length-1 for each because the last
+#   element is the pre-release tail, NOT a numeric segment.
+#     n1 = parseInt(s1[i] || 0, 10)      # if s1[i] is missing (undefined) use 0 -> parseInt(0,10)=0;
+#     n2 = parseInt(s2[i] || 0, 10)      #   if s1[i] is the empty string "" it is falsy -> 0 too.
+#     if n1 > n2  return 1
+#     if n2 > n1  return -1
+#     # else (n1 === n2, including NaN===... see WILDCARDS) continue to next i
+#
+# parseInt semantics that MATTER (verified):
+#   - parseInt is base-10 and reads the leading integer prefix. Leading zeros are ignored:
+#     parseInt("01",10) === 1, so "01.0.0" == "1.0.0" (compares EQUAL).
+#   - WILDCARDS: a wildcard segment is the literal "x", "X", or "*". parseInt("x",10) and
+#     parseInt("*",10) are NaN. The comparisons (n1 > n2) and (n2 > n1) are BOTH false when either
+#     operand is NaN, so a wildcard segment neither-greater-nor-less => treated as EQUAL to whatever
+#     it is compared against AT THAT POSITION. Verified:
+#       "1.x.5" vs "1.9.5" -> 0   (minor x compares equal, patch 5==5)
+#       "1.x.5" vs "1.9.6" -> -1  (minor x equal, patch 5 < 6)
+#       "2.x"   vs "1.0"   -> 1   (major 2 > 1, decided before the wildcard)
+#       "1.x"   vs "2.0"   -> -1
+#       "1.x.0" vs "1.5.0" -> 0
+#   - UNEQUAL LENGTHS: missing numeric slots are treated as 0 (via `|| 0`). Verified:
+#       "1.2" vs "1.2.0" -> 0   ("1.2" lacks the patch slot; treated as 0 == 0)
+#       "1"   vs "1.0.0" -> 0
+#       "1.2.3.4" exposes a 4th numeric slot vs a 3-segment version which is 0 there:
+#       "1.0.0.5" vs "1.0.0" -> 1 ;  "1.0.0" vs "1.0.0.5" -> -1
+#
+# NOTE on loop bound + pre-release lengths: the bound is max over (length-1) of EACH array. Because
+# each array's last element is the pre-release tail, length-1 = number of numeric segments. When one
+# version has more numeric segments than the other, the extra slots on the short side read undefined
+# -> `|| 0` -> 0.
+
+# ===== NODE 4 — PRE-RELEASE COMPARISON (only reached when all numeric segments tied) =====
+# sp1 = s1[s1.length - 1]   # the pre-release string (or "")
+# sp2 = s2[s2.length - 1]
+#
+# CASE A — BOTH non-empty (sp1 && sp2 both truthy):
+#   p1 = sp1.split('.').map(tryParse)
+#   p2 = sp2.split('.').map(tryParse)
+#   where tryParse(token) = isNaN(Number(token)) ? token (keep as string) : Number(token) (coerce to number)
+#     IMPORTANT tryParse uses Number(), NOT parseInt. So Number-coercible tokens become NUMBERS:
+#       Number("1")  = 1   -> number
+#       Number("10") = 10  -> number
+#       Number("0x10")=16  -> number   (hex literal coercion! a valid identifier under the regex)
+#       Number("1e2")=100  -> number   (scientific coercion!)
+#       Number("")   = 0   -> number   (empty string coerces to 0; but "" can't be a pre-release id under the regex)
+#       Number("-")  = NaN -> stays STRING "-"
+#       Number("alpha") = NaN -> stays STRING "alpha"
+#     (These Number-coercion quirks differ from semver-spec's "all-digits" rule, but this is the
+#      package's actual behavior — reproduce it. Tokens with leading zeros like "00" -> Number=0
+#      number; an identifier that is all digits is numeric.)
+#
+#   Loop i from 0 to (max(p1.length, p2.length) - 1) inclusive. At each i, in THIS EXACT order:
+#     (1) if p1[i] === undefined  OR (typeof p2[i] === 'string' AND typeof p1[i] === 'number')  return -1
+#     (2) if p2[i] === undefined  OR (typeof p1[i] === 'string' AND typeof p2[i] === 'number')  return 1
+#     (3) if p1[i] > p2[i]  return 1
+#     (4) if p2[i] > p1[i]  return -1
+#     # else continue
+#   RULES decoded (verified):
+#     - SHORTER pre-release loses: if p1 has fewer identifiers, p1[i] becomes undefined first -> rule(1)
+#       -> -1. Verified: "1.0.0-1" vs "1.0.0-1.0" -> -1 ; "1.0.0-alpha" vs "1.0.0-alpha.1" -> -1.
+#     - NUMERIC ranks BELOW ALPHANUMERIC at a given identifier slot: number-vs-string -> the numeric
+#       side is lower. rule(1): p2 string & p1 number -> -1 ; rule(2): p1 string & p2 number -> 1.
+#       Verified: "1.0.0-1" vs "1.0.0-alpha" -> -1 ; "1.0.0-alpha" vs "1.0.0-1" -> 1.
+#     - NUMBER vs NUMBER: compared numerically by `>` (rule 3/4). "1.0.0-2" vs "1.0.0-10" -> -1.
+#     - STRING vs STRING: compared by JS `>` (lexicographic by UTF-16 code unit, CASE-SENSITIVE).
+#       Verified: "1.0.0-alpha" < "1.0.0-beta" -> -1 ; "1.0.0-beta" < "1.0.0-rc" -> -1 ;
+#       "1.0.0-a" < "1.0.0-b" -> -1 ; "1.0.0-ab" > "1.0.0-aa" -> 1 ;
+#       UPPERCASE sorts BEFORE lowercase ('A'=0x41 < 'a'=0x61): "1.0.0-Alpha" vs "1.0.0-alpha" -> -1.
+#     - EQUAL: all identifiers equal & same length -> fall through to NODE 5 -> 0.
+#       "1.0.0-alpha" vs "1.0.0-alpha" -> 0.
+#
+# CASE B — EXACTLY ONE non-empty (sp1 XOR sp2):
+#   return sp1 ? -1 : 1
+#   i.e. a version WITH a pre-release ranks BELOW the same version WITHOUT one. Verified:
+#     "1.0.0-alpha" vs "1.0.0" -> -1 ;  "1.0.0" vs "1.0.0-alpha" -> 1.
+#   (This branch is only reached when the numeric segments are all equal; if numeric segments differ
+#    they already decided in NODE 3 — e.g. "1.0.0-alpha" vs "1.0.1" -> -1 by numeric, NOT by pre-release.)
+#
+# CASE C — BOTH empty: fall through to NODE 5.
+
+# ===== NODE 5 — DEFAULT =====
+# return 0   (versions are equal).
+
+ORACLE value -> oracle.json
+# Each oracle vector: args = [v1, v2]; expected = the real package's return (-1|0|1) OR, for invalid
+# inputs, the harness-recorded throw sentinel {__throw: <message>}. The harness stamps expecteds by
+# RUNNING the real package on genInputs; the re-emitter is graded structurally (a throw matches any
+# throw per verdict.vectorPass; a numeric return must equal exactly).
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): all of NODE 1..5 above — validation (both throws + exact
+#   messages + the literal regex), the split into numeric segments + pre-release tail, base-10
+#   parseInt numeric comparison with `|| 0` for missing slots and NaN-as-equal wildcard semantics,
+#   the four-rule pre-release comparison with Number()-based tryParse coercion (including hex/sci
+#   coercion), pre-release-below-release ranking, shorter-pre-release-loses, numeric-below-alpha,
+#   case-sensitive lexical string compare, and the default 0.
+# CARRIED DATA: none. No constant tables; the only literal is the inline regex, which is reproduced
+#   verbatim in NODE 1b above (it is small enough to transcribe and is part of the in-contract logic,
+#   not a carried table).
+# OUT-OF-CONTRACT (not graded by this unit's oracle; do NOT implement to satisfy it):
+#   - compareVersions.validate(version): boolean predicate (documented above for anchoring only).
+#   - compareVersions.compare(v1, v2, operator): operator-based boolean wrapper with its own
+#     validateOperator throws ("Invalid operator type, expected string but got <typeof>" /
+#     "Invalid operator, expected one of >|>=|=|<|<=") and operatorResMap. Separate unit; not here.
+# OUT-OF-ENVELOPE (codec cannot round-trip; behavior documented, NOT emitted by genInputs):
+#   - Non-string first/second args (number, null, undefined, object, array, boolean, symbol, function)
+#     all THROW TypeError "Invalid argument expected string" at NODE 1a. A blind engineer reconstructs
+#     this from NODE 1a. The generator emits ONLY string args (both valid and invalid strings), so the
+#     graded inputs stay codec-faithful; the TypeError path is documented for fidelity but the throw
+#     path that IS exercised by the generator is the Error path (NODE 1b) via invalid strings.
+#   - Uppercase 'V' leading prefix: validation accepts it (regex /i) but split's /^v/ does not strip
+#     it, leaving "V1.0.0" -> split major token "V1" -> parseInt("V1",10)=NaN. This corner is
+#     documented but NOT emitted by genInputs (generator uses only lowercase 'v' prefix), to keep the
+#     teaching/grading slices unambiguous.
+
+# ===== SELF-CONSISTENCY CROSS-CHECK =====
+# Every value class genInputs can emit is defined above:
+#   - valid release versions (1..4 numeric segments, leading zeros, lowercase 'v' prefix) -> NODE 3.
+#   - wildcard minor/patch/4th ('x','X','*') -> NODE 3 NaN-equal semantics.
+#   - pre-release versions (alpha/beta/rc, numeric ids, mixed numeric.alpha, multi-id, hex/sci tokens
+#     like 0x10/1e2, uppercase ids, lone-hyphen id) -> NODE 4 CASE A.
+#   - one-side-pre-release pairs -> NODE 4 CASE B.
+#   - build metadata (+...) which is stripped -> NODE 2.
+#   - invalid strings (empty, "foo", too many segments, wildcard-in-major, pre-release without patch,
+#     trailing '-', non-ASCII/punctuation, leading/trailing space, "*", "x") -> NODE 1b Error throw.
+# The generator NEVER emits non-string args or uppercase-'V'-prefix (the two OUT-OF-ENVELOPE corners),
+# so the SIR fully defines every input the oracle will stamp.
+
+PROVENANCE compare-versions@3.6.0 (omichelsen/compare-versions), MIT license.
+#   repo: https://github.com/omichelsen/compare-versions
+#   source file: node_modules/compare-versions/index.js (UMD factory; the returned `compareVersions`
+#     function, lines ~40-73, plus helpers indexOrEnd/split/tryParse/validate and the `semver` regex).
+# VERIFIED-BY-EXECUTION (not assumed from the hint):
+#   - Throw messages verbatim: TypeError "Invalid argument expected string" (non-string);
+#     Error "Invalid argument not valid semver ('<v>' received)" (regex miss). [run confirmed]
+#   - Numeric-not-lexical: "1.10.0" vs "1.9.0" -> 1. [run confirmed]
+#   - Pre-release below release + alpha<beta<rc + numeric-below-alpha + shorter-loses +
+#     case-sensitive lexical + hex/sci tryParse coercion. [all run confirmed]
+#   - Unequal-length handling via `|| 0`; 4-segment support; leading-zero equality. [run confirmed]
+#   - Leading 'v' (and 'V' accepted but not stripped — out-of-envelope). [run confirmed]
+#   - WILDCARDS: 'x'/'X'/'*' SUPPORTED in minor/patch/4th positions only (NaN-equal); NOT in major;
+#     a bare "*" or "x" THROWS (corrects the hint's tentative "may be supported"). [run confirmed]
+#   - Build metadata stripped/ignored; pre-release & build require patch present. [run confirmed]

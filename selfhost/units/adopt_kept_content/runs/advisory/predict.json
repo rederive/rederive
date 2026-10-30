@@ -1,0 +1,74 @@
+{
+ "status": "ok",
+ "unit": "adopt_kept_content",
+ "primary": "selfhost/units/adopt_kept_content/sir/adopt_kept_content.sir",
+ "primarySha256": "f12abd39c819e36f544857da0f077f9d078ddb864b0e67ccf6ab80e83e8b7ecc",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Preparation. LF-READ of a text: split it at every LF, remove ONE CR from the end of each piece that ends in CR, and rejoin with LF. The UNMANAGED text is LF-READ, then BLANK is trimmed from both ends of the whole text; markers are NOT looked for in it (a marker in the giver's text is ordinary text). The MANAGED text is LF-READ; then, if BEGIN occurs, everything up to and including its leftmost occurrence is removed; then, if END occurs in what remains, its leftmost occurrence and everything after it are removed; then BLANK is trimmed from both ends. BEGIN = \"<!--\", zero or more BLANK (LF included), \"rederive:begin\" not followed by a WORD character, then everything up to and including the FIRST \"-->\" after \"rederive:begin\" (possibly spanning lines), provided no other \"<!--\" begins between the end of \"rederive:begin\" and that \"-->\"; a candidate whose first following \"-->\" comes after another \"<!--\" (or that has no following \"-->\") is not a begin marker, and a later candidate may be. END = \"<!--\", zero or more BLANK, \"rederive:end\", zero or more BLANK, \"-->\" (it may span lines). Text joined across a removed marker is joined directly. A trim makes an indented first line no longer indented when R3 classifies it CITED FIDELITY package — stripMarkers, extractKeptContent",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "R2",
+   "text": "Lines of a prepared text: split it at every LF and remove ONE CR from the end of each line that ends in CR (a second pass after R1: a line that originally ended in two CRs before its LF loses both, three loses two). CR elsewhere, U+2028 and U+2029 stay inside their line. \"The trimmed line\" = the line with BLANK removed from both ends. ONE-LINE FENCE (grammar R4) is tested first; a FENCE LINE is a line that is not a ONE-LINE FENCE and whose trimmed form starts with three backticks or with three tildes (four or more, an info string, or anything after them included). The RUN of a FENCE LINE is the maximal leading run of its trimmed form's first character (three or more backticks, or three or more tildes). A line CLOSES an open fence when its trimmed form consists only of the opening line's RUN character, repeated at least as many times as that RUN is long (no info string, nothing else; indentation and trailing BLANK are allowed) CITED FIDELITY package — linesOf, isFence, fenceRun, closesFence",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "R3",
+   "text": "Items: walk the lines in order with at most one OPEN prose item (a marker, possibly empty, and a body) or one OPEN fence (a list of lines), never both. \"Close\" = if a prose item is open and its body contains a non-BLANK character it becomes the next item; either way none is open afterwards. Each line is the first class below that applies: IN-FENCE (a fence is open) — append the line as read to the fence; if the line CLOSES it (R2), the fence becomes the next item and is no longer open. Every other line is content, whatever it looks like: backticks inside a tilde fence, a shorter run, a run with an info string, a heading, a marker. A line of seven or more backticks only (a ONE-LINE FENCE when outside a fence) closes a backtick fence whose RUN it is not shorter than. ONE-LINE FENCE — close; the line is itself the next fence item (lines: just this line). FENCE LINE — close; open a fence whose first line is this line. HEADING (grammar R4) — close; the next item is a heading item. BLANK LINE (the trimmed line is empty) — close. LIST (grammar R5) — close, then open a prose item with the matched MARKER and BODY. TEXT — if a prose item is open, append one space and the trimmed line to its body; otherwise open a prose item with an empty marker and the trimmed line as body. At the end of the text: close; then an open fence (never closed) becomes the last item with the lines it has CITED FIDELITY package — extractItems",
+   "ambiguity": 0.55
+  },
+  {
+   "id": "R4",
+   "text": "ONE-LINE FENCE: the trimmed line starts with three backticks, ends with three backticks, has at least one character between them (seven backticks qualify, six do not) and contains no NOTDOT character; tildes never make one (a \"~~~x~~~\" line is a FENCE LINE). HEADING (the whole line): one to six \"#\" at the start, then a non-empty run of BLANK, then a non-empty tail containing no NOTDOT character; the run and the tail may divide anywhere that works (so NOTDOT may occur only inside the BLANK run after the hashes). Seven \"#\", \"#x\" and an indented \"#\" line (other than the first line, see R1) are not headings; \"#\" followed by two spaces IS (an empty heading). A heading item's marker is its hashes and its body is everything after the hashes with BLANK trimmed CITED FIDELITY package",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "R5",
+   "text": "LIST (the whole line): zero or more BLANK, then MARKER = one or more ASCII digits followed by \".\", or \"-\", or \"*\"; then one or more BLANK; then BODY = everything after that maximal BLANK run, which must contain no NOTDOT character. BODY is kept untrimmed (its trailing BLANK stays). So \"-\" alone, \"1)\", \"+\", \"--\", \"*emph*\" and a list line with a NOTDOT after its body start are TEXT; \"- \" opens an item with an empty body that later TEXT lines continue (its body then starts with the joining space); \"007.\" is a MARKER kept as written CITED FIDELITY package",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R6",
+   "text": "Fragments (sentences) of a prose or heading body. If the body contains a NUL or a SPANMARK character it is not cut: its one fragment is the body with BLANK trimmed from both ends. Otherwise, in three steps. MASK: scanning left to right, each CODE SPAN (a backtick, zero or more non-backtick characters, a backtick; leftmost first, non-overlapping) is replaced by NUL, its 0-based index in decimal ASCII digits, NUL; the spans are remembered in order. CUT the masked body at every maximal run of BLANK characters that is immediately preceded by a TERMINAL character, or by a CLOSER character itself immediately preceded by a TERMINAL character, AND is immediately followed by a START character; the run is removed. So a cut never falls inside a code span, a run before a code span counts as followed by a START, and a run after one never counts as preceded by a TERMINAL. UNMASK each piece: each mask token in it is replaced by the span it stands for (a cut never divides a token, and the body had no NUL of its own, so every token is the mask's; no fragment of this branch contains NUL or SPANMARK). Then each piece has BLANK trimmed from both ends and empty pieces are dropped. Nothing else cuts (\"e.g. Foo\" cuts; \". lower\", \". É\", \".)) X\" and a run followed by a quote do not) CITED FIDELITY package — splitSentences",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R7",
+   "text": "KEY of a fragment. A fragment containing a NUL or a SPANMARK character: its KEY is RAWMARK followed by the fragment exactly as it is (no case mapping, no whitespace change). Any other fragment: pair the backticks from the left (first with second, third with fourth, ...); each pair with the text between them is a CODE SPAN, everything else (a last unpaired backtick included) is PROSE. Rewrite each code span as SPANMARK, the text between its backticks unchanged, SPANMARK (so the span's boundary survives: \"`ls` -s\" and \"`ls -s`\" differ). Rewrite each prose piece, on its own, by the Unicode default full lowercase mapping; every other character stays, asterisks included (\"**bold**\" and \"bold\" differ). Concatenate in order; replace every maximal BLANK run by one space; trim spaces from both ends. LINE KEY of a line: replace every maximal BLANK run by one space and trim; nothing else changes (case and asterisks stay) CITED FIDELITY package — normalizeForMatch, norm",
+   "ambiguity": 0.58
+  },
+  {
+   "id": "R8",
+   "text": "Managed shapes, from the items of the prepared managed text. Each non-fence managed item (headings included) gives one PROSE LIST: the KEYs of its fragments, in order. Each managed fence item gives one BLOCK KEY. The KEY LINES of a fence item: a ONE-LINE FENCE item -> its one line; a CLOSED fence (one whose last line CLOSES it, R2) -> its opener line (info string included), then every line strictly between opener and closer that is not blank (trimmed empty), in order; an UNCLOSED fence (it reached the end of the text, a lone opener included) -> no key lines. Lines between are key lines whatever they look like (a nested fence, an info-string line, a run of backticks); the closer never is. Its BLOCK KEY is the LINE KEYs of its key lines, in order, joined with LF (so \"```\" and \"~~~\" openers differ, and \"```bash\" differs from \"```py\"). Keys compare as exact text equality; there is no other tolerance.",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "R9",
+   "text": "An unmanaged item is REPRESENTED when: a prose or heading item — it has at least one fragment and the KEYs of its fragments, in order, occur as a CONTIGUOUS run of at least one PROSE LIST (no managed fragment between them; a repeated fragment needs as many adjacent equal managed fragments; an item with no fragments, i.e. an empty heading, is never represented); a fence item — it has at least one key line AND its BLOCK KEY equals the BLOCK KEY of some managed fence item (an unclosed fence is never represented; a closed fence with nothing between its delimiters has its opener as its one key line and can be). Prose is never represented by a fence nor a fence by prose.",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R10",
+   "text": "Result: for each unmanaged item in order that is not represented, one element: a fence item -> its lines joined with LF (a one-line fence -> its trimmed line); a prose or heading item with a non-empty marker -> the marker, one space, the body; otherwise the body. Equal items are each kept. The result may be empty.",
+   "ambiguity": 0.19
+  }
+ ],
+ "ranked": [
+  "R7",
+  "R3",
+  "R1",
+  "R4",
+  "R6",
+  "R5",
+  "R2",
+  "R8",
+  "R9",
+  "R10"
+ ],
+ "at": "2026-10-28T02:37:46Z"
+}

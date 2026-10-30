@@ -1,0 +1,37 @@
+UNIT decode_value
+LANG js
+PRIMARY-SHA256 741b65d5c687491faec1852fd5d337c19407512a0f7146fd04f2a2fe7e5a3667
+SIG decode_value(tree: unknown): unknown
+NOTE default export (the real function is the named export decode of canon.mjs, driven through the seam)
+ABI json = a JS value: none=null; bool=boolean; f64=number (NaN, ±Infinity and -0 are numbers); text=string (UTF-16);
+  list=Array; map=plain object (prototype Object.prototype) with own string keys. The argument arrives as such a value,
+  already decoded from the oracle by the verifier. Result: the same mapping, plus the js-only values: the absent value =
+  undefined, big integer = bigint, bytes = a plain Uint8Array (not a Buffer), a utf16 text = a string holding a lone
+  surrogate. A throw node (R13) RETURNS the plain object { __threw: msg } — never throw for it: the verifier's driver
+  marker-escapes every returned value, so that object (like any map keyed __t / __throw / __threw) grades as a map, and
+  only an Error the function raises grades as a throw.
+ENVELOPE js WIDENS the result to bigint, Uint8Array, undefined and non-well-formed strings (R3, R5-R8, R11): those
+  vectors live in the js envelope extension, verified only by js and ts, as do the R15 probes deeper than the neutral
+  codec carries.
+MECHANISM R1: a node is x !== null && typeof x === 'object' && !Array.isArray(x) && typeof x.t === 'string'; look the tag up
+  with Object.hasOwn in an own table (a plain-object lookup reads "constructor" through the prototype); NODE-KEYS checked
+  over Object.keys(node); every rejection throws an Error. R15: carry the depth as an internal recursion counter (the root
+  call is depth 0; the exported function takes the tree only); depth > 100 throws, checked before anything else at each
+  position.
+MECHANISM R3: well-formed = String.prototype.isWellFormed(); cu 'utf8' requires it true, cu 'utf16' requires it false; R12
+  requires it true of every record name. R6/R7: DECIMAL, then BigInt(v); the range and the ±2n ** 53n
+  tests on the bigint; Number(n) inside.
+MECHANISM R8: BASE64_CANONICAL, then b = Buffer.from(v.slice(7), 'base64'); the padding-bit rule is 'base64:' +
+  b.toString('base64') === v; the result is new Uint8Array(b).
+MECHANISM R9: typeof v === 'string'; HEX16 on a string bits, then DataView.setBigUint64(0, BigInt('0x' + bits)) and
+  getFloat64(0) (big-endian); a NaN result is accepted only when bits === '7ff8000000000000'.
+MECHANISM R11: KEY-ORDER is the JS relational string comparison (prev < k compares UTF-16 code units), never localeCompare;
+  duplicates by Object.hasOwn on the result. R11/R12 build the result with Object.defineProperty(o, k, { value,
+  enumerable: true, writable: true, configurable: true }) on a fresh {} — never o[k] = v, which would set the prototype for
+  a "__proto__" key.
+DEPENDS-ON none
+PINNED regex BASE64_CANONICAL = /^base64:(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/ CITED R8 — the accept-set rides on it; no m flag, so $ is the end of the text (a trailing line break fails)
+PINNED regex DECIMAL = /^(?:0|-?[1-9][0-9]*)$/ CITED R6 R7 — no "-0"; no m flag
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R9 — no m flag
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs decode (rederive, MIT). Blind js re-emissions are graded by the
+  verifier-owned driver; the js envelope extension (oracles/decode_value.js.json) is graded only by js and ts.

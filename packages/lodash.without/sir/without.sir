@@ -1,0 +1,198 @@
+UNIT without
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG without(array, ...values) -> Array        # default export; module.exports = without
+DEPENDS-ON none                               # zero runtime deps; pure; no seam (no clock/RNG/io/net)
+
+# ============================================================================
+# RE-EMITTER ENTRYPOINT SHAPE
+# ============================================================================
+# The original is `module.exports = without` (a CommonJS DEFAULT export).
+# Emissions are .mjs loaded via dynamic import(). The blind re-emitter MUST
+# expose the function as:
+#     export default function without(array, ...values) { ... }
+# (or `const without = ...; export default without;`). The harness calls the
+# module's DEFAULT export. There is NO named export to match.
+#
+# `values` is the variadic rest parameter: every argument AFTER `array` is an
+# element of the `values` list. Zero trailing args => values = [] (empty).
+
+# ============================================================================
+# BEHAVIOR  (exact, ordered — reconstructs lodash.without@4.4.0 / baseRest + baseDifference)
+# ============================================================================
+#
+# Top-level (the wrapped function inside baseRest):
+#   return isArrayLikeObject(array) ? baseDifference(array, values) : []
+#
+# ----------------------------------------------------------------------------
+# NODE 1 — FIRST-ARG GUARD: isArrayLikeObject(array)
+# ----------------------------------------------------------------------------
+# Compute the guard predicate EXACTLY (it decides copy-into-new-array vs []):
+#
+#   isArrayLikeObject(value) :=  isObjectLike(value) AND isArrayLike(value)
+#
+#     isObjectLike(value)  :=  value is truthy  AND  (typeof value === 'object')
+#         # NOTE: typeof null === 'object' but null is falsy => false.
+#         # Arrays: typeof === 'object' => true. Functions: typeof === 'function' => false.
+#         # Primitives (number, string, boolean, bigint, symbol, undefined): false.
+#
+#     isArrayLike(value)   :=  value != null
+#                              AND isLength(value.length)
+#                              AND NOT isFunction(value)
+#
+#         isLength(v)      :=  typeof v === 'number'
+#                              AND v > -1
+#                              AND (v % 1 === 0)            # integer
+#                              AND v <= 9007199254740991    # MAX_SAFE_INTEGER
+#
+#         isFunction(v)    :=  Object.prototype.toString.call(v) is
+#                              '[object Function]' OR '[object GeneratorFunction]'
+#                              (only evaluated when isObject(v); functions are
+#                               already excluded by isObjectLike, so within this
+#                               unit isFunction on an object-like value is false.)
+#
+#   BRANCH 1a (guard FALSE): if NOT isArrayLikeObject(array)  => return a NEW empty array []
+#       This covers, for the codec-faithful inputs the generator emits:
+#         - null            -> []
+#         - undefined       -> []
+#         - a number        -> []   (e.g. without(5, 1)      => [])
+#         - a string        -> []   (e.g. without('abc','a') => [])   # strings are NOT object-like
+#         - a boolean       -> []
+#         - a bigint        -> []
+#         - a plain object WITHOUT a valid numeric `length` (e.g. {a:1}) -> []
+#             # {a:1}.length is undefined; isLength(undefined) is false.
+#       (A function first arg also -> [], but functions are OUT-OF-ENVELOPE; see SCOPE.)
+#
+#   BRANCH 1b (guard TRUE): array is an Array, OR an array-like OBJECT
+#       (a non-null typeof-'object' value with an integer length in [0, 2^53-1],
+#        e.g. an `arguments` object, or {0:'a',1:'b',length:2}) => go to NODE 2,
+#        treating `array[0..length-1]` as the elements. The OUTPUT IS ALWAYS A
+#        PLAIN Array (built fresh via push), regardless of the input's own type.
+#        # The generator emits only real Arrays / null / undefined / primitive
+#        # first args (codec-faithful). The array-like-OBJECT acceptance is
+#        # documented here so a blind engineer reproduces the guard exactly,
+#        # but is OUT-OF-ENVELOPE for genInputs.
+#
+# ----------------------------------------------------------------------------
+# NODE 2 — baseDifference(array, values)   (no iteratee, no comparator)
+# ----------------------------------------------------------------------------
+# Build result = [] (a NEW array). Let length = array.length (the array-like
+# length), valuesLength = values.length.
+#
+#   NODE 2.0  if length === 0: return result (empty []).  # also covers empty []
+#
+#   # values.length >= 200 (LARGE_ARRAY_SIZE) triggers an internal SetCache
+#   # OPTIMIZATION in the original. It is BEHAVIORALLY TRANSPARENT: the cache
+#   # performs the SAME SameValueZero membership test. A blind re-emitter MUST
+#   # NOT reproduce the cache; a straight membership scan over `values` yields
+#   # byte-identical output (verified at and above 200 values, incl. NaN & 0).
+#
+#   For index = 0 .. length-1, let value = array[index]:
+#
+#     ZERO-NORMALIZATION (applied to the element BEFORE pushing):
+#       value := (value !== 0) ? value : 0
+#       # If value is +0 OR -0 (both satisfy value === 0), it is REPLACED by +0.
+#       # Net effect: ANY surviving zero element is emitted as +0. A -0 in the
+#       # input NEVER appears as -0 in the output. (No comparator path here.)
+#
+#     MEMBERSHIP TEST — "is `value` (the ORIGINAL element, pre-normalization, as
+#     `computed`) present in `values` under SameValueZero?"  Two sub-branches by
+#     whether the element is NaN:
+#
+#       NODE 2.a  element is NOT NaN  (computed === computed is TRUE):
+#         Test: does ANY values[i] === computed  (strict === ) ?
+#           # Iterated in the original from valuesIndex = valuesLength-1 down to 0,
+#           # but order of the scan is unobservable (boolean membership).
+#           # Strict === means: +0 === -0 is TRUE  => excluding 0 removes a 0 or -0
+#           #   element, and excluding -0 removes a 0 or -0 element (±0 COLLAPSE).
+#           # 1 === '1' is FALSE (no coercion); 'a' === 'a' TRUE; objects/arrays
+#           #   compared by REFERENCE identity (same object excluded; an equal-shaped
+#           #   but distinct object is NOT excluded). null === null TRUE;
+#           #   undefined === undefined TRUE; null !== undefined.
+#         If FOUND in values  => SKIP (do not push; element is excluded).
+#         If NOT found        => push the (zero-normalized) value to result.
+#
+#       NODE 2.b  element IS NaN  (computed === computed is FALSE):
+#         Test: is NaN present in `values`?  i.e. does ANY values[i] satisfy
+#               values[i] !== values[i] (SameValueZero NaN match) ?
+#           # Original routes this through arrayIncludes -> baseIndexOf, which,
+#           # because the target is NaN (value !== value), uses baseFindIndex
+#           # with the baseIsNaN predicate (x => x !== x). Equivalent to: values
+#           # contains at least one NaN.
+#         If values contains a NaN  => SKIP (NaN element excluded).
+#         If values has NO NaN      => push NaN to result.
+#         # (NaN is never normalized by the zero step: NaN !== 0 is true.)
+#
+#   Return result.
+#
+# ----------------------------------------------------------------------------
+# DERIVED CONTRACT SUMMARY (must all hold):
+#   - Returns a NEW array; never mutates `array` (input array unchanged).
+#   - When values is empty (zero trailing args): result is a shallow copy of the
+#     elements of an array-like-object first arg (with zero-normalization applied
+#     to any 0/-0 elements -> +0), in ORIGINAL ORDER. Result is a distinct array
+#     (out !== array). Holes in a sparse source materialize as `undefined` slots
+#     (the original reads array[index] for index 0..length-1, so a hole reads as
+#     undefined and, unless undefined is in values, is pushed as undefined).
+#   - ORDER of surviving elements is preserved from `array`.
+#   - DUPLICATES: every element matching a value (SameValueZero) is removed
+#     (all occurrences), e.g. without([1,2,1,3,1],1) => [2,3].
+#   - SameValueZero semantics for membership:
+#       * NaN matches NaN (excluded iff NaN is among values).
+#       * +0 and -0 are equal for exclusion (collapse).
+#       * surviving zero elements are emitted as +0.
+#       * everything else uses strict === (no type coercion; object by reference).
+#   - SPARSE / hole element behavior (codec round-trips holes): a hole reads as
+#     undefined; without(undefined) leaves it (pushed as undefined); excluding
+#     undefined removes hole slots too. Length-based iteration, so result has no
+#     holes (dense push).
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   baseRest variadic collection, isArrayLikeObject guard, baseDifference with
+#   SameValueZero membership, ±0 collapse + surviving-zero normalization to +0,
+#   NaN matching, order preservation, no-mutation / new-array, the empty-array
+#   and empty-values degenerate cases, duplicate removal, reference identity.
+#
+# CARRIED DATA: NONE. The only literal constants are LARGE_ARRAY_SIZE = 200
+#   (a perf threshold with no observable effect) and MAX_SAFE_INTEGER =
+#   9007199254740991 (used only inside the first-arg array-like guard's isLength).
+#   Both are inlined above by value; no external authority table; no carried.json.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+#   they are not oracle-codec-faithful, yet a blind engineer reconstructs them
+#   from the rules above):
+#   - FUNCTION as first arg -> [] (isObjectLike requires typeof 'object'; a
+#     function is typeof 'function' => guard false). Functions don't round-trip.
+#   - FUNCTION elements / SYMBOL elements / SYMBOL values: not codec-faithful;
+#     not emitted. (For completeness: function/symbol ELEMENTS would be compared
+#     by reference/identity under strict ===, same as objects; never special.)
+#   - array-like OBJECT first arg ({0:..,length:n}, arguments): accepted (BRANCH
+#     1b) and produces a plain Array — documented but not emitted (the generator
+#     restricts first arg to real Arrays / null / undefined / primitives).
+#   No stateful mutators, no side-effecting APIs, no ambient reads — pure.
+
+# ============================================================================
+# SELF-CONSISTENCY CROSS-CHECK (SIR <-> genInputs)
+# ============================================================================
+# Every value class genInputs can emit has its mapping defined above:
+#   * Array first args (numbers, strings, booleans, null, undefined, bigints,
+#     nested plain objects/arrays by reference, +0, -0, NaN, +Inf, -Inf,
+#     duplicates, sparse holes) -> NODE 2 rules.
+#   * null / undefined / number / string / boolean / bigint / plain-object
+#     (non-array-like) first arg -> BRANCH 1a -> [].
+#   * zero values / many values / >=200 values -> NODE 2 (large path transparent).
+# Conversely genInputs emits NO value whose behavior is left to an unstated
+#   table — there is no carried data. Functions/symbols are NOT emitted.
+
+# ============================================================================
+PROVENANCE lodash.without@4.4.0
+  repo: lodash/lodash (https://github.com/lodash/lodash)
+  license: MIT (jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+  source file: node_modules/lodash.without/index.js
+  unit: module.exports = without  (var without = baseRest(function(array, values){
+        return isArrayLikeObject(array) ? baseDifference(array, values) : []; }))

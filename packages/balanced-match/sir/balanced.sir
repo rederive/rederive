@@ -1,0 +1,237 @@
+UNIT balanced
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG balanced(a, b, str) -> { start:number, end:number, pre:string, body:string, post:string } | undefined
+    # SECONDARY (attached to the function): balanced.range(a, b, str) -> [start, end] | undefined
+
+DEPENDS-ON none   # pure, zero-dependency. No clock/RNG/IO/network seam. No carried data.
+
+# ============================================================================
+# RE-EMITTER TARGET (read this first)
+# ============================================================================
+# The emission is an ES module with a DEFAULT export:
+#     export default balanced
+# `balanced` is a named function (function balanced(a,b,str){...}).
+# Attach the secondary helper to it:  balanced.range = range
+# The GRADED behavior is the main `balanced(a,b,str)`. The `.range` helper is
+# described below and SHOULD be implemented (balanced delegates to it), but
+# `genInputs` exercises balanced(a,b,str) only.
+#
+# `a` and `b` may each be a STRING or a RegExp. `str` is always a string in
+# scope (see SCOPE for non-string str -> out-of-envelope TypeError).
+# The function does NOT mutate any argument (read-only). Confirmed.
+
+# ============================================================================
+# BEHAVIOR  (exact, ordered pipeline — mirrors balanced-match@1.0.2 index.js)
+# ============================================================================
+#
+# balanced(a, b, str):
+#   STEP 1 (RegExp coercion of a):
+#     if (a instanceof RegExp) a = maybeMatch(a, str)
+#   STEP 2 (RegExp coercion of b):
+#     if (b instanceof RegExp) b = maybeMatch(b, str)
+#       where maybeMatch(reg, str):
+#         m = str.match(reg)
+#         return m ? m[0] : null
+#       # i.e. a/b become the FULL TEXT of the first regex match (group 0),
+#       # or null if the regex does not match str. An EMPTY match (e.g. /x?/)
+#       # yields the empty string "" (m is truthy, m[0] === "").
+#       # NOTE: coercion happens ONCE here, against the WHOLE str, BEFORE range.
+#       #       a.length / b.length used later (STEP 4) are the lengths of the
+#       #       COERCED strings (or, if a/b were already strings, their lengths).
+#       #       If a became null, a.length throws? NO — see STEP 3: range runs
+#       #       first and returns undefined (indexOf(null) === -1), so STEP 4's
+#       #       a.length is never evaluated. (r is falsy -> short-circuit.)
+#
+#   STEP 3 (find the balanced range):
+#     r = range(a, b, str)        # a,b here are the (possibly-coerced) values
+#
+#   STEP 4 (build result or undefined):
+#     return r && {
+#       start: r[0],
+#       end:   r[1],
+#       pre:   str.slice(0, r[0]),
+#       body:  str.slice(r[0] + a.length, r[1]),
+#       post:  str.slice(r[1] + b.length)
+#     }
+#     # `r && {...}` : if r is undefined, the WHOLE expression is undefined
+#     #               (NOT null) -> the function returns undefined.
+#     # OBJECT KEY ORDER IS EXACTLY: start, end, pre, body, post. (verified)
+#     # All five keys ALWAYS present when r is truthy. body/pre/post may be "".
+#
+# ----------------------------------------------------------------------------
+# range(a, b, str) -> [start, end] | undefined        (the index engine)
+# ----------------------------------------------------------------------------
+# Locals: begs, beg, left, right, result (result starts undefined).
+#   ai = str.indexOf(a)              # first index of opener a
+#   bi = str.indexOf(b, ai + 1)      # first index of closer b at/after ai+1
+#   i  = ai
+#
+#   GUARD: if NOT (ai >= 0 && bi > 0):  return undefined
+#     # ai >= 0 : opener a must occur in str.
+#     # bi  > 0 : closer b must occur at index >= 1 AND at index > ai (because
+#     #           search started at ai+1). NOTE the asymmetry: it is `bi > 0`,
+#     #           strictly greater than zero, NOT `bi >= 0`. So a closer found
+#     #           at index 0 does not count (but indexOf(b, ai+1) with ai>=0
+#     #           can only return >= ai+1 >= 1 anyway when found, or -1; the
+#     #           `> 0` simply excludes the -1 sentinel here).
+#     # indexOf with an EMPTY-STRING needle: "abc".indexOf("") === 0, and
+#     #   indexOf("", k) === min(k, length). (Empty a/b are in envelope.)
+#     # indexOf(null): null is coerced to the string "null"; if str does NOT
+#     #   contain "null", indexOf === -1 -> guard fails -> undefined. (This is
+#     #   the regex-no-match path: a or b became null.)
+#
+#   FAST PATH (a === b, same value, e.g. both "%"):
+#     if (a === b): return [ai, bi]
+#     # When opener and closer are identical, the FIRST a at ai and the NEXT
+#     # occurrence at bi (= indexOf(a, ai+1)) form the pair. No nesting logic.
+#     # Example: "@@@@" with a=b="@" -> [0,1].
+#
+#   GENERAL NESTING SCAN (a !== b):
+#     begs = []                      # stack of opener indices not yet closed
+#     left = str.length             # provisional outermost-open (for leftover)
+#     while (i >= 0 && !result):
+#       if (i == ai):                # current position is the next opener
+#         begs.push(i)
+#         ai = str.indexOf(a, i + 1)   # advance opener cursor
+#       else if (begs.length == 1):  # current position is a closer that
+#         result = [ begs.pop(), bi ] # closes the SINGLE outstanding opener ->
+#                                      # this is a fully balanced top-level pair.
+#       else:                        # current position is a closer, with
+#                                    # either 0 or >=2 outstanding openers
+#         beg = begs.pop()
+#         if (beg < left):           # remember the LEFTMOST opener seen and
+#           left = beg               # the closer index that paired against it,
+#           right = bi               # as the leftover fallback candidate.
+#         bi = str.indexOf(b, i + 1)   # advance closer cursor
+#
+#       # choose next position: the nearer of ai/bi, preferring ai when it is
+#       # a valid index strictly before bi; else bi (which may be -1 -> loop end)
+#       i = (ai < bi && ai >= 0) ? ai : bi
+#
+#     # AFTER the loop: if openers remain unclosed (unbalanced, more a than b),
+#     # fall back to the leftmost recorded open and its paired closer:
+#     if (begs.length): result = [ left, right ]
+#
+#     return result   # [start,end] or undefined
+#
+#   KEY CONSEQUENCES (verified against the real package):
+#   - Returns the FIRST balanced pair scanning left-to-right; for top-level
+#     siblings like "{}{}{}" -> [0,1].
+#   - For nested "pre{in{ner}}post" -> [3,11] (outer pair), body keeps inner.
+#   - For "{{}}{}" -> [0,3] (the first fully-balanced outer pair).
+#   - Unbalanced "more openers than closers" uses the leftmost-open fallback:
+#       "{{}"   -> [1,2]   (inner pair; outer { left over)
+#       "{a{b}" -> [2,4]
+#       "x{{{}}" -> [2,5]
+#       "{{a}b{c}" -> [1,3]
+#       "a{b{c}d" -> [3,5]
+#   - Unbalanced "opener present, closer absent" ("pre{body") -> undefined
+#     (bi === -1 -> guard fails).
+#   - "closer present, opener absent" ("pre}body") -> undefined (ai === -1).
+#   - "extra closer" "pre{a}b}c" -> [3,5] (first balanced pair, trailing }).
+#
+# ============================================================================
+# WORKED EXAMPLES (all executed against balanced-match@1.0.2; the oracle is
+# anchored to these — every genInputs curated case below was run live)
+# ============================================================================
+#   balanced("{","}","pre{in{ner}}post")
+#     -> {start:3,end:11,pre:"pre",body:"in{ner}",post:"post"}
+#   balanced("{","}","pre{body}post")
+#     -> {start:3,end:8,pre:"pre",body:"body",post:"post"}
+#   balanced("{","}","{{}}")
+#     -> {start:0,end:3,pre:"",body:"{}",post:""}
+#   balanced("{","}","abc")        -> undefined
+#   balanced("{","}","")           -> undefined
+#   balanced("{","}","{")          -> undefined
+#   balanced("{","}","}")          -> undefined
+#   balanced("{","}","a}b{c")      -> undefined        # closer before opener
+#   balanced("{","}","pre{body")   -> undefined        # opener, no closer
+#   balanced("{","}","pre}body")   -> undefined        # closer, no opener
+#   balanced("{","}","{a}{b}")     -> {start:0,end:2,pre:"",body:"a",post:"{b}"}
+#   balanced("{","}","pre{a}b}c")  -> {start:3,end:5,pre:"pre",body:"a",post:"b}c"}
+#   balanced("{","}","pre{a{b}c")  -> {start:5,end:7,pre:"pre{a",body:"b",post:"c"}
+#   balanced("{","}","{}")         -> {start:0,end:1,pre:"",body:"",post:""}
+#   balanced("{","}","{{{}}}")     -> {start:0,end:5,pre:"",body:"{{}}",post:""}
+#   balanced("{","}","{{{}}")      -> {start:1,end:4,pre:"{",body:"{}",post:""}
+#   balanced("{","}","{{}}}")      -> {start:0,end:3,pre:"",body:"{}",post:"}"}
+#   balanced("<",">","<a<b>c>")    -> {start:0,end:6,pre:"",body:"a<b>c",post:""}
+#   balanced("<!--","-->","a<!--b-->c")
+#     -> {start:1,end:6,pre:"a",body:"b",post:"c"}    # multi-char a/b; end is
+#        # the START index of the closer (6), not its end. body excludes a.
+#   balanced("//","//","x//y//z")  -> {start:1,end:4,pre:"x",body:"y",post:"z"}
+#   balanced("%","%","pre%in%post")-> {start:3,end:6,pre:"pre",body:"in",post:"post"}
+#   balanced("%","%","%a%b%")      -> {start:0,end:2,pre:"",body:"a",post:"b%"}
+#   balanced("%","%","%%")         -> {start:0,end:1,pre:"",body:"",post:""}
+#   balanced("%","%","%")          -> undefined        # only one occurrence
+#   balanced("aa","aa","aaa")      -> {start:0,end:1,pre:"",body:"",post:"a"}
+#        # a===b multi-char: [ai,bi] = [indexOf("aa")=0, indexOf("aa",1)=1].
+#   # RegExp args (coerced via str.match, group 0):
+#   balanced(/\{/,"}","pre{body}post")
+#     -> {start:3,end:8,pre:"pre",body:"body",post:"post"}
+#   balanced(/\{/,/\}/,"pre{in{ner}}post")
+#     -> {start:3,end:11,pre:"pre",body:"in{ner}",post:"post"}
+#   balanced(/<!--/,/-->/,"x<!--y-->z")
+#     -> {start:1,end:6,pre:"x",body:"y",post:"z"}     # a="<!--" b="-->" via match
+#   balanced(/ZZZ/,"}","pre}post") -> undefined        # regex a no-match -> a=null
+#   balanced(/x?/,"}","ab}cd")     -> {start:2,end:2,pre:"ab",body:"",post:"cd"}
+#        # /x?/ matches "" at 0 -> a="". Then range("","}","ab}cd"):
+#        # ai=indexOf("")=0, bi=indexOf("}",1)=2; a!==b; scan: i=0==ai push,
+#        # ai=indexOf("",1)=1; ... eventually result=[2,2]. body = slice(2+0,2)="".
+#   # Empty-string literal a/b (in envelope):
+#   balanced("","}","ab}cd")       -> {start:2,end:2,pre:"ab",body:"",post:"cd"}
+#   balanced("{","","a{bc")        -> {start:1,end:2,pre:"a",body:"",post:"bc"}
+#   balanced("","","abc")          -> {start:0,end:1,pre:"",body:"a",post:"bc"}
+#        # a==="" b==="": a===b fast path. ai=indexOf("")=0,
+#        # bi=indexOf("",1)=1 -> [0,1]. body=slice(0,1)="a".
+
+# ============================================================================
+# RETURN-SHAPE CONTRACT
+# ============================================================================
+# On match: a plain object with EXACTLY keys [start, end, pre, body, post] in
+#   that insertion order. start/end are integers; pre/body/post are strings.
+#   All values are JSON/codec round-trippable. No nested functions/symbols.
+# On no match: the literal value `undefined` (NOT null, NOT {}). Under the
+#   factory codec a returned `undefined` is recorded as the no-value result;
+#   the re-emitter MUST return JS `undefined` (do not coerce to null/{}).
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full balanced/maybeMatch/range pipeline above, including:
+#       * RegExp -> group-0 string coercion (or null on no-match), done first.
+#       * range guard `ai >= 0 && bi > 0` (note strict > 0).
+#       * a===b fast path returning [ai, indexOf(a, ai+1)].
+#       * the nesting stack scan with the begs/left/right leftover fallback.
+#       * result object key order start,end,pre,body,post.
+#       * body slice uses (coerced a).length; post slice uses (coerced b).length.
+#       * undefined (not null) on no match.
+#   - String/RegExp a, String/RegExp b, string str.
+#   - Empty-string a and/or b (well-defined via indexOf("") semantics).
+# CARRIED DATA: none. No tables, no constants beyond the literal control flow.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; documented so a
+#   blind re-emitter still knows the shape, but not graded):
+#   - Non-string `str` (number, null, undefined, object): `str.match` /
+#     `str.indexOf` / `str.slice` throw TypeError (or, for objects with those
+#     methods, behave per that object). The real package does not guard. The
+#     codec could carry numbers, but behavior is environment-coercion noise, so
+#     it is EXCLUDED from the generator.
+#   - `a`/`b` that are neither string nor RegExp (number, object): not coerced
+#     by the two RegExp guards; passed straight to indexOf, which string-coerces
+#     them. Out of stated contract; excluded from generator.
+#   - No mutation of any argument; no side effects; no I/O. (Pure.)
+
+# ============================================================================
+# SELF-CONSISTENCY CROSS-CHECK
+# ============================================================================
+# Every value genInputs can emit is one of: a/b in {single brace char "{","}",
+# "<",">", identical-char pairs "%"/"//"/"@"/"aa", multi-char "<!--"/"-->",
+# empty "", or RegExp literals matching those}; str a string of those brackets
+# with optional "pre"/"body"/"post"/letters. Each such combination's behavior is
+# defined by the BEHAVIOR pipeline above (no value routes to undocumented data).
+# Conversely the SIR documents no behavior that genInputs cannot or should not
+# emit (non-string str and non-string/regex a/b are explicitly OUT and not
+# emitted). The pair is closed.
+
+PROVENANCE balanced-match@1.0.2 ; repo git://github.com/juliangruber/balanced-match ; MIT ; source file index.js (module.exports = balanced; balanced.range = range)

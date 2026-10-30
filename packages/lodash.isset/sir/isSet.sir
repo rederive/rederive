@@ -1,0 +1,159 @@
+UNIT isSet
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isSet(value: any) -> boolean       # default export; module.exports = isSet (the function itself)
+DEPENDS-ON none                        # zero runtime deps; self-contained single file
+
+# ---------------------------------------------------------------------------
+# PURPOSE
+# ---------------------------------------------------------------------------
+# Predicate: returns a STRICT boolean (true | false) that is true iff `value`
+# is classified as a JavaScript `Set` object, else false. This is the lodash
+# `_.isSet` method, exported standalone as the package's default export.
+#
+# RETURN TYPE: strict boolean. Confirmed by running the real package:
+#   typeof isSet(new Set()) === 'boolean'  and  isSet(new Set()) === true
+#   typeof isSet([])        === 'boolean'  and  isSet([])        === false
+# Never returns a truthy/falsy non-boolean.
+#
+# ARITY: one positional arg. Called with no arg => value is `undefined` => false.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (this is the crux of the unit — read the SEAM note carefully)
+# ---------------------------------------------------------------------------
+# The source binds the exported function at module-load time by ONE of two
+# implementations, chosen by whether a Node.js internal helper is reachable:
+#
+#   var nodeUtil  = (try { freeProcess.binding('util') } catch {})   # may be undefined
+#   var nodeIsSet = nodeUtil && nodeUtil.isSet                        # i.e. util.types.isSet
+#   var isSet     = nodeIsSet ? baseUnary(nodeIsSet) : baseIsSet
+#
+# Where:
+#   baseUnary(fn)      = function(value){ return fn(value); }   # caps arity to 1 arg
+#   baseIsSet(value)   = isObjectLike(value) && getTag(value) == '[object Set]'
+#   isObjectLike(v)    = !!v && typeof v == 'object'            # excludes null and primitives & functions
+#   getTag(v)          = baseGetTag(v) = Object.prototype.toString.call(v)
+#                        (the modern-engine path; the legacy getTag-rewrite branch on lines
+#                         213-234 only activates on broken engines (IE11/Edge<14/old-Node) where a
+#                         built-in's toString tag is wrong — it does NOT activate on a conformant
+#                         V8 and is irrelevant to every in-scope input below.)
+#
+# So there are exactly TWO candidate implementations:
+#   PATH-A (nodeIsSet present): isSet(v) === util.types.isSet(v)
+#       -> true iff v has an internal [[SetData]] slot (a genuine native Set), ignoring
+#          prototype tampering / Symbol.toStringTag shadowing / fake tags.
+#   PATH-B (nodeIsSet absent):  isSet(v) === isObjectLike(v) && O.p.toString.call(v) == '[object Set]'
+#       -> true iff v is object-like AND its brand string is exactly '[object Set]'.
+#
+# === SEAM CLASSIFICATION ===================================================
+# `nodeUtil = freeProcess.binding('util')` is an AMBIENT read of the host Node
+# runtime (an environment seam). On a modern Node (verified: v24.16.0) the seam
+# RESOLVES — process.binding('util').isSet is a function — so PATH-A is active
+# in the real package as installed. In a hardened/no-binding host the seam is
+# empty and PATH-B is active.
+#
+# CRITICAL FINDING (verified by experiment, contradicts the operator hint that
+# nodeIsSet is "just perf"): the two paths are NOT behaviorally identical. They
+# DIVERGE on adversarial inputs:
+#   - real Set with shadowed Symbol.toStringTag='NotASet':  PATH-A true,  PATH-B false
+#   - plain {} with Symbol.toStringTag='Set':               PATH-A false, PATH-B true
+#   - Object.create(Set.prototype):                         PATH-A false, PATH-B true
+#   - new Proxy(new Set(), {}):                             PATH-A false, PATH-B true
+#   - cross-realm (vm) new Set():                           PATH-A true,  PATH-B true  (agree)
+# So nodeIsSet is BEHAVIOR-CHANGING, not a pure performance fast-path.
+#
+# WHY THE SEAM NEED NOT BE INJECTED HERE (deterministic, not non-deterministic):
+# the seam only changes the answer on the adversarial inputs listed above, and
+# EVERY ONE of those inputs is NON-CODEC-ROUND-TRIPPABLE (a tampered prototype,
+# a shadowed Symbol tag, an Object.create, a Proxy, a cross-realm object — none
+# survive JSON.stringify(encode(args)) into the held-out store). They are
+# therefore declared OUT-OF-ENVELOPE and are NEVER emitted by genInputs.
+#
+# OVER THE IN-ENVELOPE INPUT SET (everything genInputs can emit), PATH-A and
+# PATH-B return the IDENTICAL boolean for every input — verified exhaustively
+# over the curated coverage prefix. A plain `new Set([...])` round-tripped by
+# the codec is a genuine native Set with an untouched prototype and brand
+# '[object Set]', so both paths return true; every non-Set in-envelope value
+# is rejected by both. Hence over the gradable input envelope the unit is a
+# pure, deterministic function and ORACLE-CLASS is `deterministic` (value mode).
+#
+# BLIND RE-EMITTER GUIDANCE: implement EITHER path — both converge on the
+# in-envelope inputs. The simplest faithful implementation is PATH-B:
+#       export default function isSet(value) {
+#         return (!!value && typeof value === 'object')
+#                && Object.prototype.toString.call(value) === '[object Set]';
+#       }
+# Equivalently you may delegate to util.types.isSet (PATH-A). Do NOT add any
+# special handling for tampered tags, Proxies, Object.create, or cross-realm
+# objects — those are out of envelope and not graded.
+
+# ---------------------------------------------------------------------------
+# DECISION TABLE  (the complete in-envelope contract — every row verified
+#                  against the real package; PATH-A == PATH-B on all of them)
+# ---------------------------------------------------------------------------
+#   value                              -> result
+#   ---------------------------------------------
+#   new Set()            (empty)       -> true
+#   new Set([1,2,3])                   -> true
+#   new Set([1,'a',null])              -> true
+#   new Set([new Set([1])]) (nested)   -> true
+#   new Map()                          -> false   # sibling collection, discriminating
+#   new Map([[1,2]])                   -> false
+#   []                                 -> false
+#   [1,2,3]                            -> false
+#   {}                                 -> false
+#   {a:1}                              -> false
+#   null                               -> false
+#   undefined  (incl. no-arg call)     -> false
+#   NaN                                -> false
+#   Infinity / -Infinity              -> false
+#   -0 / 0                             -> false
+#   number (e.g. 1, 3.14)              -> false
+#   '' (empty string)                  -> false
+#   'set' / any string                 -> false
+#   true / false                       -> false
+#   bigint (0n, 123n)                  -> false
+#   Uint8Array / Buffer                -> false
+#   RegExp (/abc/g)                    -> false
+#   Date                               -> false
+#   boxed new Number/String/Boolean    -> false   # (out-of-codec; documented, not emitted)
+#
+# DOCUMENTED-AS-OUT (correct behavior recorded for completeness; NOT emitted by
+# genInputs because they are not codec-round-trippable):
+#   function(){}                       -> false   # typeof 'function', isObjectLike false
+#   () => {}                           -> false
+#   Symbol('x')                        -> false   # typeof 'symbol'
+#   new WeakSet()                      -> false   # brand '[object WeakSet]' != '[object Set]'; util.types.isSet false
+#   new WeakMap()                      -> false
+#   boxed new Number(5) etc.           -> false   # codec does not preserve boxed identity
+# And the PATH-divergent adversarial inputs (shadowed tag, fake tag,
+# Object.create(Set.prototype), Proxy(Set), cross-realm Set) — out of envelope.
+
+ORACLE value -> oracle.json
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the object-like guard (!!v && typeof v === 'object') and the
+#     Object.prototype.toString.call(v) === '[object Set]' brand check
+#     (PATH-B), OR equivalently delegation to util.types.isSet (PATH-A);
+#   - strict-boolean return;
+#   - arity-1 / no-arg => false.
+# CARRIED DATA: none. No literal tables; the only "constants" are the inline
+#   tag string '[object Set]' and sibling tag strings, fully transcribed above.
+#   => NO carried.json.
+# OUT-OF-CONTRACT: none. The unit is a pure read-only predicate with no side
+#   effects and no state mutation. The single ambient read (process.binding
+#   'util') is the seam, resolved as documented; it does not mutate anything.
+
+# ---------------------------------------------------------------------------
+# PROVENANCE
+# ---------------------------------------------------------------------------
+# package: lodash.isset@4.4.2  (MIT)
+# repo:    lodash/lodash  (custom modularized build: `lodash modularize exports="npm"`)
+# source:  index.js  (single file; lines of interest: 52-59 seam, 68-72 baseUnary,
+#          158-160 baseGetTag, 185-187 baseIsSet, 209 getTag, 344-346 isObjectLike,
+#          365 export binding, 367 module.exports)
+# verified against the installed module on Node v24.16.0 (PATH-A active);
+# decision table holds on both PATH-A and PATH-B.

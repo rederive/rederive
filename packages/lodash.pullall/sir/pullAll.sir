@@ -1,0 +1,281 @@
+UNIT pullAll
+KIND STATE
+ORACLE-CLASS deterministic
+SIG pullAll(array, values) -> array        # default export: module.exports = pullAll
+
+# ===========================================================================
+# OVERVIEW
+# ===========================================================================
+# pullAll is _.pull's array-of-values sibling: it REMOVES, IN PLACE, every
+# element of `array` that is equal (under lodash's SameValueZero indexOf) to
+# ANY element of the `values` ARRAY, MUTATES `array`, and RETURNS THE SAME
+# `array` REFERENCE. `values` is a single ARRAY argument (NOT variadic — that
+# distinction is the whole difference between _.pull and _.pullAll).
+#
+# STATE / MUTATION CONTRACT (load-bearing):
+#   * `array` is mutated in place via Array.prototype.splice.
+#   * The return value IS the same object reference as the input `array`
+#     (pullAll(a, v) === a whenever the work branch runs, AND === a in the
+#     guard branch too — it always returns `array`). The observable downstream
+#     is the RETURNED (== mutated) array.
+#   * Survivor ORDER is preserved (splice removes matched indices; the rest
+#     keep their relative order).
+#
+# SEAM CHECK: none. No clock / RNG / env / fs / net. Pure-but-mutating. Fully
+# deterministic -> ORACLE-CLASS deterministic, value mode. No injection needed.
+
+# ---------------------------------------------------------------------------
+# DEPENDS-ON
+# ---------------------------------------------------------------------------
+DEPENDS-ON  Array.prototype.splice   # captured ONCE at module load as
+                                     #   var arrayProto = Array.prototype;
+                                     #   var splice     = arrayProto.splice;
+                                     # invoked as splice.call(array, fromIndex, 1).
+                                     # Host built-in (ECMA-262 23.1.3.x). The
+                                     # observable effect is "delete 1 element at
+                                     # fromIndex, shifting the tail left by one";
+                                     # a re-emitter MAY use array.splice(i,1) or
+                                     # any equivalent in-place single-element
+                                     # delete-and-compact — the OBSERVABLE result
+                                     # (final element order) is what is graded.
+            strict-equality (===)    # element comparison; see NODE 3 (SameValueZero).
+            none-else                # zero npm/runtime dependencies.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — reproduce exactly)
+# ---------------------------------------------------------------------------
+#
+#   The shipped source (verbatim shape):
+#
+#     function pullAll(array, values) {
+#       return (array && array.length && values && values.length)
+#         ? basePullAll(array, values)
+#         : array;
+#     }
+#     module.exports = pullAll;
+#
+#   where basePullAll (with NO iteratee, NO comparator passed by pullAll):
+#
+#     function basePullAll(array, values) {
+#       var indexOf = baseIndexOf,        # comparator is undefined -> baseIndexOf
+#           index   = -1,
+#           length  = values.length,
+#           seen    = array;
+#       if (array === values) {           # aliasing guard (NODE 4)
+#         values = copyArray(values);
+#       }
+#       while (++index < length) {        # for each value in `values`
+#         var fromIndex = 0,
+#             value     = values[index],
+#             computed  = value;          # no iteratee -> computed === value
+#         while ((fromIndex = indexOf(seen, computed, fromIndex)) > -1) {
+#           splice.call(array, fromIndex, 1);   # seen === array here, so the
+#                                               # `seen !== array` extra splice
+#                                               # NEVER fires for pullAll (no iteratee)
+#         }
+#       }
+#       return array;
+#     }
+#
+# -------- NODE 1 (GUARD — the outer pullAll expression) --------
+#   Evaluate `array && array.length && values && values.length` (JS &&, short-circuit,
+#   TRUTHINESS, NOT == null). If ANY conjunct is falsy -> SKIP basePullAll and
+#   RETURN `array` UNCHANGED (the same reference, no mutation, no throw):
+#     NODE 1.a  `array` falsy:
+#                 null       -> return null
+#                 undefined  -> return undefined
+#                 false / 0 / -0 / "" / NaN -> returned as-is (NO throw, NO .length read
+#                 beyond the truthiness short-circuit). For these, `array &&` already
+#                 short-circuits to the falsy value, which is then returned.
+#                 (genInputs emits ONLY the round-trippable falsy `array`: null. See
+#                 CODEC NOTE — undefined as a top-level arg does not survive JSON, and
+#                 false/0/""/NaN are uninstructive non-array receivers; documented here,
+#                 not all emitted.)
+#     NODE 1.b  `array.length === 0` (empty array, e.g. []):
+#                 `array.length` is 0 (falsy) -> short-circuit -> RETURN the SAME []
+#                 reference, unchanged. (EMITTED: [[], [1,2]] -> [].)
+#     NODE 1.c  `values` falsy (null / undefined / false / 0 / "" / NaN):
+#                 `values &&` short-circuits -> RETURN `array` UNCHANGED. No-op.
+#                 (EMITTED: [array, null] -> array unchanged. undefined values is the
+#                 same branch but undefined doesn't survive JSON as a top-level arg, so
+#                 null is the emitted representative; behavior is identical.)
+#     NODE 1.d  `values.length === 0` (empty values array, []):
+#                 `values.length` is 0 -> short-circuit -> RETURN `array` UNCHANGED.
+#                 No-op. (EMITTED: [[1,2,3], []] -> [1,2,3].)
+#   Only when ALL FOUR conjuncts are truthy (array is a non-empty array-like AND
+#   values is a non-empty array-like) does basePullAll run (NODE 2..4).
+#
+# -------- NODE 2 (basePullAll outer loop — iterate `values`) --------
+#   For each `value = values[index]`, index = 0 .. values.length-1 (left to right):
+#   repeatedly find and SPLICE OUT every occurrence of `value` in `array`, scanning
+#   left to right from fromIndex=0, advancing fromIndex to where the match was found
+#   on each iteration (the inner `while`):
+#     fromIndex = 0
+#     loop: fromIndex = indexOf(array, value, fromIndex)
+#           if fromIndex === -1 -> stop (this value done)
+#           else splice.call(array, fromIndex, 1)   # delete that one element
+#                 then re-enter loop WITHOUT incrementing fromIndex past it
+#                 (after splice the tail shifts left, so the SAME fromIndex now
+#                  points at the next element; indexOf resumes from there).
+#   NET EFFECT: ALL occurrences of every value in `values` are removed; an element
+#   surviving must match NONE of the values. Duplicate values inside `values`
+#   are harmless (a second pass finds nothing left to remove).
+#   Because there is NO iteratee, `seen === array` throughout, so the source's
+#   `if (seen !== array) splice.call(seen, ...)` branch is DEAD for pullAll — only
+#   the single `splice.call(array, fromIndex, 1)` ever runs.
+#
+# -------- NODE 3 (the comparator — baseIndexOf == SameValueZero) --------
+#   indexOf is baseIndexOf(array, value, fromIndex):
+#     if (value !== value) {                       # value is NaN
+#       return baseFindIndex(array, baseIsNaN, fromIndex);   # find first elem with e !== e
+#     }
+#     # value is not NaN: linear scan from fromIndex+0, using STRICT === :
+#     for i = fromIndex .. array.length-1:
+#       if (array[i] === value) return i;
+#     return -1;
+#   This is exactly lodash SameValueZero:
+#     * NaN  EQUALS NaN  (the `value !== value` branch -> baseIsNaN predicate finds
+#       any element e with e !== e). So NaN elements ARE removed when NaN is in values.
+#       VERIFIED: pullAll([1,NaN,2,NaN],[NaN]) -> [1,2].
+#     * +0 and -0 are EQUAL (strict === : 0 === -0 is true). Removing 0 removes BOTH
+#       +0 and -0; removing -0 removes both too. VERIFIED: pullAll([0,-0,1,0],[0]) ->
+#       [1]; pullAll([0,-0,1],[-0]) -> [1]. (CODEC NOTE: -0 does not survive
+#       JSON.stringify — it serializes to 0 — but BOTH the stored -0 input AND the
+#       JSON-serialized result render as 0, AND under SameValueZero +0/-0 are
+#       indistinguishable, so the OBSERVABLE is identical whether the literal was +0
+#       or -0. genInputs therefore uses +0 to represent this collapse; the SIR
+#       documents the full -0 semantics for the blind engineer.)
+#     * EVERYTHING ELSE uses STRICT === : NO type coercion.
+#         '1' (string) !== 1 (number)   -> NOT removed. VERIFIED.
+#         true !== 1, true !== "true"   -> NOT coerced.
+#         "" (empty string) !== 0       -> distinct. VERIFIED pullAll(['',0,'',0],['']) -> [0,0].
+#         null === null, undefined === undefined (each matches its own kind only;
+#           null !== undefined).
+#         objects/arrays/functions: REFERENCE equality only (=== on identity). Two
+#           structurally-equal-but-distinct objects do NOT match. VERIFIED:
+#           pullAll([o,{x:1},o],[o]) removes only the two `o` refs.
+#   baseFindIndex (NaN path) detail: starts at fromIndex - 1 then ++index < length;
+#   scans left to right for the first index whose element e satisfies e !== e
+#   (i.e. is itself NaN). Returns that index or -1.
+#
+# -------- NODE 4 (aliasing guard `array === values`) --------
+#   If the SAME array reference is passed as BOTH `array` and `values`, basePullAll
+#   first does `values = copyArray(values)` (a shallow length-driven copy) so the
+#   loop iterates a STABLE snapshot of the values while `array` shrinks under splice.
+#   NET: pullAll(a, a) removes every element (each element equals itself) -> a becomes [].
+#   VERIFIED: const a=[1,2,3]; pullAll(a,a) -> [] (and === a).
+#   CODEC NOTE: across the oracle codec each top-level arg decodes INDEPENDENTLY to a
+#   SEPARATE copy, so the runtime `array === values` identity is UNREACHABLE through a
+#   stamped vector — the two decoded args are distinct objects. BUT the OBSERVABLE is
+#   identical to passing two distinct arrays with the same contents (pullAll(a,[..same
+#   contents..]) also -> []), because copyArray only matters for in-place stability
+#   which the distinct-copy case already has. VERIFIED both -> []. genInputs therefore
+#   exercises this via a DISTINCT same-contents tuple ([1,2,3],[1,2,3]) -> []; the
+#   true-aliasing path is documented here and is observably equivalent.
+#
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+#   The harness DEDUPES on encode(args) BEFORE running, then stamps
+#   expected = realFn(...args.map(decode)) and stores BOTH args and expected via
+#   encode() taken AFTER the run. For a STATE/mutating unit this is faithful ONLY
+#   when decode(args[i]) is a COPY of the receiver. decode(PLAIN ARRAY) -> v.map(decode)
+#   => a NEW array; realFn mutates the COPY; the stored `args[0]` keeps the ORIGINAL
+#   contents and `expected` holds the mutated (post-removal) result. VERIFIED by
+#   simulating the stamp pipeline: stamp([["a","b","c","a","b","c"],["a","c"]]) ->
+#   args [["a","b","c","a","b","c"],["a","c"]], expected ["b","b"]. Because genInputs
+#   emits ONLY plain arrays (and round-trippable falsy `array`/`values`), every stamped
+#   vector is decode-COPIED and self-consistent. No SAME-REF mutating receiver
+#   (Uint8Array / Buffer) is emitted (those would self-poison a mutating-unit vector
+#   exactly as documented in the sibling lodash.reverse SIR). The identity contract
+#   (returned === input array) is a STATE property; the value-mode oracle grades the
+#   RETURNED array's CONTENTS/ORDER (which is the observable). No throw paths exist for
+#   any codec-faithful input (see SCOPE).
+
+# ---------------------------------------------------------------------------
+SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   * NODE 1 four-conjunct truthiness guard (array && array.length && values &&
+#     values.length) with short-circuit -> else return `array` unchanged.
+#   * NODE 2 nested-loop in-place removal of EVERY occurrence of EVERY value, via
+#     repeated single-element splice, scanning left to right; survivor order preserved.
+#   * NODE 3 SameValueZero comparator: NaN==NaN (the value!==value -> baseIsNaN path),
+#     +0==-0, otherwise STRICT === (no coercion; object/array/fn reference equality).
+#   * NODE 4 array===values aliasing copy (observably equivalent to distinct
+#     same-contents arrays).
+#   * STATE contract: array mutated in place; returns the SAME array reference.
+#
+# CARRIED DATA: NONE. No literal table / S-box / charmap. The only captured datum is
+#   the host built-in Array.prototype.splice reference (a primitive, not a
+#   transcribable constant). NO <unit>.carried.json is produced.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#   * Non-array-like ARRAY-arg receivers (number/boolean/string-as-array etc.):
+#     a STRING `array` is truthy with a `.length`, so basePullAll would try to splice
+#     a string (string indices are non-writable -> splice.call on a primitive boxes it
+#     and is a no-op / engine-specific) — out of the documented array contract; NOT
+#     emitted. Falsy non-array receivers (0/false/""/NaN/undefined) hit NODE 1.a and
+#     are returned as-is, but only `null` is the emitted falsy representative
+#     (round-trippable; undefined does not survive JSON top-level; 0/false/""/NaN are
+#     uninstructive non-arrays).
+#   * SAME-REFERENCE mutating receivers (Uint8Array / Buffer / typed arrays): a value-
+#     mode vector for a mutating unit is self-poisoned when decode returns the SAME ref
+#     (stored args re-encoded AFTER mutation == expected). NEVER emitted. (pullAll on a
+#     typed array also can't splice it meaningfully — splice is not a typed-array op.)
+#   * FUNCTION elements, SYMBOL elements, and any element whose identity can't be
+#     JSON-faithfully reproduced across a clean-room boundary: NON-round-trippable ->
+#     DOCUMENTED-OUT, NEVER emitted. (Reference-equality semantics mean a re-emitter
+#     could not reconstruct the same function/symbol identity anyway.)
+#   * -0 / NaN as the ONLY way to express the +0/-0 collapse and NaN-removal: the
+#     COLLAPSE/REMOVAL behavior IS in-contract and IS exercised — using +0 (collapse)
+#     and NaN (NaN survives JSON as `null`? NO — see CODEC NOTE) representatives that
+#     round-trip. SPECIFICALLY: NaN does NOT survive JSON.stringify (-> null). So the
+#     NaN-removal path is exercised by emitting `null` ELEMENTS (null IS round-trippable
+#     and exercises the strict-=== self-match path) AND is fully DOCUMENTED for the
+#     blind engineer via NODE 3; raw NaN literals are NOT emitted (they'd serialize to
+#     null and mis-stamp). The blind re-emitter reconstructs NaN handling from NODE 3.
+#
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ---------------------------------------------------------------------------
+# This is the DEFAULT export. The re-emitted module MUST do:  export default pullAll;
+# Implement exactly:
+#   function pullAll(array, values) {
+#     if (!(array && array.length && values && values.length)) return array;  # NODE 1
+#     for (let vi = 0; vi < values.length; vi++) {                            # NODE 2
+#       const value = values[vi];
+#       let fromIndex = 0;
+#       while ((fromIndex = sameValueZeroIndexOf(array, value, fromIndex)) > -1) {
+#         array.splice(fromIndex, 1);   # delete 1 at fromIndex; do NOT advance fromIndex
+#       }
+#     }
+#     return array;                     # SAME reference
+#   }
+# where sameValueZeroIndexOf(arr, value, from):                               # NODE 3
+#   if (value !== value) {              # NaN
+#     for (let i = from; i < arr.length; i++) if (arr[i] !== arr[i]) return i;
+#     return -1;
+#   }
+#   for (let i = from; i < arr.length; i++) if (arr[i] === value) return i;   # strict ===
+#   return -1;
+# HARD RULES:
+#   * Guard with the FOUR-conjunct truthiness test; on falsy return `array` AS-IS
+#     (do NOT throw, do NOT substitute `array == null`).
+#   * `values` is an ARRAY — iterate it; do NOT treat it as variadic.
+#   * Comparison is SameValueZero: NaN matches NaN, +0 matches -0, otherwise STRICT
+#     === (NO coercion; reference equality for objects).
+#   * Remove EVERY occurrence of EACH value; preserve survivor order; mutate IN PLACE;
+#     return the SAME array reference.
+
+# ---------------------------------------------------------------------------
+PROVENANCE
+# ---------------------------------------------------------------------------
+#   package:  lodash.pullall@4.2.0  (npm)
+#   export:   module.exports = pullAll  (default export)
+#   repo:     lodash/lodash  (custom modularized build; "lodash modularize exports=npm")
+#   license:  MIT  (Copyright jQuery Foundation and other contributors; Underscore.js
+#             1.8.3 lineage)
+#   file:     index.js  (213-line file; arrayProto/splice at lines 124/127;
+#             basePullAll at lines 140-165; copyArray at 175-184; baseIndexOf at
+#             62-75; baseFindIndex at 41-51; baseIsNaN at 106-108; pullAll at
+#             206-210; module.exports at 212)

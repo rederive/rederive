@@ -1,0 +1,597 @@
+{
+ "mode": "vectors",
+ "unit": "directive",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "UNIT x\nSIG f(a: text) -> text\nKIND FUNCTIONAL",
+    "SIG"
+   ],
+   "expected": "f(a: text) -> text"
+  },
+  {
+   "name": "v1",
+   "args": [
+    "SIG x",
+    "SIG\n"
+   ],
+   "expected": {
+    "__throw": "not a directive name: \"SIG\\n\""
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "x",
+    "Ä"
+   ],
+   "expected": {
+    "__throw": "not a directive name: \"Ä\""
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "﻿﻿SIG a\n﻿  b\n  ﻿c",
+    "SIG"
+   ],
+   "expected": "a b c"
+  },
+  {
+   "name": "v4",
+   "args": [
+    "SIG \t ",
+    "SIG"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v5",
+   "args": [
+    "SIG first\nSIG second",
+    "SIG"
+   ],
+   "expected": "first"
+  },
+  {
+   "name": "v6",
+   "args": [
+    "SIG a\n# comment\n  b",
+    "SIG"
+   ],
+   "expected": "a b"
+  },
+  {
+   "name": "v7",
+   "args": [
+    "SIG x\nSIG real",
+    "SIG"
+   ],
+   "expected": "real"
+  },
+  {
+   "name": "v8",
+   "args": [
+    "ENVELOPE first line\n  continued here\n\tand tab\n    four\nNOTE n",
+    "ENVELOPE"
+   ],
+   "expected": "first line continued here and tab four"
+  },
+  {
+   "name": "v9",
+   "args": [
+    "SIG a#b # c",
+    "SIG"
+   ],
+   "expected": "a#b"
+  },
+  {
+   "name": "v10",
+   "args": [
+    "SIG \"a # b",
+    "SIG"
+   ],
+   "expected": "\"a"
+  },
+  {
+   "name": "v11",
+   "args": [
+    "SIG f(\"a # b\") x=\" # \" k:\" # \" [\" # \"] {\" # \"} a,\" # \"",
+    "SIG"
+   ],
+   "expected": "f(\"a # b\") x=\" # \" k:\" # \" [\" # \"] {\" # \"} a,\" # \""
+  },
+  {
+   "name": "v12",
+   "args": [
+    "SIG \"x\\\" # y\" z",
+    "SIG"
+   ],
+   "expected": "\"x\\\" # y\" z"
+  },
+  {
+   "name": "v13",
+   "args": [
+    "SIG \"a\\😀\" # b \"c\"",
+    "SIG"
+   ],
+   "expected": "\"a\\😀\""
+  },
+  {
+   "name": "v14",
+   "args": [
+    "PINNED regex A = /x/ CITED R1",
+    "PINNED"
+   ],
+   "expected": "regex A = /x/"
+  },
+  {
+   "name": "v15",
+   "args": [
+    "SIG \"a CITED b\" c CITED d",
+    "SIG"
+   ],
+   "expected": "\"a CITED b\" c"
+  },
+  {
+   "name": "v16",
+   "args": [
+    "SIG \"a CITED # b\" c",
+    "SIG"
+   ],
+   "expected": "\"a CITED # b\" c"
+  },
+  {
+   "name": "v17",
+   "args": [
+    "SIG a\nCITED: b",
+    "SIG"
+   ],
+   "expected": "a CITED: b"
+  },
+  {
+   "name": "v18",
+   "args": [
+    "SIG a;\"b # c\" d|\"e # f\" g",
+    "SIG"
+   ],
+   "expected": "a;\"b # c\" d|\"e # f\" g"
+  },
+  {
+   "name": "v19",
+   "args": [
+    "SIG /\"a # b\"/ # c",
+    "SIG"
+   ],
+   "expected": "/\"a"
+  },
+  {
+   "name": "v20",
+   "args": [
+    "SIG \"a\"\"\"b # c",
+    "SIG"
+   ],
+   "expected": "\"a\"\"\"b"
+  },
+  {
+   "name": "v21",
+   "args": [
+    "SIG a\n  \"b CITED c\";\"d CITED e\" CITED f",
+    "SIG"
+   ],
+   "expected": "a \"b CITED c\";\"d CITED e\""
+  },
+  {
+   "name": "v22",
+   "args": [
+    "﻿  SIG x\n  ﻿\n﻿ \t\nSIG y\n ﻿SIG z",
+    "SIG"
+   ],
+   "expected": "y SIG z"
+  },
+  {
+   "name": "v23",
+   "args": [
+    "SIG a\nCITED:​x\n﻿⁠R1 y",
+    "SIG"
+   ],
+   "expected": "a CITED:​x ⁠R1 y"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "R007 seven\nR7 plain",
+    "R007"
+   ],
+   "expected": "seven"
+  },
+  {
+   "name": "v25",
+   "args": [
+    "SIG: x",
+    "SIG:"
+   ],
+   "expected": {
+    "__throw": "not a directive name: \"SIG:\""
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "KIND a\r\nSIG crlf\r\n  more\r\nSTATE s",
+    "SIG"
+   ],
+   "expected": "crlf more"
+  },
+  {
+   "name": "v27",
+   "args": [
+    "SIG a SIG b",
+    "SIG"
+   ],
+   "expected": "a SIG b"
+  },
+  {
+   "name": "v28",
+   "args": [
+    "ORACLE value",
+    "ORACLE-CLASS"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v29",
+   "args": [
+    "SIG\nSIG later",
+    "SIG"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v30",
+   "args": [
+    "SIG  x ",
+    "SIG"
+   ],
+   "expected": " x "
+  },
+  {
+   "name": "v31",
+   "args": [
+    "UNIT u\nSIG​x\nSIG⁠y\nSIG᠎z",
+    "UNIT"
+   ],
+   "expected": "u SIG​x SIG⁠y SIG᠎z"
+  },
+  {
+   "name": "v32",
+   "args": [
+    "SIG a\nsig b\nprose line\nKIND k",
+    "SIG"
+   ],
+   "expected": "a sig b prose line"
+  },
+  {
+   "name": "v33",
+   "args": [
+    "SIG # only comment",
+    "SIG"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "v34",
+   "args": [
+    "SIG pipe 12\" wide # note \"q",
+    "SIG"
+   ],
+   "expected": "pipe 12\" wide"
+  },
+  {
+   "name": "v35",
+   "args": [
+    "SIG a\"b # c\"",
+    "SIG"
+   ],
+   "expected": "a\"b"
+  },
+  {
+   "name": "v36",
+   "args": [
+    "SIG \"x\\\\\" # y\" z",
+    "SIG"
+   ],
+   "expected": "\"x\\\\\""
+  },
+  {
+   "name": "v37",
+   "args": [
+    "SIG \"a\"\"b # c\" d",
+    "SIG"
+   ],
+   "expected": "\"a\"\"b # c\" d"
+  },
+  {
+   "name": "v38",
+   "args": [
+    "SIG a CITEDx XCITED b",
+    "SIG"
+   ],
+   "expected": "a CITEDx XCITED b"
+  },
+  {
+   "name": "v39",
+   "args": [
+    "R1 \"a CITED b\" null",
+    "R1"
+   ],
+   "expected": "\"a CITED b\" null"
+  },
+  {
+   "name": "v40",
+   "args": [
+    "SIG \"open CITED x",
+    "SIG"
+   ],
+   "expected": "\"open"
+  },
+  {
+   "name": "v41",
+   "args": [
+    "CITED: x\nSIG a\nCITED:\nCITED:: y",
+    "SIG"
+   ],
+   "expected": "a CITED: CITED:: y"
+  },
+  {
+   "name": "v42",
+   "args": [
+    "SIG <\"a # b\"> !\"c CITED d\" &\"e # f\"",
+    "SIG"
+   ],
+   "expected": "<\"a # b\"> !\"c CITED d\" &\"e # f\""
+  },
+  {
+   "name": "v43",
+   "args": [
+    "SIG f(x)\"a # b\" 12\"c # d\"",
+    "SIG"
+   ],
+   "expected": "f(x)\"a"
+  },
+  {
+   "name": "v44",
+   "args": [
+    "SIG a\"\"b # c\"",
+    "SIG"
+   ],
+   "expected": "a\"\"b"
+  },
+  {
+   "name": "v45",
+   "args": [
+    "SIG a\n  ﻿\"b # c\"",
+    "SIG"
+   ],
+   "expected": "a \"b # c\""
+  },
+  {
+   "name": "v46",
+   "args": [
+    "R1:​x\nR1 real",
+    "R1"
+   ],
+   "expected": "real"
+  },
+  {
+   "name": "v47",
+   "args": [
+    "ORACLE value -> oracles/u.json  CANONICAL-SHA256 abababababababababababababababababababababababababababababababab",
+    "ORACLE"
+   ],
+   "expected": "value -> oracles/u.json  CANONICAL-SHA256 abababababababababababababababababababababababababababababababab"
+  },
+  {
+   "name": "v48",
+   "args": [
+    "SIG x",
+    ""
+   ],
+   "expected": {
+    "__throw": "not a directive name: \"\""
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "SIG a\nCITED x",
+    "CITED"
+   ],
+   "expected": {
+    "__throw": "CITED is an attribute, never a directive: read it from a directive's attrs"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "KIND a\rSIG cr-only\r  more\rSTATE s",
+    "SIG"
+   ],
+   "expected": "cr-only more"
+  },
+  {
+   "name": "v51",
+   "args": [
+    "",
+    "SIG"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v52",
+   "args": [
+    "SIGNAL on\nSIG-X y\nSIG real",
+    "SIG"
+   ],
+   "expected": "real"
+  },
+  {
+   "name": "v53",
+   "args": [
+    "SIG: legacy colon",
+    "SIG"
+   ],
+   "expected": "legacy colon"
+  },
+  {
+   "name": "v54",
+   "args": [
+    "SIG a\n \n  b",
+    "SIG"
+   ],
+   "expected": "a   b"
+  },
+  {
+   "name": "v55",
+   "args": [
+    "UNIT u\nSIGx\nSIG　y",
+    "SIG"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v56",
+   "args": [
+    "SIG f() -> text # trailing comment",
+    "SIG"
+   ],
+   "expected": "f() -> text"
+  },
+  {
+   "name": "v57",
+   "args": [
+    "SIG \"a # b\" c # d",
+    "SIG"
+   ],
+   "expected": "\"a # b\" c"
+  },
+  {
+   "name": "v58",
+   "args": [
+    "PINNED regex Q = /\"/ # c \"x\"",
+    "PINNED"
+   ],
+   "expected": "regex Q = /\"/"
+  },
+  {
+   "name": "v59",
+   "args": [
+    "SIG x \"a # b\"",
+    "SIG"
+   ],
+   "expected": "x \"a"
+  },
+  {
+   "name": "v60",
+   "args": [
+    "SIG \"a\\ \" # b \"c\"",
+    "SIG"
+   ],
+   "expected": "\"a\\ \""
+  },
+  {
+   "name": "v61",
+   "args": [
+    "SIG a\n  \"b # c\" # d",
+    "SIG"
+   ],
+   "expected": "a \"b # c\""
+  },
+  {
+   "name": "v62",
+   "args": [
+    "SIG CITED x\n  b",
+    "SIG"
+   ],
+   "expected": "b"
+  },
+  {
+   "name": "v63",
+   "args": [
+    "SIG a\n  \"x EARNED y\" ANCHOR z\n  w",
+    "SIG"
+   ],
+   "expected": "a \"x EARNED y\" w"
+  },
+  {
+   "name": "v64",
+   "args": [
+    "SIG a\n  CITED x\n  b",
+    "SIG"
+   ],
+   "expected": "a b"
+  },
+  {
+   "name": "v65",
+   "args": [
+    "SIG a\nEARNED b CITED c",
+    "EARNED"
+   ],
+   "expected": "b"
+  },
+  {
+   "name": "v66",
+   "args": [
+    "SIG +\"a # b\" -\"c # d\" *\"e # f\" ~\"g # h\" ?\"i # j\" x",
+    "SIG"
+   ],
+   "expected": "+\"a"
+  },
+  {
+   "name": "v67",
+   "args": [
+    "SIG \"\"\"a # b\" # c",
+    "SIG"
+   ],
+   "expected": "\"\"\"a # b\""
+  },
+  {
+   "name": "v68",
+   "args": [
+    "PINNED regex Q = /\"(?:a|b)*\"/ CITED R5 \"x\"\n  y +\"a # b\" ?\"c # d\"",
+    "PINNED"
+   ],
+   "expected": "regex Q = /\"(?:a|b)*\"/ y +\"a"
+  },
+  {
+   "name": "v69",
+   "args": [
+    "SIG a\n\t﻿﻿b\n ﻿ ﻿c\n﻿ ﻿d",
+    "SIG"
+   ],
+   "expected": "a b c d"
+  },
+  {
+   "name": "v70",
+   "args": [
+    "UNIT u\n⁠KIND k\nKIND j",
+    "UNIT"
+   ],
+   "expected": "u ⁠KIND k"
+  },
+  {
+   "name": "v71",
+   "args": [
+    "UNIT été 😀\n  über",
+    "UNIT"
+   ],
+   "expected": "été 😀 über"
+  }
+ ]
+}

@@ -1,0 +1,253 @@
+UNIT capitalize
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG capitalize(string: any) -> string          # default export (module.exports = capitalize)
+DEPENDS-ON none                                # zero runtime deps; all helpers are inlined in the source file
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# capitalize converts the FIRST character of a string to UPPER case and ALL
+# REMAINING characters to LOWER case. It is exactly:
+#
+#     capitalize(string) = upperFirst( toString(string).toLowerCase() )
+#
+# This DIFFERS from upperFirst alone: capitalize lowercases the rest of the
+# string FIRST (whole-string .toLowerCase()), THEN uppercases the first char.
+#   capitalize('FRED')   -> 'Fred'    # rest IS lowercased
+#   upperFirst('FRED')   -> 'FRED'    # rest unchanged
+#
+# The first-character extraction is Unicode-AWARE: an astral surrogate pair,
+# a base+combining-mark cluster, a regional-indicator pair, a ZWJ sequence,
+# or a fitzpatrick-modified emoji is treated as ONE logical first "symbol",
+# and only that whole first symbol is uppercased.
+#
+# Non-string inputs are COERCED to a string first via lodash's toString
+# (an empty string for null/undefined; arrays comma-joined; the -0 sign
+# preserved; numbers/booleans/bigints stringified the JS way).
+#
+# PIPELINE ORDER IS LOAD-BEARING. The exact order is:
+#   1. s0 = toString(string)            # lodash coercion (see TOSTRING below)
+#   2. s1 = s0.toLowerCase()            # NATIVE String.prototype.toLowerCase, whole string
+#   3. result = upperFirst(s1)          # uppercase first Unicode symbol, keep the rest
+# Note step 2 runs on the WHOLE coerced string BEFORE the first char is split
+# out. This is why e.g. greek 'ΣΟΣ' -> lowercases to 'σος' (final-sigma rule
+# applies to the trailing Σ) -> 'Σος', NOT 'Σοσ'.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline / BRANCH nodes — exact + complete)
+# ============================================================================
+
+# ---- NODE A: toString(value)  (lodash coercion; produces the string s0) ----
+# toString(value):
+#   if value == null            -> ''           # loose ==, so BOTH null AND undefined -> ''
+#   else                        -> baseToString(value)
+#
+# baseToString(value):
+#   if typeof value == 'string' -> value        # pass through unchanged (fast path)
+#   if isSymbol(value)          -> symbolToString.call(value)   # Symbol#toString -> 'Symbol(desc)'
+#                                                # (see OUT-OF-ENVELOPE: Symbols are not codec-faithful)
+#   else:
+#     result = (value + '')                      # native JS string coercion
+#     if (result == '0' && (1 / value) == -Infinity) -> return '-0'   # NEGATIVE-ZERO QUIRK
+#     else                                        -> return result
+#   # isSymbol(value): typeof value == 'symbol'  OR (value is object-like AND
+#   #   Object.prototype.toString.call(value) == '[object Symbol]'). object-like
+#   #   means value is truthy and typeof value == 'object'.
+#
+#   COERCION CONTRACT — exact native (value + '') results that then flow on:
+#     number 123        -> '123'
+#     number 0          -> '0'
+#     number -0         -> '-0'      # via the quirk above (native -0 + '' is '0'; lodash forces '-0')
+#     NaN               -> 'NaN'
+#     Infinity          -> 'Infinity'
+#     -Infinity         -> '-Infinity'
+#     bigint 123n       -> '123'
+#     true              -> 'true'
+#     false             -> 'false'
+#     null              -> ''        # (handled by toString's == null branch)
+#     undefined         -> ''        # (handled by toString's == null branch)
+#     []                -> ''        # Array#join of empty
+#     [1,2,3]           -> '1,2,3'   # Array -> comma-joined; nested arrays flattened by join
+#     ['HELLO','WORLD'] -> 'HELLO,WORLD'
+#     [null, undefined] -> ','       # null/undefined array ELEMENTS join as empty
+#     [[1,2],3]         -> '1,2,3'   # nested array join recursion
+#     {}                -> '[object Object]'
+#     plain object      -> Object.prototype.toString-style or its own toString
+#
+# ---- NODE B: lowercase the whole coerced string ----
+# s1 = s0.toLowerCase()      # NATIVE ECMAScript String.prototype.toLowerCase
+#                            # (locale-INDEPENDENT default case mapping; the blind
+#                            #  re-emitter MUST use the platform's native .toLowerCase,
+#                            #  which already encodes final-sigma, eszett, Turkish-İ,
+#                            #  micro/Kelvin-sign, ligature behavior — see EXAMPLES).
+#
+# ---- NODE C: upperFirst(s1)  (= createCaseFirst('toUpperCase')) ----
+# upperFirst(string):           # here `string` == s1, but upperFirst also re-runs toString:
+#   string = toString(string)   # idempotent on a string -> returns s1 unchanged
+#
+#   # BRANCH C1 — decide Unicode vs ASCII fast path:
+#   if hasUnicode(string):
+#       strSymbols = stringToArray(string)   # array of Unicode symbol clusters
+#   else:
+#       strSymbols = undefined                # ASCII / no special code points
+#
+#   # BRANCH C2 — first char:
+#   chr = strSymbols ? strSymbols[0] : string.charAt(0)
+#       # ASCII path: charAt(0) is one UTF-16 code unit (or '' if string is empty).
+#       # Unicode path: strSymbols[0] is the first symbol CLUSTER (may be several
+#       #   UTF-16 code units: a surrogate pair, base+combos, ZWJ seq, flag pair...).
+#       # If string is '' the Unicode path is NOT taken (hasUnicode('') is false),
+#       #   so chr = ''.charAt(0) = ''.
+#
+#   # BRANCH C3 — trailing:
+#   trailing = strSymbols
+#       ? castSlice(strSymbols, 1).join('')   # all symbols AFTER the first, re-joined
+#       : string.slice(1)                     # all UTF-16 units after index 0
+#
+#   return chr['toUpperCase']() + trailing
+#       # NATIVE String.prototype.toUpperCase applied to the first symbol cluster
+#       #   ONLY, then concatenated with the (already-lowercased) trailing.
+#       # If chr == '' then ''.toUpperCase() == '' and result == '' (empty input).
+#
+#   # hasUnicode(string): reHasUnicode.test(string), where
+#   #   reHasUnicode = RegExp('[' + ZWJ + ASTRAL + COMBO_MARKS + COMBO_SYMBOLS + VAR + ']')
+#   #     ZWJ          = ‍
+#   #     ASTRAL       = \ud800-\udfff       (any UTF-16 surrogate code unit, incl. LONE surrogates)
+#   #     COMBO_MARKS  = ̀-ͯ ︠-︣
+#   #     COMBO_SYMBOLS= ⃐-⃰
+#   #     VAR          = ︎ ️       (variation selectors 15/16)
+#   #   reHasUnicode has NO 'g' flag -> .test is STATELESS (no lastIndex leakage).
+#   #   It returns true if ANY of those code units appears anywhere in the string.
+#
+#   # stringToArray(string):
+#   #   = unicodeToArray(string) if hasUnicode(string) else asciiToArray(string).
+#   #   In upperFirst we only reach stringToArray when hasUnicode is already true,
+#   #   so effectively stringToArray here == unicodeToArray.
+#   #   asciiToArray(string) = string.split('')             # per-UTF16-code-unit
+#   #   unicodeToArray(string) = string.match(reUnicode) || []   # per Unicode symbol
+#
+#   # reUnicode (the symbol matcher), 'g' flag, EXACT composition from the source:
+#   #   astralRange   = \ud800-\udfff
+#   #   comboMarks    = ̀-ͯ︠-︣
+#   #   comboSymbols  = ⃐-⃰
+#   #   varRange      = ︎️
+#   #   rsAstral      = [<astralRange>]
+#   #   rsCombo       = [<comboMarks><comboSymbols>]
+#   #   rsFitz        = \ud83c[\udffb-\udfff]                 # emoji skin-tone modifiers
+#   #   rsModifier    = (?:<rsCombo>|<rsFitz>)
+#   #   rsNonAstral   = [^<astralRange>]                      # any single non-surrogate code unit
+#   #   rsRegional    = (?:\ud83c[\udde6-\uddff]){2}          # a pair of regional indicators (flag)
+#   #   rsSurrPair    = [\ud800-\udbff][\udc00-\udfff]        # a well-formed surrogate pair (astral cp)
+#   #   rsZWJ         = ‍
+#   #   reOptMod      = <rsModifier>?
+#   #   rsOptVar      = [<varRange>]?
+#   #   rsOptJoin     = (?:<rsZWJ>(?:<rsNonAstral>|<rsRegional>|<rsSurrPair>)<rsOptVar><reOptMod>)*
+#   #   rsSeq         = <rsOptVar><reOptMod><rsOptJoin>
+#   #   rsSymbol      = (?:<rsNonAstral><rsCombo>? | <rsCombo> | <rsRegional> | <rsSurrPair> | <rsAstral>)
+#   #   reUnicode     = RegExp(<rsFitz>(?=<rsFitz>) | <rsSymbol><rsSeq>, 'g')
+#   #   The blind re-emitter MUST build reUnicode and reHasUnicode with these EXACT
+#   #   sub-patterns (byte-for-byte) — they govern where symbol boundaries fall and
+#   #   thus which code units constitute the "first character".
+#   #   reUnicode has the 'g' flag, but unicodeToArray uses String#match (NOT exec),
+#   #   which IGNORES/RESETS lastIndex -> the function is STATELESS across calls.
+#
+#   # castSlice(array, 1):  end defaults to array.length; since start=1 (truthy)
+#   #   it calls baseSlice(array, 1, length) -> returns elements [1 .. length-1].
+#   #   For an array of length 0 or 1, the trailing slice is empty -> '' after join.
+#   #   baseSlice with these args is a plain "drop first element" slice; no negative
+#   #   or out-of-range indices are ever passed here (start=1, end=length).
+
+# ============================================================================
+# WORKED EXAMPLES  (REAL package outputs — verified by execution, must reproduce)
+# ============================================================================
+#   capitalize('')                 -> ''
+#   capitalize('a')                -> 'A'
+#   capitalize('A')                -> 'A'
+#   capitalize('FRED')             -> 'Fred'          # rest lowercased
+#   capitalize('fOoBaR')           -> 'Foobar'
+#   capitalize('1ABC')             -> '1abc'          # leading non-letter; first char '1'.toUpperCase()=='1'
+#   capitalize('  ABC')            -> '  abc'         # leading spaces; first char ' '
+#   capitalize(123)                -> '123'
+#   capitalize(0)                  -> '0'
+#   capitalize(-0)                 -> '-0'            # -0 quirk
+#   capitalize(null)               -> ''
+#   capitalize(undefined)          -> ''
+#   capitalize([1,2,3])            -> '1,2,3'
+#   capitalize(['HELLO','WORLD'])  -> 'Hello,world'   # join -> 'HELLO,WORLD' -> lc -> 'hello,world' -> 'Hello,world'
+#   capitalize([null,1])           -> ',1'
+#   capitalize([])                 -> ''
+#   capitalize(true)               -> 'True'
+#   capitalize(false)              -> 'False'
+#   capitalize(NaN)                -> 'Nan'           # 'NaN' -> lc 'nan' -> 'Nan'
+#   capitalize(Infinity)           -> 'Infinity'
+#   capitalize(-Infinity)          -> '-infinity'     # '-Infinity' -> lc '-infinity' -> first char '-' unchanged
+#   capitalize({})                 -> '[object object]'  # '[object Object]' -> lc -> uc first '[' (no change)
+#   capitalize(123n)               -> '123'
+#   # --- Unicode / surrogate-pair (verified) ---
+#   capitalize('\u{1F600}ABC')     -> '\u{1F600}abc'  # 😀 (no case) stays; rest lowercased
+#   capitalize('\u{1F600}')        -> '\u{1F600}'     # lone astral, no rest
+#   capitalize('\u{10400}bc')      -> '\u{10400}bc'   # DESERET CAP LONG I; lc -> small \u{10428}; upperFirst -> \u{10400}
+#   capitalize('\u{10428}BC')      -> '\u{10400}bc'   # DESERET SMALL; same result (Deseret HAS case)
+#   capitalize('\u{10400}')        -> '\u{10400}'     # lone deseret cap (lc small -> upperFirst cap)
+#   capitalize('áBC')        -> 'Ábc'     # a + COMBINING ACUTE: cluster is first symbol; 'á'.toUpperCase()='Á'
+#   capitalize('Ábc')        -> 'Ábc'
+#   capitalize('́abc')        -> '́abc'     # LONE combining mark first: cluster '́', toUpperCase no-op
+#   capitalize('àBC')         -> 'Àbc'      # precomposed à -> À
+#   capitalize('ßABC')        -> 'SSabc'         # ß: .toUpperCase() expands to 'SS' (native)
+#   capitalize('Kxy')         -> 'Kxy'           # KELVIN SIGN -> 'K'
+#   capitalize('µXY')         -> 'Μxy'      # MICRO SIGN -> GREEK CAPITAL MU
+#   capitalize('ﬁxyz')        -> 'FIxyz'         # ligature ﬁ -> 'FI'
+#   capitalize('İxy')         -> 'İxy'     # Turkish İ: native lc -> 'i̇', upperFirst -> 'İ'
+#   capitalize('ΣΟΣ')-> 'Σος'  # ΣΟΣ -> lc 'σος' (final sigma) -> 'Σος'
+#   capitalize('\ud800abc')        -> '\ud800abc'     # LONE high surrogate first (matched by rsAstral), uc no-op
+#   capitalize('\udc00ABC')        -> '\udc00abc'     # LONE low surrogate first
+#   capitalize('\u{1F1FA}\u{1F1F8}xy') -> '\u{1F1FA}\u{1F1F8}xy'  # regional flag pair = one symbol
+#   capitalize('\u{1F44D}\u{1F3FB}XY') -> '\u{1F44D}\u{1F3FB}xy'  # thumbs-up + skin tone = one symbol
+#   capitalize('❤️XY')   -> '❤️xy'  # heart + VS16 = one symbol
+#   # --- statefulness ---
+#   Repeated calls are STABLE (no global RegExp lastIndex leakage).
+
+# ============================================================================
+# ERROR / THROW BEHAVIOR
+# ============================================================================
+# No throws on any of the documented in-envelope inputs. The only path that
+# can throw is a value whose own .toString/.valueOf throws during (value + '')
+# (NODE A else-branch) — that exception propagates unchanged. genInputs does
+# NOT emit such adversarial objects (not codec-faithful and out of scope).
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full pipeline: lodash toString coercion (incl. null/undefined->'',
+#     -0 quirk, array join), whole-string native .toLowerCase, then Unicode-aware
+#     upperFirst (native .toUpperCase on the first symbol cluster only).
+#   - The reUnicode / reHasUnicode regexes built EXACTLY as composed above; the
+#     symbol boundary rules; the ASCII fast path (charAt/slice); statelessness.
+#   - All coercion outputs for codec-faithful values (numbers incl -0/NaN/±Inf,
+#     bigint, booleans, null, undefined, strings, arrays incl nested/holey,
+#     plain objects).
+#
+# CARRIED DATA: none. The only constants are the small inline regex source
+#   strings, which are TRANSCRIBED IN FULL in BEHAVIOR above (no large literal
+#   table, no external data module).
+#
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because not codec-faithful):
+#   - Symbol primitive: capitalize(Symbol('xY')) routes through isSymbol ->
+#     symbolToString -> 'Symbol(xY)' -> lc 'symbol(xy)' -> 'Symbol(xy)'. Symbols
+#     do not survive JSON.stringify(encode(args)); a blind re-emitter reconstructs
+#     this from this note, but the generator must not emit a Symbol.
+#   - Boxed primitives (new String('FRED') -> 'Fred'; new Number(123) -> '123'):
+#     typeof 'object', not symbol -> (value + '') native unbox. Not codec-faithful
+#     (boxed identity is lost), so NOT emitted; reconstructable from this note.
+#   - Functions / objects with side-effecting or throwing toString/valueOf: out of
+#     envelope; not emitted.
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): none. Pure function, no I/O,
+#   no global mutation (no seam).
+
+PROVENANCE lodash.capitalize@4.2.1 (custom build of lodash; `lodash modularize exports="npm"`).
+  repo: lodash/lodash. license: MIT. source file: index.js (single file, self-contained).

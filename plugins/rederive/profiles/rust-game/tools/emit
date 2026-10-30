@@ -1,0 +1,40 @@
+#!/bin/sh
+# tools/emit <unit> <lang> <i> [<i> ...] — spawn clean-room emitters as FRESH processes: `claude -p --agent
+# rederive:sir-reemitter-cr`, one per index, in parallel, each given that language's task card with <i>
+# replaced — nothing added (the runner's rule).
+# Why a process and not an in-session subagent: a session only sees agent roles registered when it STARTED; a fresh process
+# loads .claude/agents from this repo, and `--tools Read Write` + `--strict-mcp-config` make the clean room real (no Bash,
+# no search, no MCP) whatever the session had. Billing (rederive policy): never on an API key — refuse if one is set.
+set -eu
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# sir-factory (the checkpoint seam) is resolved exactly as tools/lab resolves it: $SIR_FACTORY (a checkout dir, or its
+# factory.mjs), else this repo's node_modules/.bin/sir-factory, else the `sir-factory` on PATH.
+SF_JS=""; SF=""
+if [ -n "${SIR_FACTORY:-}" ]; then
+  if [ -f "$SIR_FACTORY/factory.mjs" ]; then SF_JS="$SIR_FACTORY/factory.mjs"; elif [ -f "$SIR_FACTORY" ]; then SF_JS="$SIR_FACTORY"; fi
+  SF="$SF_JS"
+elif [ -x "$REPO/node_modules/.bin/sir-factory" ]; then SF="$REPO/node_modules/.bin/sir-factory"
+elif command -v sir-factory >/dev/null 2>&1; then SF="$(command -v sir-factory)"
+fi
+sf() { if [ -n "$SF_JS" ]; then node "$SF_JS" "$@"; else "$SF" "$@"; fi; }
+NO_SF="sir-factory was not found — npm i -D sir-factory@^0.4.0 (or -g), or set SIR_FACTORY to a sir-factory checkout"
+[ $# -ge 3 ] || { echo "usage: tools/emit <unit> <lang> <i> [<i> ...]"; exit 2; }
+unit="$1"; lang="$2"; shift 2
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then echo "emit: REFUSED — ANTHROPIC_API_KEY is set; emitter fleets never bill an API key (unset it)"; exit 3; fi
+[ -n "$SF" ] || { echo "emit: $NO_SF"; exit 3; }
+card="$REPO/units/$unit/runs/$lang/task.md"; [ -r "$card" ] || { echo "emit: no task card $card — run tools/lab prepare $unit first"; exit 2; }
+model="${EMIT_MODEL:-sonnet}"; logs="$REPO/units/$unit/runs/$lang/emit-logs"; mkdir -p "$logs"
+export SIR_FACTORY_EVENTS_FILE="$REPO/observer/events.jsonl"
+sf checkpoint "$REPO/units/$unit" --step emit:spawned --lang "$lang" \
+  --note "$lang $#; indices $*; claude -p --agent rederive:sir-reemitter-cr --tools Read Write; model $model" >/dev/null
+cd "$REPO"
+for i in "$@"; do
+  sed "s/<i>/$i/g" "$card" | claude -p --agent rederive:sir-reemitter-cr --tools Read Write --strict-mcp-config \
+    --permission-mode acceptEdits --model "$model" --no-session-persistence --output-format json \
+    > "$logs/emit_$i.json" 2> "$logs/emit_$i.err" &
+done
+wait
+for i in "$@"; do
+  d="$REPO/units/$unit/runs/$lang/emit_$i"
+  if [ -f "$d/src/lib.rs" ] || [ -f "$d.js" ] || [ -f "$d.ts" ]; then echo "emit_$i landed"; else echo "emit_$i MISSING (see $logs/emit_$i.err)"; fi
+done

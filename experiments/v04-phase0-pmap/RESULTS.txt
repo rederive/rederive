@@ -1,0 +1,22 @@
+p-map under test: ~/sir-lab/boxen/node_modules/p-map/index.js
+
+== EXHAUSTIVE — every reachable completion order ==
+  n  conc   space   explored  exhaustive  I1 order-invariant  I2 bound
+  3  1         1        1   true        PASS              PASS (max 1 <= 1)
+  3  2         4        4   true        PASS              PASS (max 2 <= 2)
+  4  2         8        8   true        PASS              PASS (max 2 <= 2)
+  4  3        18       18   true        PASS              PASS (max 3 <= 3)
+  5  2        16       16   true        PASS              PASS (max 2 <= 2)
+  5  3        54       54   true        PASS              PASS (max 3 <= 3)
+  6  3       162      162   true        PASS              PASS (max 3 <= 3)
+
+== POR — is the independence claim true? ==
+  16 schedules explored -> 1 distinct (result, maxInFlight) outcome(s)
+  POR prediction for independent mappers: 1 class. CONFIRMED
+
+== POR-SCALED — sizes where exhaustive is impossible ==
+  n=20  conc=5   space=3.66e12  1 POR representative + 25 random: PASS
+  n=40  conc=8   space=3.19e33  1 POR representative + 25 random: PASS
+  n=64  conc=10  space=3.62e60  1 POR representative + 25 random: PASS
+
+PHASE 0: PASS — §19's p-map claim reproduces against this build.

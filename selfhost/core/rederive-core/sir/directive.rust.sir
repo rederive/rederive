@@ -1,0 +1,21 @@
+UNIT directive
+LANG rust
+PRIMARY-SHA256 7d028a91b909e5fafc9a4b6440e7f93eaff370b0ca053c6d582d9ec156c482aa
+SIG pub fn directive(text: &str, name: &str) -> Result<Option<String>, String>
+ABI crate shape: a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn directive`) — no main, no I/O. The verifier's
+  own harness crate depends on it by path; compiling that harness against this SIG is the signature check.
+ABI text=&str (UTF-8; the envelope holds only well-formed text); none=None; R1's throw = Err(any message) (not graded; a
+  panic is also recorded as a throw, but Err is the contract). Ok(Some(String::new())) is the empty-value directive,
+  distinct from Ok(None).
+MECHANISM zero dependencies, no regex crate: realize R1–R9 directly over chars. R2 is NOT str::lines (that keeps a lone
+  CARRIAGE RETURN inside a line); split CRLF as one break and lone CR / lone LF each as one break, nothing else.
+MECHANISM SEP is exactly ' ' and '\t' everywhere (R2, R3, R5, R6, R8): never char::is_whitespace, str::trim, trim_start,
+  trim_end or split_whitespace, which also take NO-BREAK SPACE, IDEOGRAPHIC SPACE, LINE TABULATION, NEXT LINE and more.
+  Use trim_matches(|c| c == ' ' || c == '\t') and the like.
+MECHANISM R4's escape pairs a REVERSE SOLIDUS with the next whole char, any scalar (U+2028, U+2029 and astral included); the
+  OPENER test looks at the previous char (or the char is the one right after the previous span's closing mark); R2's
+  byte-order-mark drop removes every U+FEFF from the line's leading run of ' ', '\t' and U+FEFF, keeping the SEP chars in order; compare quoted-span, keyword and "#" positions in one unit (char or byte indices)
+  over one string, never mixed.
+MECHANISM NAME (R1) is ASCII-only: is_ascii_uppercase / is_ascii_digit / '-', never char::is_uppercase or is_numeric.
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs + cli/sir/sir-parse.mjs (the real modules, js); this file states how a Rust library realizes the primary.

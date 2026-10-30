@@ -1,0 +1,28 @@
+UNIT canonical_string
+LANG js
+PRIMARY-SHA256 d84d2cbeedc82e13cfbf4fe434f58f7b53d137ea6b6d76e27b14abff858f7633
+SIG canonical_string(value) -> string
+NOTE default export
+ABI json = a JS value: text=string (UTF-16 code units); bool=boolean; list=Array; map=a plain object (prototype
+  Object.prototype or null) with own enumerable string keys; f64=number and none=null, both of which throw (R8). Result
+  text=string. A throw (R5, R8, widening) is an Error thrown out of the call; the message is free. The artifact is an
+  ES module default-exporting the function; it must not import rederive or any package.
+ENVELOPE widening: undefined, Array holes, bigint, symbols, functions and every non-plain object (Map, Set, RegExp, Date,
+  boxed primitives, typed arrays, class instances) throw; strings holding unpaired surrogates render (JSON.stringify
+  escapes them); Object.create(null) is a map. A "__proto__" own key is OUT (the legacy oracle codec turns it into a
+  prototype). The R10 probes (raw depth up to 417, beyond the neutral codec's 100 value levels) are graded HERE, through
+  the extension oracles/canonical_string.js.json; the default Node stack carries them.
+MECHANISM text (R1) and every key = JSON.stringify(string): since ES2019 it realizes TABLE ESCAPE exactly, unpaired
+  surrogates as lower-case \uXXXX, U+2028/U+2029 raw. Never JSON.stringify anything else (it would render numbers and
+  null instead of throwing, and would neither sort nor project).
+MECHANISM list (R2) = Array.isArray; check every index with "i in x" and throw on a hole BEFORE mapping (map skips holes
+  and join would render them empty). map (R3) = typeof 'object', not an Array, prototype Object.prototype or null;
+  keys = Object.keys(o).sort() (the default sort IS the 16-bit code-unit order of R4). Projections (R5, R6): test
+  x.t === 'f64' / 'throw' first, validate bits with HEX16, then render a fresh { t: 'f64', bits } or { t: 'throw' } so the
+  dropped entries are never visited. Anything else (number, null, undefined, bigint, symbol, function, other object) throws.
+DEPENDS-ON none
+MECHANISM R10: carry the node depth down the recursion (the top call at 0) and throw before rendering a node deeper than
+  416 (the check first, before the type tests); check it at every visited node, the projected "bits"/"t" text included, never at keys or dropped entries.
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R5 — the bits accept-set
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs canonicalString (own code). Round 5 language file, 2026-10-27; the widening
+  and R10 vectors live in oracles/canonical_string.js.json (tooling-routed).

@@ -1,0 +1,14 @@
+UNIT f64_from_bits
+LANG rust
+PRIMARY-SHA256 280dbe363c44f78c8429c754e288658426d2993eb5e176c5eab0af7485e4f4a4
+SIG pub fn f64_from_bits(bits: &str) -> f64
+ABI crate shape: a LIBRARY crate (`[lib]`, `src/lib.rs` exporting `pub fn f64_from_bits`), no main, no I/O; the verifier
+  owns the harness. text=&str (UTF-8); f64=f64. A "throws" rule (R1) is a panic; its message is not graded.
+MECHANISM R1: check bits.len() == 16 (bytes; any non-ASCII char makes a 16-char text longer than 16 bytes or fails the
+  digit test) and every byte in b'0'..=b'9' or b'a'..=b'f'. Do NOT rely on u64::from_str_radix alone — it accepts
+  uppercase and a leading "+" (both must panic here); do NOT use char::is_ascii_hexdigit (it accepts uppercase).
+MECHANISM R2: after R1 passes, u64::from_str_radix(bits, 16) cannot fail; f64::from_bits on it. NaN patterns pass
+  through unchanged, which is fine (payloads are not graded).
+DEPENDS-ON none
+PINNED charset HEX16 = b'0'..=b'9' and b'a'..=b'f' CITED R1 — lowercase ASCII bytes only
+PROVENANCE rederive@b15b56613f9d cli/sir/canon.mjs f64fromBits.

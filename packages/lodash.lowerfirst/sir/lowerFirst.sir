@@ -1,0 +1,148 @@
+UNIT lowerFirst
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG lowerFirst(string = '') -> string
+    # Single positional arg, any type. Returns a string. Default export (module.exports = lowerFirst).
+DEPENDS-ON none
+    # Zero runtime deps. Self-contained; uses only String.prototype.{charAt,slice,split,match,toLowerCase},
+    # Array.prototype.join, RegExp, Object.prototype.toString, Symbol.prototype.toString. PURE.
+
+BEHAVIOR
+  # lowerFirst == createCaseFirst('toLowerCase'). It lower-cases the FIRST string-SYMBOL only
+  # (Unicode-aware grapheme-ish unit, NOT a naive charAt(0)), leaving the rest BYTE-FOR-BYTE unchanged.
+  # No locale tailoring: plain String.prototype.toLowerCase (invariant / "default" locale).
+  #
+  # ---- STEP 0: coerce the argument to a string via lodash toString(value) ----
+  # toString(value):
+  #   - if value == null  (i.e. value === null OR value === undefined)  -> return ''   (LOOSE ==, so ONLY null/undefined)
+  #   - else return baseToString(value):
+  #       - if typeof value === 'string'        -> return value unchanged
+  #       - if isSymbol(value)                  -> Symbol.prototype.toString.call(value) (e.g. 'Symbol(x)')
+  #                                                # OUT-OF-ENVELOPE: Symbols are not codec-round-trippable; see SCOPE.
+  #       - else:
+  #           result = (value + '')             # JS default ToString via "+ ''"
+  #           if result === '0' AND (1 / value) === -Infinity:  return '-0'   # special-cases NEGATIVE ZERO
+  #           else: return result
+  #     NOTE the -0 rule: plain String(-0) === '0', but lodash toString(-0) === '-0'. This is lodash-specific
+  #     and MUST be reproduced. Detection is: the "+ ''" coercion produced '0' AND value is negative zero
+  #     (1/value === -Infinity distinguishes -0 from +0). Applies to the primitive number -0 only.
+  #   Worked coercions (the "+ ''" / JS ToString results that then feed the case logic):
+  #     0 -> '0' ; -0 -> '-0' (special) ; 123 -> '123' ; -45.6 -> '-45.6' ; -5 -> '-5'
+  #     true -> 'true' ; false -> 'false' ; NaN -> 'NaN' ; Infinity -> 'Infinity' ; -Infinity -> '-Infinity'
+  #     1e21 -> '1e+21' ; null -> '' ; undefined -> '' ;
+  #     10n -> '10' ; -10n -> '-10' (bigint: "+ ''" drops the 'n') ;
+  #     [] -> '' ; [1,2,3] -> '1,2,3' ; [[1],[2]] -> '1,2' ; ['Abc'] -> 'Abc' (Array#toString = join(',')) ;
+  #     {} -> '[object Object]' ; {a:1} -> '[object Object]' (default Object#toString) .
+  #   Let S = the coerced string.
+  #
+  # ---- STEP 1: decide ASCII vs Unicode path via hasUnicode(S) ----
+  # hasUnicode(S) := reHasUnicode.test(S), where (EXACT regex, NON-global, no flags):
+  #   rsZWJ              = '‍'
+  #   rsAstralRange      = '\ud800-\udfff'
+  #   rsComboMarksRange  = '̀-ͯ︠-︣'
+  #   rsComboSymbolsRange= '⃐-⃰'
+  #   rsVarRange         = '︎️'
+  #   reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange + rsComboMarksRange + rsComboSymbolsRange + rsVarRange + ']')
+  #                = /[‍\ud800-\udfff̀-ͯ︠-︣⃐-⃰︎️]/
+  #   i.e. TRUE iff S contains ANY of: a ZWJ, any code unit in the surrogate range \ud800-\udfff
+  #   (so ANY astral char OR any lone surrogate), a combining mark in the listed ranges,
+  #   a combining symbol ⃐-⃰, or a variation selector ︎/️.
+  #   IMPORTANT: reHasUnicode is NON-GLOBAL (no 'g' flag) -> no lastIndex carry-over -> calling lowerFirst
+  #   repeatedly is STATELESS / fully deterministic. Do NOT add a 'g' flag.
+  #
+  # ---- STEP 2a: ASCII PATH (hasUnicode(S) === false) ----
+  #   strSymbols = undefined
+  #   chr        = S.charAt(0)        # '' when S is '' ; else the single UTF-16 code unit at index 0
+  #   trailing   = S.slice(1)         # the rest of S, UTF-16-code-unit-wise, unchanged
+  #   RESULT     = chr.toLowerCase() + trailing
+  #   Notes: '' .charAt(0) === '' and ''.toLowerCase() === '' -> empty input yields '' (no throw).
+  #   Only chr is lower-cased; trailing is untouched (so 'FRED' -> 'fRED', 'ABC' -> 'aBC').
+  #
+  # ---- STEP 2b: UNICODE PATH (hasUnicode(S) === true) ----
+  #   strSymbols = stringToArray(S) = unicodeToArray(S) = (S.match(reUnicode) || [])
+  #     reUnicode (EXACT, GLOBAL 'g') matches whole string SYMBOLS (grapheme-ish clusters):
+  #       rsAstral   = '[\ud800-\udfff]'
+  #       rsCombo    = '[̀-ͯ︠-︣⃐-⃰]'
+  #       rsFitz     = '\ud83c[\udffb-\udfff]'                          # Fitzpatrick skin-tone modifiers
+  #       rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+  #       rsNonAstral= '[^\ud800-\udfff]'
+  #       rsRegional = '(?:\ud83c[\udde6-\uddff]){2}'                   # regional-indicator flag pair
+  #       rsSurrPair = '[\ud800-\udbff][\udc00-\udfff]'                 # well-formed surrogate pair (astral)
+  #       rsZWJ      = '‍'
+  #       reOptMod   = rsModifier + '?'
+  #       rsOptVar   = '[︎️]?'
+  #       rsOptJoin  = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')'
+  #                            + rsOptVar + reOptMod + ')*'
+  #       rsSeq      = rsOptVar + reOptMod + rsOptJoin
+  #       rsSymbol   = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')'
+  #       reUnicode  = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+  #     EFFECT: strSymbols is the array of Unicode symbols. A "symbol" is, in priority order, a Fitz-before-Fitz
+  #     lookahead unit, OR a base (non-astral char + optional combining, OR a lone combining, OR a regional
+  #     flag pair, OR a surrogate pair, OR a lone astral/surrogate) followed by an optional sequence of
+  #     variation-selector / modifier / ZWJ-joined continuations. This correctly groups: combining marks WITH
+  #     their base ('Á' -> one symbol "Á"); ZWJ emoji families -> one symbol; flag pairs -> one symbol;
+  #     skin-tone-modified emoji -> one symbol; variation-selector sequences -> one symbol.
+  #     reUnicode IS global, but is consumed via String.prototype.match (which resets lastIndex each call),
+  #     so it is also STATELESS across calls. `(... || [])` guards a null match (degenerate, e.g. S === '',
+  #     but '' never reaches this path since hasUnicode('') === false).
+  #   chr        = strSymbols[0]                    # the FIRST Unicode symbol (may be >1 UTF-16 code unit)
+  #   trailing   = castSlice(strSymbols, 1).join('')# all symbols after the first, re-joined with '' (no separator)
+  #     castSlice(array, 1): start=1, end defaults to array.length; since start is truthy it calls
+  #     baseSlice(array, 1, length) -> array.slice(1) equivalent (elements 1..end). join('') concatenates them.
+  #   RESULT     = chr.toLowerCase() + trailing
+  #     toLowerCase is applied to the ENTIRE first symbol string (so an astral cap letter like Deseret
+  #     '\u{10400}' (𐐀) lower-cases to '\u{10428}' (𐐨); a base+combining 'Á' -> 'á'). Symbols
+  #     with no case mapping (emoji, CJK, lone surrogate, lone combining mark, regional flags) pass through
+  #     unchanged. trailing symbols are NEVER case-changed.
+  #
+  # ---- DEMONSTRATED EXPECTEDS (verified against lodash.lowerfirst@4.3.1; self-consistent with genInputs) ----
+  #   ''                    -> ''
+  #   'a'                   -> 'a'        'A'   -> 'a'        'abc' -> 'abc'     'Abc' -> 'abc'
+  #   'ABC'                 -> 'aBC'      'aBC' -> 'aBC'      'fred'-> 'fred'    'Fred'-> 'fred'   'FRED'-> 'fRED'
+  #   ' leading space'      -> ' leading space'              '1leading' -> '1leading'   '_underscore' -> '_underscore'
+  #   '9abc'                -> '9abc'     '中文' -> '中文'    'ß sharp s' -> 'ß sharp s'
+  #   'Élan' (precomposed É) -> 'élan'                  'Ünder' (Ü) -> 'ünder'
+  #   'Ábc' (A + combining acute, hasUnicode path) -> 'ábc'  (renders 'ábc')
+  #   'ábc'           -> 'ábc'    '́abc' (lone combining acute leading) -> '́abc'
+  #   '\u{1D49C}bc' (MATH SCRIPT CAPITAL A, no lowercase mapping) -> '\u{1D49C}bc'
+  #   '\u{10400}bc' (DESERET CAPITAL LONG I) -> '\u{10428}bc'  (𐐀bc -> 𐐨bc)
+  #   '\u{10400}'           -> '\u{10428}'   (single astral cap, no trailing)
+  #   '\u{1F600}bc' (emoji) -> '\u{1F600}bc' (no case change)
+  #   '\uD800abc' (lone high surrogate) -> '\uD800abc'   '\uDC00abc' (lone low surrogate) -> '\uDC00abc'
+  #   '\u{1F468}‍\u{1F469}‍\u{1F467}X' (ZWJ family) -> unchanged first symbol + 'X'
+  #   '\u{1F1FA}\u{1F1F8}x' (flag US) -> unchanged + 'x'      '\u{1F44D}\u{1F3FB}x' (thumbs+tone) -> unchanged + 'x'
+  #   '❤️x' (heart + VS16) -> unchanged + 'x'
+  #   'İstanbul' (İ TURKISH DOTTED CAPITAL I) -> 'i̇stanbul' (toLowerCase decomposes to i + combining dot)
+  #   NON-STRING coercions (then case-logic on coerced string):
+  #     0 -> '0' ; -0 -> '-0' ; 123 -> '123' ; -45.6 -> '-45.6' ; -5 -> '-5' ; 1e21 -> '1e+21' ;
+  #     true -> 'true' ; false -> 'false' ; NaN -> 'naN' (lower-cases 'N'->'n') ;
+  #     Infinity -> 'infinity' ; -Infinity -> '-Infinity' (first char '-' has no case) ;
+  #     null -> '' ; undefined -> '' ;
+  #     10n -> '10' ; -10n -> '-10' ;
+  #     [] -> '' ; [1,2,3] -> '1,2,3' ; [[1],[2]] -> '1,2' ; ['Abc'] -> 'abc' (coerces to 'Abc' then lowers) ;
+  #     {} -> '[object Object]' (first char '[' no case) ; {a:1} -> '[object Object]' .
+
+ORACLE value -> oracle.json
+    # Pure value function. genInputs emits single-arg tuples [value]; the harness records lowerFirst(value).
+    # The blind re-emitter MUST `export default <fn>` so the harness consumes the default export.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The lodash toString coercion incl. null/undefined -> '' and the -0 -> '-0' special-case.
+    - hasUnicode dispatch with the EXACT reHasUnicode char-class (non-global).
+    - ASCII path: charAt(0).toLowerCase() + slice(1).
+    - Unicode path: stringToArray via the EXACT reUnicode symbol regex (global, via .match || []);
+      first-symbol toLowerCase + castSlice(...,1).join('') of the rest.
+    - String.prototype.toLowerCase semantics (locale-invariant; astral & combining-aware as demonstrated).
+  CARRIED DATA: none. (No literal table; the only constants are the two inline regexes, transcribed in BEHAVIOR.)
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+    - Symbol primitives/objects: baseToString routes through Symbol.prototype.toString (-> 'Symbol(desc)'),
+      then case-logic. Symbols are NOT codec-round-trippable, so genInputs does not emit them; a blind
+      re-emitter still reconstructs the path from this note. (typeof 'symbol' OR Object#toString === '[object Symbol]'.)
+    - Functions: coerce via (fn + '') to their source text; non-round-trippable -> not emitted.
+    - Engine/host toLowerCase locale tailoring: spec uses the default (locale-invariant) mapping; all expecteds
+      were captured on Node and are stable. No locale option exists.
+
+PROVENANCE lodash.lowerfirst@4.3.1 (npm); repo lodash/lodash; MIT license;
+    source file index.js (custom modularized build: createCaseFirst('toLowerCase') over toString +
+    hasUnicode + stringToArray/unicodeToArray/asciiToArray + castSlice/baseSlice).

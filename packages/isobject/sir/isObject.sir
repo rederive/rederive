@@ -1,0 +1,134 @@
+UNIT isObject
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# A pure, total predicate. No clock / RNG / env / fs / net — no seam. Nothing to inject.
+# Same-process value-mode oracle: feed args, capture the strict boolean return.
+
+SIG isObject(val: any) -> boolean
+# Single positional argument. Called as a default export (CJS: module.exports = isObject).
+# Zero-argument call is legal: `val` is then `undefined` (see BRANCH-1).
+
+DEPENDS-ON none
+# Zero runtime dependencies. Uses only the JS built-ins `typeof` and `Array.isArray`.
+
+BEHAVIOR
+  # The ENTIRE body is one boolean expression, evaluated left-to-right with
+  # short-circuit AND (&&). The result is whatever that expression yields, which is
+  # ALWAYS a strict boolean (the final conjunct `=== false` forces boolean), and is
+  # returned directly. Exact source (v4.0.0, identical in index.cjs.js and index.js):
+  #
+  #     return val != null && typeof val === 'object' && Array.isArray(val) === false;
+  #
+  # Evaluate the three conjuncts IN THIS ORDER; AND short-circuits, so a false
+  # conjunct yields the final value `false` immediately without evaluating the rest.
+
+  BRANCH-1  NON-NULLISH GATE  (val != null)
+    # LOOSE inequality (!=), NOT strict (!==). By JS abstract-equality coercion,
+    # `x != null` is FALSE for EXACTLY two values: `null` and `undefined`
+    # (because `undefined == null` is true and nothing else `==` null).
+    # Therefore this single check rejects BOTH null AND undefined together.
+    # If val is null OR undefined (including the no-argument call where val is
+    # `undefined`): the whole expression short-circuits to the boolean `false`.
+    # -> RETURN false
+    # Otherwise: continue to BRANCH-2.
+
+  BRANCH-2  OBJECT-TYPEOF GATE  (typeof val === 'object')
+    # STRICT equality (===) against the string 'object'.
+    # The host `typeof` operator classifies val:
+    #   'object'    -> plain objects {}, arrays [], null(*), Map, Set, Date, RegExp,
+    #                  typed arrays (Uint8Array), Buffer, boxed primitives
+    #                  (new Number/String/Boolean), class instances, Error, Promise,
+    #                  WeakMap, arguments object, etc.  (* null already excluded by BRANCH-1)
+    #   'function'  -> functions, arrow functions, classes (the constructor itself),
+    #                  generator functions, async functions  -> typeof is 'function', NOT 'object'
+    #   'number'    -> number primitives (incl. NaN, Infinity, 0)
+    #   'string'    -> string primitives (incl. "")
+    #   'boolean'   -> boolean primitives true/false
+    #   'bigint'    -> bigint primitives (e.g. 10n)
+    #   'symbol'    -> symbol primitives
+    #   'undefined' -> undefined (already excluded by BRANCH-1)
+    # If typeof val !== 'object' (i.e. function / number / string / boolean / bigint /
+    # symbol): short-circuit to the boolean `false`.
+    # -> RETURN false
+    # Otherwise (typeof val === 'object'): continue to BRANCH-3.
+
+  BRANCH-3  NOT-ARRAY GATE  (Array.isArray(val) === false)
+    # Uses the built-in `Array.isArray`. This conjunct is `Array.isArray(val) === false`,
+    # so its VALUE is a strict boolean:
+    #   - If val IS an array (Array.isArray returns true): `true === false` -> `false`.
+    #     -> RETURN false   (arrays are excluded even though their typeof is 'object')
+    #   - If val is NOT an array (Array.isArray returns false): `false === false` -> `true`.
+    #     -> RETURN true
+    # `Array.isArray` is true ONLY for genuine Array exotic objects ([], new Array(),
+    # Array.of(...)). It is FALSE for array-likes (arguments, typed arrays, Buffer,
+    # objects with a length) — those reach here and RETURN true.
+
+  # SUMMARY TRUTH TABLE (after the full pipeline):
+  #   TRUE  for: {}, new Object(), Object.create(null), Map, Set, WeakMap, WeakSet,
+  #              Date, RegExp (literal and constructed), Uint8Array & other typed arrays,
+  #              Buffer, new Number(n), new String(s), new Boolean(b), class instances,
+  #              Error, Promise, arguments object, any plain/exotic object whose typeof
+  #              is 'object' and which is not an Array.
+  #   FALSE for: null, undefined (incl. no-arg call), array literals [] and new Array(),
+  #              number primitives (incl. NaN, +/-Infinity, 0), string primitives (incl. ""),
+  #              boolean primitives, bigint primitives, symbol primitives,
+  #              functions / arrow functions / classes (typeof 'function').
+  #
+  # RETURN TYPE: ALWAYS a strict boolean (`true` or `false`). Never truthy/falsy, never
+  # the original value — the trailing `=== false` guarantees a boolean result on every path.
+  # TOTAL: never throws for any input (no property access, no coercion that can throw).
+
+ORACLE value -> oracle.json
+  # Pure same-process predicate. The oracle records, per input tuple [val]:
+  #   { result: <strict boolean> }.
+  # No seam, no injected collaborator, no trace. The blind re-emitter implements the
+  # 3-conjunct expression above; the oracle's expecteds are computed by the REAL package.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    The full 3-conjunct boolean expression and its left-to-right short-circuit order:
+    (1) val != null  [loose, rejects null AND undefined]
+    (2) typeof val === 'object'  [strict]
+    (3) Array.isArray(val) === false  [strict; forces boolean result]
+    Strict-boolean return on every path. Totality (never throws).
+  CARRIED DATA: none. No literal tables, no maps, no constants beyond the string
+    'object' and the boolean literal `false` embedded in the expression above.
+  OUT-OF-CONTRACT: none. No side effects, no mutation, no external API, no statefulness.
+
+  # SELF-CONSISTENCY with the input-generator (isObject.inputs.mjs):
+  #   Every value the generator can emit has its behavior pinned above by char/value class:
+  #     {} / new Object() / Object.create(null) / class instance / Error / Promise
+  #         / WeakMap / arguments         -> typeof 'object', not array -> TRUE  (BRANCH-3 true)
+  #     Map / Set / Date / RegExp         -> typeof 'object', not array -> TRUE
+  #     Uint8Array / Buffer (typed array) -> typeof 'object', not array -> TRUE
+  #     new Number / new String / new Boolean (boxed) -> typeof 'object', not array -> TRUE
+  #     []  / new Array()                 -> typeof 'object' BUT Array.isArray -> FALSE (BRANCH-3 false)
+  #     null                              -> BRANCH-1 false -> FALSE
+  #     undefined (incl. no-arg)          -> BRANCH-1 false -> FALSE
+  #     number (incl. NaN, +/-Infinity, 0)-> typeof 'number'  -> BRANCH-2 false -> FALSE
+  #     string (incl. "")                 -> typeof 'string'  -> BRANCH-2 false -> FALSE
+  #     boolean true/false                -> typeof 'boolean' -> BRANCH-2 false -> FALSE
+  #     bigint (e.g. 10n)                 -> typeof 'bigint'  -> BRANCH-2 false -> FALSE
+  #     function(){} / arrow / class ctor -> typeof 'function'-> BRANCH-2 false -> FALSE
+  #
+  #   CODEC NOTE (values the generator does NOT emit because they cannot survive the
+  #   JSON.stringify(encode(args)) persistence round-trip used to store held-out inputs):
+  #     - bare `undefined` as a top-level arg, NaN/+/-Infinity, boxed primitives, and
+  #       class/exotic instances may not survive the codec depending on its support set.
+  #       The generator emits ONLY codec-faithful representatives for each class. The
+  #       BEHAVIOR above still fully specifies these out-of-envelope values so a blind
+  #       re-emitter reconstructs them from spec; they are simply not drawn for the
+  #       differential. See the generator's curated prefix for the exact emitted set.
+  #     - Symbols and live non-reconstructable functions are DOCUMENT-as-OUT only.
+  #       (A FRESH `function(){}` IS emitted as an edge — `typeof === 'function'` is the
+  #       discriminating behavior and a fresh empty function reconstructs deterministically.)
+
+PROVENANCE
+  isobject@4.0.0 — Jon Schlinkert. repo: jonschlinkert/isobject. License: MIT.
+  Source files (logic byte-identical across both):
+    index.cjs.js  (CJS, package "main"; loaded by require)
+    index.js      (ESM, package "module")
+  Verified against the installed real package at
+  /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-isobject-PzGHaF/node_modules/isobject
+  (35/35 discriminating cases + no-arg + strict-boolean return type confirmed).

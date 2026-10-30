@@ -1,0 +1,325 @@
+UNIT snakeCase
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG snakeCase(string = '') -> string          # single string arg; default export
+
+# The blind re-emitter MUST `export default <fn>`. The harness imports the DEFAULT export.
+
+DEPENDS-ON none                                # zero runtime deps; fully self-contained / pure
+
+# =====================================================================================
+# OVERVIEW
+# =====================================================================================
+# snakeCase converts an arbitrary string into snake_case: it splits the string into
+# "words" using a deburr + apostrophe-strip + (unicode-or-ascii) word-split pipeline,
+# lowercases every word, and joins them with a single underscore '_'.
+#
+# It is built as a "compounder":
+#     snakeCase(string) = arrayReduce(
+#                           words( deburr(toString(string)).replace(reApos, '') ),
+#                           (result, word, index) => result + (index ? '_' : '') + word.toLowerCase(),
+#                           '' )
+#
+# Pure function. No clock/RNG/IO/env/network. No seam. ORACLE value -> oracle.json.
+#
+# =====================================================================================
+# PIPELINE (exact order — each stage feeds the next)
+# =====================================================================================
+#
+# STAGE 0  -- toString coercion
+#   s := toString(string)
+#     toString(value): if value is null OR undefined -> '' ; else baseToString(value).
+#     baseToString: if typeof value == 'string' -> value (returned as-is);
+#                   if value is a Symbol -> Symbol.prototype.toString (NOT exercised by generator);
+#                   else result := (value + '') with the special case
+#                        (result == '0' && 1/value == -Infinity) -> '-0'  (negative-zero sign preserve).
+#   NOTE: the input-generator emits ONLY strings, so STAGE 0 is effectively identity here
+#         (typeof == 'string' -> returned unchanged, including '' ). Non-string coercion
+#         (null/undefined -> '', number -> its decimal string, -0 -> '-0') is documented as
+#         OUT-OF-ENVELOPE for the generator (see SCOPE) but specified here for completeness.
+#
+# STAGE 1  -- deburr(s)   [maps Latin-1 Supplement + Latin Extended-A letters to ASCII, then
+#                          strips combining diacritical marks]
+#   if s is the empty string '' -> deburr returns '' and SHORT-CIRCUITS the two .replace calls
+#       (source: `return string && string.replace(...).replace(...)` — falsy '' returns '').
+#   else:
+#     d1 := s.replace(reLatin, deburrLetter)
+#            reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xffĀ-ſ]/g
+#            For each matched char c, replace with deburredLetters[c] (the table below).
+#            EVERY codepoint in reLatin's ranges is a key in deburredLetters (verified), so
+#            deburrLetter never returns undefined for a matched char.
+#            Replacement strings may be multi-char (e.g. '\xc6'->'Ae', '\xdf'->'ss', 'Ĳ'->'IJ',
+#            'ŉ'->"'n" -- note this introduces a STRAIGHT APOSTROPHE that STAGE 2 then strips).
+#     d  := d1.replace(reComboMark, '')
+#            reComboMark = /[̀-ͯ︠-︣⃐-⃰]/g
+#            Removes combining diacritical marks + combining marks for symbols (each matched
+#            char deleted). This handles DECOMPOSED accents (e.g. 'e'+U+0301) — the base letter
+#            'e' survives, the combining mark is deleted. (reLatin does NOT match combining marks.)
+#       ORDER MATTERS: reLatin first, then reComboMark. (Precomposed letters are mapped by the
+#       table; decomposed marks are dropped by the combo-mark pass.)
+#
+# STAGE 2  -- strip apostrophes
+#   a := d.replace(reApos, '')
+#         reApos = /['’]/g     # matches the STRAIGHT apostrophe U+0027 AND the
+#                                   # RIGHT SINGLE QUOTATION MARK U+2019  ( ' and ’ )
+#         Every such char is deleted. Consequence: "don't"->"dont", "o'clock"->"oclock",
+#         "rock’n’roll"->"rocknroll". Because apostrophes are removed HERE, BEFORE word
+#         splitting, the contraction-suffix sub-patterns inside the word regexes
+#         (rsOptLowerContr / rsOptUpperContr, see below) are effectively DEAD CODE for the
+#         compounder input — no apostrophe ever reaches STAGE 3. The blind re-emitter may keep
+#         those groups in the regex for byte-fidelity, but they never fire on this input.
+#
+# STAGE 3  -- words(a)   [split into an array of words]
+#   The `words` helper here is called with NO pattern argument, so:
+#       wordsList := hasUnicodeWord(a) ? unicodeWords(a) : asciiWords(a)
+#
+#   STAGE 3a -- hasUnicodeWord(a): boolean branch selector
+#       hasUnicodeWord(a) := reHasUnicodeWord.test(a)
+#         reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#         (NON-global, used with .test). Returns true if the string contains ANY of:
+#           - a lowercase ASCII letter immediately followed by an uppercase ASCII letter, OR
+#           - two-or-more uppercase ASCII letters immediately followed by a lowercase ASCII letter, OR
+#           - an ASCII digit immediately followed by an ASCII letter, OR
+#           - an ASCII letter immediately followed by an ASCII digit, OR
+#           - ANY char that is not [A-Za-z0-9] and not a plain space ' ' (U+0020).
+#         If true -> unicode word split; else -> ascii word split.
+#
+#   STAGE 3b-ASCII -- asciiWords(a) := a.match(reAsciiWord) || []
+#         reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#         i.e. greedily match maximal runs of chars that are NOT in these excluded ASCII ranges:
+#           \x00-\x2f  (controls, space, ! " # $ % & ' ( ) * + , - . / )
+#           \x3a-\x40  ( : ; < = > ? @ )
+#           \x5b-\x60  ( [ \ ] ^ _ ` )
+#           \x7b-\x7f  ( { | } ~ DEL )
+#         The KEPT ASCII chars are exactly: digits 0-9 (\x30-\x39), uppercase A-Z (\x41-\x5a),
+#         lowercase a-z (\x61-\x7a). (Plus any byte >= \x80, but on the ascii branch
+#         hasUnicodeWord was false so no such char with the [^...] clause can be present except
+#         a plain space which is a separator — see note.) Each maximal run is one word.
+#         Returns [] if no match (e.g. all-separator or empty string).
+#
+#   STAGE 3c-UNICODE -- unicodeWords(a) := a.match(reUnicodeWord) || []
+#         reUnicodeWord is the global alternation below, tried left-to-right at each position.
+#         Returns [] if no match. (Definitions of the rs* fragments are given in the
+#         "REGEX FRAGMENTS" section; the full reUnicodeWord is assembled there.)
+#
+# STAGE 4  -- compound / join  (arrayReduce with accumulator '')
+#   result := ''
+#   for index from 0 to wordsList.length-1:
+#       result := result + (index ? '_' : '') + wordsList[index].toLowerCase()
+#   return result
+#   i.e. lowercase each word (JS String.prototype.toLowerCase — full Unicode lowercase) and
+#   join with '_'. EMPTY wordsList -> '' (the initial accumulator is returned unchanged).
+#   FIRST word gets no leading underscore; every subsequent word is preceded by exactly one '_'.
+#
+# =====================================================================================
+# REGEX FRAGMENTS (verbatim — needed to assemble reUnicodeWord exactly)
+# =====================================================================================
+# Astral / mark / range building blocks:
+#   rsAstralRange       = '\ud800-\udfff'
+#   rsComboMarksRange   = '̀-ͯ︠-︣'
+#   rsComboSymbolsRange = '⃐-⃰'
+#   rsDingbatRange      = '✀-➿'
+#   rsLowerRange        = 'a-z\xdf-\xf6\xf8-\xff'
+#   rsMathOpRange       = '\xac\xb1\xd7\xf7'
+#   rsNonCharRange      = '\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xbf'
+#   rsPunctuationRange  = ' -⁯'
+#   rsSpaceRange        = ' \t\x0b\f\xa0﻿\n\r   ᠎             　'
+#   rsUpperRange        = 'A-Z\xc0-\xd6\xd8-\xde'
+#   rsVarRange          = '︎️'
+#   rsBreakRange        = rsMathOpRange + rsNonCharRange + rsPunctuationRange + rsSpaceRange
+#
+# Capture-group fragments:
+#   rsApos        = "['’]"          # (also used to BUILD reApos in STAGE 2)
+#   rsBreak       = '[' + rsBreakRange + ']'
+#   rsCombo       = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'   # (also builds reComboMark)
+#   rsDigits      = '\d+'
+#   rsDingbat     = '[' + rsDingbatRange + ']'
+#   rsLower       = '[' + rsLowerRange + ']'
+#   rsMisc        = '[^' + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + ']'
+#                   # NOTE: rsDigits == '\d+' is spliced INTO this character class verbatim,
+#                   #       so the class literally contains  \  d  +  as members too (a lodash
+#                   #       quirk; reproduce it verbatim).
+#   rsFitz        = '\ud83c[\udffb-\udfff]'
+#   rsModifier    = '(?:' + rsCombo + '|' + rsFitz + ')'
+#   rsNonAstral   = '[^' + rsAstralRange + ']'
+#   rsRegional    = '(?:\ud83c[\udde6-\uddff]){2}'
+#   rsSurrPair    = '[\ud800-\udbff][\udc00-\udfff]'
+#   rsUpper       = '[' + rsUpperRange + ']'
+#   rsZWJ         = '‍'
+#
+#   rsLowerMisc   = '(?:' + rsLower + '|' + rsMisc + ')'
+#   rsUpperMisc   = '(?:' + rsUpper + '|' + rsMisc + ')'
+#   rsOptLowerContr = '(?:' + rsApos + '(?:d|ll|m|re|s|t|ve))?'      # DEAD on this input (apos pre-stripped)
+#   rsOptUpperContr = '(?:' + rsApos + '(?:D|LL|M|RE|S|T|VE))?'      # DEAD on this input (apos pre-stripped)
+#   reOptMod      = rsModifier + '?'
+#   rsOptVar      = '[' + rsVarRange + ']?'
+#   rsOptJoin     = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+#   rsSeq         = rsOptVar + reOptMod + rsOptJoin
+#   rsEmoji       = '(?:' + [rsDingbat, rsRegional, rsSurrPair].join('|') + ')' + rsSeq
+#
+# Assembled global word matcher:
+#   reUnicodeWord = RegExp([
+#       rsUpper + '?' + rsLower + '+' + rsOptLowerContr + '(?=' + [rsBreak, rsUpper, '$'].join('|') + ')',
+#       rsUpperMisc + '+' + rsOptUpperContr + '(?=' + [rsBreak, rsUpper + rsLowerMisc, '$'].join('|') + ')',
+#       rsUpper + '?' + rsLowerMisc + '+' + rsOptLowerContr,
+#       rsUpper + '+' + rsOptUpperContr,
+#       rsDigits,
+#       rsEmoji
+#     ].join('|'), 'g')
+#
+#   reAsciiWord   = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#   reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#   reLatin       = /[\xc0-\xd6\xd8-\xf6\xf8-\xffĀ-ſ]/g
+#   reComboMark   = RegExp(rsCombo, 'g')
+#   reApos        = RegExp(rsApos, 'g')
+#
+# =====================================================================================
+# DEBURR TABLE  (deburredLetters) -- VERBATIM, used by STAGE 1 reLatin replacement
+# =====================================================================================
+# This is an ALGORITHMIC CONSTANT inlined in the source (not authority-bearing carried data),
+# so it is specified here in full. Keys are single chars; values are ASCII strings.
+# Latin-1 Supplement block:
+#   \xc0 A  \xc1 A  \xc2 A  \xc3 A  \xc4 A  \xc5 A
+#   \xe0 a  \xe1 a  \xe2 a  \xe3 a  \xe4 a  \xe5 a
+#   \xc7 C  \xe7 c
+#   \xd0 D  \xf0 d
+#   \xc8 E  \xc9 E  \xca E  \xcb E
+#   \xe8 e  \xe9 e  \xea e  \xeb e
+#   \xcc I  \xcd I  \xce I  \xcf I
+#   \xec i  \xed i  \xee i  \xef i
+#   \xd1 N  \xf1 n
+#   \xd2 O  \xd3 O  \xd4 O  \xd5 O  \xd6 O  \xd8 O
+#   \xf2 o  \xf3 o  \xf4 o  \xf5 o  \xf6 o  \xf8 o
+#   \xd9 U  \xda U  \xdb U  \xdc U
+#   \xf9 u  \xfa u  \xfb u  \xfc u
+#   \xdd Y  \xfd y  \xff y
+#   \xc6 Ae \xe6 ae
+#   \xde Th \xfe th
+#   \xdf ss
+# Latin Extended-A block:
+#   Ā A  Ă A  Ą A
+#   ā a  ă a  ą a
+#   Ć C  Ĉ C  Ċ C  Č C
+#   ć c  ĉ c  ċ c  č c
+#   Ď D  Đ D  ď d  đ d
+#   Ē E  Ĕ E  Ė E  Ę E  Ě E
+#   ē e  ĕ e  ė e  ę e  ě e
+#   Ĝ G  Ğ G  Ġ G  Ģ G
+#   ĝ g  ğ g  ġ g  ģ g
+#   Ĥ H  Ħ H  ĥ h  ħ h
+#   Ĩ I  Ī I  Ĭ I  Į I  İ I
+#   ĩ i  ī i  ĭ i  į i  ı i
+#   Ĵ J  ĵ j
+#   Ķ K  ķ k  ĸ k
+#   Ĺ L  Ļ L  Ľ L  Ŀ L  Ł L
+#   ĺ l  ļ l  ľ l  ŀ l  ł l
+#   Ń N  Ņ N  Ň N  Ŋ N
+#   ń n  ņ n  ň n  ŋ n
+#   Ō O  Ŏ O  Ő O
+#   ō o  ŏ o  ő o
+#   Ŕ R  Ŗ R  Ř R
+#   ŕ r  ŗ r  ř r
+#   Ś S  Ŝ S  Ş S  Š S
+#   ś s  ŝ s  ş s  š s
+#   Ţ T  Ť T  Ŧ T
+#   ţ t  ť t  ŧ t
+#   Ũ U  Ū U  Ŭ U  Ů U  Ű U  Ų U
+#   ũ u  ū u  ŭ u  ů u  ű u  ų u
+#   Ŵ W  ŵ w
+#   Ŷ Y  ŷ y  Ÿ Y
+#   Ź Z  Ż Z  Ž Z
+#   ź z  ż z  ž z
+#   Ĳ IJ ĳ ij
+#   Œ Oe œ oe
+#   ŉ 'n    # value is the TWO chars apostrophe + n -> the apostrophe is later stripped by STAGE 2
+#   ſ ss    # U+017F LATIN SMALL LETTER LONG S -> 'ss'
+#
+# NOTE: chars OUTSIDE reLatin's ranges are NOT in this table and pass through unchanged
+#       (e.g. U+FB00 'ﬀ' ligature, U+00B5 micro sign, Greek/Cyrillic, CJK, emoji). They are
+#       handled only as word characters / break characters by the splitter, never deburred.
+#
+# =====================================================================================
+# BEHAVIOR — WORKED EXAMPLES (oracle-verified against the real package @4.1.1)
+# =====================================================================================
+#   ''                -> ''                       # empty: deburr short-circuits, words->[]
+#   '  '              -> ''                        # whitespace-only: ascii path, no match -> []
+#   'Foo Bar'         -> 'foo_bar'
+#   'fooBar'          -> 'foo_bar'
+#   '--FOO-BAR--'     -> 'foo_bar'
+#   'camelCase'       -> 'camel_case'
+#   'fooBarBaz'       -> 'foo_bar_baz'
+#   'FOO'             -> 'foo'
+#   'ABCDef'          -> 'abc_def'                 # 'ABCD' run, then 'Def' boundary -> abc + def
+#   'foo123bar'       -> 'foo_123_bar'             # digits split out as own word
+#   'v1.2.3'          -> 'v_1_2_3'
+#   '123'             -> '123'
+#   'a1b2c3'          -> 'a_1_b_2_c_3'
+#   '9to5'            -> '9_to_5'
+#   'déjà vu'         -> 'deja_vu'                 # precomposed -> deburr table
+#   'Crème Brûlée'    -> 'creme_brulee'
+#   'naïve'           -> 'naive'
+#   'café' (decomp.)  -> 'cafe'                    # combining acute removed
+#   'über cool'       -> 'uber_cool'
+#   'école'           -> 'ecole'
+#   'ñ'               -> 'n'
+#   'Þorn'            -> 'thorn'                    # \xde -> 'Th'
+#   'ßharp'           -> 'ssharp'                   # \xdf -> 'ss'
+#   'Æon'             -> 'aeon'                     # \xc6 -> 'Ae'
+#   'Œuvre'           -> 'oeuvre'                   # Œ -> 'Oe'
+#   'Ðð'              -> 'dd'
+#   "o'clock"         -> 'oclock'                  # apostrophe stripped
+#   "don't"           -> 'dont'
+#   "y'all"           -> 'yall'
+#   "they'll"         -> 'theyll'
+#   'rock’n’roll'     -> 'rocknroll'               # curly apostrophe U+2019 stripped
+#   "'twas"           -> 'twas'
+#   'foo-bar'         -> 'foo_bar'
+#   'foo_bar'         -> 'foo_bar'
+#   'foo.bar'         -> 'foo_bar'
+#   '  foo   bar  '   -> 'foo_bar'
+#   '_id'             -> 'id'                       # leading '_' is a separator
+#   'XMLHttpRequest'  -> 'xml_http_request'
+#   'IDs'             -> 'i_ds'                      # 'I' alone, then 'Ds' (Upper? + LowerMisc+)
+#   'OEMs'            -> 'oe_ms'                     # 'OE' (UpperMisc+, before 'Ms') then 'Ms'
+#   'userID'          -> 'user_id'
+#   'iOS'             -> 'i_os'
+#   'macOS'           -> 'mac_os'
+#   'AString'         -> 'a_string'
+#   'fooBARbaz'       -> 'foo_ba_rbaz'              # 'foo','BA' then 'Rbaz' (R + lower run)
+#   'HTTPSConnection' -> 'https_connection'
+#   'GET2Post'        -> 'get_2_post'
+#   '1.5kg'           -> '1_5_kg'
+#   'Hello, World!'   -> 'hello_world'
+#   'über'            -> 'uber'
+#   'foo👍bar'        -> 'foo_👍_bar'              # emoji kept as its own word (rsEmoji)
+#   '✂cut'           -> '✂_cut'                    # dingbat kept as a word
+#   '🇺🇸flag'         -> '🇺🇸_flag'               # regional-indicator pair kept as a word
+#   '👨‍👩‍👧' -> '👨‍👩‍👧'   # ZWJ sequence kept whole (rsOptJoin)
+#   '👍🏽'             -> '👍🏽'                     # base + Fitzpatrick modifier kept whole
+#   'ﬀ'               -> 'ﬀ'                        # U+FB00 ligature: not deburred, misc word, no lowercase change
+#   'wordﬀword'       -> 'wordﬀword'               # ligature glues run together (misc char in a word)
+#   'Ψφ test'         -> 'ψφ_test'                  # Greek lowercased, misc/upper handling
+#
+# =====================================================================================
+ORACLE value -> oracle.json
+# =====================================================================================
+SCOPE
+#  IN-CONTRACT LOGIC (reproduce exactly):
+#    - The full pipeline STAGE 0..4 above: toString coercion, deburr (reLatin table map +
+#      reComboMark strip, with the '' short-circuit), apostrophe strip (reApos), word split
+#      (hasUnicodeWord branch -> unicodeWords | asciiWords), and the lowercase '_'-join reduce.
+#    - All regexes VERBATIM as listed; the deburr table VERBATIM as listed.
+#  CARRIED DATA: none. The deburredLetters table and the rs* unicode ranges are algorithmic
+#    constants of lodash's own word-splitter, inlined here in full — NOT an external
+#    authority-bearing table. No carried.json is emitted (per task directive).
+#  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (specified but NOT emitted by genInputs):
+#    - Non-string args: null/undefined/no-arg -> '' ; number/boolean/array -> String(value)
+#      via baseToString (with the -0 -> '-0' special case). These are real behaviors but the
+#      generator emits ONLY strings (the codec must round-trip; -0/NaN/Infinity/Symbol/function
+#      are excluded from emission). A blind re-emitter still reproduces them from STAGE 0.
+#    - Symbol args -> Symbol.prototype.toString; functions / Symbols do not round-trip the codec
+#      and are NOT emitted.
+#
+PROVENANCE lodash.snakecase@4.1.1 (npm) | repo lodash/lodash (Custom Build, modularize exports="npm")
+#  | MIT license | source file: node_modules/lodash.snakecase/index.js
+#  | snakeCase = createCompounder((result, word, index) => result + (index ? '_' : '') + word.toLowerCase())

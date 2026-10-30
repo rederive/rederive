@@ -1,0 +1,140 @@
+UNIT uniq
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure function. No seam (no clock/RNG/env/io/net). The Set fast-path vs the linear
+# scan are an INTERNAL optimization only; both produce the identical observable array
+# (verified against the real package), so the unit is fully deterministic.
+
+SIG uniq(array) -> newArray
+# Single positional argument. Returns a NEW array. Re-emitter MUST ship it as the
+# module's DEFAULT export:  export default uniq   (no named export required).
+# exportName = null, importKind = default.
+
+DEPENDS-ON none
+# Zero runtime deps. Internally inlines lodash baseUniq + a native-Set fast path, but
+# those are private helpers, not separate units — reproduce their OBSERVABLE result.
+
+BEHAVIOR
+# ---------------------------------------------------------------------------
+# Produce a duplicate-free copy of `array`, keeping only the FIRST occurrence of
+# each distinct element, in original order, using SameValueZero equality, with one
+# extra normalization quirk on zero (see node Z). Input is never mutated.
+# ---------------------------------------------------------------------------
+
+# NODE 1 (guard / coercion of the argument):
+#   isTruthyLen := array AND array.length    # JS truthiness of `array && array.length`
+#   IF NOT isTruthyLen: RETURN a fresh empty array []   (do NOT return the input)
+#   This guard means:
+#     - null            -> []   (array is null/falsy)
+#     - undefined       -> []   ( "  )
+#     - []              -> []   (length 0 is falsy)
+#     - a number, true, or a plain object with no/zero `length`  -> []  (length undefined/0 -> falsy)
+#       (verified: uniq(5)===[], uniq({})===[], uniq({length:0})===[])
+#   NOTE: the guard does NOT require a real Array. ANY value whose `.length` is a
+#   truthy number is processed by index 0..length-1 as an array-like:
+#     - a string "aab"            -> ["a","b"]   (indexed chars)
+#     - an arguments object        -> deduped by element
+#     - {length:2, 0:'a', 1:'a'}   -> ["a"]
+#     - a string of length>=200    -> still works, char-deduped
+#   These array-like inputs are IN-CONTRACT but are NOT emitted by the generator
+#   (genInputs emits real arrays only). A blind re-emitter that processes the arg
+#   as `for i in 0..(arg.length-1): elem = arg[i]` reproduces them automatically.
+
+# NODE 2 (length / path selection — observably transparent):
+#   length := array.length
+#   PATH-A "linear scan"   when length <  200   (LARGE_ARRAY_SIZE = 200)
+#   PATH-B "Set fast path"  when length >= 200   (threshold is INCLUSIVE: 200 itself uses PATH-B)
+#   Both paths MUST yield the IDENTICAL observable array. Re-emitter MAY implement
+#   either path for ALL lengths (e.g. always linear, or always a SameValueZero set);
+#   the threshold is an internal optimization with ZERO observable effect. Verified:
+#   lengths 199, 200, 201 over the same modular data give byte-identical results.
+
+# NODE 3 (the dedup walk — for index = 0 .. length-1, in ASCENDING order):
+#   value    := array[index]
+#   ZERO NORMALIZATION (node Z, applied to the VALUE that gets PUSHED):
+#       pushed := (value !== 0) ? value : 0
+#     i.e. if value is the number 0 OR the number -0 (since -0 === 0 is true in JS),
+#     the value pushed into the result is POSITIVE ZERO (+0). This means a -0 in the
+#     input is REWRITTEN to +0 in the output. (Source line:
+#       value = (comparator || value !== 0) ? value : 0;  with comparator undefined.)
+#     ALL OTHER values are pushed unchanged (same reference for objects).
+#   MEMBERSHIP TEST (decides whether to skip as a duplicate) uses the *value*
+#   (pre-normalization is irrelevant here since +0 and -0 are SameValueZero-equal):
+#     append `pushed` to result IFF no already-accepted element e satisfies
+#     SameValueZero(e, value) == true.
+#   SameValueZero(a, b) :=
+#       a === b
+#       OR (a is NaN AND b is NaN)        # i.e. (a!==a && b!==b)
+#     Consequences:
+#       - NaN IS a duplicate of NaN -> all NaN collapse to a SINGLE NaN.
+#         (This DIFFERS from naive ===/Array indexOf, where NaN!==NaN keeps every NaN.)
+#         The single retained NaN is the literal NaN value.
+#       - +0 and -0 are EQUAL (collapse to one element); combined with node Z the
+#         survivor is always +0 regardless of which zero appeared first.
+#         Verified: uniq([-0]) -> [+0]; uniq([0,-0,0]) -> [+0]; uniq([-0,0]) -> [+0].
+#       - Distinct primitives compared as strict ===: 1 (number) != "1" (string) !=
+#         true (boolean) != 1n (bigint). null != undefined. Each kept separately.
+#       - Objects/arrays/functions compared by REFERENCE identity: the SAME instance
+#         appearing twice collapses; two structurally-equal-but-distinct instances are
+#         BOTH kept.  Verified: uniq([o,o,p]) len 2;  uniq([{a:1},{a:1}]) len 2.
+#       - Infinity and -Infinity are distinct, normal === values (kept both, no quirk).
+#       - bigint values dedupe among themselves by ===; 1n != 1 (number).
+
+# NODE 4 (result):
+#   RETURN the accumulated result array (a fresh array; the input is not mutated).
+#   Order = ascending order of first occurrence. Holes in a sparse input array read
+#   as `undefined` (standard JS element access), so e.g. [1,<hole>,1,<hole>,2] ->
+#   [1, undefined, 2]  (the first hole contributes one `undefined`).
+#   Verified: input array is structurally unchanged after the call.
+
+# ---------------------------------------------------------------------------
+# WORKED EXAMPLES (each independently verified against lodash.uniq@4.5.0):
+#   uniq([2,1,2])                       -> [2,1]
+#   uniq([3,1,2,1,3])                   -> [3,1,2]
+#   uniq([])                            -> []
+#   uniq(null)                          -> []
+#   uniq(undefined)                     -> []
+#   uniq([NaN,NaN,1,NaN,2])             -> [NaN,1,2]           (NaN collapsed)
+#   uniq([0,-0,0])                      -> [+0]                (one element, +0)
+#   uniq([-0,0])                        -> [+0]
+#   uniq([Infinity,-Infinity,Infinity,-Infinity]) -> [Infinity,-Infinity]
+#   uniq([1,'1',1,true,true,null,null,undefined,undefined,false,0])
+#                                       -> [1,'1',true,null,undefined,false,0]
+#   uniq([1,1n,1])                      -> [1, 1n]             (number 1 != bigint 1n)
+#   uniq([{a:1},{a:1}])                 -> [ {a:1}, {a:1} ]    (two distinct refs kept)
+#   uniq(big array len>=200)            -> same as the equivalent small-array result
+# ---------------------------------------------------------------------------
+
+ORACLE value -> oracle.json
+# Pure deterministic mapping arrayArg -> resultArray. The harness stores
+# JSON.stringify(encode(args)) and the encoded result; expecteds are computed by
+# running the real package. Codec round-trips the values genInputs emits
+# (JSON primitives, arrays, plain objects, Set/Map (as elements), Uint8Array/Buffer,
+# bigint, NaN, +/-Infinity). NaN and +/-Infinity ARE codec-faithful for this codec.
+# Note: the codec preserves -0 vs +0 distinction in the INPUT arg, but uniq's output
+# only ever contains +0 for any zero, so expecteds compare equal regardless.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the whole pipeline above — the guard,
+#   the array-like .length handling, the SameValueZero dedup (NaN-collapse,
+#   +0/-0 collapse), the -0 -> +0 output normalization (node Z), first-occurrence
+#   order, reference identity for objects, non-mutation, and the path-independence
+#   of the 200-element Set optimization.
+# CARRIED DATA: none.
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because they are not
+#   codec-faithful or are out of the array-element value domain):
+#   - Array elements that are FUNCTIONS or SYMBOLS: behavior is reference-identity
+#     dedup (same as objects), but functions/Symbols do not round-trip the codec,
+#     so the generator never emits them. A blind re-emitter still handles them via
+#     the reference-identity rule.
+#   - `undefined` AS THE TOP-LEVEL ARGUMENT is in-contract (-> []) and the codec
+#     does encode it as the sole arg; genInputs includes it. (`undefined` as an
+#     ARRAY ELEMENT is round-tripped by this codec and IS emitted — it dedupes
+#     normally as a distinct value.)
+# OUT-OF-CONTRACT (side APIs / mutators): none — uniq has no side effects.
+
+PROVENANCE lodash.uniq@4.5.0 (npm) | repo: lodash/lodash | license: MIT |
+  source file: node_modules/lodash.uniq/index.js (function uniq + baseUniq +
+  createSet/setToArray + eq; LARGE_ARRAY_SIZE=200). Custom modularized build,
+  "lodash modularize exports=npm". Based on Underscore.js 1.8.3.

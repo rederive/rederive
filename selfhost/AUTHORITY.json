@@ -1,0 +1,111 @@
+{
+  "$comment": "The pinned authority every selfhost oracle is stamped from: rederive's own cli/ (+ LICENSE) at this commit, extracted by stamp.mjs into .authority/<commit>/ with git archive and refused unless its tree hash matches. Later edits to cli/ cannot move an oracle. A fix to the kernel is a NEW authority (a new commit here) and a re-stamp, never an edit of an oracle.",
+  "commit": "6fedf4d6deec",
+  "paths": [
+    "cli",
+    "LICENSE"
+  ],
+  "treeSha256": "4fc66ca35cb3f0ec1828311cf8ccfbf1cdb098939c788458182a54998c7e1199",
+  "history": [
+    {
+      "commit": "20bdd3dd041a",
+      "treeSha256": "656cd17f115f8874a709bbb87f02e6c2a8aaf39c5a49b7698f2b35cc12f596cd",
+      "retired": "2026-10-26: the pilot found two kernel bugs here (binding hash under-covered the primary; canonicalString rendered out-of-domain input). Fixed in d7e1fb4 + 7c2a6d0."
+    },
+    {
+      "commit": "a82f850a0a90",
+      "treeSha256": "739533039e9df87d2a9103e48ab36247f8f12169c404d02c8a1a0ee9fd48042a",
+      "retired": "2026-10-26 round 1: canonical_text found the binding and the parser still saw different lines (CR, BOM, trailing whitespace). Fixed: one splitter, sirLines()."
+    },
+    {
+      "commit": "ccc0bd9d45cb",
+      "treeSha256": "e43c7ae4c366362372138524334d4ff4717b871e1743a1e4ad99c55c1ec0e4ac",
+      "retired": "2026-10-26: pilot closed (both units VERIFIED); Tier 1 pinned at the next commit (no behavior change in the pilot functions since)."
+    },
+    {
+      "commit": "b329a40412df",
+      "treeSha256": "7dc1b7769e5718e2314af2a56f841d83d615588dddf78dfe13d9cf555758c309",
+      "retired": "2026-10-26 Tier 1 round 1: its 18 decomposers found 32 kernel findings (five gates that failed open); all fixed, fixed in part, or declined with reasons (selfhost/FINDINGS.md). The 4 units verified under it (canonical_string, canonical_text, f64_bits, vector_set_sha) reproduce exactly on the fixed kernel."
+    },
+    {
+      "commit": "b15b56613f9d",
+      "treeSha256": "3faa76fe60b5d8a0e35f5bad4e2459076ffd68ef5c3e9b255b32ca1602bb836a",
+      "retired": "2026-10-26 round 2: 22 findings (#33–#56) — decode accepted non-canonical spellings, parser attribute/whitespace splits, leak lint cut mid-surrogate, ANCHOR read from prose, languagesOf holes. Fixed in bea2c7f + 31803f4."
+    },
+    {
+      "commit": "31803f408bef",
+      "treeSha256": "f6d84c40ed726a2384715a6785b9e89207fde9accf4213a870cad2a880ab3abe",
+      "retired": "2026-10-27 round 4: the open findings #55 #58-#68 fixed or decided in 978444f (+ #72, a verifier fault in the rust harness); the 12 units whose function changed are re-cut on the new pin."
+    },
+    {
+      "commit": "978444f3baf3",
+      "treeSha256": "51f9195ee1b09f5e41694dbdc5fcc7485ea965437794117d895254294c55571f",
+      "retired": "2026-10-27 round 5: the round-4 re-cuts and the first 21 Tier 2/3 cuts found #74-#97 (gate holes in the any-ban, the ts SIG shim, hash pins, divergenceOf, adopt, the rust wire, every carried-data reader; the depth caps sat above the host stack); fixed in bb8ded8. Units whose function did not change reproduce on the new kernel."
+    },
+    {
+      "commit": "bb8ded84fa50",
+      "treeSha256": "a2593d187a3b57881e9039d81f31300817407e8286e573aee1bdebb899e8b111",
+      "retired": "2026-10-27 round 5b: the round-5 re-cuts found #99-#121 in round 5's own fixes; fixed in the next commit. The 13 units whose fresh stamps replay identically are re-stamped, the 21 that change are delta re-cut."
+    },
+    {
+      "commit": "6199e2cc8b75",
+      "treeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+      "retired": "2026-10-27 round 5c: the round-5b re-cuts found #123 #129 #134 #135 (gate regressions and kept-content drops) and the round-3 grades found #136 (the ts SIG shim could not see the artifact's own types). Fixed in 7b348e351c9f."
+    },
+    {
+      "commit": "7b348e351c9f",
+      "treeSha256": "91baed7dcec37cb11b1e62d2abb16969b6b5bcbd6e9b99a96c3fe71291ceb15f",
+      "retired": "2026-10-27 round 5d: the round-5c re-cuts found #139 (CARRIED-DATA behind an attribute, fail-open), #142 (three any-ban escapes) and #144 (four adopt drops). Fixed in e691ae0a86ba + 69b68b4a1c39."
+    },
+    {
+      "commit": "69b68b4a1c39",
+      "treeSha256": "fdf648cfc37d038aed85657e0e6c3a3de9aee504979b89b5e20278916a0bfedb",
+      "retired": "2026-10-27 round 5e: the adopt_kept_content 5d re-cut found #146 (unclosed opener / info string dropped). Fixed in c7b0916ed08a."
+    },
+    {
+      "commit": "c7b0916ed08a",
+      "treeSha256": "6716d5ceb289679ec027961905ff2233656ae8af20f973ce72d1f0ae32ca4c23",
+      "retired": "2026-10-27 round 5f: the any_ban_hits 5d re-cut found #148 (a #142 regression + three regex/divide escapes). Fixed in 2967f1354620."
+    },
+    {
+      "commit": "2967f1354620",
+      "treeSha256": "3d93e5d71937c08ecb6e8542acd8f36d30d4fe67708b9898fd3b35414bbab128",
+      "retired": "2026-10-27 round 5g: the any_ban_hits 5f re-cut found #149 (a misread divide out of step with strings). Fixed in 77ede425f3e5."
+    },
+    {
+      "commit": "77ede425f3e5",
+      "treeSha256": "69082865ba57e1367209636c3966f3eee84de1d7662d8f004ab66fded13caeda",
+      "retired": "2026-10-27 round 5h: the any_ban_hits 5g re-cut found #150 (a keyword-spelt identifier before a divide). Fixed in aa3b8dce6ef8."
+    },
+    {
+      "commit": "aa3b8dce6ef8",
+      "treeSha256": "fd2837bab99e137ae86b09c75afaf0a79ac7453f6cef25a5d326de4ef1455605",
+      "retired": "2026-10-27 round 5i: escape_markers could not encode its js extension (#152). Fixed in 1d1861440f2c; no unit function changed."
+    },
+    {
+      "commit": "1d1861440f2c",
+      "treeSha256": "9d064f28964b7d5bcb6da01b82e9a892a825084312a5e16136f8d017e22a6aff",
+      "retired": "2026-10-27 round 5j: the escape_markers 5i fix found #153 (Set members read as tags). Fixed in f68cca701417."
+    },
+    {
+      "commit": "f68cca701417",
+      "treeSha256": "a1c4b88edc0603d95b03d26d49135314dc357955377ff7c4478b43e6cd746082",
+      "retired": "2026-10-27 round 5k: the core build found #158 (rdv refused SIGs with object-type ; separators). Fixed in 7f015c4d1023."
+    },
+    {
+      "commit": "7f015c4d1023",
+      "treeSha256": "9f9cd065fa883f9a9e639cc2475436b6bfb8ae3ba4f077b0e2ca9972335be1d0",
+      "retired": "2026-10-28 one judge: #162 (rdv graded a js/ts artifact through an export the SIG does not name), #163 (the lab kept its own judge), #164 (the js extension was never shipped or graded by rdv). Fixed in 7d8e61a4d90d + 659deb9245d3."
+    },
+    {
+      "commit": "659deb9245d3",
+      "treeSha256": "68f783e4602e09712c361035f182091572f3cffb11c2a7c11a4d720197e11f0e",
+      "retired": "2026-10-28 v0.5 ecosystem update: strict v0.5 lint in rdv check, validate unit option, CLI ergonomics, directive-table wording. No unit function changed (delta replay clean). Fixed in 37999c158124."
+    },
+    {
+      "commit": "37999c158124",
+      "treeSha256": "813cb5fee932867b69ec12605cd5703760fac6df1beb2abe728e5b70e703a28e",
+      "retired": "2026-10-28 rdv failure hint for v0.5 bundles. No unit function changed. Fixed in 6fedf4d6deec."
+    }
+  ]
+}

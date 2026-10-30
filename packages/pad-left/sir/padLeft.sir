@@ -1,0 +1,300 @@
+UNIT padLeft
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG padLeft(str: any, num?: any, ch?: any) -> string
+DEPENDS-ON none   # SELF-CONTAINED: repeat-string's logic is INLINED below; the emitted module must NOT require/import anything.
+
+# ---------------------------------------------------------------------------
+# PURPOSE
+#   Left-pad `str` (coerced to a string) up to width `num` by prepending copies
+#   of `ch`. The pad is NOT a fill-to-length-N operation in the usual sense: it
+#   prepends EXACTLY (num - str.length) whole copies of the (string-coerced) pad
+#   token `ch`, then the original string. With the default single-space token
+#   this looks like ordinary left-padding to width `num`; with a MULTI-character
+#   token the result can be wider than `num` (see MULTI-CHAR below).
+#
+#   This is npm `pad-left@2.1.0` (module.exports = function padLeft). pad-left
+#   itself does `require('repeat-string')` and computes its padding as
+#       repeat(ch, num - str.length) + str
+#   For a SELF-CONTAINED re-emission, the observable behavior of repeat-string
+#   for the inputs this unit produces is INLINED here as an exact specification
+#   (see NODE 4). The reconstructed function contains the repeat logic and has
+#   NO dependency.
+#
+# THE ORIGINAL SOURCE (verbatim, load-bearing — reproduce this control flow exactly):
+#   module.exports = function padLeft(str, num, ch) {
+#     str = str.toString();
+#     if (typeof num === 'undefined') {
+#       return str;
+#     }
+#     if (ch === 0) {
+#       ch = '0';
+#     } else if (ch) {
+#       ch = ch.toString();
+#     } else {
+#       ch = ' ';
+#     }
+#     return repeat(ch, num - str.length) + str;
+#   };
+#
+# ---------------------------------------------------------------------------
+BEHAVIOR
+
+  # ---- NODE 1: coerce `str` via .toString() (FIRST statement, may THROW) ----
+  # str = str.toString()
+  # This is the VERY FIRST thing executed, BEFORE the `num` undefined check.
+  #   - A string passes through.
+  #   - A number coerces: 42 -> '42', 0 -> '0', -0 -> '0' (Number#toString),
+  #     42.5 -> '42.5'.
+  #   - A boolean: true -> 'true', false -> 'false'.
+  #   - An array: [1,2,3] -> '1,2,3', [] -> '', ['a'] -> 'a' (Array#toString = join(',')).
+  #   - A plain object {} -> '[object Object]'.
+  #   - null  -> THROWS  TypeError "Cannot read properties of null (reading 'toString')"
+  #             (null has no .toString; the read itself throws). VERIFIED.
+  #   - undefined -> THROWS TypeError "Cannot read properties of undefined (reading 'toString')".
+  #             VERIFIED. (NOTE: this is the FIRST arg being undefined; an
+  #             undefined SECOND arg `num` is handled at NODE 2 and does NOT throw.)
+  #   A re-emitter MUST call `str.toString()` (a property access then call), NOT
+  #   String(str) — String(null) would yield 'null' and NOT throw, which would be
+  #   WRONG. The throw on null/undefined is in-contract observable behavior.
+  IF str is null OR undefined  -> THROW TypeError (per above; do NOT swallow)
+  ELSE  str := str.toString()
+
+  # ---- NODE 2: undefined `num` short-circuit ----
+  # if (typeof num === 'undefined') return str;
+  # If `num` is ABSENT or explicitly undefined, return the coerced string with NO
+  # padding. This is checked via `typeof num === 'undefined'` — ONLY the value
+  # `undefined` (and an omitted 2nd arg) takes this branch. null does NOT
+  # (typeof null === 'object'); NaN does NOT (typeof NaN === 'number').
+  # VERIFIED: padLeft('foo') -> 'foo'.
+  IF (type-of num) == "undefined"  -> return str
+
+  # ---- NODE 3: normalize the pad token `ch` (three-way branch) ----
+  # if (ch === 0)      ch = '0';
+  # else if (ch)       ch = ch.toString();
+  # else               ch = ' ';
+  # Exact branch semantics (order matters):
+  #   3a. ch === 0  (STRICT equal to the NUMBER 0): ch := '0'.
+  #       This special-case exists so a numeric-zero pad token works; without it,
+  #       0 would be falsy and fall to the else (space). VERIFIED:
+  #         padLeft('foo',6,0) -> '000foo'.
+  #       NOTE: ch === 0 is strict — the string '0' does NOT take this branch (it
+  #       is truthy, takes 3b, .toString() -> '0', same result). Boolean false,
+  #       null, '' are NOT === 0 and are falsy -> take 3c. VERIFIED.
+  #   3b. else if (ch)  (ch is TRUTHY): ch := ch.toString().
+  #       Truthy values: non-empty strings, nonzero numbers (incl. negatives, NaN
+  #       is falsy so excluded), true, objects, arrays, etc.
+  #         '_'   -> '_'                  (string passthrough)
+  #         '0'   -> '0'
+  #         1     -> '1',   42 -> '42',  -5 -> '-5'   (Number#toString)
+  #         true  -> 'true'               (Boolean#toString)
+  #         '-='  -> '-='                 (MULTI-char token; see NODE 4)
+  #         'ab'  -> 'ab'
+  #       VERIFIED: padLeft('foo',6,1)->'111foo', padLeft('foo',6,true)->'truetruetruefoo',
+  #                 padLeft('foo',6,42)->'424242foo', padLeft('foo',6,-5)->'-5-5-5foo'.
+  #   3c. else  (ch is FALSY and not === 0): ch := ' ' (single space).
+  #       Falsy ch that maps to space: undefined, null, false, '' (empty string),
+  #       NaN, and also when ch is OMITTED. (The number 0 is intercepted by 3a, so
+  #       0 never reaches here.)
+  #       VERIFIED: padLeft('foo',6) -> '   foo', padLeft('foo',6,'') -> '   foo',
+  #                 padLeft('foo',6,null) -> '   foo', padLeft('foo',6,false) -> '   foo',
+  #                 padLeft('foo',6,NaN) -> '   foo'.
+  IF ch === 0 (strict, number zero)  -> ch := '0'
+  ELSE IF ch is truthy               -> ch := ch.toString()   # may coerce number/bool/array/object
+  ELSE                               -> ch := ' '
+
+  # ---- NODE 4: build padding = repeat(ch, count) where count = num - str.length ----
+  # return repeat(ch, num - str.length) + str;
+  # count := num - str.length   (JS subtraction; both operands coerced to Number).
+  #   - `num` is coerced to a Number by the `-` operator:
+  #       number          -> itself
+  #       numeric string  -> its numeric value:  '5'->5, '  5  '->5 (trimmed),
+  #                          '+4'->4, '5.9'->5.9, '1e1'->10, '0x8'->8, '0b110'->6,
+  #                          '0o12'->10  (full JS Number() string grammar)
+  #       non-numeric str -> NaN   ('abc'->NaN, ''->0, ' '->0)
+  #       true->1, false->0, null->0, [5]->5 ([5]->'5'->5), []->0, {}->NaN
+  #     count = (that number) - str.length.
+  #
+  #   The INLINED observable behavior of repeat(ch, count) — ch is ALWAYS a string
+  #   here (NODE 3 guarantees it). The result is:
+  #
+  #       padding =  (count is an integer and count > 0 and ch is a string)
+  #                     ?  ch repeated `count` times   # i.e. ch.repeat(count) in JS,
+  #                                                     #   or ''.concat ch×count
+  #                     :  ''                            # count <= 0, NaN, OR count==0
+  #
+  #   Concretely for the INTEGER-count envelope (the ONLY envelope genInputs
+  #   exercises — see SCOPE):
+  #       count <= 0        -> padding = ''   (NO padding; original returned as-is)
+  #       count == 0        -> padding = ''
+  #       count >= 1 (int)  -> padding = ch concatenated with itself `count` times
+  #   This means the pad is `count` WHOLE copies of ch, NOT a truncate-to-width-N.
+  #   With a single-char ch this equals classic left-pad to width num. With a
+  #   k-char ch the padding length is k*count, so the final string length is
+  #   k*count + str.length, which can EXCEED num. (MULTI-CHAR below.)
+  #
+  #   return  padding + str
+  count := (Number(num)) - str.length
+  padding := (Number.isInteger(count) AND count > 0) ? (ch concatenated count times) : ''
+  return padding + str
+
+  # ---- MULTI-CHAR ch (k > 1) — VERIFIED exact outputs ----
+  #   The pad token is repeated as a WHOLE `count` times; it is NOT sliced to fit
+  #   a target width. count = num - str.length.
+  #     padLeft('x', 10, '-=')  : count = 10 - 1 = 9
+  #                               padding = '-=' x9 = '-=-=-=-=-=-=-=-=-='  (18 chars)
+  #                               result  = '-=-=-=-=-=-=-=-=-=x'           (19 chars)  VERIFIED
+  #     padLeft('x', 6, 'ab')   : count = 6 - 1 = 5
+  #                               padding = 'ab' x5 = 'ababababab'          (10 chars)
+  #                               result  = 'abababababx'                   (11 chars)  VERIFIED
+  #     padLeft('x', 7, 'ab')   : count = 7 - 1 = 6
+  #                               result  = 'ababababababx'                 (13 chars)  VERIFIED
+  #     padLeft('foo', 6, 'ab') : count = 6 - 3 = 3 -> 'ababab' + 'foo' = 'abababfoo'    VERIFIED
+  #   So: multi-char padding count is governed by (num - str.length), the same
+  #   integer as single-char; only the per-copy width differs.
+
+  # ---- NO-PAD cases (count <= 0) — VERIFIED ----
+  #   padLeft('foo', 3)   : count = 0  -> '' + 'foo' = 'foo'        (num == len)   VERIFIED
+  #   padLeft('foo', 2)   : count = -1 -> 'foo'                     (num < len)    VERIFIED
+  #   padLeft('foo', 0)   : count = -3 -> 'foo'                     (num == 0)     VERIFIED
+  #   padLeft('foo', -3)  : count = -6 -> 'foo'                     (negative num) VERIFIED
+  #   padLeft('foo','abc'): Number('abc')=NaN -> count NaN -> '' -> 'foo'          VERIFIED
+  #   padLeft('x', NaN)   : typeof NaN==='number' (NOT undefined) -> count NaN
+  #                         -> padding '' -> 'x'                                   VERIFIED
+  #   padLeft('x', null)  : typeof null==='object' (NOT undefined); Number(null)=0
+  #                         -> count = 0-1 = -1 -> '' -> 'x'                       VERIFIED
+
+  # ---- EMPTY str — VERIFIED ----
+  #   padLeft('', 5)      : str ''='' len 0; count = 5 -> ' ' x5 = '     ' (5 spaces) VERIFIED
+  #   padLeft('', 0)      : count = 0 -> '' -> ''                                      VERIFIED
+
+  # ---- NUMBER str coercion — VERIFIED ----
+  #   padLeft(42, 5)      : str -> '42' (len 2); count = 3 -> '   42'                  VERIFIED
+  #   padLeft(0, 5)       : str -> '0'  (len 1); count = 4 -> '    0'                  VERIFIED
+  #   padLeft(true, 5)    : str -> 'true' (len 4); count = 1 -> ' true'                VERIFIED
+  #   padLeft([1,2], 5)   : str -> '1,2' (len 3); count = 2 -> '  1,2'                 VERIFIED
+  #   padLeft({}, 5)      : str -> '[object Object]' (len 14); count = 5-14 = -9 -> '[object Object]' VERIFIED
+
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+  # Pure deterministic function of (str, num, ch). No seam (no clock/RNG/io/net).
+  # The oracle records the expected string, OR {__throw} for the null/undefined
+  # `str` paths (NODE 1 throws TypeError). Compare expected === actual (string
+  # identity); for throw-paths compare that BOTH throw (the harness records
+  # {__throw} on codec-faithful throwing inputs). No floating-point comparison;
+  # results are exact strings.
+
+# ---------------------------------------------------------------------------
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly, INLINED — no dependency):
+    - NODE 1 str.toString() coercion, including the THROW on null/undefined `str`
+      (property-access-then-call semantics, NOT String()).
+    - NODE 2 `typeof num === 'undefined'` short-circuit returning the coerced str.
+    - NODE 3 three-way ch normalization: (ch === 0 ? '0') else (ch truthy ?
+      ch.toString()) else (' '). Exact order and the STRICT === 0 test.
+    - NODE 4 padding = ch repeated max(0, integer count) times, count = Number(num)
+      - str.length, then padding + str. This is the INLINED observable contract of
+      repeat-string@1.6.1: for any integer count it returns ch concatenated `count`
+      times for count>=1, and '' for count<=0; for non-string ch it would throw a
+      TypeError, but NODE 3 guarantees ch is always a string here so that throw is
+      unreachable from padLeft.
+
+    INLINED DEPENDENCY NOTE (repeat-string@1.6.1):
+      pad-left's source calls `repeat(ch, num - str.length)`. repeat-string's
+      INTERNAL implementation uses a module-level result cache plus a bit-shift
+      doubling loop (`while (max>res.length && num>1){ if(num&1) res+=str; num>>=1;
+      str+=str; } res += str; res = res.substr(0, max)`), and fast paths
+      `num===1 -> str`, `num===2 -> str+str`. The blind re-emitter need NOT
+      reproduce the cache or the doubling loop. The OBSERVABLE result, for every
+      input padLeft can pass (ch a string, count an INTEGER), is exactly
+      `ch` repeated `max(0, count)` times. VERIFIED: 486 (str,count) integer
+      combinations and 990 end-to-end padLeft combinations matched the inlined
+      model with ZERO divergences.
+
+  CARRIED DATA: none. (No literal tables.)
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for completeness; NOT emitted by
+  genInputs, because either they do not survive the JSON oracle codec, or they
+  exercise a fractional-count corner whose exact bit-shift/substr truncation the
+  inlined integer model intentionally does not promise):
+
+    (A) FRACTIONAL `num` (or fractional count). When count is non-integer, the
+        real repeat-string does NOT simply round: it builds res from WHOLE copies
+        via the doubling loop using `num >>= 1` (ToInt32 truncation toward zero),
+        then `res = res.substr(0, max)` with max = ch.length * count (a FLOAT).
+        Because res contains only whole copies, the observed result is a whole
+        number of copies truncated by substr. EXAMPLES (VERIFIED, for reference
+        only — NOT emitted):
+          repeat('ab', 3.5) -> 'ababab'   (6 chars, NOT 7)
+          repeat('abc',2.5) -> 'abcabc'   (6 chars)
+          repeat('ab', 2.5) -> 'abab'     (4 chars)
+          padLeft('xy',6.5,'-=') -> '-=-=-=-=xy'  (8 pad chars)
+          padLeft('x',5.7) -> '    x'  (single-space ch: 4.7 -> 4 spaces)
+        Re-emitters need NOT match this fractional corner; genInputs emits only
+        integer `num`, so the integer-count model is the authoritative contract.
+
+    (B) null / undefined as the FIRST arg (`str`): THROWS TypeError at NODE 1.
+        These are not codec-faithful as standalone JSON args (undefined does not
+        round-trip; null does, but is included in (B) for symmetry). null IS
+        codec-faithful and its throw IS gradable, so genInputs MAY emit [null, n]
+        to exercise the throw — see genInputs. undefined `str` is NOT emitted
+        (undefined arg does not round-trip), but its throw is specified here.
+
+    (C) NaN / +-Infinity as `num`: typeof 'number' (not 'undefined'); NaN -> count
+        NaN -> '' (no pad). Infinity -> count Infinity -> Number.isInteger(Inf) is
+        false -> '' under the inlined model. (NaN/Infinity as standalone args do
+        not round-trip the JSON codec, so they are NOT emitted; behavior specified
+        here. Note real repeat-string with count=Infinity would attempt to build
+        an enormous string / loop; padLeft never reaches a useful result, so this
+        is out-of-envelope and not graded.)
+
+    (D) Symbol / function / boxed primitives as any arg: not codec-faithful, NOT
+        emitted. (Symbol str/ch would throw on .toString() coercion via String
+        concat or behave per JS; out of envelope.)
+
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE (default export, SELF-CONTAINED ESM):
+#   The emission is an ES module loaded via dynamic import(). This unit is the
+#   package DEFAULT export (module.exports = function padLeft(str, num, ch){...}).
+#   The blind re-emitter MUST:
+#     - expose the function as the module DEFAULT export:
+#         export default function padLeft(str, num, ch) { ... }
+#       (or `const padLeft = ...; export default padLeft;`). NOT a named export.
+#     - be FULLY SELF-CONTAINED: contain the repeat logic INLINE. It MUST NOT
+#       `require` or `import` anything (no 'repeat-string', no polyfills). The
+#       padding may be produced with native String#repeat, a loop, or any means
+#       whose OUTPUT equals `ch` concatenated max(0, integer count) times.
+#     - preserve the THROW on null/undefined `str` (use str.toString(), not String).
+#   Signature: three positional args (str, num?, ch?); returns a primitive string
+#   (or throws TypeError for null/undefined str). PURE: no state, no argument
+#   mutation, no deep clone.
+#
+#   A correct minimal self-contained body (illustrative pseudo-implementation;
+#   the '#' lines are SIR notes, the rest is content):
+#     export default function padLeft(str, num, ch) {
+#       str = str.toString();                       # throws on null/undefined str
+#       if (typeof num === 'undefined') return str;
+#       if (ch === 0) ch = '0';
+#       else if (ch) ch = ch.toString();
+#       else ch = ' ';
+#       var count = num - str.length;               # JS Number coercion of num
+#       var pad = '';
+#       # inlined repeat: whole copies, count<=0 -> '' ; integer count only is graded
+#       if (count > 0) { for (var i = 0; i < count; i++) pad += ch; }
+#       return pad + str;
+#     }
+#   (Using `pad = count > 0 ? ch.repeat(count) : ''` is equally correct for the
+#    integer-count envelope; note String#repeat throws RangeError on a NEGATIVE
+#    count, so the `count > 0` guard is REQUIRED — VERIFIED that padLeft never
+#    feeds a negative count to the repeat.)
+
+# ---------------------------------------------------------------------------
+PROVENANCE
+  package: pad-left@2.1.0
+  author:  Jon Schlinkert (jonschlinkert)
+  repo:    https://github.com/jonschlinkert/pad-left
+  license: MIT
+  source:  node_modules/pad-left/index.js  (whole module body, 28 lines)
+  inlined-dependency: repeat-string@1.6.1 (jonschlinkert/repeat-string, MIT),
+                      node_modules/repeat-string/index.js — observable behavior
+                      inlined per NODE 4; internal cache/doubling-loop NOT reproduced.

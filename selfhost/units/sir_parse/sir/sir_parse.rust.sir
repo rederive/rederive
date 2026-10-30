@@ -1,0 +1,33 @@
+UNIT sir_parse
+LANG rust
+PRIMARY-SHA256 84cce153d90c22c8ab2ce2e108be678d196ba9592c6a6b48ddc16b17532cacb3
+SIG pub fn sir_parse(text: &str) -> serde_json::Value
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn sir_parse) depending on serde_json only — no main, no
+  I/O, no binary, no unsafe; the verifier generates the harness crate and prints the returned Value as one JSON line.
+  json result = Value::Object with the keys "ast", "errors", "warnings" (key order immaterial, the canonical form sorts);
+  nodes and diagnostics are Value::Object; "line" is an integer Number (Value::from(n as u64)); register none =
+  Value::Null; "attrList" is a Value::Array of two-element Value::Array [keyword, value]; "body" only on a comment node;
+  "msg" only on the codes TABLE DIAGNOSTICS marks (omit the key otherwise). A panic is recorded as a throw; the contract
+  has none on text.
+MECHANISM SPACE is ' ' and '\t' only: trim with trim_matches([' ', '\t']) / trim_end_matches([' ', '\t']), NEVER str::trim,
+  char::is_whitespace or split_whitespace (they use the Unicode White_Space set). The pinned GLUE set is used ONLY to decide
+  W_NAME_SEPARATOR (R8): one fn is_glue(c: char) -> bool over its ranges — not char::is_whitespace (std has no
+  General_Category Cf table, and GLUE holds U+200B, U+2060, U+180E, U+FEFF, U+00AD and the tag characters). No regex crate
+  is needed: every rule is a scan.
+MECHANISM R1: split on "\r\n", '\r', '\n' by a char scan (str::lines is wrong: it keeps a lone CR inside a line and drops a
+  final empty piece), then take the longest prefix of ' ', '\t' and '\u{feff}' chars and drop every '\u{feff}' in it (keep the spaces and tabs in order; a BOM after the first other char stays), then trim_end_matches([' ', '\t']). Work on a Vec<char> (or
+  char_indices), never on a byte offset that did not come from a char boundary. The 40-character msg cut is
+  chars().take(40) — a char is the primary's character. R5: scan chars; a '"' opens only at index 0, right after one of
+  ' ' '\t' '(' '[' '{' ',' '=' ':' ';' '|' '<' '>' '!' '&' '-' '~' (not '*' '+' '?'), or at the index right after the previous span's
+  closing quote; from it a '\\' consumes itself and the next char whatever it is (one char = one scalar
+  value, so U+2028 and an astral char are each one), the first other '"' closes, and reaching the end means unclosed, no
+  span. R11: scan for GROUPS left to right (a maximal ' '/'\t' run, a keyword, then ' ', '\t' or the end; resume the scan
+  right after the keyword); a continuation scans " " + code, a directive scans REST (with its leading space or tab) as
+  is; a group whose keyword's first char lies strictly between a span's two quotes (spans of that same scanned text) is
+  dropped before values are cut. The R8 hex is format!("{:04X}", c as u32) (five digits for an astral GLUE char): the char after G (after G's ':' when there
+  is one) for (a), the first char of CODE for (b), whose GLUE run is followed by '#' or by an ASCII WORD followed by ' ', '\t', ':', a GLUE char or the end.
+MECHANISM attrs is a serde_json::Map of String to Value; keep attrList as a Vec<(String, String)> on the node and set
+  attrs[k] to the non-empty values for k joined by "; " after each store (an all-empty k maps to "").
+DEPENDS-ON serde_json (crate, version 1)
+PINNED charset GLUE = '\u{a}'..='\u{d}' '\u{85}' '\u{a0}' '\u{1680}' '\u{2000}'..='\u{200a}' '\u{2028}' '\u{2029}' '\u{202f}' '\u{205f}' '\u{3000}' '\u{ad}' '\u{600}'..='\u{605}' '\u{61c}' '\u{6dd}' '\u{70f}' '\u{890}' '\u{891}' '\u{8e2}' '\u{180e}' '\u{200b}'..='\u{200f}' '\u{202a}'..='\u{202e}' '\u{2060}'..='\u{2064}' '\u{2066}'..='\u{206f}' '\u{feff}' '\u{fff9}'..='\u{fffb}' '\u{110bd}' '\u{110cd}' '\u{13430}'..='\u{1343f}' '\u{1bca0}'..='\u{1bca3}' '\u{1d173}'..='\u{1d17a}' '\u{e0001}' '\u{e0020}'..='\u{e007f}' CITED the primary's GLUE pin — the parser's exported GLUE ranges copied in its order
+PROVENANCE rederive@6199e2cc8b75 cli/sir/sir-parse.mjs (MIT); ambo's Rust parser is the intended consumer. Cut cold 2026-10-26; round 3 re-cut; round 4 re-cut; round 5 re-cut (OPENER-PREV, adjacent spans, BOM after the indent, the pinned GLUE ranges, glued NAME:, the invisible lead).

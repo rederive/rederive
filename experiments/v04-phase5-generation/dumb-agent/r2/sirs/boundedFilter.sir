@@ -1,0 +1,16 @@
+UNIT boundedFilter
+KIND FUNCTIONAL
+FIDELITY spec
+SIG boundedFilter(array, concurrency, gate) -> Promise<Array<number>>
+DESCRIPTION Filters an integer array to retain only even numbers in their original input order, subject to a concurrency bound.
+DESCRIPTION For each array element, the unit examines whether the element is even. The examination is signaled to the harness by awaiting gate.open(element).
+DESCRIPTION The gate parameter is a harness-owned completion source: gate.open(element) is a COMPLETION SOURCE that resolves with the element unchanged and performs no computation, transformation, or filtering.
+DESCRIPTION The UNIT performs all domain work: it determines whether each element is even and includes only even elements in the output array. The gate only signals timing to the verifier, never performs any work.
+DESCRIPTION No more than concurrency examinations may be in flight (awaiting gate.open()) at any instant.
+PAR Each element examination is independent and runs concurrently; the harness interleaves the resolutions of gate.open() calls.
+INVARIANT At most min(concurrency, array.length) gate.open() calls may be in flight (awaited but not yet resolved) simultaneously.
+INVARIANT An examination is in flight from the instant gate.open(element) is awaited until it resolves.
+INVARIANT The result is an array containing exactly those elements e from the input where (e % 2 === 0), meaning e modulo 2 equals 0.
+INVARIANT The result preserves the original input order: if input elements at indices i and j satisfy i < j and both are even, they appear in that relative order in the result.
+INVARIANT For empty input array, the result is an empty array and no gate.open() calls are made.
+INVARIANT Each input element is examined exactly once for evenness, regardless of the order in which gate.open() calls resolve.

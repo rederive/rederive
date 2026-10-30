@@ -1,0 +1,303 @@
+UNIT hasValues
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG hasValues(value: any) -> boolean
+DEPENDS-ON none   # kind-of's type classification is INLINED below; NO require/import in emissions
+
+# =============================================================================
+# PURPOSE
+# =============================================================================
+# hasValues(value) answers "does `value` have meaningful content / is it
+# non-empty". It is the default export of has-values@2.0.1
+# (module.exports = function has(val){...}). It dispatches on a type-name
+# string produced by kind-of@6 (resolved 6.0.3) and applies a per-kind
+# emptiness predicate. For arrays and plain objects the predicate RECURSES:
+# the container "has values" iff ANY own-enumerable element/property itself
+# "has values" (i.e. hasValues recurses into it).
+#
+# This unit is PURE: no clock, RNG, env, fs, or network. No seam. Fully
+# deterministic. ORACLE-CLASS deterministic, value mode -> oracle.json.
+#
+# IMPORTANT GROUND-TRUTH CORRECTIONS to the operator hint (all VERIFIED by
+# executing the real has-values@2.0.1 + kind-of@6.0.3):
+#   * null  -> TRUE   (hint guessed false; the switch has `case 'null': return true`)
+#   * 0, NaN, Infinity, -Infinity -> TRUE   (all numbers -> true)
+#   * false -> TRUE   (all booleans -> true)
+#   * function -> TRUE; date -> TRUE
+#   * arrays/objects are RECURSIVE over Object.keys, NOT a flat length check.
+#         [null] -> true   ([] element `null` itself -> true)
+#         [''] -> false, [undefined] -> false, [[]] -> false   (each element empty)
+#         [0] -> true, [null,null] -> true, [[1]] -> true
+#         {a:null} -> true, {a:undefined} -> false, {a:''} -> false, {a:{}} -> false
+#   * regexp -> source-based (empty pattern -> false)
+#   * buffer -> toString()!=='' ; error -> message!=='' ; map/set/file -> size!==0
+#   * everything kind-of names but has-values has no case for (symbol, bigint,
+#     promise, weakmap, weakset, typed arrays, generator, iterators, etc.)
+#     hits the DEFAULT branch -> TRUE.
+
+# =============================================================================
+# ENVELOPE
+# =============================================================================
+# INPUT  : exactly one positional argument `value` of any JS type.
+# OUTPUT : a primitive boolean (true | false). Never throws on codec-faithful
+#          inputs EXCEPT the unbounded-recursion case (see OUT-OF-ENVELOPE).
+# PURITY : referentially transparent for a given value; no mutation of `value`
+#          (only reads .length/.size/.source/.message/.toString()/Object.keys).
+
+# =============================================================================
+# BEHAVIOR  (exact pipeline — mirrors the real switch, in order)
+# =============================================================================
+# Let kind = kindOf(value)  (see INLINED KIND-OF CLASSIFICATION below).
+# Dispatch on kind:
+#
+#   NODE 1  kind in { 'boolean', 'date', 'function', 'null', 'number' }
+#             -> return true
+#           # NOTE: this includes booleans true AND false; numbers 0, NaN,
+#           # Infinity, -Infinity; null; any function (incl. arrow);
+#           # any Date instance. ALWAYS true regardless of value content.
+#
+#   NODE 2  kind == 'undefined'
+#             -> return false
+#
+#   NODE 3  kind == 'regexp'
+#             -> return value.source !== '(?:)' && value.source !== ''
+#           # /re/.source === 're' -> true.
+#           # /(?:)/.source === '(?:)' -> false.
+#           # new RegExp('').source === '(?:)' (JS normalizes empty pattern)
+#           #   -> false. The extra `!== ''` guard catches a source that is
+#           #   literally the empty string (defensive; standard RegExp objects
+#           #   never have an empty .source, they yield '(?:)').
+#
+#   NODE 4  kind == 'buffer'
+#             -> return value.toString() !== ''
+#           # Node Buffer. Buffer.from('') -> '' -> false.
+#           # Buffer.from('x') -> 'x' -> true. Buffer.from([0]) -> '\x00' -> true
+#           #   (one NUL byte is a non-empty string). toString() default = utf8.
+#
+#   NODE 5  kind == 'error'
+#             -> return value.message !== ''
+#           # new Error('') -> false ; new Error('boom') -> true.
+#
+#   NODE 6  kind in { 'string', 'arguments' }
+#             -> return value.length !== 0
+#           # '' -> false ; 'x' -> true. arguments object uses its .length.
+#           # NOTE: 'arguments' is FLAT (length only), NOT recursive — unlike
+#           # 'array'. An arguments object with length 1 whose sole element is
+#           # '' still returns true.
+#
+#   NODE 7  kind in { 'file', 'map', 'set' }
+#             -> return value.size !== 0
+#           # new Map() -> size 0 -> false ; new Map([['a',1]]) -> size 1 -> true.
+#           # new Set() -> false ; new Set([1]) -> true.
+#           # ('file' is a vinyl-File-like object exposing .size; not produced
+#           #  by any in-scope generator input — documented for completeness.)
+#           # NOTE: map/set are SIZE-based, NOT recursive. A Map whose single
+#           # value is '' still returns true (size 1).
+#
+#   NODE 8  kind in { 'array', 'object' }
+#             -> for (const key of Object.keys(value)) {
+#                  if (hasValues(value[key])) return true;   # RECURSE
+#                }
+#                return false;
+#           # Container has values iff ANY own-ENUMERABLE-string-keyed member
+#           # recursively hasValues. Short-circuits on first truthy member.
+#           # Uses Object.keys, therefore:
+#           #   - ARRAY HOLES ARE SKIPPED: [,,] has Object.keys === [] -> false;
+#           #     [,1] has keys ['1'] -> recurse on 1 -> true.
+#           #   - NON-INDEX OWN PROPS ON ARRAYS COUNT: arr=[]; arr.foo=1 -> keys
+#           #     ['foo'] -> recurse on 1 -> true. arr.foo='' -> '' is empty -> false.
+#           #   - INHERITED props are NOT visited (Object.keys = own enumerable).
+#           #   - Object.create(null) with own keys still works (kind=='object').
+#           # The recursion bottoms out at the per-kind leaf rules above, so:
+#           #   {a:null} -> recurse null -> NODE1 true -> true
+#           #   {a:undefined} -> recurse undefined -> NODE2 false -> (only key) false
+#           #   {a:''} -> recurse '' -> NODE6 length 0 -> false -> false
+#           #   {a:0} -> recurse 0 -> NODE1 true -> true
+#           #   {a:false} -> recurse false -> NODE1 true -> true
+#           #   {a:{}} -> recurse {} -> NODE8 no keys -> false -> false
+#           #   {a:{b:1}} -> recurse {b:1} -> recurse 1 -> true -> true
+#           #   [null] -> recurse null -> true ; [''] -> false ; [[]] -> false
+#           #   [[1]] -> recurse [1] -> recurse 1 -> true
+#
+#   NODE 9  default (any other kind string):
+#             -> return true
+#           # Reached by every kind kind-of names that has-values has NO case
+#           # for: 'symbol', 'bigint', 'promise', 'generatorfunction',
+#           # 'generator', 'weakmap', 'weakset', 'int8array', 'uint8array',
+#           # 'uint8clampedarray', 'int16array', 'uint16array', 'int32array',
+#           # 'uint32array', 'float32array', 'float64array', 'mapiterator',
+#           # 'setiterator', 'stringiterator', 'arrayiterator', and any
+#           # exotic lowercased ctor/tag name. ALL -> true (content ignored).
+#           # VERIFIED: 0n->true, 5n->true, new Uint8Array(0)->true,
+#           # new Promise(...)->true, new WeakMap()->true, Symbol()->true.
+
+# =============================================================================
+# INLINED KIND-OF CLASSIFICATION  (kind-of@6.0.3, index.js — reproduce EXACTLY)
+# =============================================================================
+# The blind emitter MUST inline this; there is NO `require('kind-of')`.
+# kindOf(val) returns a lowercase type-name string. Algorithm, IN ORDER
+# (first match wins):
+#
+#   1. if val === undefined (void 0)          -> 'undefined'
+#   2. if val === null                        -> 'null'
+#   3. let t = typeof val
+#        if t === 'boolean'                   -> 'boolean'
+#        if t === 'string'                    -> 'string'
+#        if t === 'number'                    -> 'number'
+#        if t === 'symbol'                    -> 'symbol'
+#        if t === 'bigint'                     # NOTE: not an explicit branch in
+#                                              # the source, but `typeof 5n` is
+#                                              # 'bigint'; it falls through the
+#                                              # typeof checks, is not array/
+#                                              # buffer/etc., ctorName(5n) ===
+#                                              # 'BigInt' (no switch case), is
+#                                              # not a generator obj, toString
+#                                              # tag is '[object BigInt]' ->
+#                                              # falls to the final
+#                                              # `type.slice(8,-1).toLowerCase()`
+#                                              # -> 'bigint'. (VERIFIED.)
+#        if t === 'function'                  -> isGeneratorFn(val) ? 'generatorfunction' : 'function'
+#                                              # isGeneratorFn: ctorName(val) === 'GeneratorFunction'
+#   4. if isArray(val)                        -> 'array'    # Array.isArray(val)
+#   5. if isBuffer(val)                       -> 'buffer'
+#        # isBuffer: val.constructor && typeof val.constructor.isBuffer ===
+#        #   'function' && val.constructor.isBuffer(val). (Node Buffer.)
+#   6. if isArguments(val)                    -> 'arguments'
+#        # isArguments: typeof val.length === 'number' &&
+#        #   typeof val.callee === 'function'  (with a try/catch on strict-mode
+#        #   callee access; the catch checks err.message contains 'callee').
+#   7. if isDate(val)                         -> 'date'
+#        # isDate: val instanceof Date, OR duck-type (toDateString/getDate/setDate
+#        #   are all functions).
+#   8. if isError(val)                        -> 'error'
+#        # isError: val instanceof Error, OR (typeof val.message==='string' &&
+#        #   val.constructor && typeof val.constructor.stackTraceLimit==='number').
+#   9. if isRegexp(val)                       -> 'regexp'
+#        # isRegexp: val instanceof RegExp, OR duck-type (flags string,
+#        #   ignoreCase/multiline/global booleans).
+#  10. switch (ctorName(val))  # ctorName = typeof val.constructor==='function'
+#                              #            ? val.constructor.name : null
+#        'Symbol'              -> 'symbol'
+#        'Promise'             -> 'promise'
+#        'WeakMap'             -> 'weakmap'
+#        'WeakSet'             -> 'weakset'
+#        'Map'                 -> 'map'
+#        'Set'                 -> 'set'
+#        'Int8Array'           -> 'int8array'
+#        'Uint8Array'          -> 'uint8array'
+#        'Uint8ClampedArray'   -> 'uint8clampedarray'
+#        'Int16Array'          -> 'int16array'
+#        'Uint16Array'         -> 'uint16array'
+#        'Int32Array'          -> 'int32array'
+#        'Uint32Array'         -> 'uint32array'
+#        'Float32Array'        -> 'float32array'
+#        'Float64Array'        -> 'float64array'
+#  11. if isGeneratorObj(val)                 -> 'generator'
+#        # isGeneratorObj: throw/return/next are all functions.
+#  12. let tag = Object.prototype.toString.call(val); switch(tag)
+#        '[object Object]'         -> 'object'   # plain objects, null-proto objects
+#        '[object Map Iterator]'   -> 'mapiterator'
+#        '[object Set Iterator]'   -> 'setiterator'
+#        '[object String Iterator]'-> 'stringiterator'
+#        '[object Array Iterator]' -> 'arrayiterator'
+#  13. otherwise                              -> tag.slice(8, -1).toLowerCase().replace(/\s/g, '')
+#        # e.g. '[object BigInt]' -> 'bigint'. Strips '[object ' (8 chars) and
+#        # trailing ']' (-1), lowercases, removes whitespace.
+#
+# For the IN-SCOPE generator inputs, kindOf reduces to this exact map (VERIFIED):
+#   undefined            -> 'undefined'
+#   null                 -> 'null'
+#   true / false         -> 'boolean'
+#   any number incl 0/NaN/Infinity/-Infinity -> 'number'
+#   any string           -> 'string'
+#   Array.isArray        -> 'array'
+#   plain {} / null-proto-> 'object'
+#   new Map()            -> 'map'
+#   new Set()            -> 'set'
+#   new Date()           -> 'date'
+#   RegExp literal/ctor  -> 'regexp'
+#   Node Buffer          -> 'buffer'
+#   Uint8Array (non-buffer) -> 'uint8array' (default branch in NODE9)
+#   bigint               -> 'bigint' (default branch in NODE9)
+
+# =============================================================================
+# ORACLE
+# =============================================================================
+ORACLE value -> oracle.json
+# For each generator-emitted input [value], the expected is the boolean (or
+# {__throw} marker) returned by the real has-values@2.0.1. Deterministic;
+# no seam to inject. The harness records the boolean directly.
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the entire dispatch (NODE 1..9),
+#   the recursion over Object.keys for array/object, and the inlined kind-of
+#   classification. No external table; pure logic.
+# CARRIED DATA: none. (Not a carried-data unit; no large literal tables.)
+# OUT-OF-CONTRACT: none. No stateful mutators, no side APIs. The unit only
+#   reads from `value`.
+
+# =============================================================================
+# NON-ROUND-TRIPPABLE / OUT-OF-ENVELOPE  (do NOT emit from genInputs)
+# =============================================================================
+# These behaviors are SPECIFIED here so a blind re-emitter reconstructs them,
+# but they are NOT emitted by the generator because they do not survive the
+# clean-room JSON/structured-clone codec deterministically (or they throw in a
+# way not codec-reachable):
+#
+#   * function  -> kind 'function' -> NODE1 -> TRUE. (Functions are not
+#                  serializable; identity-bearing. DOCUMENTED, not emitted.)
+#   * symbol    -> kind 'symbol'   -> NODE9 default -> TRUE. (Symbols are not
+#                  serializable. DOCUMENTED, not emitted.)
+#   * arguments -> kind 'arguments'-> NODE6 length-based. (Cannot construct a
+#                  real arguments object across the codec; behaves like a flat
+#                  length check. DOCUMENTED, not emitted.)
+#   * error     -> kind 'error'    -> NODE5 message-based. (Error instances are
+#                  not reliably structured-cloned with .message preserved across
+#                  the codec; DOCUMENTED — '' -> false, non-empty -> true.)
+#   * Promise / WeakMap / WeakSet / generator / typed-array variants other than
+#                  what the codec round-trips -> all NODE9 default -> TRUE.
+#                  DOCUMENTED, not emitted (not codec-faithful / identity-bound).
+#   * CIRCULAR / DEEPLY-RECURSIVE containers (e.g. obj.self = obj) -> the
+#                  array/object recursion (NODE8) does NOT guard against cycles
+#                  and RECURSES UNBOUNDED -> throws RangeError "Maximum call
+#                  stack size exceeded". This is real behavior but is NOT
+#                  codec-faithful (a cyclic object cannot be JSON-serialized)
+#                  and is therefore OUT-OF-ENVELOPE; the generator never emits a
+#                  cyclic input. DOCUMENTED for completeness.
+#
+# CODEC NOTE: the generator emits only codec round-trippable values: JSON
+#   primitives (incl. 0, NaN is NOT emitted as a top-level codec value — see
+#   below), arrays, plain objects, RegExp, Set, Map, Uint8Array/Buffer, bigint,
+#   Date. NaN/Infinity do NOT JSON-round-trip; they are SPECIFIED here (number
+#   -> TRUE) and are reconstructible by a blind engineer from the spec, but to
+#   stay codec-faithful the generator emits them only if the harness codec is
+#   confirmed to carry them; by default the generator AVOIDS top-level NaN /
+#   Infinity (it uses finite numbers incl 0/1/-1) to avoid poisoning held-out.
+#   The number->TRUE rule is fully covered by 0/1/-1 anyway.
+
+# =============================================================================
+# EMISSION CONTRACT  (for the SOURCE-BLIND re-emitters)
+# =============================================================================
+# * Emit a .mjs module with a DEFAULT export of the function:
+#       export default function hasValues(value) { ... }
+# * SELF-CONTAINED: inline the kind-of classification above. NO require/import
+#   of any package ('kind-of', 'has-values', or otherwise).
+# * The function takes exactly one argument and returns a primitive boolean.
+# * Recursion: array/object branch must call the SAME hasValues recursively on
+#   each Object.keys(value) member and short-circuit on the first truthy result.
+# * Reproduce the kind strings EXACTLY (lowercase, as enumerated) so the
+#   per-kind dispatch matches; in particular distinguish 'array' (recursive)
+#   from 'arguments' (flat length) from 'map'/'set' (size) and route everything
+#   unrecognized to the default TRUE branch.
+
+# =============================================================================
+# PROVENANCE
+# =============================================================================
+# has-values@2.0.1  (jonschlinkert/has-values, CJS, MIT)
+#   source file: node_modules/has-values/index.js
+# kind-of@6.0.3    (jonschlinkert/kind-of, MIT)  [resolved from ^6.0.2]
+#   source file: node_modules/kind-of/index.js  (classification INLINED above)
+# Ground truth captured by executing both packages on Node (darwin) — see the
+# VERIFIED notes throughout BEHAVIOR.

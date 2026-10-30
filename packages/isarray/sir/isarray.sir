@@ -1,0 +1,130 @@
+UNIT isarray
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure value-mode type-checker. No seam (no clock/RNG/env/fs/net). One argument,
+# read-only, no mutation of the argument or any ambient state. Returns a real boolean.
+
+SIG isarray(value: any) -> boolean
+
+DEPENDS-ON none
+
+# ----------------------------------------------------------------------------------
+# PROVENANCE OF THE EXPORT SHAPE  (verified against the real source + runtime)
+# ----------------------------------------------------------------------------------
+# Source (index.js, verbatim, 5 lines):
+#
+#     var toString = {}.toString;
+#     module.exports = Array.isArray || function (arr) {
+#       return toString.call(arr) == '[object Array]';
+#     };
+#
+# The exported value is chosen ONCE, at module load, by the expression
+#   `Array.isArray || <polyfill>`:
+#   * If the host realm has Array.isArray (every Node >= 0.x, every modern browser),
+#     the export IS Array.isArray itself -- the native function reference, BY IDENTITY
+#     (verified: `require('isarray') === Array.isArray` -> true; .name === 'isArray';
+#     .length === 1).
+#   * Only in a (now-historical) realm LACKING Array.isArray does the export become the
+#     toString-brand polyfill.
+#
+# THE TWO IMPLEMENTATIONS AGREE on every input this unit's generator can emit, and on
+# every realistic value. They DIVERGE on exactly one constructed class of object:
+# a non-array whose brand is forged to "[object Array]" via Symbol.toStringTag, e.g.
+#   const o = {}; o[Symbol.toStringTag] = 'Array';
+#   native Array.isArray(o) === false   (CORRECT for v2.0.5)
+#   polyfill toString.call(o) === '[object Array]' -> true   (divergent)
+# THE AUTHORITATIVE BEHAVIOR FOR isarray@2.0.5 IS THE NATIVE Array.isArray BEHAVIOR
+# (the `||` short-circuits to the native ref in every host that has it). The blind
+# re-emitter MUST therefore reproduce `Array.isArray` semantics (the genuine-array
+# partition below), NOT the toString brand. Such Symbol.toStringTag objects are OUT OF
+# ENVELOPE for the generator anyway (Symbols do not survive the factory codec), so the
+# graded set never contains a case where the two implementations differ -- but the
+# specification is pinned to native semantics so there is no ambiguity.
+
+# ----------------------------------------------------------------------------------
+# BEHAVIOR  (the true/false partition -- exact)
+# ----------------------------------------------------------------------------------
+# isarray(value) returns a REAL boolean primitive (typeof result === 'boolean'),
+# NEVER a truthy/falsy non-boolean, NEVER undefined.
+#
+# RETURNS true  IFF `value` is a genuine Array exotic object -- i.e. an object created
+#   by the Array constructor / an array literal / Array.of / Array.from / a spread, or a
+#   subclass instance of Array (class X extends Array). Concretely, true for every value
+#   for which the native Array.isArray returns true:
+#     []                       -> true   (empty array literal)
+#     [1, 2]                   -> true
+#     [[1], [2]]               -> true   (nested arrays: the OUTER value is an array)
+#     new Array(3)             -> true   (sparse / holes; still an array)
+#     new Array(1, 2, 3)       -> true
+#     Array.of(7)              -> true
+#     (subclass) new (class extends Array)() -> true
+#     a FROZEN array Object.freeze([1])      -> true
+#
+# RETURNS false for EVERYTHING ELSE, including (exhaustive over in-scope classes):
+#     {}                                   -> false   (plain object)
+#     { a: 1 }                             -> false
+#     { 0:'a', 1:'b', length: 2 }          -> false   (ARRAY-LIKE / arguments-like: NOT an array)
+#     a real `arguments` object            -> false   (array-like, but not an Array)
+#     ''                                   -> false   (empty string)
+#     'abc'                                -> false   (string -- even though indexable)
+#     42, 0, -1, 3.14                      -> false   (numbers)
+#     true, false                          -> false   (booleans)
+#     null                                 -> false
+#     undefined                            -> false
+#     NaN                                  -> false
+#     Infinity, -Infinity                  -> false
+#     10n / any bigint                     -> false
+#     new Set([1,2])                       -> false
+#     new Map()                            -> false
+#     /re/  (RegExp)                       -> false
+#     new Date()                           -> false
+#     new Uint8Array(3) / any TypedArray   -> false   (TypedArrays are NOT Arrays)
+#     Buffer.from([1]) (Node Buffer)       -> false   (a Uint8Array subclass; NOT an Array)
+#     new Number(5), new String('x'),      -> false   (boxed primitives)
+#       new Boolean(true)
+#     Object.create(Array.prototype)       -> false   (inherits Array.prototype but is
+#                                                       not an Array exotic object)
+#
+# DOCUMENTED EDGES:
+#   * EMPTY array []            -> true  (length 0 does not matter; it is an array)
+#   * SPARSE array new Array(3) -> true  (holes do not matter)
+#   * NESTED: only the top-level argument is classified; [[...]] is itself an array -> true
+#   * The function does not throw for ANY input (Array.isArray never throws; the polyfill's
+#     toString.call also never throws for any value, including null/undefined). NO throw path.
+#   * The argument is never mutated and never coerced; classification is by internal
+#     [[Class]] / exotic-object kind, not by reading .length or any property.
+#
+# CALL/ARITY NOTES:
+#   * The function's declared arity is 1 (.length === 1). Calling with zero args
+#     (value === undefined) -> false. Extra args beyond the first are ignored.
+
+ORACLE value -> oracle.json
+
+# ----------------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the genuine-array partition above == native
+#   Array.isArray semantics; return a real boolean; no throw; no mutation; arity 1.
+# CARRIED DATA: none. Pure function, no literal tables.
+# OUT-OF-CONTRACT: none (no stateful mutator, no side API).
+# OUT OF ENVELOPE (documented, NOT emitted by the generator -- non-round-trippable
+#   under the factory codec, and would only probe the native/polyfill divergence which
+#   is pinned to native above):
+#     * live function values (typeof 'function')              -> would be false
+#     * Symbol values                                         -> would be false
+#     * objects carrying a forged Symbol.toStringTag === 'Array' -> native: false
+#       (v2.0.5's authoritative answer), polyfill: true. PIN: native -> false.
+#   A blind engineer reconstructs all three from this spec without seeing them in inputs.
+
+# ----------------------------------------------------------------------------------
+# EMISSION SHAPE  (DEFAULT-EXPORT unit -- exportName is null)
+# ----------------------------------------------------------------------------------
+# The blind re-emitter MUST emit an ES module whose DEFAULT export is the function value:
+#     export default function isarray(value) { return Array.isArray(value); }
+# NOT a named export, NOT module.exports, NOT `export const ... `. The harness imports the
+# default binding and calls it as a function of one argument. Reproducing native
+# Array.isArray semantics (e.g. by delegating to Array.isArray, which IS what the package
+# resolves to) is the faithful implementation.
+
+PROVENANCE isarray@2.0.5, git://github.com/juliangruber/isarray, MIT license, file index.js

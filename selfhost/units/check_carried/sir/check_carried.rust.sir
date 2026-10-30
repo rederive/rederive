@@ -1,0 +1,36 @@
+UNIT check_carried
+LANG rust
+PRIMARY-SHA256 48345c0139463424c8369a2dd17b8f99b22d5dbe4a32e3f5583cb189c642bc28
+SIG pub fn check_carried(decl: &serde_json::Value, table: &serde_json::Value) -> Result<(String, Option<bool>, Vec<(String, Option<serde_json::Value>, Option<serde_json::Value>, bool)>, bool, String, i64), String>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn check_carried) depending on serde_json (version 1)
+  only — no main, no I/O, no unsafe. The verifier's generated harness parses one JSON args line, binds decl and table as
+  serde_json::Value, calls check_carried(&decl, &table) and prints the result; the record result is the six-tuple in the
+  primary's field order (sha, hashOk, results, attested, status, entries), each results element the four-tuple (expr,
+  equals, got, ok). Err(msg) (and a panic) is a throw — R1; the message is not graded. An ABSENT got is None
+  (Some(Value::Null) reads the same in the oracle); equals is always Some (the element must hold it, R1).
+ABI type mapping: text = Value::String; bool = Value::Bool; none = Value::Null; list = Value::Array; map = Value::Object
+  (serde_json::Map, default features: iterated in byte order — never rely on it for CANON, see MECHANISM). A json number
+  arrives as serde_json::Number parsed from the host's own number text; take Number::as_f64 (exact: the text is the
+  shortest round-trip spelling of a double) for both CANON and comparison.
+ENVELOPE narrowing: serde_json::Value holds no NaN, infinity or -0, so the vectors carrying one (R1's throwing tables and
+  equals) are narrowed by the driver and never reach this crate; inside it every number is finite.
+MECHANISM SHA-256 (R2) is FIPS 180-4, implemented in the crate (no hash crate): the published initial hash words and the 64
+  round constants, big-endian words, padding with 0x80, zeros and the 64-bit big-endian bit length; hex digest lowercase.
+MECHANISM CANON (R2): write it by hand into a String. Map keys sorted by UTF-16 code units — compare
+  a.encode_utf16() against b.encode_utf16() lexicographically (Iterator::cmp), NOT the str / byte order serde_json's Map
+  iterates in (they differ between U+E000..U+FFFF and supplementary characters: "\u{FF61}" sorts AFTER the emoji
+  "\u{1F600}"). ESCAPE per the table, iterating chars (a supplementary character is written literally as its 4 UTF-8
+  bytes); \u00XX with lowercase hex via format!("\\u{:04x}", c as u32). NUMBER-TEXT: Rust's Display for f64 is NOT it
+  (it never uses exponent form: 1e21 prints 1000000000000000000000). Take the shortest round-trip digits and exponent
+  from format!("{:e}", x) (e.g. "1.5e-7" -> digits 15, exponent -7; then n = exponent + 1) and lay them out by the
+  NUMBER-TEXT rule; 0.0 is "0".
+MECHANISM ok (R5): inside this crate's envelope ok is structural equality of GOT and E with GOT present — numbers compared
+  as f64 (as_f64), lists element by element in order, maps by key set and value per key (order free), text by content.
+  GOT (R4): table.get(key) (own entries only — a Value::Object has no inherited keys, so __proto__ and constructor are
+  plain keys); count: the table's entry count as a Value::Number (compares equal to the declared 3 or 3.0). PIN (R3): a
+  Value::String of length 64 whose every byte is b'0'..=b'9' or b'a'..=b'f'; a missing sha key or Value::Null is ABSENT
+  (hashOk None); any other value is Err (R1). An expr must be a non-empty Value::String, else Err.
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs checkCarried + canonical + canonicalValue. Language file re-cut 2026-10-27
+  with the primary; the ABI follows the lab's rust driver (drivers/rust.mjs: json args as serde_json::Value, a record
+  result as a tuple in declared field order, Result Err as a throw).

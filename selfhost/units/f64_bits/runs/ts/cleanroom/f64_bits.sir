@@ -1,0 +1,41 @@
+UNIT f64_bits
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b329a40412df cli/sir/canon.mjs — encode(x, f64).bits, the normative bit pattern every f64 comparison in every oracle runs on (SIR_SCHEMA canonical form, the NaN rule)
+ORACLE-CLASS deterministic
+SIG f64_bits(x: f64) -> text
+ENVELOPE every IEEE-754 binary64 value: finite normals, subnormals, both zeros, both infinities, and NaN of any sign and
+  payload. Non-f64 arguments are outside the envelope (the real code throws on them; see SCOPE).
+DEPENDS-ON none
+DESCRIPTION Render an f64 as the 16 lowercase hexadecimal digits of its IEEE-754 binary64 encoding, with every NaN
+  replaced by the one canonical quiet NaN — so that f64 equality in an oracle is text equality of this rendering.
+BEHAVIOR
+R1 Read x as its 64-bit IEEE-754 binary64 encoding taken as an unsigned integer: bit 63 the sign, bits 62..52 the biased
+  exponent, bits 51..0 the fraction. The result is that integer written in base 16, most significant digit first, with
+  lowercase digits a-f, left-padded with "0" to exactly 16 characters.
+R2 Every NaN, whatever its sign bit and whatever its payload (quiet or signaling), yields "7ff8000000000000". This is the
+  ONE place the result is not the input's own encoding. CITED FIDELITY package — the NaN rule (SIR_SCHEMA canonical form)
+R3 No other value is normalized: -0 and +0 differ, the infinities keep their sign, subnormals keep their exact fraction,
+  and no rounding or tolerance is applied. Two f64 values give the same result exactly when both are NaN or their
+  encodings are identical.
+TABLE SPECIALS — x -> result (R1 except row 1, which is R2)
+  1  NaN (any sign, any payload)                     -> "7ff8000000000000"
+  2  +0                                               -> "0000000000000000"
+  3  -0                                               -> "8000000000000000"
+  4  +Infinity                                        -> "7ff0000000000000"
+  5  -Infinity                                        -> "fff0000000000000"
+  6  smallest positive subnormal (2 to the -1074)     -> "0000000000000001"
+  7  largest subnormal                                -> "000fffffffffffff"
+  8  smallest positive normal (2 to the -1022)        -> "0010000000000000"
+  9  largest finite                                   -> "7fefffffffffffff"
+  10 1                                                -> "3ff0000000000000"
+INVARIANT the result is always exactly 16 characters, each one of 0-9 or a-f.
+INVARIANT the result never has the NaN exponent pattern (exponent bits all ones, fraction non-zero) except as "7ff8000000000000".
+ORACLE value -> oracles/f64_bits.json  CANONICAL-SHA256 6b106e6ba0d9a2f538e0953da58f89ca3a821d79793a2df131e4b6de3d088019
+NOTE the oracle carries NaN arguments only as the codec's NaN tag, so its single NaN vector cannot show a non-canonical
+  payload or a negative sign; R2 for those NaNs is stated here and pinned in each language file's MECHANISM.
+SCOPE IN: R1-R3 over every f64. OUT: the decimal display string v that encode also emits (a non-normative hint), and the
+  real code's handling of non-f64 arguments — a non-number throws "not f64: ...", and a legacy codec number tag whose text
+  is not a numeral is first converted to NaN (an encode-codec fact, not this unit's behavior).
+PROVENANCE rederive@b329a40412df (rederive, the trust kernel) cli/sir/canon.mjs, functions f64bits + hex16 as reached through
+  encode(x, {k: 'f64'}).bits (seam selfhost/seams/f64_bits.mjs). Cut 2026-10-26, REDERIVE_SELF_PLAN Tier 1 round 1.

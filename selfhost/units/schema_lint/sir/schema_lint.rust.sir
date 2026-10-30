@@ -1,0 +1,20 @@
+UNIT schema_lint
+LANG rust
+PRIMARY-SHA256 8e74cb3dded267ffa91c77fece9986ab50d20be3ad85c2b5ee718a04d26d04bb
+SIG pub fn schema_lint(text: &str, carried_name: Option<&str>) -> (Vec<(u64, String, String)>,)
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn schema_lint) with NO dependencies —
+  no main, no I/O, no binary, no unsafe. The verifier generates its own harness crate from the abstract SIG and depends on
+  the artifact by path; compiling that harness against this SIG is the signature check.
+ABI type mapping: text = &str (UTF-8); text | none = Option<&str> (None for none; Some("") is the empty name and, like
+  None and Some("none"), skips the name test); u64 = u64. A record crosses as a tuple in DECLARED field order: the result record[hits] is the
+  1-tuple (hits,) — note the trailing comma — and each hit record[line, what, text] is (line, what, text). No error path:
+  no Result, no panic inside the envelope.
+ENVELOPE narrowing: none beyond the primary — an unpaired surrogate has no &str form and is already OUT there.
+MECHANISM no regex crate. SP is ' ' and '\t' only: never char::is_whitespace, str::trim, trim_start or trim_end (they take
+  NBSP, U+3000, U+2028 and more); trim with trim_start_matches / trim_end_matches over [' ', '\t']. R1 splits by hand at
+  "\r\n", '\r' and '\n' (str::lines keeps a lone CR inside its line). Work on Vec<char> or char_indices so R8's escape skips
+  one char. R10: the word test is to_ascii_lowercase, then EVERY occurrence of "carried" (overlap impossible) with the chars just before and after checked against is_ascii_alphabetic (never is_alphabetic: é is not a letter here); the name test visits EVERY occurrence
+  (match_indices misses overlapping ones, e.g. name "--" in "x---" hits only at its second, overlapping start: scan every start index with starts_with) and checks the
+  chars just before and after against WORD (is_ascii_alphanumeric or '_'). R11 = chars().take(96) — code points, not bytes.
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs schemaLint — this file states the crate shape, the type mapping and the std-library traps only; no behavior.

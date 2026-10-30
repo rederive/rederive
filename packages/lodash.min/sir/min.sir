@@ -1,0 +1,226 @@
+UNIT min
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG min(array) -> any | undefined
+    # `array` is the sole positional argument. The DEFAULT export of the package
+    # (module.exports = min  =>  ESM `export default min`). No options, no second arg.
+DEPENDS-ON none
+    # Self-contained: the source file inlines all helpers (baseExtremum, baseLt,
+    # identity, isSymbol, isObjectLike). Zero runtime deps. No carried data.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline + branch nodes — exact and complete)
+# ============================================================================
+#
+# min(array):
+#   GUARD:  if NOT (array && array.length) -> return undefined.
+#           This is a JS truthiness test on `array` AND on `array.length`:
+#             - array is null / undefined / false / 0 / "" / NaN  -> falsey -> return undefined
+#             - array is a number (e.g. 42): array.length is undefined (falsey) -> return undefined
+#             - array.length === 0 (empty array, empty string, {length:0}) -> return undefined
+#           Otherwise (array truthy AND array.length truthy/non-zero) ->
+#             return baseExtremum(array, identity, baseLt).
+#
+#   NOTE the guard is purely on truthiness of array.length, NOT "is an Array".
+#   Any value with a truthy .length and integer-indexed elements is iterated:
+#     - a non-empty STRING is iterated char-by-char  (min("hello") === "e")
+#     - an array-like object {length:N, 0:..,1:..} is iterated by index
+#     - an `arguments` object is iterated
+#   (These array-like / string-argument forms are IN-CONTRACT and verified;
+#    see SCOPE for which the generator emits.)
+#
+#   identity(value)  = value                         # the iteratee; returns its arg unchanged
+#   baseLt(value, other) = (value < other)           # the comparator; JS strict-less-than `<`
+#                                                     # (NO numeric coercion forced; uses native `<`)
+#
+# baseExtremum(array, iteratee=identity, comparator=baseLt):
+#   # Single forward pass, index 0 .. length-1. Two function-scoped vars,
+#   # `computed` and `result`, are BOTH initially undefined (var-hoisted, never
+#   # assigned until the first element that "seeds"). This is the seam.
+#   #
+#   #   computed := undefined        # the running iteratee-value of the current minimum
+#   #   result   := undefined        # the running minimum ELEMENT (what is returned)
+#   #
+#   #   for index from 0 to length-1:
+#   #       value   := array[index]              # array holes read as undefined
+#   #       current := iteratee(value)           # == value, since iteratee is identity
+#   #
+#   #       ACCEPT := (current != null)          # LOOSE !=  -> rejects BOTH null AND undefined
+#   #                 AND
+#   #                 ( computed === undefined           # ---- SEED BRANCH (no minimum yet) ----
+#   #                     ? ( current === current        #        reject NaN (NaN === NaN is false)
+#   #                         AND NOT isSymbol(current) ) #        reject Symbol values
+#   #                     : comparator(current, computed) # ---- COMPARE BRANCH: current < computed ----
+#   #                 )
+#   #
+#   #       if ACCEPT:
+#   #           computed := current
+#   #           result   := value
+#   #
+#   #   return result
+#   #
+#   # EXACT SEAM SEMANTICS (this is where blind re-emitters diverge — be precise):
+#   #
+#   #   The "running minimum" starts UNSET (computed === undefined). An element
+#   #   becomes the FIRST running minimum (seeds) iff, in order:
+#   #       (a) value is not null and not undefined          (current != null, loose)
+#   #       (b) value is not NaN                             (current === current)
+#   #       (c) value is not a Symbol                        (!isSymbol(current))
+#   #   The FIRST element (lowest index) satisfying (a)+(b)+(c) seeds computed/result.
+#   #   Elements before it that fail (a)/(b)/(c) are SKIPPED (do not seed, do not
+#   #   throw — see Symbol caveat below). So a leading run of
+#   #   null/undefined/NaN/Symbol is silently skipped until the first "comparable"
+#   #   element seeds the minimum.
+#   #
+#   #   Once seeded (computed !== undefined), each later element is taken only if:
+#   #       (a) value is not null and not undefined  (current != null)
+#   #       AND
+#   #       (d) comparator(current, computed) is truthy, i.e. (current < computed).
+#   #   In the COMPARE branch there is NO NaN guard and NO Symbol guard:
+#   #       - NaN element after seeding: (NaN < computed) is always false -> skipped (never replaces).
+#   #       - undefined/null element after seeding: rejected by (a) -> skipped.
+#   #       - Symbol element after seeding: (Symbol < computed) THROWS a TypeError
+#   #         "Cannot convert a Symbol value to a number" — the whole call throws.
+#   #         (See OUT-OF-ENVELOPE; Symbol elements are not codec-round-trippable
+#   #          so the generator never emits them, but a blind re-emitter MUST
+#   #          reproduce the throw if such an input were ever fed.)
+#   #
+#   #   STRICT-LESS-THAN, FIRST-WINS TIES: replacement requires current STRICTLY
+#   #   less than the running minimum. Equal elements (current < computed false)
+#   #   do NOT replace -> the FIRST occurrence of the minimum value is the one
+#   #   returned (stable / leftmost). Examples (verified):
+#   #       [3,3,1]   -> 1
+#   #       [2,2,2]   -> 2  (the first 2; identity, but tie-rule confirmed)
+#   #       [0, -0]   -> 0   ( -0 < 0 is false -> first 0 kept )
+#   #       [-0, 0]   -> -0  ( 0 < -0 is false -> first -0 kept )
+#   #
+#   #   COMPARISON IS NATIVE JS `<` (NOT numeric-forced):
+#   #       - numbers: usual ordering; -Infinity is the smallest, +Infinity the largest.
+#   #             [-Infinity, 5] -> -Infinity ;  [Infinity, -Infinity] -> -Infinity
+#   #       - bigint: ordered as integers; bigint<->number cross-compares numerically.
+#   #             [3n,1n,2n] -> 1n ;  [3n, 1, 2n] -> 1 (number)
+#   #       - boolean: false(0) < true(1).            [true,false] -> false ; [false,true] -> false
+#   #       - strings: UTF-16 CODE-UNIT lexicographic order via `<`. NO case-folding,
+#   #         NO locale. Uppercase code points (A=65) sort before lowercase (a=97).
+#   #             ["banana","apple","cherry"] -> "apple"
+#   #             ["b","a","B","A"]           -> "A"
+#   #             ["apple","Apple"]           -> "Apple"
+#   #             ["10","9","100"]            -> "10"   ( '1'(49) < '9'(57) )
+#   #       - mixed string<->number: native `<` coerces the string to number when the
+#   #         other operand is a number:  [1,"0"] -> "0" ; ["2",1] -> 1
+#   #       - Date / objects: compared via native `<` (valueOf/primitive coercion).
+#
+# ============================================================================
+# DEMONSTRATED INPUT -> OUTPUT TABLE  (all VERIFIED by executing lodash.min@4.0.1)
+# ============================================================================
+#   min([])                       -> undefined
+#   min(null)                     -> undefined
+#   min(undefined) / min()        -> undefined
+#   min(false)                    -> undefined
+#   min(0)                        -> undefined
+#   min("")                       -> undefined
+#   min(NaN)                      -> undefined
+#   min(42)                       -> undefined        # number arg: .length undefined -> falsey
+#   min({length:0})               -> undefined
+#   min({length:3,0:5,1:2,2:8})   -> 2                # array-like object
+#   min([5])                      -> 5
+#   min([4,2,8,6])                -> 2
+#   min([-1,-5,3])                -> -5
+#   min([3,2,1,2,1])              -> 1
+#   min([2,2,2])                  -> 2
+#   min([3,3,1])                  -> 1
+#   min([Infinity,5])             -> 5
+#   min([-Infinity,5])            -> -Infinity
+#   min([Infinity,-Infinity])     -> -Infinity
+#   min([0,-0])                   -> 0
+#   min([-0,0])                   -> -0
+#   min([true,false])             -> false
+#   min([false,true])             -> false
+#   min([3n,1n,2n])               -> 1n
+#   min([3n,1,2n])                -> 1   (number)
+#   min(["banana","apple","cherry"]) -> "apple"
+#   min(["b","a","B","A"])        -> "A"
+#   min(["apple","Apple"])        -> "Apple"
+#   min(["10","9","100"])         -> "10"
+#   min([1,"0"])                  -> "0"
+#   min(["2",1])                  -> 1
+#   min("hello")                  -> "e"   # string arg iterated char-by-char, min UTF-16 unit
+#   min("ZYXabc")                 -> "X"   # 'X'(88) is the min code unit present
+#   min([NaN])                    -> undefined        # NaN cannot seed
+#   min([undefined])              -> undefined        # undefined rejected by !=null
+#   min([null])                   -> undefined        # null rejected by !=null
+#   min([null,null])              -> undefined
+#   min([undefined,null])         -> undefined
+#   min([NaN,NaN])                -> undefined
+#   min([NaN,5,2])                -> 2                 # leading NaN skipped, then 2 wins
+#   min([undefined,3,1])          -> 1                 # leading undefined skipped
+#   min([null,3,1])               -> 1                 # leading null skipped
+#   min([3,undefined,1])          -> 1                 # interior undefined skipped
+#   min([3,null,1])               -> 1                 # interior null skipped
+#   min([5,NaN,3])                -> 3                 # interior NaN after seed: NaN<5 false, skipped
+#   min([2,NaN,5])                -> 2                 # NaN after seed never replaces
+#   min([undefined,NaN,5,2])      -> 2                 # leading undefined+NaN skipped, then min of {5,2}
+#   min([1,,3])                   -> 1                 # array hole == undefined element (skipped)
+#   min([,,3])                    -> 3                 # leading holes skipped, then 3 seeds
+#
+# ============================================================================
+# ORACLE value -> oracle.json
+# ============================================================================
+#   Pure deterministic function of its single argument. No seam (no clock/RNG/IO/net).
+#   The oracle records, per input tuple, the returned value (or {__throw} for the
+#   Symbol-after-seed TypeError path, which the generator does not emit).
+#
+# ============================================================================
+# SCOPE
+# ============================================================================
+#   IN-CONTRACT LOGIC (reproduce exactly; the generator EMITS these):
+#     - The guard `(array && array.length) ? ... : undefined`.
+#     - baseExtremum's single forward pass with the seed-branch / compare-branch seam.
+#     - identity iteratee; baseLt = native `<` comparator.
+#     - Element rejection by loose `!= null` (null AND undefined), the NaN seed-guard
+#       (current === current), and the Symbol seed-guard (!isSymbol).
+#     - Strict-less-than first-wins tie behavior; -0/0 tie; Infinity ordering.
+#     - Element types the codec round-trips and the generator emits: number (incl.
+#       NaN, +/-Infinity, -0), string, boolean, bigint, null, undefined (incl. holes).
+#     - Argument forms emitted: arrays; non-empty strings (iterated char-wise);
+#       falsey args (null/undefined/false/0/"" /NaN); a number arg (42); a couple of
+#       array-like objects {length, 0..} — all verified above.
+#
+#   CARRIED DATA: none. (No tables/constants; nothing to attest.)
+#
+#   OUT-OF-ENVELOPE (documented for the blind re-emitter; NOT emitted by the generator
+#   because the harness codec cannot faithfully round-trip them — re-emitter must still
+#   reconstruct the behavior from this spec):
+#     - SYMBOL ELEMENTS:
+#         * a Symbol at the SEED position is SKIPPED (rejected by !isSymbol in the
+#           seed branch): min([Symbol(),3,1]) -> 1 ; min([Symbol()]) -> undefined ;
+#           min([Symbol(),Symbol()]) -> undefined.
+#         * a Symbol AFTER a value has seeded the minimum makes `Symbol < computed`
+#           THROW TypeError "Cannot convert a Symbol value to a number": e.g.
+#           min([3, Symbol()]) THROWS ; min([3, Symbol(), 1]) THROWS.
+#       (Codec carries no Symbol; verified live; reproduce exactly if ever fed.)
+#     - FUNCTION ELEMENTS / class instances whose identity matters: not round-trippable;
+#       behavior follows the same `<` rules (function < value coerces via toString) but
+#       not emitted.
+#     - Date / object elements with valueOf: compared via native `<` numeric coercion
+#       (min([Date(1000),Date(500),Date(2000)]) -> Date(500), verified). Not emitted
+#       because Date does not survive the JSON codec as a Date; behavior documented.
+#
+#   OUT-OF-CONTRACT (stateful / side APIs): none. min is read-only, non-mutating;
+#   it neither mutates its argument nor touches any ambient state. No seam to inject.
+#
+# ============================================================================
+# RE-EMITTER DIRECTIVE
+# ============================================================================
+#   Emit an ES module whose DEFAULT export is the function:  export default min
+#   (the package's module.exports = min => ESM default). The harness imports the
+#   default export. Signature: a single positional argument. Do NOT add a second
+#   iteratee/comparator parameter to the public function — those are fixed internally
+#   to identity and baseLt.
+#
+# PROVENANCE
+#   lodash.min@4.0.1  (npm)
+#   repo: lodash/lodash  (custom modular build: `lodash modularize exports="npm" -o ./`)
+#   license: MIT
+#   source file: node_modules/lodash.min/index.js  (entire unit incl. inlined helpers
+#                baseExtremum, baseLt, identity, isSymbol, isObjectLike — lines 33-160)

@@ -1,0 +1,232 @@
+UNIT isRelative
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure boolean predicate over a single STRING argument. NO seam of any kind.
+# VERIFIED: the entire dependency chain (is-relative -> is-unc-path -> unc-path-regex)
+# contains NO require('is-windows'), NO process.platform read, NO os module, NO env-var
+# read, NO Date, NO Math.random, NO fs/net. The only `require`s are the two intra-chain
+# deps, which are INLINED below. The result depends ONLY on the input string and is
+# therefore FULLY DETERMINISTIC regardless of host OS. (See "ENV-SEAM CONFIRMATION".)
+# Read-only: the argument is never mutated; no ambient state is touched.
+
+SIG isRelative(filepath: string) -> boolean
+
+DEPENDS-ON none
+# NOTE on provenance of "none": the real npm unit is is-relative@1.0.0, whose index.js
+# does `require('is-unc-path')`, which does `require('unc-path-regex')`. This SIR INLINES
+# both transitively so the re-emitted unit is STANDALONE with no imports. The two inlined
+# regexes are reproduced VERBATIM under "INLINED CONSTANTS".
+
+# ----------------------------------------------------------------------------------
+# ORIGINAL SOURCE (verbatim — the 3 files in the chain)
+# ----------------------------------------------------------------------------------
+# is-relative@1.0.0 / index.js  (the unit; module.exports IS this function):
+#     'use strict';
+#     var isUncPath = require('is-unc-path');
+#     module.exports = function isRelative(filepath) {
+#       if (typeof filepath !== 'string') {
+#         throw new TypeError('expected filepath to be a string');
+#       }
+#       // Windows UNC paths are always considered to be absolute.
+#       return !isUncPath(filepath) && !/^([a-z]:)?[\\\/]/i.test(filepath);
+#     };
+#
+# is-unc-path@1.0.0 / index.js  (INLINED — its own type-check is DEAD here, see NODE A):
+#     'use strict';
+#     var regex = require('unc-path-regex')();
+#     module.exports = function(filepath) {
+#       if (typeof filepath !== 'string') {
+#         throw new TypeError('expected a string');
+#       }
+#       return regex.test(filepath);
+#     };
+#
+# unc-path-regex@0.1.2 / index.js  (INLINED — supplies the UNC regex factory):
+#     'use strict';
+#     module.exports = function uncPathRegex() {
+#       return /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/;
+#     };
+
+# ----------------------------------------------------------------------------------
+# INLINED CONSTANTS  (the two regexes — VERBATIM, the load-bearing literals)
+# ----------------------------------------------------------------------------------
+# UNC_REGEX  (from unc-path-regex@0.1.2, the value its factory returns):
+#     /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/
+#   Reads as, anchored at start of string:
+#     ^                two-or-more   one-or-more       one-or-more     one-or-more
+#                      leading       NON-separator     separator       NON-separator
+#                      separators    chars             chars           chars
+#     [\\\/]{2,}       [^\\\/]+      [\\\/]+           [^\\\/]+
+#   "separator" here = backslash (\) OR forward slash (/) (the class [\\\/] is the SAME
+#   in both the {2,} and the single-class positions). NOT anchored at the end ($ absent):
+#   it only needs the PREFIX  <2+ seps><host><1+ seps><share-start>  to match.
+#   NOTE: this regex has NO `i` flag and NO global state issues (it is rebuilt fresh /
+#   used via .test on a freshly-constructed literal each call in the original; reproduce
+#   it as a fresh literal or a non-stateful constant — there is no lastIndex hazard
+#   because there is no /g flag).
+#
+# DRIVE_SEP_REGEX  (from is-relative@1.0.0, inline in the return expression):
+#     /^([a-z]:)?[\\\/]/i
+#   Reads as, anchored at start of string, CASE-INSENSITIVE (/i flag):
+#     ^                OPTIONAL drive       MANDATORY single
+#                      group ([a-z]:)?      separator [\\\/]
+#   The drive group is exactly ONE ASCII letter (a-z, and via /i also A-Z) followed by a
+#   literal colon ':'. It is OPTIONAL. After it (or, if absent, at index 0) there MUST be
+#   ONE separator char (\ or /). The /i flag affects ONLY the [a-z] letter class; the ':'
+#   and the separators are literal regardless. The match is a PREFIX match (no $).
+#   IMPORTANT digit/length nuance: the drive letter is a SINGLE [a-z]; "1:\\x" and
+#   "AB:\\x" do NOT match the drive group (digit / two letters), so the optional group is
+#   skipped and matching falls to whether index 0 is a separator (it is '1'/'A' -> no) =>
+#   those are RELATIVE (true). See RESULT TABLE.
+
+# ----------------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — exact + complete)
+# ----------------------------------------------------------------------------------
+# NODE A — TYPE GUARD (the ONLY throw path):
+#   if (typeof filepath !== 'string'):
+#       throw  TypeError  with message EXACTLY  "expected filepath to be a string"
+#   This guard lives in is-relative ITSELF and runs FIRST. Because it runs first, the
+#   inlined is-unc-path's OWN type guard (which would throw TypeError "expected a string")
+#   is DEAD CODE relative to this unit — control never reaches isUncPath with a non-string.
+#   THEREFORE the only observable throw message for this unit is "expected filepath to be
+#   a string" (NOT "expected a string"). This is the message the blind re-emitter MUST
+#   reproduce verbatim. typeof check: only the JS primitive string type passes; everything
+#   else (number, boolean, null, undefined, object, array, bigint, symbol, function,
+#   Set/Map/RegExp/Date/Uint8Array/Buffer, boxed `new String('x')` [typeof 'object'!])
+#   throws. NOTE: a boxed String object `new String('x')` has typeof 'object' and THUS
+#   THROWS — it is NOT treated as a string. Zero-arg call -> filepath === undefined -> THROWS.
+#
+# NODE B — UNC TEST (inlined is-unc-path):
+#   uncMatch = UNC_REGEX.test(filepath)          # /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/
+#
+# NODE C — DRIVE/SEP TEST (inline in is-relative):
+#   driveSepMatch = DRIVE_SEP_REGEX.test(filepath)   # /^([a-z]:)?[\\\/]/i
+#
+# NODE D — COMBINE (the return expression, exact short-circuit order):
+#   return  !uncMatch  &&  !driveSepMatch
+#   i.e. the path is RELATIVE (true) IFF it is NEITHER a UNC path NOR drive-rooted/
+#   separator-rooted. JS `&&` short-circuits: if uncMatch is true, driveSepMatch is not
+#   even evaluated — but both regexes are pure/total over strings (neither throws, neither
+#   has /g lastIndex state), so the short-circuit is observationally irrelevant to the
+#   result; reproduce the full conjunction. The result is a REAL boolean primitive
+#   (typeof === 'boolean'), never truthy/falsy non-boolean.
+
+# ----------------------------------------------------------------------------------
+# RESULT TABLE  (VERIFIED by running is-relative@1.0.0 — self-consistent with genInputs)
+# ----------------------------------------------------------------------------------
+# Every value the generator can emit has its outcome pinned here.
+#   RELATIVE (returns true) — neither UNC nor drive/sep-rooted:
+#     "a/b"            -> true   (no leading sep; '/' is mid-string)
+#     "./x"            -> true   ('.' at index 0, not a sep)
+#     "../x"           -> true
+#     "x"  "x.txt"     -> true
+#     "rel/path/here"  -> true
+#     ""               -> true   (EMPTY STRING: UNC_REGEX no-match, DRIVE_SEP no-match =>
+#                                  !false && !false => TRUE.  <-- VERIFIED, documented edge)
+#     "a\\b"           -> true   (backslash present but NOT at index 0)
+#     "C:"             -> true   (drive group matches "C:" but NO separator follows =>
+#                                  DRIVE_SEP overall no-match because [\\\/] is mandatory)
+#     "C:foo"          -> true   (drive, then 'f' not a sep => no DRIVE_SEP match)
+#     "foo:bar"        -> true   ("foo" is not a single [a-z]; ':' not preceded correctly =>
+#                                  drive group absent, index0 'f' not sep => true)
+#     "1:\\x"          -> true   (drive letter must be [a-z]; '1' is a digit => group skipped;
+#                                  index0 '1' not a sep => true)
+#     "AB:\\x"         -> true   (two letters, not a single [a-z] drive => group skipped;
+#                                  index0 'A' not a sep => true)
+#     "http://x"       -> true   ('h' at index0, no leading sep, "//" is mid-string => true)
+#     "  /x"           -> true   (leading SPACES, then '/'; index0 is space, not a sep =>
+#                                  DRIVE_SEP no-match; UNC no-match => true)
+#     "\t/x"           -> true   (leading TAB; same reasoning => true)
+#     "+/x"            -> true   ('+' at index0, not drive, not sep => true)
+#     "~/x"            -> true   ('~' at index0 => true)
+#     "./"  "../"      -> true   (trailing sep, but index0 is '.', no drive => true)
+#     "\\\\a"          -> true   (TWO leading backslashes but NO share segment: UNC needs
+#                                  <2+seps><host><1+seps><share>; "\\\\a" lacks the 2nd sep
+#                                  group+share => UNC no-match. BUT DRIVE_SEP matches index0
+#                                  '\\' => driveSepMatch=true => result FALSE. SEE BELOW —
+#                                  "\\\\a" is actually FALSE, listed under FALSE partition.)
+#                                  (kept here only to flag the subtlety; canonical row below)
+#
+#   ABSOLUTE / NON-RELATIVE (returns false):
+#     "/x"  "/"  "/abs/path"   -> false   (DRIVE_SEP: index0 '/' is a sep)
+#     "\\foo"  "\\"            -> false   (DRIVE_SEP: index0 '\' is a sep)
+#     "C:\\x" "c:\\x" "C:/x"   -> false   (DRIVE_SEP: drive group "C:" + sep '\' or '/')
+#     "C:\\" "C:/" "z:\\" "Z:/" "D:\\x" "d:/x"  -> false  (drive + sep; /i => any case)
+#     "C:\\Users\\a"          -> false
+#     "\\\\server\\share"     -> false   (UNC: \\ + server + \ + share => UNC match;
+#                                          ALSO DRIVE_SEP matches index0 '\' — both true)
+#     "//server/share"        -> false   (UNC with forward slashes)
+#     "\\\\server\\share\\x"  -> false   (UNC)
+#     "\\\\\\\\server\\\\share" (>=2 leading backslashes) -> false  (UNC: {2,} allows 4)
+#     "///server/share"       -> false   (UNC: {2,} allows 3 leading '/')
+#     "\\\\a\\b"              -> false   (UNC: \\ + a + \ + b)
+#     "\\\\?\\C:\\x"          -> false   (UNC: \\ + '?' + \ + 'C...' ; '?' is a NON-sep char)
+#     "\\\\.\\pipe"           -> false   (UNC)
+#     "\\\\a"   "\\\\a\\"     -> false   (UNC NO-match — missing share — BUT DRIVE_SEP
+#                                          matches the leading '\' at index0 => result FALSE)
+#     "\\\\server" "\\\\server\\" -> false (same: DRIVE_SEP catches leading '\' => false)
+#
+# THROW (TypeError "expected filepath to be a string") for any NON-string argument:
+#     123, 0, -1, 3.14, NaN, Infinity        (numbers)
+#     true, false                            (booleans)
+#     null, undefined  (incl. zero-arg call) (nullish)
+#     {}, {a:1}, []                          (objects/arrays)
+#     10n / any bigint
+#     new Set(...), new Map(...), /re/, new Date(...), new Uint8Array(...), Buffer.from(...)
+#     new String('x'), new Number(5), new Boolean(true)  (boxed primitives: typeof 'object')
+
+ORACLE value -> oracle.json
+
+# ----------------------------------------------------------------------------------
+# ENV-SEAM CONFIRMATION  (explicit, per task requirement)
+# ----------------------------------------------------------------------------------
+# I read ALL THREE source files (is-relative@1.0.0, is-unc-path@1.0.0,
+# unc-path-regex@0.1.2) AND grepped them for process./platform/os/is-windows/env/Date/
+# Math.random/fs/net. RESULT: NONE present. is-relative depends only on is-unc-path;
+# is-unc-path only on unc-path-regex; unc-path-regex has ZERO dependencies. There is NO
+# `is-windows` dependency in this version, NO process.platform branch, NO environment
+# read. The Windows-specific shapes (drive letters, UNC, backslashes) are matched purely
+# by the two STRING regexes regardless of the host OS. CONCLUSION: NO ENVIRONMENT SEAM —
+# the unit is fully deterministic on every platform. ORACLE-CLASS deterministic (value
+# mode). No injection, no quarantine.
+
+# ----------------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): NODE A type guard + exact throw message
+#   "expected filepath to be a string"; the two INLINED regexes VERBATIM
+#   (UNC_REGEX = /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/ ,
+#    DRIVE_SEP_REGEX = /^([a-z]:)?[\\\/]/i); the combine `!uncMatch && !driveSepMatch`;
+#   real-boolean return. The whole RESULT TABLE above is in-contract.
+# CARRIED DATA: none. (The two regexes are small inline literals reproduced verbatim in
+#   this SIR, not a large external table — no carried.json.)
+# OUT-OF-CONTRACT: none (pure function; no mutation, no side API, no stateful collaborator).
+# OUT OF ENVELOPE (documented, NOT emitted by the generator — non-round-trippable under
+#   the factory codec; their behavior is nonetheless fully reconstructable from NODE A):
+#     * live function values (typeof 'function')  -> THROWS TypeError (non-string)
+#     * Symbol values (typeof 'symbol')            -> THROWS TypeError (non-string)
+#   A blind engineer reproduces both from the NODE A type guard without seeing them.
+
+# ----------------------------------------------------------------------------------
+# EMISSION SHAPE  (DEFAULT-EXPORT unit — exportName is null)
+# ----------------------------------------------------------------------------------
+# The original is `module.exports = function isRelative(filepath){...}` — the module's
+# export IS the function. The blind re-emitter MUST emit an ES module whose DEFAULT export
+# is the function value, fully SELF-CONTAINED (NO require, NO import), e.g.:
+#     export default function isRelative(filepath) {
+#       if (typeof filepath !== 'string') {
+#         throw new TypeError('expected filepath to be a string');
+#       }
+#       const unc = /^[\\\/]{2,}[^\\\/]+[\\\/]+[^\\\/]+/.test(filepath);
+#       const driveSep = /^([a-z]:)?[\\\/]/i.test(filepath);
+#       return !unc && !driveSep;
+#     }
+# NOT a named export, NOT module.exports. The harness imports the default binding and
+# calls it as a one-argument function.
+
+PROVENANCE is-relative@1.0.0, git://github.com/jonschlinkert/is-relative, MIT license,
+# file index.js. INLINES is-unc-path@1.0.0 (github.com/jonschlinkert/is-unc-path, MIT,
+# index.js) and unc-path-regex@0.1.2 (github.com/jonschlinkert/unc-path-regex, MIT,
+# index.js). All three read sighted and behavior VERIFIED by running the installed
+# is-relative@1.0.0 in Node.

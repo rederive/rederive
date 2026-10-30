@@ -1,0 +1,19 @@
+# dep-guard for Azure DevOps — a PR gate on risky dependency ADDS (npm/pnpm).
+# Add to a pipeline that runs on PRs. Requires: Node on the agent + this repo's dep-guard.sh.
+#
+# Trigger the pipeline on PRs via branch policy (Project Settings → Repos → Branch policies
+# → Build validation), or a `pr:` trigger in a GitHub-backed pipeline.
+steps:
+  - checkout: self
+    fetchDepth: 0          # REQUIRED: the target branch must be present to diff the lockfile
+  - task: NodeTool@0
+    inputs: { versionSpec: '20.x' }
+  - bash: bash "$(Build.SourcesDirectory)/dep-guard-action/dep-guard.sh"
+    displayName: 'dep-guard'
+    env:
+      # The verifier is pinned: dep-guard.sh runs `npx --yes rederive@$DEPGUARD_RDV_VERSION guard …`.
+      DEPGUARD_RDV_VERSION: '0.5.0'
+      # 'true' (default): a guard crash or empty/invalid output fails the task (exit 2). 'false': warn and pass.
+      DEPGUARD_FAIL_CLOSED: 'true'
+      # Optional full override of the invocation, e.g. a local build:
+      # DEPGUARD_RDV: 'node ./node_modules/rederive/dist/cli.cjs'

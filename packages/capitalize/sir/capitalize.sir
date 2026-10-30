@@ -1,0 +1,225 @@
+UNIT capitalize
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG capitalize(string: any, opts?: boolean | object | any) -> string
+#   This is the package's MAIN / default export (a single function, exportName=null, importKind=default).
+#   In the PUBLISHED CommonJS package the function is exposed as `module.exports = capitalize`.
+#   >>> EMISSION EXPORT-SHAPE (READ THIS — it is a CONTRACT, not a behavioral note) <<<
+#   The clean-room emission file is an ESM `.mjs` module and the grader LOADS it with
+#   `await import(pathToFileURL(path).href)` then resolves `m.default`. Therefore the re-emitter
+#   MUST expose the function as the ESM DEFAULT export:  `export default capitalize;`
+#   DO NOT write `module.exports = capitalize` (CommonJS) — in a `.mjs` file `module` is undefined
+#   and there is no `default` export, so the grader's `loadFn` returns undefined and EVERY emission
+#   fails to load (0-quorum). See section EXPORT-SHAPE (EMISSION) below. This export-format choice
+#   does NOT change any behavior; it only changes the module wrapper the function is published under.
+
+DEPENDS-ON none
+# Zero runtime dependencies. Pure value transform. No clock/RNG/env/fs/net seam.
+# The package ALSO exposes capitalize.words (a separate function). The MAIN export's
+# output does NOT depend on capitalize.words in any way (it never calls it). capitalize.words
+# is OUT-OF-CONTRACT for this unit and is NOT exercised by the oracle.
+
+# ============================================================================================
+# EXPORT-SHAPE (EMISSION)  —  HARD CONTRACT for the BLIND re-emitter
+# ============================================================================================
+# The unit is re-emitted into an ESM module file with extension `.mjs` (runs/emit_<i>.mjs).
+# The grader imports that file as ECMAScript Module and reads the DEFAULT export:
+#       const m = await import(pathToFileURL(path).href);
+#       const fn = m.default ?? <first function-valued named export>;
+# So the emitted module MUST make the `capitalize` function its ESM DEFAULT export. Emit, verbatim
+# in spirit:
+#
+#       function capitalize(string, opts) { ... exact body per BEHAVIOR ... }
+#       function normalizeOptions(opts)   { ... exact body per BEHAVIOR ... }
+#       export default capitalize;
+#
+#   - REQUIRED: `export default capitalize;`  (an ESM default export of the function).
+#     Equivalent acceptable forms: `export default function capitalize(string, opts) { ... }`.
+#   - FORBIDDEN in the `.mjs` emission: `module.exports = capitalize;`, `exports.default = ...`,
+#     `module.exports.default = ...`, or anything relying on the CommonJS `module`/`exports`
+#     globals. Those are undefined in an ESM `.mjs` file and yield NO `default` export, so the
+#     grader cannot load the function (this is exactly what produced the 0/3 quorum in round 1 —
+#     a LOAD failure, not a behavioral divergence).
+#   - A function-valued NAMED export (e.g. `export function capitalize(...) {}` with no default)
+#     would also be tolerated by the grader's fallback, but the DEFAULT export is the canonical
+#     and unambiguous target — prefer `export default capitalize;`.
+#   - exportName=null / importKind=default in the input-generator reflects "call the default
+#     export directly"; it is consistent with `export default` in the emission.
+# This section governs ONLY the module wrapper / export statement. The function BODY and all
+# observable behavior are specified by BEHAVIOR below and are UNCHANGED.
+# (The published upstream package is CommonJS `module.exports = capitalize`; that is the real
+#  package's default-export semantics and is documented in PROVENANCE. The `.mjs` clean-room
+#  emission re-expresses that SAME single-default-export shape in ESM as `export default`.)
+# ============================================================================================
+
+BEHAVIOR
+# ----------------------------------------------------------------------------------
+# The unit is exactly the 3-line body of the main export plus the normalizeOptions helper.
+# Pseudocode of the EXACT pipeline (reproduce precisely):
+#
+#   capitalize(string, opts):
+#     opts = normalizeOptions(opts)
+#     if (!opts.preserve):               # JS truthiness of opts.preserve
+#       string = string.toLowerCase()    # default (locale-independent) Unicode lowercasing
+#     return string.charAt(0).toUpperCase() + string.substring(1)
+#                                          # charAt(0)/substring operate on UTF-16 CODE UNITS
+#
+#   normalizeOptions(opts):
+#     if (!opts) return { preserve: false }          # opts falsy -> see NODE-OPT-A
+#     if (typeof opts === 'boolean') return { preserve: opts }   # only `true` reaches here -> NODE-OPT-B
+#     if (opts.skipWord instanceof RegExp) { ...wrap opts.skipWord... }  # NODE-OPT-C (no effect on main output)
+#     return opts                                    # any other truthy value returned as-is -> NODE-OPT-D
+# ----------------------------------------------------------------------------------
+#
+# NODE-1  Option normalization (resolve the effective `preserve` flag). Determined by the
+#         RUNTIME TYPE / TRUTHINESS of the SECOND arg `opts`:
+#
+#   NODE-OPT-A  opts is FALSY  (i.e. opts is one of: undefined / absent / null / false / 0 / "" / NaN):
+#               effective preserve = false  (normalizeOptions returns { preserve:false }).
+#
+#   NODE-OPT-B  opts === true (boolean true; boolean false already handled by OPT-A as falsy):
+#               effective preserve = true   (normalizeOptions returns { preserve:true }).
+#
+#   NODE-OPT-C  opts is a truthy object whose `skipWord` property is a RegExp:
+#               normalizeOptions MUTATES opts.skipWord into a wrapper function, then returns opts.
+#               This mutation is a side effect on the caller's object but DOES NOT change the main
+#               export's RETURN VALUE (the main export never reads opts.skipWord). For the oracle's
+#               value contract, treat this exactly like OPT-D: effective preserve = truthiness of
+#               opts.preserve (undefined if absent -> false).
+#
+#   NODE-OPT-D  opts is any OTHER truthy value (plain object, string, number != 0, array, etc.):
+#               normalizeOptions returns opts UNCHANGED. effective preserve = Boolean(opts.preserve).
+#               - For a plain object: read the `preserve` property and take its truthiness.
+#                   { preserve:true } -> true ; { preserve:1 } -> true ; { preserve:"x" } -> true
+#                   { preserve:false }-> false; { preserve:0 } -> false; { preserve:null }-> false
+#                   {} or { foo:1 }   -> preserve undefined -> false
+#               - For a truthy string / number / array (no own meaningful `preserve`): reading
+#                   `.preserve` yields undefined -> false. So opts="x", opts=1, opts=[] => preserve=false.
+#
+# NODE-2  Lowercasing of the source string (the `!opts.preserve` branch):
+#         IF effective preserve is FALSY -> string := string.toLowerCase().
+#         IF effective preserve is TRUTHY -> string is left UNCHANGED (the rest of its casing is
+#         preserved). Uses String.prototype.toLowerCase (the DEFAULT, non-locale variant). Full
+#         Unicode default case mapping over UTF-16; e.g. "İstanbul".toLowerCase() etc. are the
+#         engine defaults (NOT toLocaleLowerCase). No locale is consulted.
+#
+# NODE-3  Capitalize first code unit and concatenate the remainder:
+#         return  string.charAt(0).toUpperCase()  +  string.substring(1)
+#         - charAt(0): the FIRST UTF-16 CODE UNIT of the (possibly-lowercased) string. For the
+#           empty string charAt(0) === "" and substring(1) === "" -> result "".
+#         - .toUpperCase() on that single code unit uses String.prototype.toUpperCase (DEFAULT,
+#           non-locale). It can EXPAND to multiple chars: e.g. "ß" -> "SS", the "fi" ligature
+#           U+FB01 -> "FI". A non-cased first code unit (digit, space, punctuation, a LONE SURROGATE
+#           from an astral/emoji char) is returned unchanged by toUpperCase.
+#         - .substring(1): the rest of the string from code-unit index 1 to the end, UNCHANGED.
+#
+# DETERMINISTIC EDGE CASES (all VERIFIED by running capitalize@2.0.4):
+#   ""                              -> ""                       # empty
+#   "a"                             -> "A"
+#   "A"                             -> "A"
+#   "Hello"                         -> "Hello"
+#   "united states"                 -> "United states"          # only FIRST char capitalized; rest lowercased
+#   "UNITED STATES"                 -> "United states"           # rest lowercased by default
+#   "uNiTeD sTaTeS"                 -> "United states"
+#   "1abc"                          -> "1abc"                    # leading digit: toUpperCase no-op
+#   " hi"                           -> " hi"                     # leading space: no-op; rest already lower
+#   "!hi"                           -> "!hi"
+#   "a b"                           -> "A b"                     # internal whitespace preserved
+#   "ab "                           -> "Ab "                     # trailing whitespace preserved
+#   "   "                           -> "   "                     # all whitespace
+#   "\tab"                          -> "\tab"                    # leading tab: no-op
+#   "12345"                         -> "12345"
+#   "caña"                          -> "Caña"                    # Latin accented (default casing)
+#   "ñam"                           -> "Ñam"
+#   "über"                          -> "Über"
+#   "привет"                        -> "Привет"                  # Cyrillic
+#   "ßomething"                     -> "SSomething"              # ß first -> "SS" (expansion)
+#   "ﬁle"  (ﬁle)               -> "FIle"                    # ligature first -> "FI"
+#   "istanbul"                      -> "Istanbul"                # default (non-Turkish) casing
+#   "😀abc"  (U+1F600 + "abc")      -> "😀abc"                   # first CODE UNIT is a lone high surrogate;
+#                                                                #  toUpperCase no-op, result unchanged
+#   "😀"                            -> "😀"                      # single astral char unchanged
+#   "𝕏yz"   (U+1D54F + "yz")        -> "𝕏yz"                     # astral first code unit unchanged
+#
+#   OPTION CASES (string fixed where shown):
+#   ("canDoItRight", true)          -> "CanDoItRight"            # preserve rest's casing
+#   ("canDoItRight", false)         -> "Candoitright"            # false is falsy -> lowercase
+#   ("HELLO", true)                 -> "HELLO"
+#   ("HELLO", false)                -> "Hello"
+#   ("HELLO", {preserve:true})      -> "HELLO"
+#   ("HELLO", {preserve:false})     -> "Hello"
+#   ("HELLO", {})                   -> "Hello"
+#   ("HELLO", {foo:1})              -> "Hello"
+#   ("HELLO", {preserve:1})         -> "HELLO"                   # truthy preserve
+#   ("HELLO", {preserve:0})         -> "Hello"
+#   ("HELLO", {preserve:null})      -> "Hello"
+#   ("HELLO", {preserve:"x"})       -> "HELLO"                   # non-empty string is truthy
+#   ("HELLO", "x")                  -> "Hello"                   # truthy non-bool opts; .preserve undefined
+#   ("HELLO", 1)                    -> "Hello"
+#   ("HELLO", 0)                    -> "Hello"                   # 0 falsy -> {preserve:false}
+#   ("HELLO", "")                   -> "Hello"                   # "" falsy
+#   ("HELLO", [])                   -> "Hello"                   # array truthy; .preserve undefined
+#   ("HELLO", null)                 -> "Hello"
+#   ("HELLO", {skipWord:/x/})       -> "Hello"                   # skipWord irrelevant to main export; preserve undefined
+#   ("hello", {skipWord:/x/, preserve:true}) -> "Hello"          # preserve true; "ello" already lower
+#   ("", true)                      -> ""
+#   ("", {preserve:true})           -> ""
+#
+# NODE-THROW  NON-STRING `string` argument (the unit performs NO coercion — String() is never called):
+#   The body immediately does string.toLowerCase() (or, on the preserve path, string.charAt(0)),
+#   so any non-string `string` throws a TypeError at runtime. EXACT messages (V8 / Node) by type:
+#     - number / boolean / object / array / Symbol-less primitive box  ->
+#         TypeError: "string.toLowerCase is not a function"
+#         (or on the preserve:true path: "string.charAt is not a function")
+#     - null      -> TypeError: "Cannot read properties of null (reading 'toLowerCase')"
+#                    (preserve path: "... (reading 'charAt')")
+#     - undefined / no-arg -> TypeError: "Cannot read properties of undefined (reading 'toLowerCase')"
+#                    (preserve path: "... (reading 'charAt')")
+#   The frozen oracle records a throw as `{__throw}` (the BLIND re-emitter must also throw a
+#   TypeError here). The generator DOES emit codec-faithful non-string `string` values that are
+#   GRADABLE as throw-paths (number, boolean, null, plain object, array, bigint). It does NOT
+#   emit `undefined` as the `string` arg because `undefined` is NOT codec-round-trippable as an
+#   argument element; the undefined/no-arg throw is documented here as OUT-OF-ENVELOPE for the
+#   generator but fully specified for a blind re-emitter.
+
+ORACLE value -> oracle.json
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   (a) EXPORT SHAPE (emission): the function is published as the ESM DEFAULT export of the `.mjs`
+#       file — `export default capitalize;` (see EXPORT-SHAPE (EMISSION) above). This is in-contract
+#       because the grader loads `m.default`; a CommonJS `module.exports` in a `.mjs` file is a LOAD
+#       failure. It does not alter any computed value.
+#   (b) The full main-export pipeline above — normalizeOptions (the falsy / boolean-true /
+#       regex-skipWord / pass-through branches), the `!opts.preserve` lowercasing branch, and
+#       `charAt(0).toUpperCase() + substring(1)` over UTF-16 code units using the DEFAULT
+#       (non-locale) toUpperCase/toLowerCase. The throw-on-non-string behavior with the exact
+#       TypeError class. Full Unicode default case mapping (accents, Cyrillic, ß-expansion,
+#       ligature-expansion, lone-surrogate no-op) is delegated to the runtime's String case
+#       methods and is in-scope as "whatever the engine's default toUpperCase/toLowerCase produce"
+#       — the blind re-emitter reproduces it by calling the same default String case methods (NOT a
+#       locale variant, NOT a hand-rolled table).
+#
+# CARRIED DATA: none. There is no large literal table; the only literals (QUOTE, WORD, nonWord
+#   regexes) belong to capitalize.words, which is out-of-contract. No carried.json is shipped.
+#
+# OUT-OF-CONTRACT:
+#   - capitalize.words (the secondary export) — separate function; not exercised by this unit's oracle.
+#   - The MUTATION side effect of normalizeOptions on a caller-supplied opts object whose
+#     `skipWord` is a RegExp (it rewrites opts.skipWord into a function). This is a side effect on
+#     the input object, never observable in the main export's RETURN VALUE; the value-mode oracle
+#     does not grade it. The generator avoids RegExp-valued skipWord to keep inputs codec-clean.
+#
+# NON-ROUND-TRIPPABLE / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - `string` = undefined (or no-arg call): throws TypeError ("... reading 'toLowerCase'"); undefined
+#     is not a codec-faithful argument element, so it is specified here but not generated.
+#   - opts containing a live function (skipWord callback) or a RegExp: not codec-round-trippable in a
+#     way that affects the main export's value (and RegExp is irrelevant to the return); not generated.
+
+PROVENANCE capitalize@2.0.4 — https://github.com/grncdr/js-capitalize — MIT —
+  source file: node_modules/capitalize/index.js (function `capitalize` + helper `normalizeOptions`).
+  In the PUBLISHED CommonJS package the main/default export is `module.exports = capitalize` (a single
+  function; this is the package's real default-export semantics). The `.mjs` clean-room EMISSION
+  re-expresses that same single-default-export shape in ESM as `export default capitalize;` so the ESM
+  grader (`await import(...)` -> `m.default`) can load it — see EXPORT-SHAPE (EMISSION). Behavior
+  verified by executing capitalize@2.0.4 under Node.

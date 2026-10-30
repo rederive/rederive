@@ -56,32 +56,18 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
 .footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
 .footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
 @media(max-width:760px){.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}}
-</style>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WF3PHQF0SX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
 
-    gtag('config', 'G-WF3PHQF0SX');
-  </script>
-<style>
-/* topnav hamburger */
-.nav-burger{display:none;margin-left:auto;background:none;border:0;color:#e8e8e8;font-size:1.55em;line-height:1;cursor:pointer;padding:0 2px}
-.topnav .nav-links{display:flex;align-items:center;gap:1.4em;flex:1}
-.topnav .nav-links a:not(.cta-nav){color:#b0b0b0;transition:color .15s}
-.topnav .nav-links a:not(.cta-nav):hover{color:#fafafa;text-decoration:none}
-.topnav .nav-links a.current{color:#fafafa;font-weight:600}
-@media(max-width:860px){
-  .topnav{flex-wrap:wrap;gap:0.5em}
-  .nav-burger{display:block}
-  .topnav .nav-links{display:none;flex:0 0 100%;flex-direction:column;align-items:flex-start;gap:0.1em;margin-top:0.6em}
-  .topnav.nav-open .nav-links{display:flex}
-  .topnav .nav-links a{padding:0.6em 0;width:100%;font-size:1.05em}
-  .topnav .cta-nav{margin-left:0;margin-top:0.3em}
-}
+/* responsive nav (ported from index) */
+.topnav{flex-wrap:wrap;max-width:960px;gap:1.4em;padding-left:20px;padding-right:20px}
+.topnav .navlinks{display:flex;align-items:center;gap:inherit;flex-wrap:wrap;min-width:0}
+.nav-toggle{display:none;background:none;border:1px solid #3a3f4e;border-radius:6px;color:#e8e8e8;padding:0.3em 0.55em;cursor:pointer;font-size:1.05em;line-height:1}
+.nav-toggle:hover,.nav-toggle:focus-visible{border-color:#c27c4e;color:#fff}
+@media(max-width:1040px){.topnav .by{display:none}.topnav .navlinks{order:3;flex-basis:100%;padding-top:0.1em}}
+@media(max-width:720px){.topnav .navlinks{display:none}.topnav.open .navlinks{display:flex;order:5;flex-basis:100%;flex-direction:column;align-items:flex-start;gap:0.95em;padding:0.9em 0 0.4em}.nav-toggle{display:inline-flex}}
 </style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Blog","name":"rederive — Blog","description":"Writing from rederive: verified re-derivation, the SIR contract format, bug-finding by characterization, brownfield and greenfield verification, and vibeless coding.","url":"https://rederive.ai/blog.html","inLanguage":"en","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"},"blogPost":[{"@type":"BlogPosting","headline":"rederive is live: verify what a package does, not who published it","url":"https://rederive.ai/blog/reveal.html","datePublished":"2026-07-06"},{"@type":"BlogPosting","headline":"Your tests pass. Would they notice if the code was wrong?","url":"https://rederive.ai/blog/tests-would-they-notice.html","datePublished":"2026-07-07"},{"@type":"BlogPosting","headline":"Modernize legacy code without changing what it does","url":"https://rederive.ai/blog/brownfield.html","datePublished":"2026-07-08"},{"@type":"BlogPosting","headline":"Verifying code that has no reference","url":"https://rederive.ai/blog/greenfield.html","datePublished":"2026-07-09"},{"@type":"BlogPosting","headline":"The contract underneath it all","url":"https://rederive.ai/blog/sir-spec.html","datePublished":"2026-07-10"},{"@type":"BlogPosting","headline":"Vibe coding, minus the vibes","url":"https://rederive.ai/blog/vibeless-coding.html","datePublished":"2026-07-03"},{"@type":"BlogPosting","headline":"colors.js had a trusted maintainer. That was the problem.","url":"https://rederive.ai/blog/trusted-maintainer.html","datePublished":"2026-07-02"}]}
+</script>
 </head>
 <body>
 
@@ -89,17 +75,19 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
 <nav class="topnav">
   <a href="/index.html" class="logo" style="text-decoration:none">
     <span class="logo-mark"><span></span><span></span><span></span></span>
-    rederive <span class="by">· from Semcom</span>
+    rederive
   </a>
-  <button class="nav-burger" aria-label="Menu" aria-expanded="false" onclick="var o=this.parentNode.classList.toggle('nav-open');this.setAttribute('aria-expanded',o)">☰</button>
-    <div class="nav-links">
-  <a href="/#get-started">Get started</a>
-  <a href="/guide.html">Guide</a>
-  <a href="/spec.html">SIR Spec</a>
-  <a href="/blog.html" class="current">Blog</a>
-  <a href="https://github.com/rederive">GitHub</a>
-  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+  <div class="navlinks" id="navlinks">
+    <a class="nl" href="/index.html#get-started">Get started</a>
+    <a class="nl" href="/index.html#how">How it works</a>
+    <a class="nl" href="/index.html#compliance">Compliance</a>
+    <a class="nl" href="/spec.html">SIR Spec</a>
+    <a class="nl active" href="/blog.html">Blog</a>
+    <a class="nl" href="/promise.html">Promise</a>
+    <a class="nl" href="https://github.com/rederive">GitHub</a>
   </div>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a call</a>
+  <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="navlinks">☰</button>
 </nav>
 </div>
 
@@ -107,7 +95,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
   <div class="hero-inner">
     <div class="eyebrow">Writing</div>
     <h1>Verified re-derivation, in the open.</h1>
-    <p>Notes from building rederive — the trust-nothing package manager, the SIR contract format, and what happens to code when you squeeze the uncertainty out of it.</p>
+    <p>Notes from building rederive — verified compute for the code you ship, the SIR contract format, and what happens to code when you squeeze the uncertainty out of it.</p>
   </div>
 </header>
 
@@ -117,7 +105,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
   <a class="post" href="/blog/reveal.html">
     <div class="meta"><span class="day">Mon · 1 of 5</span> · 2026-07-06 · 6 min</div>
     <h2>rederive is live: verify what a package does, not who published it</h2>
-    <p>The infrastructure behind Friday's essay. The registry hands you bytes and a name to trust; rederive ships the contract instead — a spec and a held-out oracle the publisher can't move. Plus three things you can run right now.</p>
+    <p>The infrastructure behind Friday's essay. The registry hands you bytes and a name to trust; rederive ships the contract instead — a spec and hidden tests whose answers come from running the original. Plus three things you can run right now.</p>
   </a>
 
   <a class="post" href="/blog/tests-would-they-notice.html">
@@ -158,16 +146,19 @@ footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;bord
 
 <footer>
   <div class="footer-inner">
-    <span style="color:#b0b0b0;font-weight:600">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <span style="color:#b0b0b0;font-weight:600">rederive &middot; by Apilify Inc.</span>
     <div class="footer-links">
       <a href="/index.html">Home</a>
       <a href="/spec.html">SIR Spec</a>
-  <a href="/guide.html">Guide</a>
       <a href="https://github.com/rederive">GitHub</a>
     </div>
     <span>&copy; 2026 Apilify Inc. &middot; Apache-2.0</span>
   </div>
 </footer>
 
+<script>
+document.addEventListener('click',function(e){var t=e.target.closest('.nav-toggle');if(t){var n=t.closest('.topnav');var o=n.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');return}
+if(e.target.closest('.navlinks a')){var n2=document.querySelector('.topnav.open');if(n2){n2.classList.remove('open');n2.querySelector('.nav-toggle').setAttribute('aria-expanded','false')}}});
+</script>
 </body>
 </html>

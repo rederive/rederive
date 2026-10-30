@@ -1,0 +1,361 @@
+# =====================================================================
+# SIR — Semantic Intermediate Representation
+# =====================================================================
+UNIT escapeRegExp
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure function of its single argument. No clock / RNG / env / fs / net.
+# No seam to inject. ORACLE value mode.
+
+SIG escapeRegExp(string: any) -> string
+# Single positional argument named `string` in the source, but it accepts ANY
+# JS value (it is coerced — see BEHAVIOR/node-1). Returns a primitive string,
+# OR throws a TypeError on exactly one in-envelope input (see THROW-PATHS).
+# CALLING CONVENTION (for the blind re-emitter):
+#   - This is the package's DEFAULT/MAIN export: `module.exports = escapeRegExp`.
+#   - The .mjs re-emission MUST do:  export default escapeRegExp
+#   - Invoked as a single-arg function:  escapeRegExp(args[0]) -> escaped string.
+#   - Calling with zero args is equivalent to calling with `undefined` (node-1a).
+
+DEPENDS-ON none
+# Self-contained single file. The internal helpers (toString, baseToString,
+# isSymbol, isObjectLike) are INLINED in the source and reproduced below as
+# IN-CONTRACT LOGIC; they are NOT separate catalog units.
+
+# =====================================================================
+# CONSTANTS (exact — reproduce verbatim)
+# =====================================================================
+# ---------------------------------------------------------------------
+# !!! HARDEN NOTE (round 1 fixed an under-spec here) !!!
+# The PRIOR SIR transcribed this regex with the LEADING BACKSLASH DROPPED
+# (it wrote `/[\^$.*+?()[\]{}|]/g`, a single `\^`). That is WRONG: `[\^...]`
+# is a class with an *escaped caret* and NO backslash member, so a blind
+# re-emitter trusting it never escapes the literal backslash. Three
+# independent emitters all dropped it. The CORRECT regex has a DOUBLE
+# backslash `\\` at the START of the class — the literal backslash U+005C
+# is the FIRST and most-commonly-dropped member of the class. Read the
+# code-fenced spec below LITERALLY; if your transcription has only one
+# backslash before the caret you have reintroduced the bug.
+# ---------------------------------------------------------------------
+#
+# THE TWO REGEXES (verbatim from the source file, byte-for-byte):
+# ```
+# var reRegExpChar = /[\\^$.*+?()[\]{}|]/g,
+#     reHasRegExpChar = RegExp(reRegExpChar.source);
+# ```
+#   In the literal `/[\\^$.*+?()[\]{}|]/g`:
+#     * `\\`  at the START of the class  = ONE escaped backslash  => the literal
+#             backslash character U+005C is a CLASS MEMBER (the first member).
+#     * `\]`  later in the class         = ONE escaped close-bracket => the literal
+#             `]` character U+005D is a class member.
+#     * the `/g` suffix = GLOBAL flag (replace ALL matches).
+#
+#   reRegExpChar.source (the `.source` STRING, character-by-character, 18 chars) =
+#     [  \  \  ^  $  .  *  +  ?  (  )  [  \  ]  {  }  |  ]
+#     ^^^^^^                                  ^^^^^
+#     index0 '['; index1 '\'; index2 '\'; index3 '^'; ... index12 '\'; index13 ']'; ... index17 ']'
+#   (Two literal backslash chars sit at source-string indices 1 and 12; they are
+#    the regex-escapes for the class's backslash member and the close-bracket
+#    member respectively.)
+#
+# reRegExpChar    GLOBAL flag = TRUE  (used by String.prototype.replace to replace ALL matches).
+# reHasRegExpChar = RegExp(reRegExpChar.source)
+#   SAME source/character-class, but GLOBAL flag = FALSE (a fresh non-global
+#   RegExp built from the source string). Non-global => `.test()` is stateless
+#   (no lastIndex drift); calling it repeatedly on the same string is stable.
+#   This is a detection-only regex used for the short-circuit; it never mutates
+#   shared state across calls.
+#
+# ---------------------------------------------------------------------
+# THE CHARACTER CLASS AS AN EXPLICIT ENUMERATED SET — 14 distinct members.
+# Membership was verified against the real package (each tested true; every
+# listed non-member tested false). The set IS EXACTLY:
+#
+#   class = { U+005C BACKSLASH,   # <-- THE BACKSLASH. It IS in the class.
+#                                 #     Most-commonly-dropped member. fn('\') => '\\'
+#                                 #     (one backslash in -> TWO backslashes out).
+#             U+005E ^  caret,
+#             U+0024 $  dollar,
+#             U+002E .  dot,
+#             U+002A *  asterisk,
+#             U+002B +  plus,
+#             U+003F ?  question,
+#             U+0028 (  lparen,
+#             U+0029 )  rparen,
+#             U+005B [  lbracket,
+#             U+005D ]  rbracket,
+#             U+007B {  lbrace,
+#             U+007D }  rbrace,
+#             U+007C |  pipe }
+#
+#   COUNT IT: 14 characters, AND THE BACKSLASH IS ONE OF THEM. If your enumerated
+#   class has 13 members you dropped the backslash. The 14 members, listed once
+#   more inline so it cannot be miscounted:
+#        \  ^  $  .  *  +  ?  (  )  [  ]  {  }  |
+#        1  2  3  4  5  6  7  8  9  10 11 12 13 14
+#   Member #1 is the BACKSLASH.
+#
+# CHARACTERS THAT ARE *NOT* ESCAPED (verified false against the real package;
+# the round-1 divergence confirmed `-` and `/` correctly pass through):
+#     -  (hyphen, U+002D)   /  (forward slash, U+002F)
+#     newline (U+000A)  tab (U+0009)  CR (U+000D)  space (U+0020)
+#     _ (U+005F)  letters/digits  : # < > ~ @ %  and ALL other characters.
+#   THERE ARE NO OTHER MEMBERS BEYOND THE 14 ABOVE. (Confirmed: hyphen, slash,
+#   whitespace, underscore, etc. are NOT in the class.)
+#   (This DIFFERS from npm `escape-string-regexp`, which also escapes `-` and
+#    handles `\n\r` specially and THROWS on non-string. lodash does NEITHER.)
+#
+# REPLACEMENT TEMPLATE: the literal JS string '\\$&'  ==  ONE backslash + "$&".
+#   Reproduce it verbatim:
+# ```
+# string.replace(reRegExpChar, '\\$&')
+# ```
+#   In String.prototype.replace, `$&` = the whole matched substring. Because the
+#   character class matches exactly ONE character per match, the effect is:
+#   prepend a SINGLE backslash (U+005C) before EACH occurrence of an in-scope
+#   metacharacter. There is no other special-pattern handling ($1, $`, $' etc.
+#   do not appear). A literal `$` in the input is matched (it is in the class)
+#   and becomes `\$`.
+#   WHY A LITERAL BACKSLASH DOUBLES: because U+005C is itself a class MEMBER,
+#   each input backslash is matched and gets ONE backslash prepended:  \ -> \\ .
+#
+# ---------------------------------------------------------------------
+# WORKED EXAMPLES — THE BACKSLASH SPECIFICALLY (the round-1 failure point).
+# These were re-run against the real lodash.escaperegexp@4.1.2 and matched:
+#   input "\"            (ONE backslash)        -> output "\\"      (TWO backslashes)
+#   input "a\b"          (a, backslash, b)      -> output "a\\b"    (backslash doubled)
+#   input "a\b\c"        (two backslashes)      -> output "a\\b\\c" (each doubled)
+#   input "\^$.*+?()[]{}|" (lead backslash +    -> output "\\\^\$\.\*\+\?\(\)\[\]\{\}\|"
+#                          all 13 other metas)     (the leading \ becomes \\, THEN
+#                                                    each of the 13 others gets one \)
+# Written in JS-source escaping (so transcription cannot lose a level):
+#   fn('\\')               === '\\\\'                 # 1 backslash -> 2 backslashes
+#   fn('a\\b')             === 'a\\\\b'
+#   fn('a\\b\\c')          === 'a\\\\b\\\\c'
+#   fn('\\^$.*+?()[]{}|')  === '\\\\\\^\\$\\.\\*\\+\\?\\(\\)\\[\\]\\{\\}\\|'
+# (In each: a JS-source `\\` is ONE runtime backslash. The first identity says one
+#  runtime backslash maps to two runtime backslashes.)
+# ---------------------------------------------------------------------
+
+# =====================================================================
+# BEHAVIOR  (ordered pipeline — exact + complete)
+# =====================================================================
+# escapeRegExp(value):
+#
+# node-1  COERCE TO STRING via lodash `toString(value)`:
+#         toString(value) = (value == null) ? '' : baseToString(value)
+#
+#   node-1a  NULLISH GUARD: the test is loose-equality `value == null`, which is
+#            TRUE for BOTH `null` AND `undefined` (and ONLY those two — it is the
+#            standard JS null/undefined check). Either -> '' (empty string).
+#            Zero-argument call => value is `undefined` => ''.
+#
+#   node-1b  baseToString(value) (only reached for non-nullish values):
+#       (i)   if typeof value === 'string'  -> return value UNCHANGED (fast path,
+#             no coercion). (A boxed `new String('x')` is typeof 'object', so it
+#             does NOT take this path — see (iii).)
+#       (ii)  else if isSymbol(value) -> return Symbol.prototype.toString.call(value)
+#             when a Symbol constructor exists in the realm (it always does on
+#             modern Node), else ''.
+#             isSymbol(value) is TRUE when:
+#                 typeof value === 'symbol'                      (primitive symbol)
+#               OR (value is object-like AND Object.prototype.toString.call(value)
+#                   === '[object Symbol]')                       (boxed Symbol object)
+#             where object-like = (value is truthy AND typeof value === 'object').
+#             Symbol.prototype.toString yields 'Symbol(<description>)', e.g.
+#             Symbol('a(b)c') -> 'Symbol(a(b)c)', Symbol() -> 'Symbol()',
+#             Symbol.iterator -> 'Symbol(Symbol.iterator)'.
+#             NOTE: raw Symbols are OUT-OF-ENVELOPE for the generator (see SCOPE);
+#             documented here only for completeness of the definition.
+#       (iii) else (the general/fallthrough case):
+#               result = (value + '')                  # JS string coercion via ToPrimitive
+#               return (result == '0' && (1 / value) == -Infinity) ? '-0' : result
+#             EXACT NOTES on (iii) — this is one of the divergence-prone seams:
+#             * The comparisons use LOOSE equality (`==`), exactly as in source:
+#               `result == '0'` and `(1 / value) == -Infinity`. (For these operands
+#               loose vs strict makes no observable difference, but reproduce `==`.)
+#             * SHORT-CIRCUIT: `&&` evaluates `1 / value` ONLY when `result == '0'`
+#               is already true (i.e. the coerced string is exactly "0"). For any
+#               value whose string form is not "0", the division is NEVER performed.
+#             * The `-0` special-case: returns '-0' ONLY when result is "0" AND
+#               1/value is -Infinity (value is genuinely negative zero at the
+#               numeric level). Preserves the sign of a negative-zero NUMBER.
+#             * BIGINT-ZERO THROW (see THROW-PATHS): when value is a bigint whose
+#               decimal string is exactly "0" (i.e. the value `0n`), `result == '0'`
+#               is TRUE, so `1 / value` = `1 / 0n` is evaluated and JS THROWS
+#               `TypeError: Cannot mix BigInt and other types, use explicit
+#               conversions`. The function does NOT catch this; it propagates to
+#               the caller. NON-zero bigints (10n, -5n, 123n, ...) have string
+#               forms != "0", so they short-circuit before the division and return
+#               their decimal string normally.
+#
+#   node-1b EXACTS (verified against the real package — the coercion seam):
+#       value (non-string, non-symbol, non-nullish)        toString(value)
+#       --------------------------------------------------  ----------------
+#       42                          (number)              -> "42"
+#       0                           (number)              -> "0"
+#       -0                          (number, neg zero)    -> "-0"   # special-case fires
+#       3.14                                              -> "3.14"
+#       NaN                                               -> "NaN"
+#       Infinity                                          -> "Infinity"
+#       -Infinity                                         -> "-Infinity"
+#       1e21                                              -> "1e+21"   # note the '+'
+#       1e-7  (== 0.0000001)                              -> "1e-7"
+#       Number.MAX_VALUE                                  -> "1.7976931348623157e+308"
+#       true / false                (boolean)            -> "true" / "false"
+#       10n                         (bigint)             -> "10"
+#       -5n                         (bigint)             -> "-5"
+#       123456789012345678901234567890n                  -> "123456789012345678901234567890"
+#       0n                          (bigint ZERO)        -> THROWS TypeError (see THROW-PATHS)
+#       []                          (empty array)        -> ""      # Array.join of [] is ""
+#       [1,2,3]                     (array)              -> "1,2,3" # default Array join, comma sep
+#       ["a.b","c*d"]                                     -> "a.b,c*d"
+#       [1,[2,[3,4]],5]             (nested array)       -> "1,2,3,4,5"  # join recurses
+#       [["a.b"],["c|d"]]                                 -> "a.b,c|d"
+#       [-0]                        (array with neg-0)   -> "0"     # NOT "-0": Array.join
+#                                                                   # yields "0" and 1/[-0] is
+#                                                                   # +Infinity (the array coerces
+#                                                                   # to number 0, not -0), so the
+#                                                                   # special-case does NOT fire.
+#       [null, undefined]                                 -> ","    # null/undefined join as empty
+#       [1,,3]                      (sparse hole)         -> "1,,3"  # hole joins as empty
+#       [ "a\\b" ]   (array, one elem = a,backslash,b)    -> "a\\b"  # join is "a\b"; then escaped:
+#                                                                   # the literal backslash doubles ->
+#                                                                   # the RETURNED string is "a\\b"
+#                                                                   # (a, two backslashes, b). The
+#                                                                   # backslash is a class member even
+#                                                                   # when it arrives via array-join.
+#       {}                          (plain object)       -> "[object Object]"
+#       {toString(){return 'a.b*c'}}                      -> "a.b*c"   # honors custom toString
+#       {toString(){return 42}}                           -> "42"
+#       {valueOf(){return 'v.x'}, toString(){return 't.x'}} -> "v.x"
+#                                                                   # `value + ''` uses ToPrimitive
+#                                                                   # hint "default": valueOf wins.
+#       new Date(0)                                       -> the Date's toString (locale/tz-dependent)
+#       /a.b/g  (RegExp object)                           -> "/a.b/g"   # RegExp.prototype.toString
+#       new Set([1,2])                                    -> "[object Set]"
+#       new Map([['a',1]])                                -> "[object Map]"
+#       new Uint8Array([10,20])                           -> "10,20"   # typed array joins like array
+#       Buffer.from([1,2,3])  (Node Buffer)               -> UTF-8 decode of bytes (NOT a comma-join;
+#                                                                   # Buffer overrides toString).
+#                                                                   # OUT-OF-ENVELOPE for the generator.
+#       new Number(42)  (boxed)                           -> "42"
+#       new String('a.b') (boxed)                         -> "a.b"
+#       new Boolean(true) (boxed)                         -> "true"
+#       new Number(-0)  (boxed neg-0)                     -> "-0"  # boxed coerces to prim -0,
+#                                                                   # so 1/value is -Infinity -> "-0".
+#                                                                   # (Boxed primitives OUT-OF-ENVELOPE.)
+#   NOTE: the table above shows toString OUTPUT (the coerced *input* string), which
+#   then enters node-2 and gets its metacharacters (incl. any backslash) escaped.
+#
+# node-2  SHORT-CIRCUIT + ESCAPE:
+#         let s = toString(value)            # the string from node-1
+#         return (s && reHasRegExpChar.test(s))
+#                  ? s.replace(reRegExpChar, '\\$&')   # one backslash before each metachar
+#                  : s
+#
+#   node-2a  `s && ...` : if s is the EMPTY STRING "" (falsy), short-circuit and
+#            return "" immediately WITHOUT testing or replacing. (Empty string is
+#            the only falsy string; all other strings are truthy, including "0".)
+#   node-2b  reHasRegExpChar.test(s) : detection-only. If s contains NO in-scope
+#            metacharacter (none of the 14, INCLUDING the backslash), return s
+#            unchanged (no replace).
+#   node-2c  s.replace(reRegExpChar, '\\$&') : with the GLOBAL regex, replace ALL
+#            occurrences; each matched metacharacter — INCLUDING EACH BACKSLASH —
+#            gets exactly one leading backslash. No other transformation. The output
+#            equals the input with a `\` inserted before each of the 14 metachars.
+#            Therefore a lone "\" becomes "\\" and "a\b\c" becomes "a\\b\\c".
+#
+# IDEMPOTENT ACROSS CALLS: no module-level mutable state is read or written per
+# call (the regexes' lastIndex is reset by replace/non-global-test), so repeated
+# calls with the same input always yield the same output.
+# (NOTE on non-idempotence of the TRANSFORM itself: escapeRegExp is NOT a fixpoint —
+#  applying it twice doubles backslashes again, because the backslashes it inserted
+#  are themselves class members. This is expected; the contract is single-application.)
+
+# =====================================================================
+# THROW-PATHS (in-contract, reachable by a codec-faithful input)
+# =====================================================================
+#   - INPUT `0n` (bigint zero), and ONLY `0n` among all in-envelope values:
+#       throws `TypeError: Cannot mix BigInt and other types, use explicit conversions`.
+#     Mechanism: node-1b(iii) — `(0n + '')` is "0", so `result == '0'` is true,
+#     forcing evaluation of `1 / 0n`, which is an illegal BigInt/Number mix and
+#     throws. The throw is NOT caught; it propagates. This is a genuine, stable,
+#     reproducible behavior of lodash.escaperegexp@4.1.2 (CONFIRMED by running the
+#     real package), not a generator artifact. The harness records it as {__throw}
+#     with this TypeError message; a blind re-emitter that faithfully reproduces
+#     node-1b(iii) (loose `result == '0'` then `1 / value`) will throw identically.
+#   - No other in-envelope input throws. (null/undefined/numbers/strings/booleans/
+#     non-zero bigints/arrays/plain objects/RegExp/Set/Map/Uint8Array all return.)
+
+# =====================================================================
+# SIDE EFFECTS
+# =====================================================================
+# N/A. escapeRegExp is READ-ONLY / PURE: no I/O, no mutation of inputs, no
+# mutation of module/global state, no clock/RNG/env/fs/net. There is no seam.
+# The function does not mutate its argument (string coercion is non-mutating;
+# arrays/objects passed in are read via toString/valueOf only).
+
+ORACLE value -> oracle.json
+# The harness records {input args} -> {returned string} (or {__throw} for 0n).
+# No expecteds authored by hand; the real package computes them. All curated +
+# random inputs are pure value->value (plus the single 0n throw path).
+
+# =====================================================================
+# SCOPE
+# =====================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The whole pipeline node-1..node-2 above, including:
+#       * lodash toString coercion chain (null/undefined -> ''; string fast-path;
+#         Symbol via Symbol.prototype.toString; everything else `value + ''` with
+#         the loose `result == '0'` / `1 / value` -0 special-case AND its bigint-
+#         zero throw).
+#       * the EXACT 14-character metacharacter class — INCLUDING THE BACKSLASH
+#         U+005C AS MEMBER #1 — and the global/non-global regex pair, transcribed
+#         from the verbatim literal `/[\\^$.*+?()[\]{}|]/g` (double backslash to
+#         start the class).
+#       * the `s && test` short-circuit and empty-string handling.
+#       * single-backslash-prepend escape via replace(reRegExpChar, '\\$&'), which
+#         doubles each literal backslash since the backslash is itself a class member.
+#   The demonstrated in-scope value subset above is SELF-CONSISTENT with the
+#   generator: every value class the generator can emit (each of the 14 metachars
+#   individually INCLUDING the backslash, plain text, empty string, null, undefined,
+#   scalar numbers incl. -0/NaN/±Infinity/scientific, booleans, bigint incl.
+#   0n-throw, arrays incl. nested/empty/[-0]/holes/backslash-bearing, plain objects,
+#   custom-toString objects, RegExp, Set, Map, Uint8Array, unicode, long strings,
+#   all-metachar mixes incl. leading-backslash) has its mapping (or throw) defined here.
+#
+# CARRIED DATA: NONE. (No large literal tables; the only constants are the two
+#   small regexes + replacement string, reproduced verbatim above. No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (defined here, NOT emitted by the generator,
+#   because they do not survive the oracle codec round-trip or depend on
+#   subclass/identity that the codec does not preserve):
+#   - RAW SYMBOLS (primitive `Symbol('x')`): not codec-round-trippable; behavior
+#     defined at node-1b(ii): -> 'Symbol(<description>)'.
+#   - BOXED PRIMITIVES (new Number/String/Boolean): identity-bearing wrapper
+#     objects not round-trippable; behavior defined at node-1b(iii) examples.
+#   - FUNCTIONS: not round-trippable; would coerce via Function.prototype.toString
+#     to their source text, then escape metachars in it. Not exercised.
+#   - Node BUFFER (vs plain Uint8Array): subclass identity (UTF-8 decode) not
+#     reliably preserved by the codec; behavior documented at node-1b EXACTS.
+#   - DATE: toString is locale/timezone-dependent (non-deterministic across
+#     environments) — defined but not exercised to keep the oracle environment-
+#     independent.
+#   None of these are STATEFUL mutators or side-effecting; they are simply outside
+#   the codec envelope. A blind re-emitter reconstructs them from this spec.
+
+# =====================================================================
+# PROVENANCE
+# =====================================================================
+# package:  lodash.escaperegexp@4.1.2  (MIT)
+# repo:     lodash/lodash  (Custom Build, modularize exports="npm")
+# license:  MIT (LICENSE file present; Copyright jQuery Foundation & contributors;
+#           based on Underscore.js 1.8.3)
+# file:     node_modules/lodash.escaperegexp/index.js  (single file, lines 1-166)
+#           regex literal at: `var reRegExpChar = /[\\^$.*+?()[\]{}|]/g,`
+# export:   module.exports = escapeRegExp  (default/main export, value-mode)
+# verified: behavior in this SIR was confirmed by RUNNING the real package
+#           (node require + JSON.stringify of outputs) for every documented case,
+#           including the 0n TypeError throw path AND all 25 round-1 divergence
+#           inputs (real output reproduced 25/25 by this hardened definition).

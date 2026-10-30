@@ -1,0 +1,226 @@
+UNIT toNumber
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toNumber(value: any) -> number    # default export: module.exports = toNumber
+DEPENDS-ON none
+
+# =============================================================================
+# OVERVIEW
+# =============================================================================
+# lodash.tonumber@4.18.0 is a standalone modularized build of lodash `_.toNumber`.
+# It coerces ANY JS value to a primitive number. It is PURE (read-only): no side
+# effects, no mutation of inputs, no ambient reads (no clock/RNG/env/io/net).
+# There is NO SEAM. ORACLE-CLASS is plain `deterministic`.
+#
+# Emitter note: this is a DEFAULT export. The re-emitted module MUST do
+#   `export default <fn>`  (the harness calls the default export).
+#
+# IMPORTANT vs a common (wrong) prior: the `typeof value == 'number'` check is
+# the VERY FIRST branch and returns the number value UNCHANGED (including -0,
+# NaN, +Infinity, -Infinity). It is checked BEFORE the symbol/object/string
+# logic. There is no single `reTrim` regex; trimming is `baseTrim` (trailing
+# trim via a `/\s/` scan loop, then leading trim via `/^\s+/`).
+
+# =============================================================================
+# CONSTANTS  (exact source values — reproduce verbatim)
+# =============================================================================
+# NAN          = 0 / 0                      # the NaN value (returned in two places)
+# symbolTag    = '[object Symbol]'          # Object#toString result for symbols
+# nullTag      = '[object Null]'
+# undefinedTag = '[object Undefined]'
+#
+# Regexes (EXACT source strings, INCLUDING flags):
+#   reTrimStart = /^\s+/                     # strips leading whitespace in baseTrim
+#   reWhitespace = /\s/                      # tests a single char in trailing trim loop
+#   reIsBadHex  = /^[-+]0x[0-9a-f]+$/i       # SIGNED hex string -> NaN (note leading [-+] REQUIRED)
+#   reIsBinary  = /^0b[01]+$/i               # binary string literal
+#   reIsOctal   = /^0o[0-7]+$/i              # octal string literal
+#
+#   freeParseInt = parseInt                  # the global parseInt
+#
+# NOTE on the four "classifier" regexes: all are case-insensitive (/i).
+#   - reIsBadHex requires a LEADING sign [-+]. So "0x1f" / "0x1F" have NO sign ->
+#     do NOT match -> fall to `+value` (= 31). Only SIGNED hex "-0x1f","+0x1f",
+#     "+0X1f","-0xABC" match -> NaN.
+#   - reIsBinary/reIsOctal accept upper or lower 0B/0b, 0O/0o (case-insensitive).
+
+# =============================================================================
+# BEHAVIOR  (ordered pipeline — reproduce branch order EXACTLY)
+# =============================================================================
+#
+# toNumber(value):
+#
+# NODE 1 (number fast-path):
+#   if typeof value == 'number':
+#       return value            # UNCHANGED. Preserves -0, NaN, +Infinity, -Infinity.
+#                               # This is why -0 stays -0 and NaN stays NaN for
+#                               # primitive-number inputs. NO further processing.
+#
+# NODE 2 (symbol -> NaN):
+#   if isSymbol(value): return NAN
+#     where isSymbol(value) =
+#       (typeof value == 'symbol')
+#       OR ( isObjectLike(value) && baseGetTag(value) == '[object Symbol]' )
+#     and isObjectLike(value) = (value != null && typeof value == 'object')
+#     and baseGetTag(value):
+#         if value == null:  return value === undefined ? '[object Undefined]' : '[object Null]'
+#         else if (Symbol.toStringTag is defined && Symbol.toStringTag in Object(value)):
+#                            return getRawTag(value)   # Object#toString honoring toStringTag override
+#         else:              return Object.prototype.toString.call(value)
+#     # PRACTICAL CONSEQUENCE: a plain object carrying
+#     #   { [Symbol.toStringTag]: 'Symbol' }  ->  baseGetTag == '[object Symbol]'
+#     #   -> isSymbol true -> returns NaN. (This is the codec-round-trippable way
+#     #    to exercise this branch; a raw Symbol primitive is also caught here by
+#     #    `typeof value == 'symbol'` but does NOT round-trip the JSON codec — see ENVELOPE.)
+#
+# NODE 3 (object unwrap to primitive):
+#   if isObject(value):     # isObject = value != null && (typeof in {'object','function'})
+#       other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#       value = isObject(other) ? (other + '') : other
+#     # i.e. call .valueOf() if callable; if the result is STILL an object,
+#     #   string-coerce it via `other + ''` (which invokes its toString/Symbol.toPrimitive).
+#     #   Otherwise keep the (primitive) valueOf result as `value`.
+#     # NOTE the reassignment: `value` now holds a primitive (number/string/bool/
+#     #   null/undefined/symbol) OR a string (the `other + ''` result).
+#     # THROW PATH: if `other` is an object with NO usable primitive coercion
+#     #   (e.g. an object with no toString / no Symbol.toPrimitive, like a
+#     #   null-prototype object), `other + ''` THROWS
+#     #   `TypeError: Cannot convert object to primitive value`.  (out-of-envelope; see ENVELOPE)
+#
+# NODE 4 (non-string -> numeric coercion, with -0 guard):
+#   if typeof value != 'string':
+#       return value === 0 ? value : +value
+#     # `value === 0` is TRUE for both +0 and -0, returning the ORIGINAL value,
+#     #   thereby preserving -0 that arrived via NODE 3 (e.g. a boxed Number(-0)
+#     #   whose valueOf() == -0). For everything else apply unary `+`:
+#     #     +undefined  -> NaN     +null -> 0       +true -> 1     +false -> 0
+#     #     +<bigint>   -> THROWS  TypeError: Cannot convert a BigInt value to a number
+#     #   (bigint reaches here: it is not a number(NODE1), not a symbol(NODE2),
+#     #    not an object(NODE3), not a string(NODE4) -> `+value` throws.
+#     #    `0n` is NOT === 0, so even 0n hits `+value` and throws.)
+#
+# NODE 5 (string path):
+#   # value is a string here.
+#   value = baseTrim(value)
+#     where baseTrim(s) = s ? s.slice(0, trimmedEndIndex(s) + 1).replace(/^\s+/, '') : s
+#       and trimmedEndIndex(s):
+#         index = s.length
+#         while (index-- && /\s/.test(s.charAt(index))) {}   # walk back over trailing whitespace
+#         return index
+#     # Net effect: strip trailing AND leading characters matched by /\s/ (and /^\s+/).
+#     # `/\s/` covers space, \t, \n, \r, \f, \v, NBSP( ), and the Unicode
+#     #  whitespace class JS regex `\s` recognizes. Empty string "" -> "" (the
+#     #  `s ? ... : s` guard returns "" unchanged).
+#
+#   isBinary = reIsBinary.test(value)         # /^0b[01]+$/i
+#   return (isBinary || reIsOctal.test(value))    # reIsOctal = /^0o[0-7]+$/i
+#            ? freeParseInt(value.slice(2), isBinary ? 2 : 8)    # parse without the 0b/0o prefix
+#            : (reIsBadHex.test(value) ? NAN : +value)           # signed-hex -> NaN, else unary +
+#     # STRING OUTCOMES (after trim):
+#     #   ""                 -> not bin/oct, not bad-hex -> +"" = 0
+#     #   "   " (ws only)    -> trims to "" -> 0
+#     #   "3.2","  3.2  "    -> +"3.2" = 3.2
+#     #   "-0"               -> +"-0" = -0   (preserved; not bin/oct/bad-hex)
+#     #   "0b101"/"0B101"    -> parseInt("101",2) = 5
+#     #   "0o17"/"0O17"      -> parseInt("17",8)  = 15
+#     #   "0x1f"/"0x1F"      -> NO sign, not bad-hex -> +"0x1f" = 31 (JS hex literal)
+#     #   "-0x1f","+0x1f","+0X1f","-0xABC" -> reIsBadHex match -> NaN
+#     #   "0b102"            -> not /^0b[01]+$/ (has '2') -> not bad-hex -> +"0b102" = NaN
+#     #   "0o18"             -> not /^0o[0-7]+$/ (has '8') -> +"0o18" = NaN
+#     #   "0x"/"0b"          -> +"0x"=NaN, +"0b"=NaN
+#     #   "abc"              -> +"abc" = NaN
+#     #   "Infinity"         -> +"Infinity" = Infinity ; "-Infinity" -> -Infinity
+#     #   "  7  " (via array [" 7 "] valueOf->same array->toString->"7"? see NODE3)
+
+# =============================================================================
+# WORKED EXAMPLES THROUGH THE NODES  (for the blind re-emitter to self-check)
+# =============================================================================
+#   3.2                        -> NODE1 -> 3.2
+#   -0 (number)                -> NODE1 -> -0  (preserved at NODE1, not NODE4)
+#   NaN (number)               -> NODE1 -> NaN
+#   Infinity (number)          -> NODE1 -> Infinity
+#   Symbol()                   -> NODE2 (typeof 'symbol') -> NaN     [out-of-envelope codec]
+#   {[Symbol.toStringTag]:'Symbol'} -> NODE2 (baseGetTag) -> NaN     [in-envelope]
+#   null                       -> NODE1 no, NODE2 no(isObjectLike false), NODE3 no(isObject false),
+#                                 NODE4 (typeof 'object'!='string') -> null===0? no -> +null = 0
+#   undefined                  -> NODE4 -> +undefined = NaN
+#   true                       -> NODE4 -> +true = 1
+#   false                      -> NODE4 -> +false = 0
+#   "3.2"                      -> NODE5 -> +"3.2" = 3.2
+#   bigint 10n / 0n            -> NODE4 -> +value -> THROWS TypeError (BigInt)
+#   [] (array)                 -> NODE3: valueOf()->[] (still object) -> []+'' = "" -> NODE5 trim "" -> +"" = 0
+#   [5]                        -> NODE3: [5]+'' = "5" -> NODE5 -> +"5" = 5
+#   [5,6]                      -> NODE3: [5,6]+'' = "5,6" -> NODE5 -> +"5,6" = NaN
+#   {} (plain)                 -> NODE3: {}.valueOf()->{} (object) -> {}+'' = "[object Object]" -> +that = NaN
+#   new Number(5)              -> NODE3: valueOf()->5 (number, not object) -> value=5 -> NODE4 -> +5 = 5
+#   new String("5")            -> NODE3: valueOf()->"5" (string) -> NODE5 -> +"5" = 5
+#   {valueOf:()=>7}            -> NODE3: 7 (number) -> NODE4 -> +7 = 7
+#   {valueOf:()=>({})}         -> NODE3: other={} object -> {}+'' = "[object Object]" -> +that = NaN
+#   {valueOf:()=>"0x1f"}       -> NODE3: "0x1f" (string) -> NODE5 -> +"0x1f" = 31
+#   new Date(0)                -> NODE3: Date.valueOf()->0 (number) -> NODE4 -> +0 = 0
+#   "0x1F"                     -> NODE5: no sign -> not bad-hex -> +"0x1F" = 31
+
+ORACLE value -> oracle.json
+
+# =============================================================================
+# ENVELOPE  (input/output codec faithfulness — what genInputs may/may not emit)
+# =============================================================================
+# Output: always a primitive `number` (incl. NaN / Infinity / -0), OR the call
+#   THROWS a TypeError on a bigint input or an object with no primitive coercion.
+#   The harness records throws as {__throw} — both are gradable.
+#
+# COVERED (codec round-trips, emitted by genInputs, behavior fully specified above):
+#   - primitive numbers: integers, floats, -0, NaN, +Infinity, -Infinity, MIN_VALUE-class
+#   - numeric strings (plain, whitespace/tab/newline/formfeed-padded), "-0"
+#   - "0b101"/"0B101", "0o17"/"0O17", "0x1f"/"0x1F", "-0x1f"/"+0x1f"/"+0X1f" (bad hex->NaN),
+#     malformed "0b102"/"0o18"/"0x"/"0b", "abc", "Infinity"/"-Infinity", ""/"   "
+#   - null, undefined, true, false
+#   - bigint (THROWS TypeError) -- codec round-trips bigint
+#   - boxed Number / boxed String (round-trip as class instances — see codec note below)
+#   - plain objects {}, arrays [], [5], [5,6], ["  7  "]
+#   - objects with custom valueOf (-> number, -> string, -> object)
+#   - plain object { [Symbol.toStringTag]: 'Symbol' } reaching the isSymbol baseGetTag branch -> NaN
+#
+# CODEC NOTE on boxed primitives / Symbol-tag objects: the task codec is stated
+#   NOT to round-trip boxed `new Number/String/Boolean` or class instances whose
+#   identity matters. THEREFORE genInputs MUST NOT emit `new Number(...)`,
+#   `new String(...)`, raw Symbol primitives, functions, or null-prototype
+#   objects. The valueOf/Symbol-tag/boxed BRANCHES are still fully SPECIFIED here
+#   so a blind re-emitter reconstructs them; they are exercised via PLAIN OBJECTS
+#   that DO round-trip:
+#     - the isSymbol baseGetTag branch via a plain object literal that the
+#       re-emitter constructs with a Symbol.toStringTag — BUT since a Symbol key
+#       does not survive JSON either, this case is documented OUT-OF-ENVELOPE for
+#       genInputs and reconstructed from the WORKED EXAMPLES only. genInputs
+#       instead covers NODE2 only insofar as the codec permits (it does not emit
+#       symbols); the differential still grades NODE1/3/4/5 exhaustively.
+#     - custom valueOf objects DO NOT round-trip (functions don't serialize), so
+#       genInputs does NOT emit them either; they are SPECIFIED via WORKED EXAMPLES.
+#
+# OUT-OF-ENVELOPE (NOT emitted by genInputs; specified for the blind re-emitter only):
+#   - raw Symbol primitives (NODE2, typeof 'symbol') -- non-round-trippable
+#   - objects with a function-valued valueOf (NODE3 primitive unwrap) -- functions don't serialize
+#   - boxed new Number/String/Boolean (NODE1-bypass / NODE3) -- boxed identity lost by codec
+#   - plain object carrying Symbol.toStringTag (NODE2 baseGetTag) -- Symbol key lost by codec
+#   - null-prototype objects with no toString -> NODE3 `other+''` THROWS
+#       "TypeError: Cannot convert object to primitive value" -- prototype lost by codec
+#   - functions -- non-round-trippable
+#   All of the above are FULLY DEFINED in BEHAVIOR + WORKED EXAMPLES so a blind
+#   re-emitter reproduces them; they are simply not auto-graded by genInputs
+#   because the persistence codec would corrupt the stored arg.
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire 5-node pipeline above,
+#   including the four classifier regexes (exact sources + /i flag), baseTrim's
+#   trailing(/\s/ scan)+leading(/^\s+/) trim, the -0 guard `value===0?value:+value`,
+#   the symbol->NaN branch, the object valueOf unwrap + string-coercion, the
+#   binary/octal parseInt(slice(2), 2|8), the signed-bad-hex->NaN rule, and the
+#   throw-on-bigint / throw-on-uncoercible-object behaviors.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT: none (pure function; no side APIs, no state, no seam).
+
+PROVENANCE lodash.tonumber@4.18.0  (npm)  |  repo: lodash/lodash  |  license: MIT
+           source file: node_modules/lodash.tonumber/index.js  (module.exports = toNumber)
+           Custom modularized build: `lodash modularize exports="npm" -o ./`

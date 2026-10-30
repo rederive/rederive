@@ -1,0 +1,200 @@
+{
+ "status": "ok",
+ "unit": "encode_value",
+ "primary": "selfhost/units/encode_value/sir/encode_value.sir",
+ "primarySha256": "d91d945d8d17d24001cdc090bc43f8c5eb89a2c7df0116a28a0cb40c0dfc2727",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "TYPE GRAMMAR. The type text is parsed completely before the value is looked at; any failure throws, whatever the value. The text must be exactly one TYPE, where TYPE is one ALT or two or more ALTs joined by \"|\" (a union, in written order), and ALT is one of: a scalar name from TABLE NODES (text bytes bool none i64 u64 f64 json); \"tuple[\" TYPE (\",\" TYPE)* \"]\" (one or more items); \"list[\" TYPE \"]\" (exactly one); \"map[\" TYPE \",\" TYPE \"]\" (exactly two); \"record[\" FIELD (\",\" FIELD)* \"]\" with FIELD = NAME \":\" TYPE (one or more fields, names distinct). A NAME is a letter or \"_\" followed by letters, digits or \"_\" (ASCII only), and a word is always read greedily, so \"textx\" is an unknown name. Space, tab, carriage return and line feed may appear between ANY two tokens (a keyword and its \"[\" included) and at both ends — no other character is whitespace. Names are case-sensitive. So \"text|\", \"text || none\", \"list[]\", \"record[]\", \"map[text]\", \"list[f64, text]\", \"record[text]\", \"record[0: none]\" and \"text none\" all throw, while \" record [ a : list [ f64 ] ] \" parses. Composite types (tuple, list, map, record) nest at most MAX_DEPTH deep: a composite with MAX_DEPTH composites around it throws (16 nested lists around text parse, 17 throw); siblings do not add up (a tuple of two 15-deep lists is 16 deep).",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R2",
+   "text": "UNREACHABLE ALTERNATIVES. A union (at any depth) throws the parse when a later alternative is COVERED by any earlier one of the same union. COVERS(a, b) — earlier a, later b — holds exactly when ANY of these holds: (a) SAME: a and b are the same type, where a union compares as the SET of its alternatives and a record as the SET of its named fields (orders immaterial; names and field types count), every other composite position by position; (b) a is json and b is JSON-REACHED: none, bool, f64, text or json; a list of a JSON-REACHED item; a tuple whose items are all JSON-REACHED; a map whose key type is exactly the scalar text (not a union holding it) and whose value type is JSON-REACHED; a record whose field types are all JSON-REACHED; a union of JSON-REACHED alternatives; (c) STRUCTURAL: both lists and COVERS(item, item); both tuples of the same length and COVERS item by item; both maps and COVERS on the key types and on the value types; both records and EVERY field of a has a field of the same name in b that it COVERS (b may have more fields, a may not); (d) b is a union and a COVERS every alternative of b; or a is a union and some alternative of a COVERS b. Nothing else counts (a record never covers a map, a list never a tuple, json never bytes, i64 or u64). So \"none | none\", \"json | none\", \"json | tuple[text]\", \"json | record[a: text]\", \"list[json] | list[text]\", \"list[text | json] | list[json]\", \"map[text, json] | map[text, text]\" and \"record[a: text] | record[a: text, b: none]\" throw, while \"none | json\", \"json | i64\", \"json | tuple[i64]\", \"json | map[json, f64]\", \"json | map[text | none, f64]\", \"list[text] | list[text | none]\", \"tuple[json, json] | tuple[text]\", \"record[a: text, b: none] | record[a: text]\" and \"tuple[text, none] | tuple[none, text]\" parse. NOTE coverage is decided on types alone: an alternative R2 refuses may still be the only one that accepts some value (the absent value under none, a record's unread members) — the parse refuses it all the same (FIDELITY package).",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "R3",
+   "text": "THROW OBSERVATIONS. At every TYPED position — the top, each union alternative, each tuple or list item, each map key and value, each record field, and the top of a json position — the value is first tested, before the type is consulted: a map with EXACTLY ONE member, named \"__throw\" or \"__threw\", whose value is text encodes as the node t throw with msg = that text. A second member of any kind makes it an ordinary map ({\"__throw\": \"x\", \"a\": 1} is a map, and {\"__t\": \"num\", \"v\": \"5\", \"__throw\": \"x\"} is the num tag of R5); a non-text marker value is an ordinary member. Only a map is ever a throw observation (never a list), and an ESCAPED map (R5) never is. Inside json content (below the top of a json position) such maps are ordinary maps.",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "R4",
+   "text": "ABSENT. The absent value arises from a record field the value lacks (R8) or an undef tag (R5). It encodes as t none where the type is none or a union with a none alternative, and throws everywhere else — json included.",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "R5",
+   "text": "LEGACY TAGS. After R3, a map holding a text member \"__t\" (and not ESCAPED) is a v0.4 codec tag and is replaced by the value it stands for before the type is applied — at every typed position, and at every node inside json content: num: member v must be text: \"NaN\", \"Infinity\", \"-Infinity\" or \"-0\" give those numbers; otherwise v must spell a json number literal (optional \"-\", then \"0\" or a digit 1-9 and more digits, optional \".\" and one or more digits, optional \"e\" or \"E\", optional sign, one or more digits) and gives its nearest double. The literal is a VALUE, not a spelling: \"1E3\", \"1000.0\" and \"1000\" all give 1000. It throws when that double is infinite (\"1e999\", \"-1e999\"); when it is zero of either sign while the MANTISSA (the literal before any \"e\" or \"E\") holds a digit 1-9 — an underflow: \"1e-400\", \"-1e-400\", \"2e-324\", \"0.1e-323\", while \"3e-324\" gives the least subnormal; and when it is -0 (\"-0.0\", \"-0e5\"). So a zero is accepted only from an unsigned literal whose mantissa digits are all 0 (\"0\", \"0e5\", \"0.000\"). Anything else throws (\"\", \"00\", \"+1\", \".5\", a non-text v). bigint: v must be text spelling a decimal integer in its one canonical form (\"0\", or an optional \"-\" then a digit 1-9 and more digits — so \"-0\" and \"007\" throw); it gives that exact integer (an integer kind that is not a number, R6); anything else throws. undef: the absent value (R4). obj (the escape of a user map): member v must be a map — none, a missing v, a list, text, a number or a bool throws. The result is a NEW map, ESCAPED, holding v's entries. ESCAPED means the new map's own members \"__t\", \"__throw\" and \"__threw\" are DATA at that node wherever it is then encoded (a union retries alternatives on the same escaped map); its entry VALUES are ordinary, so R3 and R5 apply to them. Any other tag name throws. Members of a tag map beyond those named are ignored ({__t: \"num\", v: \"5\", x: 1} gives 5).",
+   "ambiguity": 0.55
+  },
+  {
+   "id": "R6",
+   "text": "SCALARS AND CONTAINERS encode by TABLE NODES. A value outside a row's accept set throws (inside a union: the next alternative is tried).",
+   "ambiguity": 0.5
+  },
+  {
+   "id": "TABLE NODES row 1",
+   "text": "none | none or the absent value | t none",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "TABLE NODES row 2",
+   "text": "bool | a bool | t bool, v = the bool",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE NODES row 3",
+   "text": "text | well-formed text | t text, v = the text, cu = \"utf8\"",
+   "ambiguity": 0.56
+  },
+  {
+   "id": "TABLE NODES row 4",
+   "text": "f64 | any number | t f64, v = RENDER(x), bits = BITS(x)",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "TABLE NODES row 5",
+   "text": "i64 | an integral number or an integer, within -2^63 .. 2^63-1 | t i64, v = the exact value in decimal (\"-\" for negatives, no leading zeros; -0 gives \"0\")",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "TABLE NODES row 6",
+   "text": "u64 | an integral number or an integer, within 0 .. 2^64-1 | t u64, v as for i64",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "TABLE NODES row 7",
+   "text": "bytes | a byte string | t bytes, v = \"base64:\" then the standard base64 alphabet with \"=\" padding (RFC 4648 section 4); none in json",
+   "ambiguity": 0.55
+  },
+  {
+   "id": "TABLE NODES row 8",
+   "text": "json | see R10 | the json node tree",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE NODES row 9",
+   "text": "tuple[T1..Tn] | a list of exactly n items | t tuple, v = item i encoded under Ti",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "TABLE NODES row 10",
+   "text": "list[T] | any list | t list, v = each item encoded under T",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "TABLE NODES row 11",
+   "text": "map[K, V] | a map or a keyed collection (not a list) | t map, v = the entries as pairs [key encoded under K, value encoded under V], sorted by R9",
+   "ambiguity": 0.64
+  },
+  {
+   "id": "TABLE NODES row 12",
+   "text": "record[...] | a map (not a list, not a keyed collection) | t record, v = one pair [field name as plain text, field encoded under its type] per field, in written order",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "TABLE NODES row 13",
+   "text": "union | see R7 | the first alternative's node",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R7",
+   "text": "UNIONS. Tags are resolved once (R5) — a malformed tag at the union's own position throws the union before any alternative is tried — then the alternatives are tried in written order on that value and the FIRST that encodes it without throwing — anywhere inside it, R13 included — wins; when every alternative throws, the union throws. A throw anywhere inside a list, tuple, map, record or json content throws that whole container. So \"i64 | f64\" gives 1 as i64 and \"f64 | i64\" gives it as f64.",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R8",
+   "text": "RECORD READS. A field reads the map's OWN entry of exactly that name (a key spelled __proto__ or constructor is an ordinary key), or the absent value when there is none. A map position takes the map's own entries; over a map the keys are always text, so a key type that rejects text (i64, none, …) throws on any non-empty map.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R9",
+   "text": "MAP ORDER — one order for every map, typed (map[K, V]) and json alike. Entries sort ascending by a sort key compared as sequences of 16-bit code units: a text key's sort key is the key text itself; any other key's is CANON of its encoded node (R11). Entries with equal sort keys keep their input order (reachable only through a host keyed collection).",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R10",
+   "text": "JSON. A json position (after R3 at its top) encodes recursively, R5 applied at every node: none -> t none; bool; a number -> the f64 node; text -> the text node (well-formed); a list -> t list of its items' json nodes; a map -> t map whose pairs are [text node of the key, json node of the value], sorted by R9. Everything else throws: the absent value, an integer that is not a number, a byte string, a keyed collection, a list with a hole, a non-plain host object.",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R11",
+   "text": "CANON. The canonical string of an encoded node: compact json text with map members sorted by key (16-bit code units), strings written as ESC inside double quotes, booleans as true / false, lists in order; an f64 node is reduced to its members bits and t, a throw node to t alone. So an i64 key reads {\"t\":\"i64\",\"v\":\"10\"} (decimal text order: \"10\" before \"9\"), an f64 key {\"bits\":\"…\",\"t\":\"f64\"}; against a text key the comparison is the raw text versus that string.",
+   "ambiguity": 0.61
+  },
+  {
+   "id": "TABLE ESC row 1",
+   "text": "double quote | \"\\\"\"",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE ESC row 2",
+   "text": "backslash | \"\\\\\"",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE ESC row 3",
+   "text": "8, 9, 10, 12, 13 | \"\\b\", \"\\t\", \"\\n\", \"\\f\", \"\\r\"",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE ESC row 4",
+   "text": "any other code 0-31 | \"\\u00\" then two lowercase hex digits",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE ESC row 5",
+   "text": "every other character | itself",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R12",
+   "text": "RENDER(x) is the ECMA-262 Number::toString(x) radix-10 rendering (the fewest digits that round-trip and, among digit strings of that length, the one closest to x; exponent form below 1e-6 and from 1e21, written \"1e+21\", \"1e-7\", \"1.5e-7\"; integral values below 1e21 in full positional form, so 123456789012345680000), except -0 renders \"-0\"; NaN, Infinity and -Infinity render \"NaN\", \"Infinity\", \"-Infinity\". BITS(x) is the IEEE-754 binary64 bit pattern as 16 lowercase hex digits, most significant first; every NaN gives \"7ff8000000000000\".",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "R13",
+   "text": "NESTING CAP. Values have depths: the whole value is depth 0 and each CHILD value is one deeper than its parent — a list or tuple item, a map key and a map value, a record field value (the absent value of a missing field included), and inside json content a list item and a map value. A union alternative, the json position and a legacy tag (R5) are the SAME value at the same depth; an escaped map's entry values (R5 obj) are its children. Encoding a value at depth greater than MAX_VALUE_DEPTH throws (inside a union: an ordinary alternative failure). So under \"json\" 100 nested lists around a scalar encode (the scalar sits at depth 100) and 101 throw; 100 nested lists around an EMPTY list encode; under \"list[json] | none\" and under 16 typed lists around json the same 101-deep value throws. Typed positions alone cannot reach the cap (types nest at most MAX_DEPTH, R1); it is met inside json content.",
+   "ambiguity": 0.37
+  }
+ ],
+ "ranked": [
+  "TABLE NODES row 11",
+  "R11",
+  "R10",
+  "TABLE NODES row 3",
+  "R5",
+  "TABLE NODES row 7",
+  "TABLE NODES row 5",
+  "TABLE NODES row 10",
+  "R12",
+  "R6",
+  "TABLE NODES row 6",
+  "R2",
+  "R7",
+  "R9",
+  "R4",
+  "TABLE NODES row 8",
+  "R1",
+  "TABLE NODES row 12",
+  "R8",
+  "R3",
+  "TABLE NODES row 9",
+  "R13",
+  "TABLE NODES row 4",
+  "TABLE NODES row 1",
+  "TABLE ESC row 5",
+  "TABLE NODES row 13",
+  "TABLE ESC row 4",
+  "TABLE NODES row 2",
+  "TABLE ESC row 3",
+  "TABLE ESC row 2",
+  "TABLE ESC row 1"
+ ],
+ "at": "2026-10-28T02:32:09Z"
+}

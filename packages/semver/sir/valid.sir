@@ -1,0 +1,258 @@
+UNIT valid
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# Pure function. No clock / RNG / env / fs / net read. No seam. Fully reproducible.
+
+SIG valid(version: any, optionsOrLoose?: boolean | object) -> string | null
+# Named export on module.exports:  exports.valid = valid
+# Returns the NORMALIZED semver version STRING, or null if `version` is not a
+# valid semver under the chosen (strict|loose) parse mode.
+
+DEPENDS-ON none
+# Self-contained: depends only on two regex literals (FULL, LOOSE) defined below
+# (LOGIC, captured exactly here — NOT carried data) and the two numeric constants
+# MAX_LENGTH and MAX_SAFE_INTEGER. The blind re-emitter reconstructs valid() by
+# inlining parse() + the relevant slice of the SemVer constructor + SemVer.format().
+# (In the original these are separate functions; for `valid` they collapse to one path.)
+
+# ============================================================================
+# CONSTANTS  (exact)
+# ============================================================================
+# MAX_LENGTH       = 256
+# MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER  = 9007199254740991   (2^53 - 1)
+#   (original: `Number.MAX_SAFE_INTEGER || 9007199254740991`; the literal fallback
+#    equals the standard value, so use 9007199254740991.)
+
+# ============================================================================
+# THE TWO REGEXES  (LOGIC — reproduce these EXACT compiled source strings)
+# ============================================================================
+# These are composed in the source from named sub-patterns; the fully-expanded
+# compiled JS-RegExp source strings (no flags) are given here verbatim. A blind
+# re-emitter MUST use a regex equivalent to these exact patterns. Both are
+# anchored ^...$ . Capturing groups are numbered left-to-right; only groups
+# m[1]=major, m[2]=minor, m[3]=patch, m[4]=prerelease, m[5]=build are consumed.
+#
+# RE_FULL  (strict mode):
+#   ^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][a-zA-Z0-9-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][a-zA-Z0-9-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$
+#
+#   Strict-mode rules encoded by RE_FULL:
+#     * Optional single leading 'v' (v?). NO '=' allowed. NO surrounding whitespace.
+#     * major/minor/patch: each is a STRICT numeric identifier `0|[1-9]\d*`
+#       => a single 0, OR a nonzero digit followed by any digits. Leading zeros
+#          (e.g. "01") are REJECTED.
+#     * prerelease (optional): hyphen '-' REQUIRED to introduce it, then one or
+#       more dot-separated identifiers, each identifier is
+#         strict-numeric (0|[1-9]\d*)  OR  non-numeric (\d*[a-zA-Z-][a-zA-Z0-9-]*).
+#       => prerelease numeric ids reject leading zeros ("1.2.3-01" invalid strict).
+#     * build (optional): '+' then dot-separated [0-9A-Za-z-]+ identifiers.
+#
+# RE_LOOSE (loose mode):
+#   ^[v=\s]*([0-9]+)\.([0-9]+)\.([0-9]+)(?:-?((?:[0-9]+|\d*[a-zA-Z-][a-zA-Z0-9-]*)(?:\.(?:[0-9]+|\d*[a-zA-Z-][a-zA-Z0-9-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$
+#
+#   Loose-mode relaxations vs strict:
+#     * Leading run [v=\s]* : any mix of 'v', '=', and WHITESPACE characters at the
+#       FRONT only (e.g. "=1.2.3", "===1.2.3", "vvv1.2.3", " =v 1.2.3", " 1.2.3").
+#       NOTE: there is NO matching trailing run — trailing whitespace is NOT allowed
+#       ("1.2.3 " and " 1.2.3 " are INVALID even in loose mode). Internal whitespace
+#       (e.g. "1.2 .3") is INVALID.
+#     * major/minor/patch: loose numeric `[0-9]+` => LEADING ZEROS ALLOWED
+#       ("01.02.03" valid loose, normalizes to "1.2.3").
+#     * prerelease: the introducing hyphen is OPTIONAL (-?), so "1.2.3beta" is
+#       accepted and treated as prerelease "beta". Loose numeric prerelease ids
+#       are `[0-9]+` (leading zeros allowed). Non-numeric id pattern unchanged.
+#     * build: identical to strict.
+#
+#   IMPORTANT: x-ranges/partials ("1.2.x", "1.2", "1", "*") are NOT accepted by
+#   either RE_FULL or RE_LOOSE — `valid` requires all three of major.minor.patch.
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline — exact)
+# ============================================================================
+# Step 0 — normalize options into `loose` boolean (this is parse()/SemVer's
+#          options-coercion; for `valid` only `loose` matters; includePrerelease
+#          is computed but unused on this path):
+#     if (optionsOrLoose is null/undefined OR typeof optionsOrLoose !== 'object'):
+#         loose := Boolean(optionsOrLoose)        # !!optionsOrLoose
+#         # so: undefined/null/false/0/"" -> false ; true/1/"yes"/nonzero -> true
+#     else:                                       # it IS an object
+#         loose := Boolean(optionsOrLoose.loose)  # !!options.loose ; missing -> false
+#
+# Step 1 — SemVer-instance passthrough (parse()):
+#     if version is an instance of the SemVer class:
+#         return version.version    # its already-normalized version string
+#     # (genInputs may emit this; behavior = return the instance's .version)
+#
+# Step 2 — non-string guard (parse()):
+#     if typeof version !== 'string':            # number, boolean, object, array,
+#         return null                            #   null, undefined, function ...
+#
+# Step 3 — length guard (parse()), tested on the RAW (untrimmed) string:
+#     if version.length > MAX_LENGTH (256):
+#         return null
+#     # length exactly 256 is allowed; 257+ rejected.
+#
+# Step 4 — regex GATE (parse()), tested on the RAW (untrimmed) string:
+#     r := loose ? RE_LOOSE : RE_FULL
+#     if NOT r.test(version):                    # test, anchored ^...$
+#         return null
+#     # CRITICAL: the gate runs on the RAW string. Even though Step 5 trims, a
+#     # string that fails the raw regex test here is rejected BEFORE any trim.
+#     # Hence strict " 1.2.3" -> null (RE_FULL has no leading-ws allowance), and
+#     # loose "1.2.3 " / " 1.2.3 " -> null (RE_LOOSE has no trailing-ws allowance).
+#
+# Step 5 — construct/parse the SemVer (the SemVer constructor), which re-matches
+#          the TRIMMED string and extracts the captures. (Wrapped in try/catch in
+#          parse(); any throw below => parse returns null => valid returns null.)
+#     m := version.trim().match(r)               # same r as Step 4
+#     if m is null:                              # (cannot normally happen after the
+#         throw  => caught => return null        #  Step-4 raw test passed, but the
+#                                                #  trim can change what matches; if it
+#                                                #  yields no match, result is null)
+#     # ---- extract main numbers (note: trim() only strips OUTER whitespace; the
+#     #      leading [v=\s]* / v? prefix is consumed by the regex, not by trim) ----
+#     major := Number(m[1])                      # unary + : "01"->1, "007"->7
+#     minor := Number(m[2])
+#     patch := Number(m[3])
+#     if (major > MAX_SAFE_INTEGER) or (major < 0): throw => return null
+#     if (minor > MAX_SAFE_INTEGER) or (minor < 0): throw => return null
+#     if (patch > MAX_SAFE_INTEGER) or (patch < 0): throw => return null
+#       # major/minor/patch are ALWAYS >= 0 (regex has no sign). So the live
+#       # rejection is the > MAX_SAFE_INTEGER (2^53-1) bound. A 17+ digit number
+#       # like "9007199254740992.0.0" (=2^53) is REJECTED (> MAX_SAFE_INTEGER);
+#       # "9007199254740991.0.0" (=2^53-1) is ACCEPTED.
+#
+#     # ---- prerelease ----
+#     if m[4] is falsy (undefined/empty):
+#         prerelease := []                        # no prerelease
+#     else:
+#         prerelease := m[4].split('.').map(id ->
+#             if /^[0-9]+$/.test(id):             # pure-digit identifier
+#                 num := Number(id)
+#                 if (num >= 0 AND num < MAX_SAFE_INTEGER):   # STRICTLY less-than
+#                     return num                  # NUMERIFY: "007"->7, "00"->0
+#             return id                           # else keep the ORIGINAL string
+#         )
+#         # Consequence: a pure-digit prerelease id that is < 2^53-1 is numerified
+#         # (leading zeros stripped: "1.2.3-007" loose -> "1.2.3-7"). A pure-digit
+#         # id that is >= 2^53-1 (>= MAX_SAFE_INTEGER) stays the ORIGINAL STRING,
+#         # so its leading zeros are preserved
+#         # ("1.2.3-09007199254740991" loose -> "1.2.3-09007199254740991";
+#         #  "1.2.3-09007199254740992" loose -> "1.2.3-09007199254740992").
+#         # Mixed/alpha ids (e.g. "0a", "x", "alpha") are never numerified.
+#
+#     # ---- build (parsed but DROPPED from output) ----
+#     build := m[5] ? m[5].split('.') : []        # stored but NOT used by format()
+#
+# Step 6 — format() builds the normalized version string:
+#     out := major + '.' + minor + '.' + patch    # numbers re-stringified (canonical
+#                                                  #   decimal, no leading zeros)
+#     if prerelease.length > 0:
+#         out := out + '-' + prerelease.join('.') # numeric ids print as their number,
+#                                                  #   string ids print verbatim
+#     # BUILD METADATA IS NEVER APPENDED. ("1.2.3+exp.sha.5114f85" -> "1.2.3";
+#     #  "1.2.3-beta.2+exp" -> "1.2.3-beta.2")
+#     version := out
+#
+# Step 7 — valid() returns:
+#     return parsed_ok ? version : null
+#     # i.e. the normalized `version` string from Step 6, or null on any reject/throw
+#     # from Steps 2-5.
+
+# ============================================================================
+# WORKED EXAMPLES  (all executed against semver@5.7.1 — these are oracle truth)
+# ============================================================================
+#   valid("1.2.3")                              -> "1.2.3"
+#   valid("0.0.0")                              -> "0.0.0"
+#   valid("v1.2.3")                             -> "1.2.3"        # strict v? consumed
+#   valid("=1.2.3")                             -> null           # strict: '=' not allowed
+#   valid("=1.2.3", true)                       -> "1.2.3"        # loose strips =
+#   valid(" =1.2.3 ", true)                     -> null           # trailing ws not allowed
+#   valid(" 1.2.3", true)                       -> "1.2.3"        # leading ws ok in loose
+#   valid("1.2.3 ", true)                       -> null           # trailing ws rejected
+#   valid(" 1.2.3", false)                      -> null           # strict: no leading ws
+#   valid("===1.2.3", true)                     -> "1.2.3"
+#   valid("vvv1.2.3", true)                     -> "1.2.3"
+#   valid("01.02.03", false)                    -> null           # strict leading zeros
+#   valid("01.02.03", true)                     -> "1.2.3"        # loose normalizes
+#   valid("1.2.3-alpha.1")                      -> "1.2.3-alpha.1"
+#   valid("1.2.3-0")                            -> "1.2.3-0"
+#   valid("1.2.3-01", false)                    -> null           # strict pre leading zero
+#   valid("1.2.3-01", true)                     -> "1.2.3-1"      # loose numerifies
+#   valid("1.2.3-007", true)                    -> "1.2.3-7"
+#   valid("1.2.3-00", true)                     -> "1.2.3-0"
+#   valid("1.2.3alpha", true)                   -> "1.2.3-alpha"  # loose optional hyphen
+#   valid("1.2.3alpha", false)                  -> null
+#   valid("1.2.3-1.alpha.007.x", true)          -> "1.2.3-1.alpha.7.x"
+#   valid("1.2.3-.x", true)                     -> "1.2.3--.x"    # -? optional; "-.x" pre
+#   valid("1.2.3+build.123")                    -> "1.2.3"        # build dropped
+#   valid("1.2.3-beta.2+exp.sha.5114f85")       -> "1.2.3-beta.2" # build dropped, pre kept
+#   valid("9007199254740991.0.0")               -> "9007199254740991.0.0"  # == 2^53-1 ok
+#   valid("9007199254740992.0.0")               -> null           # 2^53 > MAX_SAFE
+#   valid("99999999999999999999.0.0")           -> null
+#   valid("1.2.3-9007199254740991")             -> "1.2.3-9007199254740991" # >=MAX stays string
+#   valid("1.2.3-9007199254740990")             -> "1.2.3-9007199254740990" # < MAX, numerified (same digits)
+#   valid("1.2.3-9007199254740992")             -> "1.2.3-9007199254740992"
+#   valid("1.2.3-09007199254740991", true)      -> "1.2.3-09007199254740991" # >=MAX keeps leading 0
+#   valid("")                                   -> null
+#   valid(null)                                 -> null
+#   valid(undefined)                            -> null
+#   valid(123)                                  -> null           # non-string
+#   valid("not a version")                      -> null
+#   valid("1.2")                                -> null           # missing patch
+#   valid("1")                                  -> null
+#   valid("1.2.3.4")                            -> null
+#   valid("1.2.3.")                             -> null
+#   valid("1.2.x", true)                        -> null           # x-range not a version
+#   valid("*", false)                           -> null
+#   valid("-1.2.3", false)                      -> null
+#   valid("   ", false)                         -> null           # whitespace-only
+#   valid("   ", true)                          -> null
+#   valid("=1.2.3", {})                         -> null           # object w/o loose => strict
+#   valid("=1.2.3", {loose:false})              -> null
+#   valid("=1.2.3", {loose:true})               -> "1.2.3"
+#   valid("=1.2.3", "yes")                       -> "1.2.3"       # truthy non-object => loose
+#   valid("=1.2.3", 1)                          -> "1.2.3"
+#   valid("=1.2.3", 0)                          -> null           # falsy => strict
+#   valid(<a SemVer instance for "1.2.3-pre+build">) -> "1.2.3-pre"  # passthrough .version
+#   (a 256-char string that matches -> normalized; a 257-char string -> null)
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Each input vector is an arg-array; the expected is the return value of
+# semver@5.7.1's `valid` applied to those args: the normalized version string,
+# or null. Compared by strict structural equality (string === string, or null).
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the two regexes (RE_FULL, RE_LOOSE) captured verbatim above (these are LOGIC,
+#     a regex literal — NOT a carried table)
+#   - options->loose coercion; SemVer-instance passthrough; non-string guard;
+#     MAX_LENGTH(256) guard on raw string; raw-string regex gate; trim()+re-match;
+#     numeric major/minor/patch parse + MAX_SAFE_INTEGER(2^53-1) upper-bound reject;
+#     prerelease per-identifier numerify rule (pure-digit AND num < MAX_SAFE_INTEGER
+#     => Number, else original string); build parsed-then-dropped; format() output
+#     (major.minor.patch[-prerelease.join('.')], build excluded).
+# CARRIED DATA: none. (No large literal table; the regexes are LOGIC.)
+# OUT-OF-CONTRACT: none. valid() performs no mutation, no side effect, no ambient
+#   read. The unused `includePrerelease` option and the parsed-but-dropped `build`
+#   array do not affect the return value and need not be modeled beyond "build is
+#   excluded from output".
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+# semver@5.7.1
+# repo: https://github.com/npm/node-semver
+# license: ISC
+# source file: node_modules/semver/semver.js
+#   - exports.valid / function valid           (lines 277-281)
+#   - exports.parse  / function parse          (lines 244-275)
+#   - function SemVer (constructor)            (lines 291-362)
+#   - SemVer.prototype.format                  (lines 364-370)
+#   - RE_FULL  = exports.re[FULL]  src index 11; FULLPLAIN at lines 111-116
+#   - RE_LOOSE = exports.re[LOOSE] src index 12; LOOSEPLAIN at lines 121-126
+#   - MAX_LENGTH=256 (line 22); MAX_SAFE_INTEGER (lines 23-24)

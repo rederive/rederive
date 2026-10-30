@@ -1,0 +1,1439 @@
+{
+ "unit": "directive",
+ "sig": "directive(text: text, name: text) -> text | none",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT x\nSIG f(a: text) -> text\nKIND FUNCTIONAL",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "f(a: text) -> text",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "not a directive name: \"SIG\\n\""
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "Ä",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "not a directive name: \"Ä\""
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿﻿SIG a\n﻿  b\n  ﻿c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a b c",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \t ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG first\nSIG second",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "first",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n# comment\n  b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG x\nSIG real",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "real",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "ENVELOPE first line\n  continued here\n\tand tab\n    four\nNOTE n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "ENVELOPE",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "first line continued here and tab four",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a#b # c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a#b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a # b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG f(\"a # b\") x=\" # \" k:\" # \" [\" # \"] {\" # \"} a,\" # \"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "f(\"a # b\") x=\" # \" k:\" # \" [\" # \"] {\" # \"} a,\" # \"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"x\\\" # y\" z",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"x\\\" # y\" z",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a\\😀\" # b \"c\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a\\😀\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED regex A = /x/ CITED R1",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "PINNED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "regex A = /x/",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a CITED b\" c CITED d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a CITED b\" c",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a CITED # b\" c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a CITED # b\" c",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\nCITED: b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a CITED: b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a;\"b # c\" d|\"e # f\" g",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a;\"b # c\" d|\"e # f\" g",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG /\"a # b\"/ # c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "/\"a",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a\"\"\"b # c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a\"\"\"b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n  \"b CITED c\";\"d CITED e\" CITED f",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a \"b CITED c\";\"d CITED e\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿  SIG x\n  ﻿\n﻿ \t\nSIG y\n ﻿SIG z",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "y SIG z",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\nCITED:​x\n﻿⁠R1 y",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a CITED:​x ⁠R1 y",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "R007 seven\nR7 plain",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "R007",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "seven",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG: x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG:",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "not a directive name: \"SIG:\""
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "KIND a\r\nSIG crlf\r\n  more\r\nSTATE s",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "crlf more",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a SIG b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a SIG b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "ORACLE value",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "ORACLE-CLASS",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG\nSIG later",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG  x ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": " x ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT u\nSIG​x\nSIG⁠y\nSIG᠎z",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "UNIT",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "u SIG​x SIG⁠y SIG᠎z",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\nsig b\nprose line\nKIND k",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a sig b prose line",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG # only comment",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG pipe 12\" wide # note \"q",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "pipe 12\" wide",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\"b # c\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a\"b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"x\\\\\" # y\" z",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"x\\\\\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a\"\"b # c\" d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a\"\"b # c\" d",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a CITEDx XCITED b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a CITEDx XCITED b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "R1 \"a CITED b\" null",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "R1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a CITED b\" null",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"open CITED x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"open",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "CITED: x\nSIG a\nCITED:\nCITED:: y",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a CITED: CITED:: y",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG <\"a # b\"> !\"c CITED d\" &\"e # f\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "<\"a # b\"> !\"c CITED d\" &\"e # f\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG f(x)\"a # b\" 12\"c # d\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "f(x)\"a",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\"\"b # c\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a\"\"b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n  ﻿\"b # c\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a \"b # c\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "R1:​x\nR1 real",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "R1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "real",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "ORACLE value -> oracles/u.json  CANONICAL-SHA256 abababababababababababababababababababababababababababababababab",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "ORACLE",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "value -> oracles/u.json  CANONICAL-SHA256 abababababababababababababababababababababababababababababababab",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "not a directive name: \"\""
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\nCITED x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "CITED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "CITED is an attribute, never a directive: read it from a directive's attrs"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "KIND a\rSIG cr-only\r  more\rSTATE s",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "cr-only more",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIGNAL on\nSIG-X y\nSIG real",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "real",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG: legacy colon",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "legacy colon",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n \n  b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a   b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT u\nSIGx\nSIG　y",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "none"
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG f() -> text # trailing comment",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "f() -> text",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a # b\" c # d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a # b\" c",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED regex Q = /\"/ # c \"x\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "PINNED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "regex Q = /\"/",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG x \"a # b\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x \"a",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"a\\ \" # b \"c\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"a\\ \"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n  \"b # c\" # d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a \"b # c\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG CITED x\n  b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n  \"x EARNED y\" ANCHOR z\n  w",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a \"x EARNED y\" w",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n  CITED x\n  b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\nEARNED b CITED c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "EARNED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "b",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG +\"a # b\" -\"c # d\" *\"e # f\" ~\"g # h\" ?\"i # j\" x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "+\"a",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG \"\"\"a # b\" # c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\"\"\"a # b\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "PINNED regex Q = /\"(?:a|b)*\"/ CITED R5 \"x\"\n  y +\"a # b\" ?\"c # d\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "PINNED",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "regex Q = /\"(?:a|b)*\"/ y +\"a",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "SIG a\n\t﻿﻿b\n ﻿ ﻿c\n﻿ ﻿d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "SIG",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a b c d",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT u\n⁠KIND k\nKIND j",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "UNIT",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "u ⁠KIND k",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT été 😀\n  über",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "UNIT",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "été 😀 über",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "canonicalSha256": "28f48ce2c793b0d474c21f1581e4871f1c4832cd4791a26de556fa05f6530554"
+}

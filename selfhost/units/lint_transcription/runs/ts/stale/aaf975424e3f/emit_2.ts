@@ -1,0 +1,42 @@
+type Hit = { line: number, what: string, text: string };
+type Result = { hits: Hit[], hitLines: number, lines: number, commentLines: number, density: number };
+
+const SHAPES: ReadonlyArray<readonly [string, RegExp]> = [
+  ["typeof", /\btypeof\b/],
+  ["arrow fn", /=>/],
+  ["method call", /\.(match|reduce|slice|test|exec|split|map|filter)\(/],
+  ["JS builtin", /\b(parseInt|parseFloat|Number|String|Math)\s*[.(]/],
+  ["if (", /\bif\s*\(/],
+  ["return", /\breturn\b/],
+  ["loop", /\bfor\s+\w+\s+in\b|\bfor\s*\(|\bwhile\s*\(/],
+  ["STEP/NODE/BRANCH narration", /^\s*#?\s*(STEP|NODE|BRANCH|GATE)\s+[\w-]+/i],
+  ["indexed assignment", /\w\[\w+\]\s*=[^=]/],
+  ["dialect regex literal", /\/\^.*\$\/[a-z]*/],
+  ["JS value name (say none)", /\b(null|undefined)\b/],
+  ["assignment statement", /[A-Za-z_]\w*\s*=\s*[^=\s].*;\s*$/],
+  ["capture-group reference", /\bgroup\d\b/],
+];
+
+export default function lint_transcription(text: string): Result {
+  const raw = text.split(/\r\n|\r|\n/);
+  const hits: Hit[] = [];
+  const hitSet = new Set<number>();
+  let lines = 0;
+  let commentLines = 0;
+  raw.forEach((r, idx) => {
+    const n = r.replace(/^﻿+/, "").replace(/[ \t]+$/, "");
+    const t = n.trim();
+    if (t.length === 0) return;
+    lines++;
+    if (t.charAt(0) === "#") commentLines++;
+    const s = n.replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+    for (const [what, re] of SHAPES) {
+      if (re.test(s)) {
+        hits.push({ line: idx + 1, what, text: Array.from(t).slice(0, 96).join("") });
+        hitSet.add(idx + 1);
+      }
+    }
+  });
+  const hitLines = hitSet.size;
+  return { hits, hitLines, lines, commentLines, density: lines === 0 ? 0 : hitLines / lines };
+}

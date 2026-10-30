@@ -1,0 +1,15 @@
+UNIT hash_ok
+LANG ts
+PRIMARY-SHA256 a7fc3172f82e6f55fca50cd60860c3aa6a8917cada4354fb1d6a6db752da2f0c
+SIG export function hash_ok(text: string, want: string | null): boolean
+ABI TypeScript compiles to the js runtime: text=string (UTF-16 code units, well-formed inside the abstract envelope);
+  bool=boolean; none=null. STRICT: the artifact must type-check under `strict: true` against this SIG, with no `any`,
+  no non-null assertions (`!`), and no `@ts-ignore` / `@ts-expect-error`.
+MECHANISM (restated from js — language files are self-contained) order: R1 want === null -> true; R2 want fails
+  /^[0-9a-f]{64}$/ (no flags; `$` is end of input only) -> throw an Error; then R3 digest = createHash('sha256') from
+  node:crypto, update(text) (a string is encoded as UTF-8), digest('hex') (lowercase), compared with ===. No
+  third-party package.
+ENVELOPE the typed SIG takes only the abstract envelope; the js extension vectors (lone surrogates, bytes, undefined
+  and non-string pins, non-string text) are not graded for ts, so the lone-surrogate check is not needed here.
+DEPENDS-ON none
+PROVENANCE rederive@bb8ded84fa50 cli/verdict.mts:109–119 (hashHex, hashOk).

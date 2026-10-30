@@ -1,0 +1,231 @@
+UNIT zipObject
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# zipObject is the default export of lodash.zipobject@4.18.0. It zips a list of
+# property identifiers with a list of corresponding values into a plain object.
+# It is the modularized lodash `_.zipObject`. Pure, read-only, zero runtime deps.
+# The re-emitter MUST `export default <fn>` (see EMISSION).
+# ----------------------------------------------------------------------------
+
+SIG  zipObject(props, values) -> Object
+     # props : the property identifiers (intended: Array). Optional.
+     # values: the property values         (intended: Array). Optional.
+     # returns a NEW plain object (prototype === Object.prototype).
+
+DEPENDS-ON none
+     # Self-contained file. No imported leaves, no carried-data table.
+     # All helpers (baseZipObject, assignValue, baseAssignValue, eq) are inlined
+     # in BEHAVIOR below; the re-emitter reconstructs them, it does not import them.
+
+EMISSION
+     # CommonJS source is `module.exports = zipObject`. The re-emitted ES module
+     # MUST export the function as the DEFAULT export:  export default zipObject
+     # The harness loads the .mjs via dynamic import() and calls the default.
+
+# ============================================================================
+# BEHAVIOR  (exact pipeline — ordered; reconstruct verbatim)
+# ============================================================================
+#
+# Top-level entry (public zipObject):
+#   zipObject(props, values):
+#     return baseZipObject(props || [], values || [], assignValue)
+#
+#   NODE-ARG-COERCE (the `|| []` default):
+#     - `props  || []`  : if props  is FALSY (undefined, null, false, 0, NaN,
+#                         "" empty string), substitute the empty array [].
+#     - `values || []`  : if values is FALSY, substitute the empty array [].
+#     - This is a JS truthiness `||`, NOT an `=== undefined` check. Therefore
+#       null/false/0/""/NaN as `props` all yield the empty-array path => {} .
+#       Verified: zipObject(null,[1,2]) === {}, zipObject(undefined,...) === {},
+#                 zipObject(0,...) === {}, zipObject(false,...) === {},
+#                 zipObject("",...) === {}.  (operator hint "null props -> {}"
+#                 is correct but the precise rule is FALSY-props, broader than null.)
+#     - A TRUTHY non-array first arg is passed through unchanged to baseZipObject,
+#       which then reads `.length` and integer-index properties off it (see
+#       OUT-OF-ENVELOPE: array-like). E.g. a plain string "ab" is iterated as
+#       array-like => {a:1,b:2}. A truthy number like 5 has length===undefined =>
+#       `++index < undefined` is false on the first test => returns {} (no throw).
+#
+# baseZipObject(props, values, assignFunc):
+#     index    = -1
+#     length   = props.length          # read ONCE up front
+#     valsLength = values.length        # read ONCE up front
+#     result   = {}                     # fresh plain object, Object.prototype proto
+#     while (++index < length):
+#         value = (index < valsLength) ? values[index] : undefined
+#         assignFunc(result, props[index], value)
+#     return result
+#
+#   NODE-INDEX-PAIRING (the core contract):
+#     - Iterate index = 0 .. length-1 where length = props.length.
+#     - result key   = props[index]   (coerced to string when assigned — see below)
+#     - result value = values[index] if index < values.length, ELSE undefined.
+#
+#   NODE-UNDEFINED-FILL (props longer than values):
+#     - For every index >= values.length, the value passed is `undefined`.
+#     - The key IS STILL ASSIGNED (an OWN, ENUMERABLE property whose value is
+#       undefined). VERIFIED against the real package with `in` / hasOwnProperty:
+#         zipObject(["a","b","c"],[1])  => own keys ["a","b","c"];
+#         "b" in result === true, "c" in result === true;
+#         result.b === undefined, result.c === undefined.
+#     - This is NOT the same as "key absent". A correct reconstruction MUST set
+#       the key. (See assignValue clause 2 below for why undefined values are set.)
+#
+#   NODE-EXTRA-VALUES (values longer than props):
+#     - Extra trailing values (index >= props.length) are simply never visited;
+#       the loop bound is props.length. Verified: zipObject(["a"],[1,2,3]) => {a:1}.
+#
+# assignValue(object, key, value):   # the assignFunc used by public zipObject
+#     objValue = object[key]
+#     if ( !( hasOwnProperty.call(object, key) && eq(objValue, value) )
+#          || ( value === undefined && !(key in object) ) ):
+#         baseAssignValue(object, key, value)
+#     # else: no-op (the existing value is already SameValueZero-equal; skip).
+#
+#   where eq(a, b) = (a === b) || (a !== a && b !== b)   # SameValueZero:
+#                    strict-equal OR both-NaN. (-0 and +0 compare EQUAL here,
+#                    since -0 === +0 is true.)
+#
+#   NODE-ASSIGN-GUARD (observable effects of the assignValue guard):
+#     During a single zipObject call, keys start absent and are added/overwritten
+#     left-to-right. The guard's only observable consequences:
+#       (a) LAST-WINS on duplicate props with DIFFERING values: the later index
+#           overwrites. Verified zipObject(["a","a","a"],[1,2,3]) => {a:3}.
+#       (b) Duplicate props with SameValueZero-EQUAL values: the second assign is
+#           skipped (guard false), but the value is already present and equal, so
+#           the result is identical to having assigned it. Verified
+#           zipObject(["a","a"],[5,5]) => {a:5}; zipObject(["a","a"],[NaN,NaN])
+#           => {a:NaN} with "a" in result (NaN===NaN handled by the NaN branch
+#           of eq, so it is treated equal and NOT re-assigned — still {a:NaN}).
+#       (c) Duplicate prop where the LATER value is undefined and an earlier
+#           DIFFERENT value exists: key already in object, but eq(prev, undefined)
+#           is false (clause 1 of the OR is true), so baseAssignValue runs and the
+#           key is OVERWRITTEN to undefined. Verified
+#           zipObject(["a","a"],[1, undefined]) => result.a === undefined,
+#           "a" in result === true, own keys === ["a"]. (Note: this requires an
+#           EXPLICIT undefined element in `values`; see OUT-OF-ENVELOPE — it is
+#           documented but NOT exercised by genInputs because an undefined array
+#           element does not survive the JSON codec.)
+#     For NON-duplicate props (every key distinct), the guard never blocks an
+#     assignment: clause 1 is `!(false && ...) = !(false) = true`, so every key is
+#     written exactly once. The guard is thus a NO-OP on distinct keys. A
+#     reconstruction that ignores the guard and just does last-wins assignment of
+#     every (key,value) pair is OBSERVABLY IDENTICAL for all distinct-key inputs
+#     and for differing-value duplicates; it differs only in the unreachable
+#     micro-case where the result would be byte-identical anyway. The guard does
+#     NOT change any returned object's shape or values. (Stated so blind
+#     re-emitters that model it either way converge.)
+#
+# baseAssignValue(object, key, value):
+#     if (key == "__proto__" && defineProperty is available):
+#         defineProperty(object, "__proto__", {
+#             configurable: true, enumerable: true, value: value, writable: true })
+#     else:
+#         object[key] = value          # ordinary [[Set]] of an own data property
+#
+#   NODE-PROTO-KEY (the "__proto__" special case — DISTINGUISHING behavior):
+#     - When the (string-coerced) key is exactly "__proto__", the value is set via
+#       Object.defineProperty as an OWN, ENUMERABLE, WRITABLE, CONFIGURABLE data
+#       property. The object's PROTOTYPE is NOT changed; result still has
+#       Object.prototype as its prototype.
+#     - A naive `object[key] = value` would instead invoke the __proto__ setter
+#       and MUTATE the prototype (and create NO own property). So this branch is
+#       behaviorally distinguishing and MUST be reconstructed.
+#       Verified: zipObject(["__proto__","a"],[{x:1},2]) =>
+#         getOwnPropertyNames === ["__proto__","a"];
+#         getOwnPropertyDescriptor(result,"__proto__") ===
+#           {value:{x:1}, writable:true, enumerable:true, configurable:true};
+#         Object.getPrototypeOf(result) === Object.prototype.
+#     - NOTE: this case is documented as in-contract logic but is EXCLUDED from
+#       genInputs (a `__proto__` own-property does not reliably survive the
+#       JSON/structured codec used to persist expecteds, which would manufacture a
+#       false divergence). The blind re-emitter reconstructs it from this spec.
+#
+# KEY-COERCION (applies at every assignment):
+#     The key written is `props[index]` coerced to a STRING via JS property-key
+#     semantics (it is used as an object property key). Verified coercions:
+#       number 1      -> "1"        (own keys are string-typed: typeof key==="string")
+#       true / false  -> "true" / "false"
+#       null          -> "null"
+#       undefined     -> "undefined"
+#       a sparse HOLE in props (missing index, but index < length) reads as
+#                        undefined -> key "undefined"
+#                        Verified: props ["a", <hole>, "c"] (length 3) with
+#                        values [1,2,3] => {a:1, undefined:2, c:3}.
+#       {}            -> "[object Object]"
+#       [1,2]         -> "1,2"      (Array.prototype.toString)
+#     (Symbol keys would NOT be string-coerced — they are real symbol keys — but
+#      symbols do not survive the codec; see OUT-OF-ENVELOPE.)
+#
+# RESULT SHAPE:
+#     - Always a fresh object with Object.prototype as prototype.
+#     - Properties are own, enumerable, writable, configurable data properties,
+#       inserted in props iteration order (insertion order, with integer-like
+#       string keys ordered numerically per JS object key-ordering — e.g.
+#       numeric props [1,2,3] => keys ["1","2","3"]).
+#     - No exceptions are thrown for any in-envelope input. (Truthy non-array
+#       first args also do not throw; they read length/index off the value.)
+#
+# DEGENERATE / EMPTY:
+#     zipObject([], [])      => {}
+#     zipObject()            => {}   (both args undefined => both `|| []`)
+#     zipObject(["a","b"])   => {a:undefined, b:undefined} with keys present
+#                               (values undefined => `|| []` => [], valsLength 0,
+#                                every index >= 0 takes the undefined branch).
+#     zipObject(["a","b"], null) => same as above (null values => `|| []`).
+
+ORACLE value -> oracle.json
+     # Pure deterministic function. The oracle records the returned object for
+     # each generated [props, values] tuple. Equality is structural over the
+     # returned plain object (own enumerable keys + values, including keys whose
+     # value is undefined). No seam; no RNG/clock/io.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   the `|| []` falsy-default, the props.length loop bound, index pairing,
+#   undefined-fill (key set with undefined value), extra-values-ignored,
+#   last-wins on duplicate keys, the SameValueZero assignValue guard (no-op on
+#   distinct keys; overwrite-to-undefined on dup), string key coercion of
+#   props[index], the "__proto__" defineProperty special case, and the
+#   own-enumerable-writable-configurable result descriptors.
+#
+# CARRIED DATA: none. (No literal tables; the file's regexes/strings exist only
+#   to support lodash's native-function detection for `defineProperty` discovery
+#   and are not part of zipObject's observable contract.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#   - Function values in `values`: lodash assigns them fine, but a function value
+#     does not survive the JSON codec — DOCUMENTED, excluded from genInputs. A
+#     blind re-emitter still reconstructs the behavior (functions are assigned
+#     like any value).
+#   - Symbol keys in `props`: assigned as true symbol keys (not string-coerced);
+#     symbols do not survive the codec — DOCUMENTED, excluded.
+#   - Explicit `undefined` ELEMENTS inside the `props`/`values` arrays (e.g. the
+#     dup-then-undefined overwrite case): an undefined array element is persisted
+#     as `null` by JSON.stringify, so it does NOT round-trip — DOCUMENTED above
+#     (NODE-ASSIGN-GUARD case c), excluded from genInputs. The undefined-FILL path
+#     (props longer than values) is exercised WITHOUT any explicit undefined
+#     element, so it is fully covered.
+#   - Array-like (non-array) first/second args (objects with `.length`+indices,
+#     strings, etc.): work via duck-typed `.length`/index access. A plain string
+#     props (e.g. "ab") round-trips and IS covered; arbitrary {length, ...} plain
+#     objects are array-like but their length/index intent is ambiguous to model
+#     blind, so genInputs restricts to real arrays (+ the string and falsy-scalar
+#     first-arg cases) and the SIR documents the general array-like rule.
+#   - `__proto__` as a prop key: in-contract (NODE-PROTO-KEY) but excluded from
+#     genInputs for codec-faithfulness, as noted.
+#   No stateful mutators, no side effects, no external APIs. Inputs are NOT
+#   mutated (read-only): mutation-safety clause N/A.
+
+PROVENANCE lodash.zipobject@4.18.0
+     # repo: lodash/lodash  (modularized build: `lodash modularize exports="npm"`)
+     # license: MIT (OpenJS Foundation; based on Underscore.js 1.8.3)
+     # source file: node_modules/lodash.zipobject/index.js
+     #   - public:  function zipObject(props, values)         (module.exports)
+     #   - inlined: baseZipObject, assignValue, baseAssignValue, eq,
+     #              baseGetTag/getNative/etc. (the native-fn detection that
+     #              resolves Object.defineProperty for the __proto__ path)

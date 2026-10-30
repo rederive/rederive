@@ -1,0 +1,306 @@
+# =====================================================================
+# SIR — is-odd  (default CommonJS export)
+# =====================================================================
+UNIT isOdd
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic        # pure; no clock/RNG/env/fs/net seam. Same input => same result/throw.
+
+SIG isOdd(value: any) -> boolean
+    # Single positional arg. Extra args ignored. Zero-arg call => value is `undefined`.
+    # This is `module.exports = function isOdd(value) { ... }` — the DEFAULT/only export of
+    # is-odd@3.0.1. exportName is null (the bare default function).
+
+DEPENDS-ON none
+    # The ORIGINAL source `require`s is-number@6.0.0 and calls `isNumber(n)`. This SIR
+    # INLINES is-number's OBSERVABLE semantics so a blind re-emitter produces a STANDALONE
+    # isOdd with NO require and NO dependency on is-number. See "THE is-number INLINE"
+    # below for the exact reduction (it collapses to a NaN/Infinity rejection because of the
+    # critical Math.abs-FIRST ordering).
+
+# =====================================================================
+# ORIGINAL SOURCE (verbatim — both files, for fidelity)
+# =====================================================================
+#   --- is-odd@3.0.1 index.js ---
+#     'use strict';
+#     const isNumber = require('is-number');
+#     module.exports = function isOdd(value) {
+#       const n = Math.abs(value);
+#       if (!isNumber(n)) {
+#         throw new TypeError('expected a number');
+#       }
+#       if (!Number.isInteger(n)) {
+#         throw new Error('expected an integer');
+#       }
+#       if (!Number.isSafeInteger(n)) {
+#         throw new Error('value exceeds maximum safe integer');
+#       }
+#       return (n % 2) === 1;
+#     };
+#
+#   --- is-number@6.0.0 index.js (the dependency, inlined below) ---
+#     'use strict';
+#     module.exports = function isNumber(num) {
+#       var number = +num;
+#       if ((number - number) !== 0) { return false; }   # discard Infinity and NaN
+#       if (number === num) { return true; }
+#       if (typeof num === 'string') {
+#         if (number === 0 && num.trim() === '') { return false; }
+#         return true;
+#       }
+#       return false;
+#     };
+
+# =====================================================================
+# BEHAVIOR  (exact, ordered)  — VERIFIED against the live installed package
+# =====================================================================
+#
+# >>> THE LOAD-BEARING SUBTLETY: `Math.abs(value)` RUNS FIRST. <<<
+# Before ANY validation, the function computes  n = Math.abs(value).  Two crucial
+# consequences flow from this and a re-emitter MUST honor them:
+#   (A) Math.abs performs JS ToNumber coercion on `value`. So `value` is coerced to a
+#       number HERE — strings, booleans, null, arrays, Dates, objects with valueOf, etc.
+#       all become numbers (or NaN) at this step. The later isNumber/Number.isInteger
+#       checks see ONLY this already-numeric `n`, never the original `value`.
+#   (B) Math.abs THROWS on a BigInt: `Math.abs(5n)` throws a native
+#       `TypeError: Cannot convert a BigInt value to a number`. This throw is from the
+#       JS engine at the Math.abs call — it PRE-EMPTS all of isOdd's own throws and has a
+#       DIFFERENT message than isOdd's 'expected a number'. (See NODE 0.)
+#
+# Because n is always a NUMBER after Math.abs (or Math.abs already threw on BigInt),
+# the inlined `isNumber(n)` NEVER receives a string. Its `typeof num === 'string'`
+# branch is DEAD here. isNumber(n) therefore reduces to exactly:
+#       isNumber(n) === ((n - n) === 0)
+#   i.e. TRUE for every finite number (incl. 0, -0, negatives, fractional),
+#        FALSE only for NaN and ±Infinity (where (n-n) is NaN, so !== 0).
+# THE is-number INLINE (what the blind re-emitter writes in place of the require):
+#   A standalone isFiniteNumber(n) = (typeof n === 'number') && ((n - n) === 0).
+#   Equivalently, since n is the result of Math.abs (always a non-negative number or
+#   NaN/Infinity): `Number.isFinite(n)`. Both are VERIFIED-equivalent on all inputs n
+#   that Math.abs can produce. (Note: Number.isFinite(NaN)===false, Number.isFinite(Inf)
+#   ===false, Number.isFinite(0)===true — matches the reduction exactly.)
+#
+# n is always >= 0 (it is an absolute value), so `(n % 2) === 1` correctly answers
+# oddness for the ORIGINAL value's magnitude. This is why negative odds work (see below).
+#
+# ---------------------------------------------------------------------
+# NODE 0 — BIGINT PRE-EMPTION (the Math.abs coercion throw):
+#     n = Math.abs(value)
+#     IF value is a BigInt  ->  Math.abs throws (engine, native):
+#         TypeError,  message === 'Cannot convert a BigInt value to a number'
+#       This happens BEFORE any of isOdd's own checks. VERIFIED: isOdd(5n) and isOdd(4n)
+#       both throw this exact native TypeError. (A BigInt argument NEVER reaches the
+#       'expected a number' / 'expected an integer' paths.)
+#     For all NON-BigInt values, Math.abs returns a number n (possibly NaN or +Infinity)
+#       via ToNumber, and execution proceeds to NODE 1.
+#       ToNumber/Math.abs coercion table (VERIFIED, the values that feed NODE 1):
+#         number x            -> |x|              (e.g. -3 -> 3, -0 -> 0, 3.5 -> 3.5)
+#         numeric string "5"  -> 5    "  -3  " -> 3   "5." -> 5   "5.0" -> 5   "+5" -> 5
+#         "0x10" -> 16   "0b101" -> 5   "0o17" -> 15   "1e3" -> 1000   "07" -> 7
+#         ""  / "   " (whitespace only) -> 0      # abs(0) = 0
+#         "0" -> 0
+#         "abc" / "Infinity" / "NaN" / "1_000" / "1.2.3"  -> NaN   # ToNumber fails -> NaN
+#         "1.5" / ".5"        -> 1.5 / 0.5         # fractional
+#         null                -> 0                 # ToNumber(null)=0
+#         undefined           -> NaN               # ToNumber(undefined)=NaN
+#         true / false        -> 1 / 0
+#         []                  -> 0                  # ToNumber([]) = 0
+#         [5]                 -> 5                  # ToNumber([5]) = 5  (single-elem array unwraps)
+#         [3,4]               -> NaN                # multi-elem array -> NaN
+#         [[]]                -> 0
+#         {}                  -> NaN                # plain object -> NaN
+#         {valueOf:()=>3}     -> 3                  # valueOf IS honored by ToNumber
+#         new Date(3)         -> 3                  # Date coerces via valueOf -> ms timestamp
+#         Set / Map / RegExp  -> NaN                # no numeric primitive -> NaN
+#         Uint8Array([3])     -> 3   Uint8Array([3,4]) -> NaN   # like arrays
+#
+# NODE 1 — NOT-A-(FINITE)-NUMBER GUARD  (`if (!isNumber(n))`):
+#     Using the inline reduction: isNumber(n) is FALSE iff n is NaN or ±Infinity.
+#     IF n is NaN OR n is +Infinity (n can't be -Infinity; it's an abs value)
+#         ->  throw new TypeError('expected a number')
+#     The error: constructor === TypeError (`err instanceof TypeError` true),
+#                err.message === 'expected a number'  (lowercase 'expected', no period).
+#     THROWS 'expected a number' (VERIFIED) for original `value` in:
+#         undefined  (also zero-arg isOdd()), {}, [3,4], Set, Map, RegExp,
+#         Uint8Array([3,4]), "abc", "Infinity", "NaN", "1_000", NaN, Infinity, -Infinity.
+#     PASSES this node for: any finite number (incl. 0, -0, fractional), numeric strings
+#         that ToNumber to a finite number, null(->0), booleans(->0/1), [](->0), [5](->5),
+#         Date, {valueOf}, etc.
+#
+# NODE 2 — INTEGER GUARD  (`if (!Number.isInteger(n))`):
+#     IF n has a fractional part  ->  throw new Error('expected an integer')
+#     The error: constructor === Error (a PLAIN Error, NOT a TypeError;
+#                `err instanceof TypeError` is FALSE, `err instanceof Error` TRUE),
+#                err.message === 'expected an integer'.
+#     THROWS 'expected an integer' (VERIFIED) for: 0.5, 2.5, -0.5 (abs->0.5),
+#         "1.5", ".5", and any fractional finite number.
+#     NOTE: integral floats pass — 3.0, "5.0", "5." all give n=5/integer -> pass.
+#
+# NODE 3 — SAFE-INTEGER GUARD  (`if (!Number.isSafeInteger(n))`):
+#     IF n > Number.MAX_SAFE_INTEGER (9007199254740991)  -> throw new Error
+#     (n is an integer here, so the only way to fail Number.isSafeInteger is |value|
+#      exceeding 2^53-1). message === 'value exceeds maximum safe integer'.
+#     The error: constructor === Error (plain Error, NOT TypeError).
+#     THROWS (VERIFIED): Number.MAX_SAFE_INTEGER+1 (9007199254740992), MAX_SAFE_INTEGER*2,
+#         1e21, 2^53, AND their negatives (abs exceeds the cap, e.g. -(MAX_SAFE+1)).
+#     PASSES: |value| <= 9007199254740991. MAX_SAFE_INTEGER itself (9007199254740991,
+#         which is ODD) returns true; -MAX_SAFE_INTEGER returns true.
+#
+# NODE 4 — ODDNESS  (reached only when n is a safe non-negative integer):
+#     return (n % 2) === 1
+#     This is the `%2 === 1` form (NOT `& 1`). It is CORRECT here precisely BECAUSE n is
+#     a NON-NEGATIVE absolute value: for n >= 0, `n % 2` is 0 (even) or 1 (odd), so the
+#     `=== 1` test is right. (The classic `%2===1` negative-number trap — where
+#     `-3 % 2 === -1`, not 1 — is AVOIDED by the leading Math.abs.)
+#
+# ---------------------------------------------------------------------
+# RESULT TABLE for the accepted (non-throwing) domain — all VERIFIED:
+#     value         n=Math.abs(value)   n%2===1   isOdd(value)
+#     0               0                  false      false
+#     1               1                  true       true
+#     2               2                  false      false
+#     3               3                  true       true
+#    -1               1                  true       true      # <-- negative odd -> TRUE
+#    -2               2                  false      false
+#    -3               3                  true       true      # <-- negative odd -> TRUE  (KEY)
+#    -4               4                  false      false
+#    -0               0                  false      false
+#   101             101                  true       true
+#   100             100                  false      false
+#   "5"               5                  true       true      # numeric string accepted -> true
+#   "4"               4                  false      false
+#   "-3"              3                  true       true
+#   "  -3  "          3                  true       true
+#   "0"               0                  false      false
+#   ""                0                  false      false     # empty/whitespace string -> 0 -> even
+#   "   "             0                  false      false
+#   "5." / "5.0"      5                  true       true
+#   "07"              7                  true       true
+#   "0x10"           16                  false      false
+#   "0b101"           5                  true       true
+#   "0o17"           15                  true       true
+#   "1e3"          1000                  false      false
+#   "1e1"            10                  false      false
+#   null              0                  false      false     # ToNumber(null)=0
+#   true              1                  true       true       # ToNumber(true)=1 -> ODD
+#   false             0                  false      false
+#   []                0                  false      false
+#   [5]               5                  true       true
+#   [3]               3                  true       true
+#   [[]]              0                  false      false
+#   {valueOf:()=>3}   3                  true       true       # valueOf honored
+#   new Date(3)       3                  true       true
+#   new Date(4)       4                  false      false
+#   Uint8Array([3])   3                  true       true
+#   3.0               3                  true       true       # integral float
+#   MAX_SAFE_INTEGER  9007199254740991   true       true       # odd, safe
+#   -MAX_SAFE_INTEGER 9007199254740991   true       true
+#
+# THROW TABLE (constructor + EXACT message — all VERIFIED):
+#     TypeError 'Cannot convert a BigInt value to a number'  :  5n, 4n, any bigint (NODE 0)
+#     TypeError 'expected a number'                          :  undefined (incl. zero-arg),
+#                                                               {}, [3,4], Set, Map, RegExp,
+#                                                               Uint8Array([3,4]), "abc",
+#                                                               "Infinity", "NaN", "1_000",
+#                                                               NaN, Infinity, -Infinity
+#     Error     'expected an integer'                        :  0.5, 2.5, -0.5, "1.5", ".5"
+#     Error     'value exceeds maximum safe integer'         :  MAX_SAFE_INTEGER+1, *2, 1e21,
+#                                                               2^53, -(MAX_SAFE_INTEGER+1)
+#
+# NET BEHAVIOR (one-line spec a blind engineer can hold):
+#   n = Math.abs(value)  [BigInt arg throws here, native TypeError].
+#   Then: if n is NaN or Infinity -> throw TypeError('expected a number');
+#         else if n is not an integer -> throw Error('expected an integer');
+#         else if n > 2^53-1 -> throw Error('value exceeds maximum safe integer');
+#         else return (n % 2) === 1.
+#   The function answers oddness of the MAGNITUDE of value's numeric coercion; negative
+#   odds return true; numeric strings/booleans/null/arrays/Dates/valueOf-objects are
+#   accepted via ToNumber; only NaN/Infinity/non-numeric-coercion and BigInt and
+#   fractional/oversized integers throw.
+
+# =====================================================================
+ORACLE value -> oracle.json
+#   Pure function. For each input vector [value], the held-out grader runs the REAL
+#   is-odd@3.0.1 and stamps the observed outcome:
+#     - a boolean (true/false) for accepted inputs, OR
+#     - a captured throw (the schema's __throw sentinel: { __throw: { name, message } })
+#       for the throwing inputs — recording error CONSTRUCTOR NAME and exact MESSAGE.
+#   Re-emitters must reproduce BOTH the boolean returns AND the exact throw
+#   (constructor name + message string) for every input the generator emits.
+#
+#   SELF-CONSISTENCY: every value isOdd.inputs.mjs can emit has its outcome fully
+#   defined by the RESULT TABLE / THROW TABLE / coercion table above:
+#     - integers (incl. negative odds -3/-1, 0, -0)           -> RESULT TABLE
+#     - numeric strings ("5","4","-3","0","","  ","5.","0x10","0b101","0o17","1e3")
+#                                                              -> coercion table + RESULT TABLE
+#     - non-numeric strings ("abc","Infinity","NaN","1_000")  -> THROW 'expected a number'
+#     - fractional ("1.5",".5",0.5,2.5,-0.5)                  -> THROW 'expected an integer'
+#     - NaN/Infinity/-Infinity, undefined, {}, [3,4], Set, Map, RegExp, Uint8Array([3,4])
+#                                                              -> THROW 'expected a number'
+#     - bigint (5n,4n)                                         -> THROW 'Cannot convert a BigInt value to a number'
+#     - null,true,false,[],[5],[3],{valueOf},Date,Uint8Array([3]) -> coercion table + RESULT TABLE
+#     - over-safe-integer (MAX_SAFE+1, 1e21, etc.)            -> THROW 'value exceeds maximum safe integer'
+#   No value the generator emits is left to an undocumented path.
+
+# =====================================================================
+# SCOPE
+# =====================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   * The Math.abs-FIRST ordering (NODE 0) and its two consequences: BigInt pre-empt
+#     throw (native TypeError 'Cannot convert a BigInt value to a number'), and ToNumber
+#     coercion of every non-BigInt value to a number n BEFORE validation.
+#   * The four guard nodes in order with their EXACT thrown values:
+#       NaN/Infinity      -> new TypeError('expected a number')
+#       non-integer       -> new Error('expected an integer')          # plain Error, not TypeError
+#       > MAX_SAFE_INTEGER-> new Error('value exceeds maximum safe integer')  # plain Error
+#   * The final test `(n % 2) === 1` on the NON-NEGATIVE n (so negative odds return true).
+#   * The inlined is-number reduction: with n always a number, isNumber(n) ==
+#     ((n - n) === 0) == Number.isFinite(n). The blind re-emitter MUST NOT reproduce
+#     is-number's dead string branch (it is unreachable because n is post-Math.abs).
+#
+# CARRIED DATA: NONE. No large literal tables. The only constants are the standard JS
+#   numeric limit Number.MAX_SAFE_INTEGER (= 9007199254740991, via Number.isSafeInteger)
+#   and the three literal error message strings, all reproduced verbatim above. No
+#   carried.json and no data module required.
+#
+# OUT-OF-CONTRACT: NONE. The function is pure: no side effects, no ambient reads
+#   (no clock/RNG/env/fs/net), no mutation of the argument, no auxiliary API surface.
+#
+# DOCUMENT-AS-OUT-OF-ENVELOPE (genuinely non-codec-round-trippable; the SIR defines
+#   their behavior so a blind engineer reconstructs it, but isOdd.inputs.mjs does NOT
+#   emit them because they cannot survive JSON.stringify(encode(args))):
+#   * Symbol() / Symbol.iterator: Math.abs(symbol) throws a native
+#       TypeError 'Cannot convert a Symbol value to a number' (analogous to BigInt;
+#       VERIFIABLE but a Symbol does not round-trip the oracle codec).
+#   * function values, class instances whose identity matters, and objects with a
+#       live valueOf closure: ToNumber would call valueOf (e.g. {valueOf:()=>3} -> 3),
+#       but such a closure does not survive JSON serialization. The generator instead
+#       emits codec-faithful proxies (plain numbers/strings/arrays) that exercise the
+#       SAME coercion outcomes; the live closure case is documented here only.
+#   * NaN / +Infinity / -Infinity as ARGUMENTS: they do not round-trip JSON
+#       (JSON.stringify -> null), so the generator does NOT emit the bare float forms;
+#       instead it emits the STRING forms "NaN"/"Infinity"/"-Infinity" which ToNumber
+#       to NaN and hit the SAME 'expected a number' throw (VERIFIED identical outcome).
+#       The bare-float behavior is documented in the THROW TABLE for completeness.
+#   bigint (e.g. 5n) DOES round-trip the oracle codec (the schema round-trips bigint),
+#   so the generator DOES emit it directly to exercise the NODE 0 native throw.
+
+# =====================================================================
+PROVENANCE
+#   package:  is-odd@3.0.1
+#   export:   module.exports = function isOdd(value){...}  (default/only export; exportName null)
+#   repo:     https://github.com/jonschlinkert/is-odd
+#   author:   Jon Schlinkert
+#   license:  MIT
+#   source:   node_modules/is-odd/index.js  (CJS)
+#   dependency (inlined, NOT carried): is-number@6.0.0 (jonschlinkert/is-number, MIT),
+#             node_modules/is-number/index.js — its observable semantics inlined into
+#             NODE 1 above; the re-emitted isOdd has NO require.
+#   verified: Node executed the REAL installed is-odd@3.0.1 (+ is-number@6.0.0) against
+#             the full probe matrix above on 2026-06-24 — every RESULT/THROW/coercion
+#             claim is observed ground truth, not inferred. Specifically confirmed:
+#               isOdd(-3) === true, isOdd("5") === true, isOdd("4") === false,
+#               isOdd(0.5) throws Error('expected an integer'),
+#               isOdd({}) throws TypeError('expected a number'),
+#               isOdd(5n) throws TypeError('Cannot convert a BigInt value to a number'),
+#               the odd test is `%2===1` (not &1), made correct by leading Math.abs.
+# =====================================================================

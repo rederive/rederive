@@ -1,0 +1,319 @@
+UNIT unionValue
+KIND STATE
+ORACLE-CLASS deterministic
+SIG unionValue(obj: object, prop: string, value: any) -> object   # returns the SAME (mutated) obj
+DEPENDS-ON none   # SELF-CONTAINED. The full semantics of get-value@3.0.1, set-value@3.0.3,
+                  # isobject@3.0.1 are INLINED below. union-value@2.0.1 does NOT use arr-union /
+                  # is-extendable — it defines its OWN flatten/unique/union (see BEHAVIOR §4).
+                  # is-plain-object is a transitive dep of set-value but is ONLY referenced on
+                  # set-value's merge path, which unionValue never triggers (it calls set with no
+                  # options), so it is irrelevant to this unit and intentionally not inlined.
+
+# =====================================================================================
+# OVERVIEW
+# =====================================================================================
+# unionValue unions `value` into the ARRAY located at nested path `prop` inside `obj`,
+# deduplicating, MUTATING obj in place, and returning the same obj. It is the composition:
+#
+#   let arr = [].concat( first( GET(obj, prop), [] ) );
+#   SET(obj, prop, UNION(arr, [].concat( first(value, []) )));
+#   return obj;
+#
+# where GET is the inlined get-value path-read, SET is the inlined set-value path-write,
+# first/concat/union are union-value's own inline helpers. EVERY one is specified below.
+# The observable contract the oracle grades is the RETURNED (== same, mutated) obj.
+
+# =====================================================================================
+# BEHAVIOR  (ordered pipeline)
+# =====================================================================================
+
+BEHAVIOR
+
+# -------------------------------------------------------------------------------------
+# NODE 1 — ARGUMENT GUARDS (throw paths) — run FIRST, before anything else.
+# -------------------------------------------------------------------------------------
+# 1a. isObject(obj) test, where (this is union-value's OWN local isObject, line 6-8):
+#        isObject(val) := val != null  &&  typeof val === 'object'  &&  !Array.isArray(val)
+#     If isObject(obj) is FALSE -> throw new TypeError('expected the first argument to be an object').
+#     => THROWS for: null, undefined, any array, string, number, boolean, bigint, symbol, function.
+#     => Passes for: plain objects, objects from Object.create, Date, RegExp, boxed wrappers,
+#        and any non-array object. (Only the "is it an object and not an array" gate matters.)
+#
+# 1b. typeof prop === 'string' test.
+#     If prop is NOT a string -> throw new TypeError('expected the second argument to be a string').
+#     => THROWS for numbers (even integer indices), arrays, null, undefined, symbols, objects.
+#     => '' (empty string) PASSES the guard (it is a string).
+#
+# Both messages are EXACT and the error type is EXACTLY TypeError. Guard 1a precedes guard 1b.
+
+# -------------------------------------------------------------------------------------
+# NODE 2 — READ existing value via inlined GET(obj, prop)   [get-value@3.0.1 semantics]
+# -------------------------------------------------------------------------------------
+# unionValue calls get(obj, prop) with NO third argument. In get-value that means:
+#   options is not an object -> options = { default: <the 3rd arg> } = { default: undefined }.
+#   So options.default === undefined, splitChar === '.', joinChar === '.', and all of
+#   options.isValid / options.split / options.join / options.separator are absent.
+# Under these fixed options, GET reduces to the following pure path-read (target := obj,
+# path := prop, default := undefined):
+#
+#   GET(target, path):
+#     # isValidObject(v) := isObject_get(v) || Array.isArray(v) || typeof v === 'function'
+#     #   where isObject_get(v) := v != null && typeof v === 'object' && !Array.isArray(v)   (isobject@3.0.1)
+#     #   net: isValidObject is true for plain objects, arrays, and functions; false otherwise.
+#     if NOT isValidObject(target): return default(undefined)     # obj is always a non-array object here, so this is false at entry
+#
+#     # path is a string here (guaranteed by NODE 1b); the numeric-path branch never applies.
+#     isArray := false; isString := true
+#
+#     # --- FAST PATH: whole path is a literal own/inherited key ---
+#     if (path in target):                # the `in` operator => walks the PROTOTYPE CHAIN too
+#         return target[path]             # isValid is always true (no options.isValid) => returns target[path]
+#         # NOTE: this is why a literal-dot key like 'a.b' present as a single key is read DIRECTLY,
+#         #       even though SET (NODE 4) will SPLIT 'a.b' on '.'. This GET/SET asymmetry is REAL
+#         #       and observable (see SCOPE example "literal-dot key").
+#
+#     # --- SPLIT PATH ---
+#     segs := path.split('.')             # plain String.split on '.', no options.split
+#     len := segs.length; idx := 0
+#     loop:
+#       prop := segs[idx]                 # already a string
+#       # backslash-continuation: a segment ending in '\' joins with the NEXT segment using '.'
+#       while (prop is truthy AND prop ends with '\\'):
+#           prop := prop.slice(0,-1) + '.' + (segs[++idx] || '')
+#       if (prop in target):              # `in` => prototype chain included
+#           target := target[prop]
+#       else:
+#           # try to GREEDILY re-join this seg with following segs to match a literal-dot own/inherited key
+#           hasProp := false; n := idx+1
+#           while (n < len):
+#               prop := prop + '.' + segs[n++]
+#               if (prop in target):
+#                   target := target[prop]; idx := n-1; hasProp := true; break
+#           if (NOT hasProp): return default(undefined)
+#       while (++idx < len AND isValidObject(target)): continue loop body
+#       # loop exits when idx >= len OR target is no longer a valid object to descend into
+#     if (idx === len): return target
+#     return default(undefined)
+#
+#   Net effect for unionValue's purposes:
+#     - GET returns the value at the resolved path, or `undefined` if any segment is missing
+#       (or descent hit a non-descendable value before consuming the whole path).
+#     - GET reads through the prototype chain (the `in` operator).
+#     - GET prefers a single literal key matching the whole/joined path over splitting.
+
+# -------------------------------------------------------------------------------------
+# NODE 3 — BUILD the base array `arr`
+# -------------------------------------------------------------------------------------
+#   existing := GET(obj, prop)                      # from NODE 2
+#   base := first(existing, [])                     # first(...args) := args.find(v => v != null)
+#                                                   #   => existing if existing != null (i.e. not null AND not undefined),
+#                                                   #      else []  (the empty array).
+#   arr := [].concat(base)
+#     # [].concat(x): if x is an Array, its elements are spliced in (one level); otherwise x is
+#     #   pushed as a single element. So:
+#     #     existing is an array  -> arr is a shallow copy of that array (one-level flatten)
+#     #     existing is undefined/null -> base = [] -> arr = []
+#     #     existing is a non-null non-array scalar/object -> arr = [existing]   (WRAPPED)
+#     #   Examples (observed): existing 'foo' -> arr ['foo']; existing {x:1} -> arr [{x:1}];
+#     #                        existing 0 -> arr [0]; existing false -> arr [false];
+#     #                        existing '' -> arr ['']; existing [] -> arr [].
+
+# -------------------------------------------------------------------------------------
+# NODE 4 — BUILD the value array and UNION  (union-value's OWN inline helpers, lines 10-21)
+# -------------------------------------------------------------------------------------
+#   valArg := [].concat(first(value, []))
+#     # first(value, []) := value if value != null else []   (null OR undefined -> [])
+#     # [].concat(that): same one-level concat as NODE 3:
+#     #     value is array       -> shallow copy (one-level)
+#     #     value is null/undef  -> []
+#     #     value is scalar/obj  -> [value]   (WRAPPED as a single element)
+#
+#   result := union(arr, valArg)   where:
+#
+#     flatten(...args):                              # NOTE: this is the package's OWN flatten
+#       res := []
+#       flat(a):
+#         for ele of a:
+#           if Array.isArray(ele): flat(ele)         # RECURSE — flattens arrays to ARBITRARY depth
+#           else: res.push(ele)
+#       flat(args)                                   # args is [arr, valArg]; both are arrays, so
+#       return res                                   #   their elements (recursively, any nested arrays
+#                                                    #   among them too) are flattened into res.
+#       # => flatten(arr, valArg) DEEP-flattens: any nested arrays inside arr or valArg are
+#       #    flattened away to scalars. e.g. value [['x','y'],'z'] -> elements x,y,z;
+#       #    value [[['x']]] -> element x.
+#
+#     unique(a):
+#       return a.filter((v, i) => a.indexOf(v) === i)
+#       # a.indexOf uses STRICT EQUALITY (===), scanning from the front. Keep an element only
+#       # if its FIRST occurrence is at the current index. Dedup semantics:
+#       #   - primitives compared by ===: 1 and '1' are DISTINCT; 0/false/''/null each distinct.
+#       #   - objects/arrays compared by REFERENCE: same ref dedups; structurally-equal-but-
+#       #     different refs do NOT dedup (e.g. {x:1} vs another {x:1} -> both kept).
+#       #   - undefined dedups against undefined (indexOf finds it) -> collapses to one.
+#       #   - null dedups against null. null !== undefined, so a null and an undefined both survive.
+#       #   - NaN: indexOf(NaN) is ALWAYS -1 (NaN !== NaN), so the predicate `-1 === i` is never
+#       #     true -> EVERY NaN element is DROPPED ENTIRELY. (Observed: value NaN -> result [];
+#       #     existing [NaN] union NaN -> [].)  This is a genuine, load-bearing quirk.
+#
+#     union(arr, valArg) := unique(flatten(arr, valArg))
+#
+#   So `result` = the deep-flattened concatenation of (existing-as-array ++ value-as-array)
+#   with first-occurrence-wins strict-=== dedup and all NaN removed.
+
+# -------------------------------------------------------------------------------------
+# NODE 5 — WRITE back via inlined SET(obj, prop, result)   [set-value@3.0.3 semantics]
+# -------------------------------------------------------------------------------------
+# unionValue calls set(obj, prop, result) with NO options. In set-value:
+#   isObject_set(v) := v !== null && (typeof v === 'object' || typeof v === 'function')
+#                      # NOTE: DIFFERENT from get/union-value isObject — arrays AND functions
+#                      #       count as objects here.
+#   if NOT isObject_set(target): return target            # obj is a non-array object -> passes
+#   path is a string (guaranteed) -> not the early-return-on-bad-path branch.
+#   merge := undefined (no options).
+#
+#   # split (set-value's OWN split; memoized, but memo is behavior-transparent):
+#   SPLIT(path):
+#     char := '.'
+#     keys := path.split('.')
+#     res := []
+#     for i in 0..keys.length-1:
+#       prop := keys[i]
+#       # backslash-continuation: segment ending in '\' AND a following key exists ->
+#       #   join with literal '.' (UN-escaping the '\.'):
+#       while (prop is truthy AND prop ends with '\\' AND keys[i+1] != null):
+#           prop := prop.slice(0,-1) + '.' + keys[++i]
+#       res.push(prop)
+#     return res
+#
+#   keys := SPLIT(prop).filter(isValidKey)
+#     # isValidKey(key): coerce non-string/non-number key to String, then
+#     #   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
+#     # => segments exactly equal to '__proto__', 'constructor', or 'prototype' are DROPPED
+#     #    (prototype-pollution guard). e.g. '__proto__.polluted' -> keys ['polluted'];
+#     #    'constructor.x' -> keys ['x'].
+#   len := keys.length
+#   orig := target
+#
+#   # FAST PATH: no options AND exactly one key -> assign directly at top level.
+#   if (len === 1):                      # (options is always absent here)
+#       target[keys[0]] := result        # result()-with-no-merge is a plain assignment
+#       return orig
+#
+#   # GENERAL PATH: walk/create intermediates.
+#   for i in 0..len-1:
+#       prop := keys[i]
+#       if NOT isObject_set(target[prop]):   # if intermediate is not an object/function/array...
+#           target[prop] := {}               # ...overwrite it with a fresh empty object
+#                                            # (arrays and functions are objects to set => NOT overwritten;
+#                                            #  a non-array scalar/null/undefined intermediate IS overwritten)
+#       if (i === len-1):
+#           target[prop] := result          # final assignment (plain, no merge)
+#           break
+#       target := target[prop]              # descend
+#   return orig
+#
+#   Net effect:
+#     - SET creates/overwrites a chain of plain objects along the dotted path and writes `result`
+#       at the leaf. It ALWAYS splits on '.', regardless of whether GET found a literal-dot key.
+#     - Existing array/function intermediates are descended into (not replaced); the leaf key is
+#       set on them (e.g. {a:[1,2]}, 'a.b' sets a non-index property 'b' on the array a, which is
+#       INVISIBLE to JSON.stringify of the array but present; this is an OUT-OF-ENVELOPE oracle
+#       input — see SCOPE).
+#     - The leaf write REPLACES whatever was there with `result` (the freshly unioned array).
+#       A new array object is written; the original array (if any) at the path is NOT the same
+#       reference (union built a new array). For the single-key fast path the same is true.
+
+# -------------------------------------------------------------------------------------
+# NODE 6 — RETURN obj  (the SAME, now-mutated object).
+# -------------------------------------------------------------------------------------
+#   return obj   # identity-preserving: unionValue(o, ...) === o. The oracle compares the
+#                # returned (mutated) obj by structural value.
+
+# =====================================================================================
+# WORKED RESULTS (all VERIFIED by running union-value@2.0.1)
+# =====================================================================================
+#   unionValue({}, 'a', 'x')                         -> {"a":["x"]}
+#   unionValue({}, 'a', ['x','y'])                    -> {"a":["x","y"]}
+#   unionValue({a:['x','y']}, 'a', ['y','z'])         -> {"a":["x","y","z"]}        # dedup append
+#   unionValue({a:['x']}, 'a', 'x')                   -> {"a":["x"]}                 # duplicate skipped
+#   unionValue({}, 'a.b.c', 'x')                      -> {"a":{"b":{"c":["x"]}}}     # dotted create
+#   unionValue({a:{b:{c:['x']}}}, 'a.b.c', ['x','y']) -> {"a":{"b":{"c":["x","y"]}}}
+#   unionValue({a:'foo'}, 'a', 'bar')                 -> {"a":["foo","bar"]}         # non-array existing WRAPPED then unioned
+#   unionValue({a:5}, 'a', 6)                         -> {"a":[5,6]}
+#   unionValue({a:{x:1}}, 'a', 'bar')                 -> {"a":[{"x":1},"bar"]}       # existing object wrapped as element
+#   unionValue({a:['x']}, 'a', [])                    -> {"a":["x"]}                 # empty value array -> no-op append
+#   unionValue({a:['x']}, 'a', null)                  -> {"a":["x"]}                 # null value -> []
+#   unionValue({a:['x']}, 'a', undefined)             -> {"a":["x"]}                 # undefined value -> []
+#   unionValue({a:null}, 'a', 'x')                    -> {"a":["x"]}                 # existing null -> base []
+#   unionValue({a:undefined}, 'a', 'x')               -> {"a":["x"]}                 # existing undefined -> base []
+#   unionValue({}, 'a', 0)                            -> {"a":[0]}
+#   unionValue({}, 'a', false)                        -> {"a":[false]}
+#   unionValue({}, 'a', NaN)                          -> {"a":[]}                    # NaN dropped by unique()
+#   unionValue({a:[NaN]}, 'a', NaN)                   -> {"a":[]}                    # all NaN dropped
+#   unionValue({}, 'a', [['x','y'],'z'])              -> {"a":["x","y","z"]}         # deep flatten of value
+#   unionValue({}, 'a', [[['x']]])                    -> {"a":["x"]}
+#   unionValue({a:0}, 'a', 'x')                       -> {"a":[0,"x"]}               # existing 0 kept (0 != null)
+#   unionValue({a:''}, 'a', 'x')                      -> {"a":["","x"]}
+#   unionValue({a:false}, 'a', 'x')                   -> {"a":[false,"x"]}
+#   unionValue({a:[]}, 'a', 'x')                      -> {"a":["x"]}
+#   unionValue({}, '', 'x')                           -> {"":["x"]}                  # empty-string prop is valid
+#   unionValue({'a.b':['x']}, 'a.b', 'y')             -> {"a.b":["x"],"a":{"b":["x","y"]}}  # GET/SET ASYMMETRY
+#   unionValue({}, 'a\\.b', 'x')                      -> {"a.b":["x"]}               # escaped dot -> literal-dot key
+#   unionValue({}, 'a\\.b.c', 'x')                    -> {"a.b":{"c":["x"]}}         # 'a.b' one key, 'c' nested
+#   unionValue({}, 'a..b', 'x')                       -> {"a":{"":{"b":["x"]}}}      # empty middle segment
+#   unionValue({}, '.a', 'x')                         -> {"":{"a":["x"]}}
+#   unionValue({}, 'a.', 'x')                         -> {"a":{"":["x"]}}
+#   unionValue({}, '0', 'x')                          -> {"0":["x"]}
+#   unionValue({a:['x','y']}, 'a.0', 'z')             -> {"a":[["x","z"],"y"]}       # read a[0]='x', union ['x','z'], write into a[0]
+#   unionValue({}, '__proto__.polluted', 'x')         -> {"polluted":["x"]}          # __proto__ seg dropped; NO pollution
+#   unionValue({}, 'constructor.x', 'v')              -> {"x":["v"]}                 # constructor seg dropped
+#   unionValue({a:[1,'1']}, 'a', [1,'1',2])           -> {"a":[1,"1",2]}             # 1 !== '1', strict dedup
+#   unionValue({}, 'a', {z:1})                        -> {"a":[{"z":1}]}             # object value wrapped
+#   unionValue({a:['x']}, 'a', {z:1})                 -> {"a":["x",{"z":1}]}
+#   THROWS: unionValue(null|undefined|[]|'hi'|5, 'a', 'x') -> TypeError('expected the first argument to be an object')
+#   THROWS: unionValue({}, 5|['a','b']|null, 'x')          -> TypeError('expected the second argument to be a string')
+
+ORACLE value -> oracle.json
+# Deterministic, pure-in / mutated-out. No seam (no clock/RNG/env/io). The oracle records the
+# RETURNED (== same, mutated) obj as the structural value. Throw paths are recorded as {__throw}.
+
+# =====================================================================================
+# SCOPE
+# =====================================================================================
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): everything in BEHAVIOR NODES 1-6 — the two type
+#   guards (+ exact messages), the inlined get-value path-read (fast-key + split + backslash
+#   join + prototype-chain `in` + greedy literal-dot re-join), the first()/[].concat() base
+#   and value array construction (null/undefined -> [], scalars/objects WRAPPED, arrays
+#   one-level-spliced), the inline deep-flatten + strict-=== first-occurrence dedup + NaN-drop
+#   union, and the inlined set-value path-write (split, isValidKey __proto__/constructor/
+#   prototype drop, single-key fast path, intermediate object/array/function vs scalar
+#   overwrite rule, leaf replace). Identity-preserving return.
+#
+# CARRIED DATA: none. There is no large literal table; all behavior is algorithmic.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they do not
+#   survive the JSON oracle codec, or because their observable effect is unserializable):
+#   - `value` or `obj`-embedded values that are: undefined as an ARRAY ELEMENT, NaN, a bigint,
+#     a Symbol, a function, or a boxed primitive. The unit still PROCESSES these per NODE 4/5
+#     (undefined/NaN handling is specified above), but the RESULT or the INPUT is not
+#     JSON-round-trippable, so it cannot be a graded oracle input. A blind re-emitter still
+#     reconstructs the documented behavior from this SIR.
+#   - obj/intermediate values that are arrays or functions written through (e.g. {a:[1,2]} with
+#     prop 'a.b' sets a non-index 'b' property on the array): the mutation is real but invisible
+#     to a JSON structural comparison, so excluded from graded inputs.
+#   - obj built via Object.create(proto) / non-own inherited reads: GET reads through the
+#     prototype chain (specified), but the prototype is lost by JSON, so not a graded input.
+#   - circular references in obj/value: not JSON-serializable -> excluded.
+#   No stateful external mutators, no side APIs, no global state (set.memo is an internal
+#   performance cache and is behavior-transparent).
+
+PROVENANCE union-value@2.0.1 (jonschlinkert/union-value, MIT) — index.js.
+  Inlined dependency semantics read from the SAME installed tree:
+    get-value@3.0.1 (jonschlinkert/get-value, MIT) — index.js
+    set-value@3.0.3 (jonschlinkert/set-value, MIT) — index.js
+    isobject@3.0.1 (jonschlinkert/isobject, MIT) — index.js
+  is-plain-object@2.0.4 present (set-value dep) but UNREACHED by this unit (no merge option).
+  Source tree: /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-union_value-lTB1ww/node_modules
+  All BEHAVIOR claims verified by executing union-value@2.0.1 (see WORKED RESULTS).

@@ -1,0 +1,214 @@
+UNIT toString
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+# READ-ONLY pure coercion. No clock/RNG/env/fs/net seam exists, so the
+# seam-injection / quarantine machinery is N/A. The function's result is a pure
+# function of its single argument, with TWO caveats documented under SCOPE:
+#   - host JS-engine native string-coercion behavior (`value + ''`, native
+#     Array/TypedArray join, Object.prototype.toString tag) is part of the
+#     contract and is stable across conforming engines for the IN-SCOPE values;
+#   - a Date argument's coercion is timezone/locale-dependent (NON-deterministic
+#     across hosts) and is therefore EXCLUDED from the generator (see SCOPE).
+
+SIG  toString(value: any) -> string
+# Single positional arg. No options. Always returns a string OR THROWS a
+# TypeError on the documented throw-paths below. CommonJS single-function export.
+
+DEPENDS-ON none
+# Zero runtime deps. Self-contained module. The internal helpers isObjectLike /
+# isSymbol / baseToString are PRIVATE and inlined into this one unit; reproduce
+# them inline, do not treat them as separate catalog leaves.
+
+BEHAVIOR
+# ============================ TOP-LEVEL (toString) ==========================
+# toString(value):
+#   1. NULLISH GUARD (loose-equality, catches BOTH null and undefined):
+#        if (value == null) return '';
+#      NOTE: `== null` is TRUE for exactly `null` and `undefined` (and nothing
+#      else — NOT for 0, '', false, NaN). This is the ONLY place nullish ->
+#      empty string. baseToString itself does NOT map nullish to ''.
+#   2. Otherwise return baseToString(value).
+#
+# ============================ baseToString(value) ==========================
+# Exact branch order (THIS ORDER IS LOAD-BEARING):
+#
+#   B1. STRING FAST-PATH:
+#         if (typeof value === 'string') return value;          # returned AS-IS, identity
+#       (Empty string '' is already handled by step 1's nullish guard? NO — '' is
+#        NOT nullish, so '' reaches baseToString and returns '' via B1. Either way
+#        result is ''.)
+#
+#   B2. SYMBOL PATH:
+#         if (isSymbol(value)) {
+#           return symbolToString ? symbolToString.call(value) : '';
+#         }
+#       isSymbol(value) is TRUE iff:
+#           typeof value === 'symbol'
+#         OR (isObjectLike(value) && Object.prototype.toString.call(value) === '[object Symbol]')
+#       where isObjectLike(v) === (!!v && typeof v === 'object').
+#       (The 2nd disjunct catches boxed Symbol objects, i.e. Object(Symbol()).)
+#       symbolToString is `Symbol.prototype.toString` captured at module load
+#       (it exists in any modern engine), so the realized result is
+#       `Symbol.prototype.toString.call(value)`, i.e. the String(sym) form:
+#           Symbol('x')            -> 'Symbol(x)'
+#           Symbol()               -> 'Symbol()'      (no description)
+#           Symbol.iterator        -> 'Symbol(Symbol.iterator)'
+#       The `: ''` fallback only fires in an engine with NO Symbol global; on a
+#       Symbol-supporting host it is dead code. Re-emitter MAY hard-code the
+#       Symbol.prototype.toString.call(value) result for the symbol path.
+#       (Raw Symbols are EXCLUDED from genInputs — non-round-trippable; see SCOPE.)
+#
+#   B3. GENERIC COERCION + (-0) SENTINEL (everything else: numbers, bigint,
+#       boolean, array, plain object, Set, Map, typed array, regexp, ...):
+#         var result = (value + '');                            # (i)
+#         return (result == '0' && (1 / value) == -INFINITY)    # (ii)
+#                  ? '-0'
+#                  : result;
+#       where INFINITY = 1 / 0 (i.e. +Infinity), so -INFINITY = -Infinity.
+#
+#       (i)  `value + ''` performs the standard ECMAScript ToPrimitive(hint
+#            String)/ToString. This is what produces nested-array flattening,
+#            object [object Tag], etc. — NOT any lodash recursion. THERE IS NO
+#            ARRAY BRANCH in this version. The operator's "arrays map baseToString
+#            recursively" hypothesis is WRONG mechanically (though it coincides on
+#            plain numeric arrays); the real mechanism is native coercion. This
+#            distinction MATTERS at the edges (see arrays below).
+#
+#       (ii) The (-0) sentinel: the `&&` SHORT-CIRCUITS. The first operand
+#            `result == '0'` is checked first. Only when result is exactly the
+#            string '0' does it evaluate `1 / value`. `result == '0'` is loose
+#            equality, but result is already a string here so it is a plain
+#            string compare to '0'. `(1 / value) == -INFINITY` is TRUE only when
+#            value is negative zero (-0): 1/-0 === -Infinity, whereas 1/+0 ===
+#            +Infinity. So:
+#                -0  -> result '0', 1/-0 = -Infinity -> returns '-0'
+#                +0  -> result '0', 1/+0 = +Infinity -> returns '0'
+#            THROW SUBTLETY: when value is 0n (bigint zero), (i) gives result
+#            '0' (0n + '' === '0'), so (ii)'s 2nd operand `1 / 0n` IS evaluated
+#            and THROWS `TypeError: Cannot mix BigInt and other types`. This is
+#            the ONLY bigint that throws (it is the only bigint whose coercion
+#            equals '0'). All other bigints (1n, -5n, 123n, ...) yield their
+#            decimal string and skip the 1/value evaluation. See THROW-PATHS.
+#
+# ----------------------- REALIZED MAPPINGS (in-scope) -----------------------
+# Nullish:
+#   null                 -> ''           (step 1)
+#   undefined            -> ''           (step 1)
+# Strings (B1, identity):
+#   ''                   -> ''
+#   'hello'              -> 'hello'
+#   any string s         -> s            (returned unchanged, no escaping)
+# Numbers (B3):
+#   0                    -> '0'
+#   -0                   -> '-0'         (SENTINEL fires)
+#   42                   -> '42'
+#   -7                   -> '-7'
+#   3.14                 -> '3.14'
+#   NaN                  -> 'NaN'
+#   Infinity             -> 'Infinity'
+#   -Infinity            -> '-Infinity'
+#   (general number n: n + '' i.e. ECMAScript Number::toString base 10)
+# BigInt (B3):
+#   1n                   -> '1'
+#   -5n                  -> '-5'
+#   123n                 -> '123'
+#   100000000000000000000n -> '100000000000000000000'
+#   0n                   -> THROWS TypeError (see THROW-PATHS)
+# Booleans (B3):
+#   true                 -> 'true'
+#   false                -> 'false'
+# Arrays (B3, via native Array.prototype.join(',') of String()-coerced elements;
+#         null/undefined ELEMENTS coerce to '' inside join; nested arrays flatten
+#         the same way recursively because each element is itself String-coerced):
+#   []                   -> ''
+#   [1,2,3]              -> '1,2,3'
+#   [1,[2,3]]            -> '1,2,3'
+#   [1,[2,[3,4]]]        -> '1,2,3,4'
+#   [null,undefined,1]   -> ',,1'        (nullish elements -> empty between commas)
+#   ['a','b']            -> 'a,b'
+#   [1,'x',true,null]    -> '1,x,true,'
+#   [[]]                 -> ''           (single empty-array element -> '')
+#   [[],[]]              -> ','          (two empty -> ['',''].join(',') = ',')
+#   [[[]]]               -> ''
+#   [-0]                 -> '0'          (!!) native array join does NOT preserve
+#                                        the -0 sign — the sentinel is only at the
+#                                        TOP LEVEL on the scalar value, not on
+#                                        array elements. So [-0] !== '-0'.
+#   [NaN]                -> 'NaN'        (Array join maps NaN element to 'NaN')
+#   [Symbol('a')]        -> THROWS TypeError (see THROW-PATHS)
+# Plain objects (B3, via Object.prototype.toString / default ToString):
+#   {a:1}                -> '[object Object]'
+#   {toString(){return 'custom'}} -> 'custom'   (honors own toString)
+# Structured codec types (B3 native coercion):
+#   new Set([...])       -> '[object Set]'   (Set has no custom toString)
+#   new Map([...])       -> '[object Map]'   (Map has no custom toString)
+#   Uint8Array([1,2,3])  -> '1,2,3'          (typed-array join, like a plain array)
+#   /ab+c/gi             -> '/ab+c/gi'        (RegExp.prototype.toString -> source+flags)
+#   /x/                  -> '/x/'
+#
+# ----------------------------- THROW-PATHS ----------------------------------
+# These are reachable from CODEC-FAITHFUL inputs and ARE graded (recorded as a
+# thrown TypeError). A re-emitter that faithfully writes `value + ''` and the
+# `&& (1/value)` sentinel reproduces them NATURALLY — do NOT add guards.
+#   T1. 0n (bigint zero): `1 / 0n` throws TypeError
+#       ("Cannot mix BigInt and other types, use explicit conversions").
+#   T2. array (or typed array) CONTAINING a symbol element, e.g. [Symbol('a')]:
+#       native join calls String() on the symbol -> TypeError
+#       ("Cannot convert a Symbol value to a string"). The whole call throws.
+#   (Engine error MESSAGE text may vary by host; the harness grades that a throw
+#    of the right kind occurred, not exact message bytes.)
+
+ORACLE value -> oracle.json
+# Each oracle record: input args-tuple [value], expected = the returned string,
+# OR a recorded throw {__throw:...} for T1/T2. The harness computes expecteds by
+# running the real package; the blind re-emitter is graded against them.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce EXACTLY, inline): the nullish guard, baseToString's
+#   3-branch order (string fast-path -> isSymbol -> generic coerce), isSymbol's
+#   two-disjunct test, isObjectLike, the `value + ''` coercion, and the
+#   `result == '0' && (1/value) == -INFINITY ? '-0' : result` sentinel. INFINITY
+#   = 1/0. symbolToString captured as Symbol.prototype.toString. ALL of the
+#   REALIZED MAPPINGS above are in-scope and each is demonstrated by genInputs
+#   (self-consistent: every value class the generator can emit is mapped here).
+#
+# CARRIED DATA: NONE. No literal tables. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - RAW SYMBOLS as the top-level value (Symbol('x') etc.): the symbol PATH is
+#     fully specified above (B2), but a primitive Symbol does NOT survive the
+#     harness codec (JSON.stringify(encode(args)) cannot carry a Symbol — Symbol
+#     is absent from the codec's round-trip set). Emitting one would POISON the
+#     held-out (stored expected computed from a corrupted/dropped arg). So the
+#     generator does NOT emit raw symbols. The behavior is still reconstructible
+#     by a blind engineer from B2. (Arrays containing symbols are ALSO excluded
+#     for the same reason — the symbol element would not round-trip.)
+#   - Date arguments: coercion is TIMEZONE/LOCALE-dependent (e.g.
+#     'Wed Dec 31 1969 19:00:00 GMT-0500 (Eastern Standard Time)'), i.e.
+#     NON-deterministic across hosts. Excluded from genInputs to avoid false
+#     divergence. (The unit itself remains deterministic given a fixed host.)
+#   - Buffer (Node Buffer.from(...)): `buf + ''` yields a Node-version-specific
+#     latin1 byte string (NOT the '1,2,3' join a plain Uint8Array gives).
+#     Excluded to avoid cross-Node-version drift. (Plain Uint8Array IS in-scope.)
+#   - Object.create(null) / objects with a null prototype: `value + ''` THROWS
+#     'Cannot convert object to primitive value' (no inherited toString). Behavior
+#     is deterministic, but excluded from genInputs to keep the curated set
+#     focused; documented here so a blind engineer is not surprised — a faithful
+#     `value + ''` reproduces the throw with no special handling.
+#   - Functions: would coerce via Function.prototype.toString to source text,
+#     which is engine/representation-sensitive; non-round-trippable as a value;
+#     excluded. Not part of the demonstrated contract.
+#   - No side effects, no mutation, no external state: side-effect / injection
+#     seam machinery is N/A for this unit.
+#
+# RE-EMITTER TARGET SHAPE (mandatory): emit an ES module whose DEFAULT export is
+#   the function, i.e. `export default function toString(value) { ... }` (or
+#   `const toString = ...; export default toString;`). This unit is the package's
+#   CommonJS single-function export; the blind .mjs must `export default <fn>`.
+
+PROVENANCE
+# lodash.tostring@4.1.4 (npm). Repo: lodash/lodash (custom modularized build,
+# `lodash modularize exports="npm" -o ./`). License: MIT (jQuery Foundation;
+# based on Underscore.js 1.8.3). Source file: index.js (single file, 137 lines).
+# Source read at:
+#   /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-lodash_tostring-2Kis5U/node_modules/lodash.tostring/index.js

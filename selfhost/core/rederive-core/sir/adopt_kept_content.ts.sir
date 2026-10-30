@@ -1,0 +1,38 @@
+UNIT adopt_kept_content
+LANG ts
+PRIMARY-SHA256 f12abd39c819e36f544857da0f077f9d078ddb864b0e67ccf6ab80e83e8b7ecc
+SIG export default function adopt_kept_content(unmanaged: string, managed: string): string[]
+ABI TypeScript compiles to the js runtime: text = string (UTF-16 code units); list[text] = string[] (a fresh array).
+  STRICT: the artifact must type-check under strict: true against this SIG, with no any, no non-null assertions (!),
+  and no @ts-ignore / @ts-expect-error. A null match result must be handled by narrowing, not asserted away; an open
+  item or fence is a nullable local narrowed before use.
+ENVELOPE as the primary: text only (the typed SIG admits nothing else).
+MECHANISM (restated from js — language files are self-contained) LF-READ and R2 = text.split('\n') with each line
+  replace(/\r$/, ''); unmanaged R1 = rejoin then trim(); managed R1 = rejoin, slice after the BEGIN match, slice before
+  the END match, trim() (its set is BLANK); ONE-LINE FENCE = ONELINE.test(line) and line.trim().length > 6; FENCE LINE =
+  FENCE.test(line) and not ONE-LINE FENCE; RUN = FENCE_RUN.exec(line)?.[1] ?? ''; CLOSES = RUN(line) non-empty, same first
+  character and at least as long as RUN(opener), and line.trim().slice(RUN.length).trim() empty; HEADING and LIST as the pins below (no m, s or u flag: \s is BLANK, the dot
+  excludes NOTDOT, $ is the end of the line); heading body = group 2 trimmed, list BODY = group 2 untrimmed; fragments = when
+  RAW.test(body): [body.trim()] minus empties; otherwise replace(MASK, record the span, return
+  '\u0000' + index + '\u0000'), split(SPLIT), each piece replace(UNMASK, the recorded span — the strict replacer must
+  return string, so narrow the lookup, e.g. ?? ''; every index is recorded), trim, drop empties; KEY = when RAW.test(fragment): '\u0002' + fragment; otherwise split(CODESPAN), a
+  part starting and ending with a backtick of length at least 2 -> '\u0001' + slice(1, -1) + '\u0001', else
+  toLowerCase(), join, replace(/\s+/g, ' '), trim(); LINE KEY = replace(/\s+/g, ' ').trim(); PROSE LISTs are string[][],
+  R9's test a contiguous-window comparison at every start index (an index past the end is a mismatch, never a match);
+  KEY LINES = [line] for a one-element ONE-LINE FENCE; [opener, ...slice(1, -1) minus blank lines] when
+  length > 1 and CLOSES(opener, last line); otherwise []; the BLOCK
+  KEYs a Set<string>.
+DEPENDS-ON none
+PINNED regex BEGIN = /<!--\s*rederive:begin\b(?:(?!<!--)[\s\S])*?-->/ CITED R1 — adopt.mts BEGIN_RE (managed text only)
+PINNED regex END = /<!--\s*rederive:end\s*-->/ CITED R1 — adopt.mts END_RE (managed text only)
+PINNED regex FENCE = /^\s*(?:```|~~~)/ CITED R2 — adopt.mts isFence (and not ONELINE)
+PINNED regex FENCE_RUN = /^\s*(`{3,}|~{3,})/ CITED R2 — adopt.mts fenceRun, closesFence
+PINNED regex ONELINE = /^\s*```.*```\s*$/ CITED R4 — adopt.mts isOneLineFence (and line.trim().length > 6)
+PINNED regex HEADING = /^(#{1,6})\s+(.+)$/ CITED R4 — adopt.mts HEADING_RE
+PINNED regex LIST = /^\s*(\d+\.|[-*])\s+(.*)$/ CITED R5 — adopt.mts extractItems
+PINNED regex MASK = /`[^`]*`/g CITED R6 — adopt.mts splitSentences, each match replaced by '\u0000' + index + '\u0000'
+PINNED regex SPLIT = /(?<=[.!?]["')\]]?)\s+(?=[A-Z`(\u0000])/ CITED R6 — adopt.mts splitSentences
+PINNED regex UNMASK = /\u0000(\d+)\u0000/g CITED R6 — adopt.mts splitSentences, replaced by spans[Number(k)]
+PINNED regex RAW = /[\u0000\u0001]/ CITED R6 R7 — adopt.mts splitSentences and normalizeForMatch, the uncut raw branch
+PINNED regex CODESPAN = /(`[^`]*`)/ CITED R7 — adopt.mts normalizeForMatch
+PROVENANCE rederive@c7b0916ed08a cli/lib/adopt.mts — this file states the typed SIG and the dialect only; no behavior.

@@ -1,0 +1,1592 @@
+{
+ "unit": "ts_sig_of",
+ "sig": "ts_sig_of(sig: text) -> record[exportName: text | none, fnType: text]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "export default function bytes(value: unknown, options?: unknown): string | number | null",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "none"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(value: unknown, options?: unknown) => string | number | null",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function pick<T>(xs: readonly T[], f: (x: T) => boolean): T | null",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "pick",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "<T>(xs: readonly T[], f: (x: T) => boolean) => T | null",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "export const x = 1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is not an exported function declaration: export const x = 1"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "export default function f(a: string)",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG declares no return type: export default function f(a: string)"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "export   default\tfunction\t\tf(a: string):\tstring",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "none"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: string) => string",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": " \t export function f(a: string): string \t ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: string) => string",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T extends (x: number) => void>(a: T): T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "<T extends (x: number) => void>(a: T) => T",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T extends '>'>(a: T, b: \"(\"): T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "<T extends '>'>(a: T, b: \"(\") => T",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"x;y=z//`\", b: 'it\\'s ) any'): \"never\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"x;y=z//`\", b: 'it\\'s ) any') => \"never\"",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): string = impl as never; //",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): string = impl as never; //"
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: string): string; export const g = 1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: string): string; export const g = 1"
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): any",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function f(): any"
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(...a: never[]): unknown",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function f(...a: never[]): unknown"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: x.any, b: $never, c: company): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: x.any, b: $never, c: company) => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: typeof x): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses typeof / import / infer — a contract type names no value: export function f(a: typeof x): s"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f (a): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG has no parameter list: export function f (a): s"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a)\n: string",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a)\n: string"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG declares no return type: export function f(): "
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"unterminated): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"unterminated) => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: number; b: boolean }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => { a: number; b: boolean }",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(o: { a: string; b?: number }): void",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(o: { a: string; b?: number }) => void",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: number }; s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): { a: number }; s"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: number }}; s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): { a: number }}; s"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): s } { a; b }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => s } { a; b }",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T>\t (a: T): T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "<T>(a: T) => T",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: T = 1): string",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: T = 1): string"
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function café(): string",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG has no parameter list: export function café(): string"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: string): s t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: string): s t"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): : x, y",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => : x, y",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a; b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => { a; b",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"{\"): s; t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: \"{\"): s; t"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: \"};\"; b: 1 }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => { a: \"};\"; b: 1 }",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T extends { a: 1; b: 2 }>(x: T): T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "<T extends { a: 1; b: 2 }>(x: T) => T",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: { b: 1; }; c: 2 }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => { a: { b: 1; }; c: 2 }",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: 1; b = 2 }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): { a: 1; b = 2 }"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): { a: never; }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function f(): { a: never; }"
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(); : { a; }",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(); : { a; }"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: { any: string }): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function f(a: { any: string }): s"
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): ﻿",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG declares no return type: export function f(): ﻿"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): import(\"m\").T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses typeof / import / infer — a contract type names no value: export function f(): import(\"m\").T"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T>(a: T): T extends Array<infer U> ? U : T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses typeof / import / infer — a contract type names no value: export function f<T>(a: T): T extends Array<infer U> ? U : T"
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: x.typeof, b: importer, c: infers, d: $infer, e: Typeof): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: x.typeof, b: importer, c: infers, d: $infer, e: Typeof) => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function typeof(): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses typeof / import / infer — a contract type names no value: export function typeof(): s"
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"x y typeof z\", b: ' '): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"x y typeof z\", b: ' ') => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(...a: (string & number)[]): ReturnType<typeof JSON.parse>",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses typeof / import / infer — a contract type names no value: export function f(...a: (string & number)[]): ReturnType<typeof JSON.parse>"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(...a: (string & number)[]): unknown, x: T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(...a: (string & number)[]) => unknown, x: T",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<>(): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "<>() => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T>x(): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG has no parameter list: export function f<T>x(): s"
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T>>(a): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG has no parameter list: export function f<T>>(a): s"
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f<T = number>(a: T): T",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f<T = number>(a: T): T"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: (b: number) => string): (c: d) => e",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: (b: number) => string) => (c: d) => e",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): s ==> t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): s ==> t"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): a >= b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): a >= b"
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): s /* c */",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): s /* c */"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): `t`",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): `t`"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): s ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(): s "
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f():\u000bstring",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => \u000bstring",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f():",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => ",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a): string",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a) => string",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): s. any",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function f(): s. any"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): éany",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function f(): éany"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(): anyX | xnever | never_ | any$",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "() => anyX | xnever | never_ | any$",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function any(): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG uses any or never, which every artifact satisfies: export function any(): s"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"a\\\"b)\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"a\\\"b)\") => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: 'a\"b)'): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: 'a\"b)') => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"a\nb;\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"a\nb;\") => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"a\\\nb;\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: \"a\\\nb;\"): s"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"a\\ b\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "SIG is more than one declaration (a ; = comment or line break outside a literal type): export function f(a: \"a\\ b\"): s"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"a\\b)\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"a\\b)\") => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"x\\\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"x\\\") => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"\\\\\", b: \")\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"\\\\\", b: \")\") => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "export function f(a: \"x\\\")\"): s",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "exportName",
+      {
+       "t": "text",
+       "v": "f",
+       "cu": "utf8"
+      }
+     ],
+     [
+      "fnType",
+      {
+       "t": "text",
+       "v": "(a: \"x\\\")\") => s",
+       "cu": "utf8"
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "canonicalSha256": "b7af1ff5d882a1c38e1e295315e7798a8886bca35249f5a5a3359cb511ca0f71"
+}

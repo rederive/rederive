@@ -1,0 +1,252 @@
+# =============================================================================
+# SIR — lodash.tolength
+# =============================================================================
+UNIT toLength
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toLength(value: any) -> number          # default export; module.exports = toLength
+DEPENDS-ON none                              # zero deps; all helpers are inlined below
+ORACLE value -> oracle.json
+
+# -----------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# -----------------------------------------------------------------------------
+# The original is a CommonJS default export: `module.exports = toLength`.
+# The blind re-emitter MUST emit an ES module whose DEFAULT export is the function:
+#     export default function toLength(value) { ... }
+#   (or)  const toLength = ...; export default toLength;
+# The function is PURE and READ-ONLY: it never mutates `value`, reads no ambient
+# state (no clock/RNG/env/fs/net), and has no seam. Same input -> same output.
+# Reconstruct EVERYTHING below inline; do NOT assume lodash is available.
+
+# -----------------------------------------------------------------------------
+# CONSTANTS (exact, from source)
+# -----------------------------------------------------------------------------
+# INFINITY          = 1 / 0                        # i.e. +Infinity
+# MAX_INTEGER       = 1.7976931348623157e+308      # == Number.MAX_VALUE
+# NAN               = 0 / 0                         # i.e. NaN
+# MAX_ARRAY_LENGTH  = 4294967295                    # == 2^32 - 1   (the clamp upper bound)
+# symbolTag         = '[object Symbol]'
+# reTrim     = /^\s+|\s+$/g                          # leading+trailing whitespace
+# reIsBadHex = /^[-+]0x[0-9a-f]+$/i                  # SIGNED hex string -> rejected as NaN
+# reIsBinary = /^0b[01]+$/i
+# reIsOctal  = /^0o[0-7]+$/i
+# freeParseInt = parseInt                            # the global parseInt
+# objectToString = Object.prototype.toString
+
+# -----------------------------------------------------------------------------
+# BEHAVIOR — top-level pipeline (toLength)
+# -----------------------------------------------------------------------------
+# toLength(value):
+#   return value ? baseClamp(toInteger(value), 0, MAX_ARRAY_LENGTH) : 0
+#
+# NODE T1 (falsy short-circuit): if `value` is FALSY -> return 0 immediately.
+#   JS falsy set: 0, -0, NaN, "", null, undefined, false, AND 0n (BigInt zero).
+#   CRITICAL ORDERING CONSEQUENCE: the falsy test happens BEFORE any numeric
+#   coercion, so falsy inputs NEVER reach toInteger/toNumber. This is why:
+#       - NaN     -> 0      (falsy; short-circuits; never clamped)
+#       - ""      -> 0      (falsy)
+#       - 0 / -0  -> 0      (falsy; note: returns the literal 0, i.e. +0, NOT -0;
+#                            Object.is(toLength(-0), 0) === true)
+#       - 0n      -> 0      (BigInt zero is falsy -> short-circuit -> never throws)
+#   The returned 0 here is the integer literal `0` (positive zero).
+#
+# NODE T2 (truthy): for any TRUTHY value -> return baseClamp(toInteger(value), 0, MAX_ARRAY_LENGTH).
+#   Compute r = toInteger(value) first (see below), then clamp into [0, 4294967295].
+
+# -----------------------------------------------------------------------------
+# baseClamp(number, lower, upper)   — here called as baseClamp(r, 0, 4294967295)
+# -----------------------------------------------------------------------------
+# baseClamp(number, lower, upper):
+#   if (number === number) {                 # i.e. number is NOT NaN
+#     if (upper !== undefined) number = number <= upper ? number : upper;   # cap at upper
+#     if (lower !== undefined) number = number >= lower ? number : lower;   # floor at lower
+#   }
+#   return number
+#
+# With lower=0, upper=4294967295 (both defined):
+#   - if r is NaN -> returned unchanged (NaN). BUT NaN cannot occur here in practice:
+#     toInteger never returns NaN (it maps non-finite/NaN to 0), and the only way to
+#     reach baseClamp is via the truthy branch. Still, define it faithfully: NaN passes through.
+#   - else:  r > 4294967295        -> 4294967295   (cap)
+#            r < 0                  -> 0            (floor; this is the integer literal 0 = +0)
+#            0 <= r <= 4294967295   -> r            (unchanged)
+#   ORDER: cap-to-upper is applied FIRST, then floor-to-lower. (Result is identical to
+#   min/max here, but preserve the documented order.)
+
+# -----------------------------------------------------------------------------
+# toInteger(value)  — truncate toward zero
+# -----------------------------------------------------------------------------
+# toInteger(value):
+#   result    = toFinite(value)
+#   remainder = result % 1
+#   return result === result ? (remainder ? result - remainder : result) : 0
+#
+# Semantics:
+#   - result = toFinite(value)  (always a FINITE number or 0; see toFinite).
+#   - TRUNCATION TOWARD ZERO via (result - (result % 1)):
+#       JS `%` keeps the sign of the dividend, so result - (result%1) drops the
+#       fractional part toward zero for BOTH signs:
+#         3.2  -> 3.2 - 0.2  = 3
+#         3.9  -> 3.9 - 0.9  = 3
+#        -3.9  -> -3.9 - (-0.9) = -3      (then later clamped to 0 by baseClamp floor)
+#        -0.5  -> -0.5 - (-0.5) = 0
+#         0.9999 -> 0
+#   - If remainder is 0 (already integer, incl. +/-0): return result unchanged.
+#   - The `result === result` guard maps NaN->0, but toFinite never returns NaN, so
+#     in practice result is always finite here. Keep the guard for fidelity.
+
+# -----------------------------------------------------------------------------
+# toFinite(value)  — coerce to a finite number, mapping +/-Infinity to +/-MAX_INTEGER
+# -----------------------------------------------------------------------------
+# toFinite(value):
+#   if (!value) return value === 0 ? value : 0          # falsy: 0/-0 returned as-is, all other falsy -> 0
+#   value = toNumber(value)
+#   if (value === INFINITY || value === -INFINITY) {
+#     sign = value < 0 ? -1 : 1
+#     return sign * MAX_INTEGER                          # +Inf -> 1.7976931348623157e+308 ; -Inf -> -that
+#   }
+#   return value === value ? value : 0                   # NaN -> 0, else the number
+#
+# NOTE: within toLength, toFinite is only reached for TRUTHY values (T2 branch),
+# so the `!value` guard inside toFinite is effectively dead for the toLength path
+# (value is already known truthy). Reconstruct it anyway; it does not change results.
+# Effect: +Infinity input -> MAX_INTEGER (~1.8e308) -> toInteger keeps it (integer) ->
+# baseClamp caps to 4294967295. -Infinity -> -MAX_INTEGER -> toInteger keeps it ->
+# baseClamp floors to 0.
+
+# -----------------------------------------------------------------------------
+# toNumber(value)  — the string/object coercion core
+# -----------------------------------------------------------------------------
+# toNumber(value):
+#   if (typeof value == 'number') return value                       # numbers pass through
+#   if (isSymbol(value))          return NaN                         # symbol -> NaN (out-of-envelope; see SCOPE)
+#   if (isObject(value)) {                                           # object or function
+#     other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#     value = isObject(other) ? (other + '') : other                # if valueOf still object -> String(other)
+#   }
+#   if (typeof value != 'string') return value === 0 ? value : +value  # non-string -> unary +
+#   # --- value is now a string ---
+#   value = value.replace(/^\s+|\s+$/g, '')                          # TRIM leading/trailing whitespace
+#   isBinary = /^0b[01]+$/i.test(value)
+#   if (isBinary || /^0o[0-7]+$/i.test(value))
+#       return parseInt(value.slice(2), isBinary ? 2 : 8)            # 0b.. base2, 0o.. base8 (strip prefix)
+#   return /^[-+]0x[0-9a-f]+$/i.test(value) ? NaN : +value           # SIGNED hex -> NaN, else unary +
+#
+# isObject(v)     = !!v && (typeof v == 'object' || typeof v == 'function')   # null -> false
+# isObjectLike(v) = !!v && typeof v == 'object'
+# isSymbol(v)     = typeof v == 'symbol' || (isObjectLike(v) && Object.prototype.toString.call(v) == '[object Symbol]')
+#
+# STRING COERCION RULES (verified against the real package):
+#   "42"        -> 42         (+ "42")
+#   "  10  "    -> 10         (trim then +; whitespace-padded numerics OK)
+#   "  42  "    -> 42
+#   "-5"        -> -5  (toNumber) -> toInteger -5 -> baseClamp floor -> 0
+#   "1e3"       -> 1000
+#   "3.9"       -> 3.9 -> toInteger 3
+#   ".5"        -> 0.5 -> toInteger 0
+#   "1."        -> 1
+#   ""          -> never reaches toNumber for toLength (falsy short-circuit -> 0)
+#   "   "       -> TRUTHY string -> toNumber: trim to "" -> +"" === 0 -> toLength 0
+#   "abc"       -> +"abc" = NaN -> toFinite NaN -> 0 -> toLength 0
+#   "Infinity"  -> +"Infinity" = +Infinity -> toFinite -> MAX_INTEGER -> clamp 4294967295
+#   "-Infinity" -> -Infinity -> toFinite -> -MAX_INTEGER -> toInteger keeps -> floor 0
+#   "0x1f"      -> NOT signed -> +"0x1f" = 31         (JS hex literal coercion)
+#   "0X1F"      -> NOT signed -> +"0X1F" = 31
+#   "0xZZ"      -> NOT signed -> +"0xZZ" = NaN -> 0
+#   "-0x1f"     -> SIGNED hex matches reIsBadHex -> NaN -> 0
+#   "+0x1f"     -> SIGNED hex matches reIsBadHex -> NaN -> 0
+#   "0b101"     -> binary -> parseInt("101", 2) = 5
+#   "  0b101  " -> trimmed -> binary -> 5
+#   "0B101"     -> binary (case-insensitive) -> 5
+#   "0b102"     -> '2' not [01] -> NOT binary -> +"0b102" = NaN -> 0
+#   "0o17"      -> octal -> parseInt("17", 8) = 15
+#   "0o18"      -> '8' not [0-7] -> NOT octal -> +"0o18" = NaN -> 0
+#
+# OBJECT / NON-PRIMITIVE COERCION (verified):
+#   isObject branch unboxes via valueOf, else stringifies:
+#   []                 -> valueOf() returns the array (still object) -> String([])  = ""    -> +"" = 0
+#                          (note: "" here is reached AFTER the toLength truthy check, since
+#                           [] is truthy. trim("")="" , +"" = 0)
+#   [5]                -> String([5]) = "5"   -> 5
+#   [5,6]              -> String([5,6]) = "5,6" -> +"5,6" = NaN -> 0
+#   {}                 -> valueOf() returns {} (object) -> String({}) = "[object Object]" -> NaN -> 0
+#   {valueOf:()=>7}    -> valueOf() = 7 (number, not object) -> +7 = 7
+#   new Number(42)     -> valueOf() = 42 -> 42
+#   new String("99")   -> valueOf() = "99" (string) -> coerced as string -> 99
+#   /ab/  (RegExp)     -> valueOf() returns regexp (object) -> String = "/ab/" -> NaN -> 0
+#   new Set([1,2])     -> valueOf() returns set (object) -> String = "[object Set]" -> NaN -> 0
+#   new Map()          -> String = "[object Map]" -> NaN -> 0
+#   new Uint8Array([7])    -> valueOf() returns the typed array (object) -> String = "7"   -> 7
+#   new Uint8Array([7,8])  -> String = "7,8" -> NaN -> 0
+#   Buffer.from([9])   -> String = (byte 9 = TAB char) -> not numeric -> NaN -> 0
+#                          (Buffer toString is utf8 of the bytes; non-numeric -> 0)
+
+# -----------------------------------------------------------------------------
+# BIGINT BEHAVIOR (verified by running the real package)
+# -----------------------------------------------------------------------------
+#   0n   -> 0       (BigInt zero is FALSY -> toLength T1 short-circuit -> 0; NEVER throws)
+#   5n, 123n, -5n, 99999999999n, any NONZERO bigint
+#        -> THROWS  TypeError: "Cannot convert a BigInt value to a number"
+#   WHY: nonzero bigint is truthy -> T2 -> toInteger -> toFinite -> toNumber.
+#        In toNumber: typeof 5n == 'bigint' (not 'number'), not a symbol, not an object
+#        (typeof bigint == 'bigint'), not a string -> reaches `+value` (unary plus on a
+#        BigInt) which THROWS TypeError per ECMAScript.
+#   The blind re-emitter MUST reproduce this throw exactly for nonzero bigints
+#   (recorded by the harness as {__throw}). 0n must return 0 (not throw).
+
+# -----------------------------------------------------------------------------
+# RESULT-VALUE NOTE (codec / grading)
+# -----------------------------------------------------------------------------
+# The output is always a NON-NEGATIVE integer in [0, 4294967295], or it THROWS.
+#   - It is never NaN, never negative, never a float, never -0
+#     (the floor produces the literal +0).
+#   - Output is always JSON-safe (a small/medium nonneg integer).
+
+# -----------------------------------------------------------------------------
+# SCOPE
+# -----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   the falsy short-circuit, baseClamp [0, 4294967295] (cap-then-floor),
+#   toInteger truncate-toward-zero, toFinite (+/-Inf -> +/-MAX_INTEGER, NaN -> 0),
+#   toNumber (number passthrough, object valueOf/stringify, string trim +
+#   binary/octal/signed-hex regex handling), and the nonzero-bigint TypeError throw.
+#
+# CARRIED DATA: none. All constants are tiny literals reproduced inline above.
+#
+# OUT-OF-CONTRACT: none (pure, read-only; no side effects, no seam, no global state).
+#
+# OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because the harness codec
+# cannot faithfully round-trip them — a blind re-emitter still reconstructs behavior
+# from this spec):
+#   - Symbol primitive (typeof 'symbol'): toNumber returns NaN -> toFinite 0 ->
+#     toLength 0. (But a Symbol is TRUTHY, so it reaches toNumber; result is 0.)
+#     Not round-trippable as JSON -> excluded from genInputs.
+#   - Functions: truthy -> isObject true -> valueOf() returns the function (object)
+#     -> String(fn) (the source text) -> NaN -> 0. Not codec-faithful -> excluded.
+#   - Symbol objects, exotic host objects: same reasoning; excluded from generation.
+
+# -----------------------------------------------------------------------------
+# DIVERGENCES FROM THE OPERATOR HINT (documented)
+# -----------------------------------------------------------------------------
+# Hint pseudo-code: "if (!value) return 0; value = toInteger(value); if (value<0) return 0;
+#                    if (value>MAX) return MAX; return value"
+#   This is BEHAVIORALLY EQUIVALENT to the real source for all in-envelope inputs,
+#   but the actual structure differs and these nuances must be honored:
+#   1. Real code is `value ? baseClamp(toInteger(value), 0, MAX_ARRAY_LENGTH) : 0`
+#      (single expression; baseClamp caps-then-floors). The hint's branch ordering
+#      gives the same result but the SIR specifies the real cap-then-floor order.
+#   2. "bigint throws" — TRUE ONLY FOR NONZERO bigint. `0n` is falsy -> returns 0,
+#      does NOT throw. The hint over-generalized; the exact rule is in the BigInt section.
+#   3. Hint omitted the rich toNumber string handling: signed-hex (reIsBadHex) -> NaN,
+#      binary `0b`/octal `0o` via parseInt, unsigned `0x` hex coercion, whitespace trim,
+#      and object valueOf/stringify unboxing. All specified above.
+#   4. MAX_ARRAY_LENGTH = 4294967295 (= 2^32 - 1) confirmed exactly in source.
+#   5. toInteger truncates TOWARD ZERO (via result - result%1), confirmed for both signs.
+#   6. -0 input returns +0 (not -0): falsy short-circuit returns the literal 0.
+
+# -----------------------------------------------------------------------------
+PROVENANCE lodash.tolength@4.0.4 ; repo lodash/lodash ; MIT license ;
+#            source file: index.js (custom modularized build); SPDX: MIT
+#            (the toLength/toInteger/toFinite/toNumber helpers are the standard
+#             lodash 4.x implementations as of the 4.0.4 modular publish)

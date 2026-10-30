@@ -1,0 +1,164 @@
+UNIT indexOf
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG indexOf(array, value, fromIndex) -> number
+# Default export. In the emitter: `export default <fn>` where <fn> is a single
+# function named indexOf with arity 3. (Source: `module.exports = indexOf`.)
+DEPENDS-ON none   # zero runtime deps; all helpers (toInteger/toNumber/baseIndexOf/indexOfNaN) are inlined below
+
+# =====================================================================================
+# PURPOSE
+# Returns the index of the FIRST occurrence of `value` in `array`, searching forward
+# from `fromIndex`, using strict equality (===) for all values EXCEPT NaN, which IS
+# found (the key differentiator vs native Array.prototype.indexOf). Returns -1 if not
+# found. READ-ONLY: the input array is never mutated.
+# =====================================================================================
+
+BEHAVIOR
+# ---- TOP-LEVEL PIPELINE: indexOf(array, value, fromIndex) ----
+# Node 1  length resolution + empty/nullish short-circuit
+#   length = array ? array.length : 0      # `array ?` is JS truthiness: null/undefined/0/""/NaN/false => length 0
+#   if (!length) return -1                  # covers null, undefined, [], and any falsy `array`, and any
+#                                           # `array` whose .length is falsy (0). NOTE: `array.length` is read
+#                                           # WITHOUT type-checking array; a string arg uses its .length and
+#                                           # char-indexing (see SCOPE / out-of-envelope note).
+#
+# Node 2  coerce fromIndex via toInteger (see TOINTEGER below)
+#   fromIndex = toInteger(fromIndex)
+#
+# Node 3  negative-wrap
+#   if (fromIndex < 0) fromIndex = max(length + fromIndex, 0)   # Math.max; clamps the start to 0
+#   # (fromIndex >= 0 is left as-is, EVEN IF >= length; baseIndexOf then simply returns -1.)
+#
+# Node 4  delegate to baseIndexOf(array, value, fromIndex)  (see BASEINDEXOF below)
+#   return baseIndexOf(array, value, fromIndex)
+
+# ---- BASEINDEXOF(array, value, fromIndex) ----
+#   BRANCH B1: if (value !== value)   # i.e. value is NaN (the ONLY value not === itself)
+#       return indexOfNaN(array, fromIndex)         # NaN-finding path (see INDEXOFNAN)
+#   BRANCH B2: else (strict-equality scan)
+#       index = fromIndex - 1
+#       length = array.length
+#       while (++index < length):
+#           if (array[index] === value) return index
+#       return -1
+#   # Notes on B2 ===:
+#   #   - +0 === -0 is TRUE, so searching for -0 finds a +0 element and vice-versa.
+#   #   - distinct object references are NOT equal; same reference IS (objects/arrays/
+#   #     functions/RegExp/Set/Map/Uint8Array/Buffer compared by identity).
+#   #   - bigint elements/values use === with type-strictness: 5n===5n true, 5n===5 false.
+#   #   - reading array[index] on a sparse hole yields undefined (=== undefined matches a
+#   #     literal undefined value/search-target).
+
+# ---- INDEXOFNAN(array, fromIndex)  [called with fromRight=undefined → forward scan] ----
+#   length = array.length
+#   index  = fromIndex + (-1)            # fromRight is falsy → -1
+#   while (++index < length):            # forward
+#       other = array[index]
+#       if (other !== other) return index   # first element that is NaN (other !== other)
+#   return -1
+#   # Equivalent to B2 but matching on "element is NaN" instead of "element === value".
+#   # The same already-resolved (coerced + wrapped) fromIndex is used as the start.
+
+# ---- TOINTEGER(value)  (this is the divergence-prone seam — specify EXACTLY) ----
+# Constants: INFINITY = Infinity ; MAX_INTEGER = 1.7976931348623157e+308 ; NAN = NaN.
+#   Step T1: if (!value)                 # falsy fromIndex: undefined, null, 0, -0, "", false, NaN
+#                return value === 0 ? value : 0
+#            # => 0 for ALL falsy inputs. (value===0 is true for both 0 and -0, returning the
+#            #    original 0/-0, which is numerically 0 for the < 0 test and the arithmetic below;
+#            #    -0 is NOT < 0, so it does not trigger negative-wrap.)
+#   Step T2: value = toNumber(value)     # see TONUMBER below (only reached for truthy `value`)
+#   Step T3: if (value === Infinity || value === -Infinity):
+#                sign = (value < 0 ? -1 : 1)
+#                return sign * MAX_INTEGER          # +Inf → 1.7976931348623157e+308 ; -Inf → its negation
+#   Step T4: remainder = value % 1
+#            return value === value ? (remainder ? value - remainder : value) : 0
+#            # value===value is false only for NaN → returns 0.
+#            # Otherwise truncate toward ZERO: if remainder!=0, value - remainder.
+#            #   3.9 → 3 ; -3.9 → -3 ; -3.5 → -3 ; 0.5 → 0 (but 0.5 truthy so reaches here) ; integers unchanged.
+#            #   NOTE remainder of a fraction in (0,1) like 0.5: 0.5%1=0.5 → 0.5-0.5=0.
+#
+# ---- TONUMBER(value) (only invoked from toInteger T2, i.e. value already known truthy) ----
+#   Step N1: if (isObject(value)):       # isObject: !!value && (typeof==='object' || typeof==='function')
+#                other = isFunction(value.valueOf) ? value.valueOf() : value
+#                value = isObject(other) ? (other + '') : other
+#            # For a plain Array, valueOf returns the array itself (still object) → coerced to string via (arr+'')
+#            #   e.g. [4] → "4" ; [] → "" ; [1,2] → "1,2". Plain {} valueOf → {} (object) → "[object Object]".
+#   Step N2: if (typeof value !== 'string'):
+#                return value === 0 ? value : +value      # numeric/boolean/etc. coercion via unary +
+#            # booleans: true→1, false→0 (but false is falsy, never reaches toNumber). +true===1.
+#            # bigint: +<bigint> THROWS TypeError ("Cannot convert a BigInt value to a number") — see THROWS.
+#   Step N3: value = value.replace(/^\s+|\s+$/g, '')       # reTrim: strip leading/trailing whitespace
+#            isBinary = /^0b[01]+$/i.test(value)            # reIsBinary
+#            if (isBinary || /^0o[0-7]+$/i.test(value)):    # reIsOctal
+#                return parseInt(value.slice(2), isBinary ? 2 : 8)   # "0b101"→5, "0o7"→7
+#            if (/^[-+]0x[0-9a-f]+$/i.test(value)):         # reIsBadHex (signed hex) → NaN
+#                return NaN                                  # → toInteger T4 returns 0
+#            return +value                                   # plain numeric string ("3"→3, "3.9"→3.9, "0x5"→5,
+#                                                            #   "abc"→NaN→toInteger 0, ""→0 but "" is falsy so
+#                                                            #   never reaches here)
+
+# ---- WORKED COERCION EXAMPLES (all confirmed against the real package) ----
+#   undefined      → toInteger 0
+#   null           → 0
+#   0 / -0         → 0   (and not negative-wrapped)
+#   false          → 0
+#   true           → 1
+#   NaN            → 0
+#   3              → 3
+#   3.9            → 3        -3.9 → -3        -3.5 → -3        0.5 → 0
+#   "3"            → 3        "3.9" → 3 (then truncated to 3)   "  4  " → 4
+#   "abc"          → NaN → 0
+#   ""             → 0 (falsy)
+#   "0x5"          → 5        "-0x5" → NaN → 0 (bad signed hex)
+#   "0b101"        → 5        "0o7"  → 7
+#   Infinity       → 1.7976931348623157e+308   (huge positive → fromIndex >= length → search yields -1)
+#   -Infinity      → -1.7976931348623157e+308  (huge negative → negative-wrap → max(length+(-huge),0)=0)
+#   []             → "" → +"" = 0
+#   [4]            → "4" → 4         [1,2] → "1,2" → NaN → 0
+#   {}             → "[object Object]" → NaN → 0
+#   5e-324         → 0 (truthy, but %1 ≈ itself → value - remainder = 0)
+
+# ---- NEGATIVE-WRAP MATH (Node 3), confirmed ----
+#   array length L, coerced fromIndex f (f < 0):  start = max(L + f, 0).
+#   e.g. L=4, f=-2 → start 2.  L=10, f=-3 (from -3.9 trunc) → start 7.  L=4, f=-100 → start 0.
+
+# ---- THROWS ----
+#   - A bigint `fromIndex` THROWS TypeError "Cannot convert a BigInt value to a number"
+#     (toNumber N2 does `+value` on a non-string non-zero bigint). This is an in-contract
+#     throw reachable by a codec-faithful input → graded as {__throw}. (bigint as an ARRAY
+#     ELEMENT or as the search VALUE does NOT throw — those go through === only.)
+#   - No other documented throw for codec-faithful inputs. (A non-array/non-string `array`
+#     with no `.length` is not in envelope; see SCOPE.)
+
+# ---- READ-ONLY ASSERTION ----
+#   indexOf performs NO writes: it only reads array.length and array[index]. The input
+#   array MUST be byte-for-byte unchanged after the call. (Confirmed: [1,2,3] unchanged.)
+
+ORACLE value -> oracle.json
+# Pure deterministic value oracle: expected = real indexOf(...args). No seam, no clock,
+# no RNG, no I/O. throw-paths recorded as {__throw}.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the full pipeline above — length short-circuit,
+#   toInteger coercion (all sub-branches), negative-wrap, baseIndexOf strict-equality scan,
+#   indexOfNaN NaN-finding scan, +0/-0 ===, reference identity for objects, bigint type-strict
+#   ===, the bigint-fromIndex throw.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - `array` argument that is neither a real Array nor a string: only `array ? array.length`
+#     and integer-indexing are used, so any "array-like" with a numeric .length would be
+#     indexed; behavior is well-defined but the generator stays within real arrays (+ documents
+#     the string-as-array char-indexing case below). A string `array` ("abc") indexes by char
+#     with === (e.g. indexOf("abc","b")===1) — defined, but NOT emitted (codec stores arrays).
+#   - FUNCTION-typed array elements or search value: identity (===) compared; functions do not
+#     survive the JSON/encode codec round-trip → NOT emitted; behavior follows the === rule.
+#   - SYMBOL elements/values: not codec-round-trippable → NOT emitted; behavior follows ===.
+#   - boxed primitives (new Number(5)/new String/new Boolean): NOT codec-round-trippable AND
+#     identity-compared (never === a primitive) → NOT emitted. Documented: never matches a
+#     primitive element.
+#   - bigint as `fromIndex`: documented THROW above; the generator MAY emit it as a throw-path
+#     (codec round-trips bigint) — see genInputs note. bigint as element/value IS emitted.
+
+PROVENANCE lodash.indexof@4.0.1 (lodash 4.0.1 Custom Build) — repo lodash/lodash — MIT —
+  source file: node_modules/lodash.indexof/index.js (module.exports = indexOf)

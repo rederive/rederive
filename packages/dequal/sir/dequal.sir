@@ -1,0 +1,336 @@
+UNIT dequal
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG dequal(foo: any, bar: any) -> boolean
+DEPENDS-ON none   # zero runtime dependencies; uses only Object.prototype.hasOwnProperty + built-in ctors
+
+# =============================================================================
+# OVERVIEW
+# =============================================================================
+# dequal is a pure, recursive deep-equality predicate. It returns a STRICT
+# boolean (the literal `true` or `false`, never a truthy/falsy proxy). It has
+# no seam (no clock/RNG/IO/net) and no side effects: it only reads its two
+# arguments. Equality is structural and constructor-gated. Recursion is
+# unbounded (deeply nested structures recurse); there is NO cycle guard (a
+# self-referential input would infinitely recurse / RangeError — but the oracle
+# codec cannot encode cycles, so that path is OUT-OF-ENVELOPE, see SCOPE).
+#
+# An internal helper `find(iter, tar)` exists ONLY to support object-keyed
+# Set/Map matching; it is not exported and is described inline below.
+
+# =============================================================================
+# EMISSION / INTERFACE CONTRACT (read this, blind re-emitter)
+# =============================================================================
+# Emit an ES module (.mjs) exposing a NAMED export `dequal`:
+#     export function dequal(foo, bar) { ... }
+# The grader resolves loadFn(module['dequal']) and calls dequal(foo, bar).
+# Return EXACTLY a boolean. Do not return objects/numbers. Do not throw on any
+# codec-faithful input (the only throw is unbounded recursion on a cyclic
+# input, which the codec cannot produce).
+#
+# Implementation note for the re-emitter: this is a single function plus a tiny
+# internal `find` helper. Reproduce the BRANCH ORDER below EXACTLY — the order
+# is observable (e.g. the `foo === bar` short-circuit fires before any
+# constructor logic, so two NaN-bearing references that are identity-equal
+# return true even though NaN !== NaN).
+
+# =============================================================================
+# BEHAVIOR  (exact ordered pipeline — reproduce verbatim)
+# =============================================================================
+# Let `ctor`, `len`, `tmp` be locals.
+#
+# NODE 1  — IDENTITY SHORT-CIRCUIT (fires FIRST, before everything):
+#     if (foo === bar) return true
+#   - Uses JS strict-equality `===`. Note `===` semantics:
+#       * 0 === -0  is TRUE  -> dequal(0, -0) returns true HERE (never reaches a
+#         sign-aware compare; dequal does NOT distinguish +0 from -0).
+#       * NaN === NaN is FALSE -> two DISTINCT NaN values do NOT short-circuit
+#         here; they are caught later by NODE 9 (the NaN tail). But the SAME
+#         reference passed as both args (identity) returns true here regardless
+#         of contents (including a function, a Symbol, a cyclic object, a Date).
+#       * Equal primitives of the same type (1===1, ''==='', true===true,
+#         Infinity===Infinity, 1n===1n, 'x'==='x') return true here.
+#       * Different-type primitives (1 vs '1', '' vs 0, true vs 1, null vs
+#         undefined, 0 vs false, 0 vs null) are NOT === -> fall through.
+#
+# NODE 2  — TRUTHY-OBJECT GATE + CONSTRUCTOR-IDENTITY CHECK:
+#     if (foo && bar && (ctor = foo.constructor) === bar.constructor) { ...NODE 3..8... }
+#   - `foo && bar` requires BOTH operands truthy. If EITHER is falsy
+#     (null, undefined, 0, -0, NaN, '', false), the whole block is SKIPPED and
+#     control goes to NODE 9.
+#       * Consequence: dequal(null, null) already returned true at NODE 1;
+#         dequal(null, {}) -> null falsy -> skip block -> NODE 9 -> false.
+#       * dequal(0, false): not === ; 0 falsy -> skip -> NODE 9 -> 0!==0 is false
+#         -> returns false.
+#   - `ctor = foo.constructor` is assigned, then compared `=== bar.constructor`.
+#     If the two constructors are NOT the SAME reference, the block is skipped
+#     and control goes to NODE 9 (which yields false for two non-NaN values).
+#       * Examples that DIFFER in constructor and thus -> NODE 9 -> false:
+#           [] (Array) vs {} (Object); Buffer vs Uint8Array; 1n (BigInt) vs 1
+#           (Number); a null-prototype object (ctor === undefined) vs a plain
+#           {} (ctor === Object).
+#       * For primitives that survived NODE 1 as different VALUES of the same
+#         type (2 vs 3): both truthy, both .constructor === Number (same ref) ->
+#         ENTERS block, matches none of NODE 3..8, falls to NODE 9 -> 2!==2 false
+#         -> returns false. (i.e. unequal same-type numbers are decided by the
+#         NaN tail returning false.)
+#       * Null-prototype objects: `Object.create(null)` has constructor ===
+#         undefined. Two null-proto objects: undefined === undefined is true,
+#         so the block IS entered (NODE 8 handles them via the `!ctor` arm).
+#
+#   Inside the block, branches are tested in THIS EXACT ORDER:
+#
+# NODE 3  — Date  (SPEC-ONLY; see SCOPE — excluded from oracle):
+#     if (ctor === Date) return foo.getTime() === bar.getTime()
+#   - Two Dates are equal iff their epoch-millisecond values are strict-equal.
+#     (Invalid Date getTime() is NaN, and NaN===NaN is false, so two Invalid
+#     Dates compare UNEQUAL here.) NOT exercised by the oracle: the factory
+#     codec has no Date tag.
+#
+# NODE 4  — RegExp:
+#     if (ctor === RegExp) return foo.toString() === bar.toString()
+#   - CRITICAL: equality is by `RegExp.prototype.toString()`, i.e. the string
+#     "/" + source + "/" + flags, where FLAGS ARE IN CANONICAL ORDER. JS
+#     normalizes flag order on construction, so /a/ig and /a/gi both toString to
+#     "/a/gi". Therefore:
+#       * /a/   vs /a/   -> "/a/"   === "/a/"   -> true
+#       * /a/g  vs /a/g  -> true
+#       * /a/gi vs /a/ig -> both "/a/gi" -> true  (flag-order independent)
+#       * /a/g  vs /a/i  -> "/a/g" vs "/a/i" -> false
+#       * /a/   vs /b/   -> false
+#     Do NOT implement this as raw `source` + raw-input flag concatenation;
+#     compare the canonical toString() forms (equivalently: source equal AND the
+#     SET of flags equal, since canonical order makes the flag strings equal).
+#
+# NODE 5  — Array:
+#     if (ctor === Array) {
+#         if ((len = foo.length) === bar.length) {
+#             while (len-- && dequal(foo[len], bar[len]));
+#         }
+#         return len === -1
+#     }
+#   - If lengths differ: the inner block is skipped, `len` still holds foo.length
+#     (> -1 unless foo was empty). Return `len === -1`. For unequal non-empty
+#     lengths this is false. (Empty-vs-empty already handled: foo.length 0, the
+#     `if` 0===0 true, the while `0-- ` evaluates `len-- ` => 0 (falsy) so loop
+#     body never runs and len becomes -1, return -1===-1 true.)
+#   - If lengths equal: iterate from highest index DOWN to 0, recursively
+#     dequal each element. The `while (len-- && ...)` decrements len and tests
+#     the PRE-decrement value for truthiness AND the recursive result. Loop
+#     stops either when a recursive compare returns false (short-circuit) or
+#     when len reaches -1 (all elements matched). Return `len === -1`:
+#       * len === -1  => every element matched => true.
+#       * len > -1    => stopped early on a mismatch => false.
+#     Elements compared recursively, so nested arrays/objects/etc. are deep.
+#     `undefined` elements: dequal(undefined, undefined) -> NODE 1 true;
+#     dequal(undefined, null) -> false. [1,2,3] vs [1,2] -> false (length).
+#
+# NODE 6  — Set:
+#     if (ctor === Set) {
+#         if (foo.size !== bar.size) return false
+#         for (len of foo) {                  # `len` reused as the member value
+#             tmp = len
+#             if (tmp && typeof tmp === 'object') {   # object member
+#                 tmp = find(bar, tmp)        # find a structurally-equal member in bar
+#                 if (!tmp) return false      # no structural match found
+#             }
+#             if (!bar.has(tmp)) return false
+#         }
+#         return true
+#     }
+#   - Sizes must be strict-equal first; differ -> false.
+#   - For each member of foo:
+#       * PRIMITIVE / falsy member (number, string, bool, null, 0, '', etc., or
+#         any non-object): tmp stays the member; require bar.has(tmp) (SameValueZero
+#         membership as Set.has uses) else false.
+#       * OBJECT (truthy, typeof 'object') member: call find(bar, member) which
+#         scans bar's members and returns the FIRST member m for which
+#         dequal(m, member) is true (deep structural match), else undefined. If
+#         no match (`!tmp`), return false. Otherwise re-bind tmp to that matched
+#         member reference and check bar.has(tmp) (true, since tmp came from bar).
+#   - Set equality is ORDER-INDEPENDENT (membership-based): {1,2,3} vs {3,2,1}
+#     -> true. Object members matched structurally: Set([{k:1}]) vs Set([{k:1}])
+#     -> true; Set([{k:1}]) vs Set([{k:2}]) -> false. Mixed primitive+object
+#     members supported. Note `find`'s guard returns undefined (falsy) when no
+#     match, which the `!tmp` check rejects.
+#
+# NODE 7  — Map:
+#     if (ctor === Map) {
+#         if (foo.size !== bar.size) return false
+#         for (len of foo) {                  # `len` is the [key, value] entry pair
+#             tmp = len[0]                     # key
+#             if (tmp && typeof tmp === 'object') {
+#                 tmp = find(bar, tmp)         # find structurally-equal KEY in bar
+#                 if (!tmp) return false
+#             }
+#             if (!dequal(len[1], bar.get(tmp))) return false   # compare VALUES
+#         }
+#         return true
+#     }
+#   - Sizes must match first.
+#   - For each [key, value] entry of foo:
+#       * PRIMITIVE key: tmp = key; compare dequal(foo-value, bar.get(key)).
+#         If bar lacks the key, bar.get returns undefined; the recursive dequal
+#         then decides (e.g. value vs undefined -> false unless value is also
+#         undefined). Mismatched value -> false.
+#       * OBJECT key (truthy, typeof 'object'): find a structurally-equal key in
+#         bar (find iterates bar.keys()); if none, return false; else rebind tmp
+#         to the matched key and compare dequal(foo-value, bar.get(tmp)).
+#   - Map equality is order-independent on keys; values compared RECURSIVELY
+#     (deep). Map([['a',1]]) vs Map([['a',2]]) -> false; Map([['a',{n:[1,2]}]])
+#     vs Map([['a',{n:[1,3]}]]) -> false; empty Map vs empty Map -> true.
+#
+# NODE 7b — find(iter, tar) helper (used by NODE 6 and NODE 7):
+#     function find(iter, tar) { for (key of iter.keys()) { if (dequal(key, tar)) return key } }
+#   - Iterates iter.keys() (for a Set, keys()===values()===the members; for a
+#     Map, keys()===the keys). Returns the first element deep-equal to `tar`,
+#     else undefined (implicit). Comparison is via dequal (recursive).
+#
+# NODE 8  — ArrayBuffer / DataView / typed-array (ArrayBuffer.isView) / plain object:
+#     if (ctor === ArrayBuffer) { foo = new Uint8Array(foo); bar = new Uint8Array(bar) }
+#     else if (ctor === DataView) {
+#         if ((len = foo.byteLength) === bar.byteLength) {
+#             while (len-- && foo.getInt8(len) === bar.getInt8(len));
+#         }
+#         return len === -1
+#     }
+#     if (ArrayBuffer.isView(foo)) {           # typed arrays (Uint8Array, etc.) + the rewrapped ArrayBuffer case
+#         if ((len = foo.byteLength) === bar.byteLength) {
+#             while (len-- && foo[len] === bar[len]);
+#         }
+#         return len === -1
+#     }
+#     if (!ctor || typeof foo === 'object') {  # plain object / null-proto object
+#         len = 0
+#         for (ctor in foo) {                  # `ctor` reused as the property-name iterator
+#             if (has.call(foo, ctor) && ++len && !has.call(bar, ctor)) return false
+#             if (!(ctor in bar) || !dequal(foo[ctor], bar[ctor])) return false
+#         }
+#         return Object.keys(bar).length === len
+#     }
+#   - ArrayBuffer (IN-ENVELOPE only if codec emits it — see SCOPE; codec emits
+#     Uint8Array/Buffer, not bare ArrayBuffer): rewrap both as Uint8Array, then
+#     fall into the isView byte compare.
+#   - DataView: SPEC-ONLY (codec has no DataView tag). byteLength compare then
+#     reverse signed-byte compare. Excluded from oracle.
+#   - TYPED-ARRAY / isView branch (THIS IS IN THE ORACLE — codec round-trips
+#     Uint8Array and Node Buffer):
+#       * Buffer's constructor is Buffer (a Uint8Array subclass). NODE 2's
+#         ctor-identity check means Buffer vs Buffer enters here; Uint8Array vs
+#         Uint8Array enters here; Buffer vs Uint8Array have DIFFERENT
+#         constructors -> never reach here -> NODE 9 -> false.
+#       * Compare byteLength; if equal, reverse element compare foo[len]===bar[len]
+#         (strict ===, numeric bytes). Return len === -1 (all bytes matched).
+#         Different length -> len > -1 -> false. Empty vs empty -> true.
+#       * Uint8Array([1,2,3]) vs Uint8Array([1,2,3]) -> true;
+#         Uint8Array([1,2,3]) vs Uint8Array([1,2,4]) -> false;
+#         Uint8Array([1,2,3]) vs Uint8Array([1,2]) -> false (length).
+#   - PLAIN-OBJECT branch `if (!ctor || typeof foo === 'object')` (THIS IS IN
+#     THE ORACLE): reached for plain Objects (ctor===Object) and null-proto
+#     objects (ctor===undefined, the `!ctor` arm). Algorithm:
+#       * len = 0 (count of foo's OWN enumerable keys actually visited).
+#       * for..in over foo (enumerates own + inherited enumerable keys; for the
+#         codec's plain objects there are no inherited enumerable keys, so this
+#         is effectively foo's own enumerable keys):
+#           - First test: `has.call(foo, key) && ++len && !has.call(bar, key)`.
+#             If key is foo's OWN property: increment len; if bar does NOT have
+#             that own key -> return false. (Note: ++len only happens for own
+#             keys; ` && ` short-circuits so for an inherited key len is not
+#             bumped.)
+#           - Second test: `!(key in bar) || !dequal(foo[key], bar[key])`.
+#             If key is not in bar (own OR inherited) OR the recursive value
+#             compare fails -> return false.
+#       * After the loop, return `Object.keys(bar).length === len`:
+#         bar must have EXACTLY as many own-enumerable keys as foo's counted
+#         own keys. This is the KEY-COUNT GUARD that makes the comparison
+#         symmetric:
+#           - {a:1} vs {a:1,b:2}: foo loop counts len=1 and all foo keys match
+#             bar; final check Object.keys(bar).length (2) === 1 -> FALSE.
+#           - {a:1,b:2} vs {a:1}: foo loop, key 'b' is own (++len) but
+#             !has.call(bar,'b') -> return false immediately.
+#           - {a:1,b:2} vs {a:1,c:2}: key 'b' own, bar has no own 'b' -> false.
+#           - Key order independent: {a:1,b:2} vs {b:2,a:1} -> true.
+#           - {a:undefined} vs {a:undefined} -> true (value undefined===undefined
+#             via NODE 1). {a:undefined} vs {} -> 'a' own in foo, bar lacks 'a'
+#             -> false. {} vs {a:undefined} -> foo empty loop, len=0,
+#             Object.keys(bar).length 1 === 0 -> false.
+#         Values compared RECURSIVELY (deep nesting, arrays/regex/sets inside).
+#
+# NODE 9  — NaN TAIL (the final fallthrough return):
+#     return foo !== foo && bar !== bar
+#   - This is reached when: NODE 1 didn't fire, AND (the NODE-2 block was
+#     skipped OR the block was entered but matched none of NODE 3..8 and fell
+#     out — e.g. two distinct same-type primitives).
+#   - `x !== x` is true ONLY for NaN. So this returns true IFF BOTH foo and bar
+#     are NaN:
+#       * NaN vs NaN -> true.
+#       * NaN vs 1   -> 1!==1 false -> false.
+#       * 1 vs 2     -> 1!==1 false -> false.
+#       * 1n vs 2n   -> 1n!==1n false -> false.
+#       * '' vs 0, null vs {}, [] vs {}, Buffer vs Uint8Array, 1 vs '1' -> false.
+#   - Returns a strict boolean.
+
+# =============================================================================
+# DECISION SUMMARY (return value for every reachable shape; strict boolean)
+# =============================================================================
+#   foo === bar (identity, incl. equal same-type primitives, 0/-0)   -> true
+#   both NaN                                                          -> true
+#   one NaN, other not                                               -> false
+#   different-type primitives (1 vs '1', null vs undefined, 0/false)  -> false
+#   either operand falsy and not identical (null vs {}, 0 vs null)    -> false
+#   different constructors (incl. Buffer vs Uint8Array, BigInt vs Num,
+#       null-proto vs plain {}, [] vs {})                             -> false
+#   RegExp: canonical toString() equal                               -> true/false
+#   Array: same length AND all elements deep-equal                   -> true/false
+#   Set: same size AND every member has a deep-equal counterpart      -> true/false
+#   Map: same size AND every entry's key+value deep-match             -> true/false
+#   typed-array/Buffer: same byteLength AND all bytes ===             -> true/false
+#   plain/null-proto object: same own-key COUNT AND all own keys
+#       present in both AND all values deep-equal                     -> true/false
+#   (Date, DataView, ArrayBuffer: spec-only, see SCOPE)
+
+ORACLE value -> oracle.json
+# Output is a strict boolean. Distinguishable; recorded directly. No seam.
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly; ALL exercised by genInputs, all of
+# whose values round-trip the factory codec — JSON primitives/arrays/plain
+# objects, RegExp, Set, Map, Uint8Array, Buffer, bigint, undefined, NaN,
+# ±Infinity, -0, boxed-free):
+#   - NODE 1 identity short-circuit (incl. same-ref, 0/-0, equal primitives,
+#     Infinity).
+#   - NODE 2 truthy gate + constructor-identity check (incl. differing-ctor
+#     and falsy-operand fallthrough).
+#   - NODE 4 RegExp (canonical toString()).
+#   - NODE 5 Array (length + reverse recursive).
+#   - NODE 6 Set (size + structural membership via find).
+#   - NODE 7 Map (size + key-match via find + recursive value compare).
+#   - NODE 8 typed-array/Buffer byte compare (Uint8Array, Buffer) AND
+#     plain-object / null-proto-object key-count + recursive compare.
+#   - NODE 9 NaN tail (incl. NaN-vs-NaN true, NaN-vs-number false, distinct
+#     same-type primitive false, bigint inequality false).
+#
+# CARRIED DATA: none. No literal tables. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; the blind
+# re-emitter STILL implements the branch from this spec, but the oracle does
+# not grade it because the factory codec cannot encode the value):
+#   - NODE 3 Date: codec has no Date tag. (Spec preserved above.)
+#   - NODE 8 DataView and bare ArrayBuffer: codec has no DataView/ArrayBuffer
+#     tag (it ships Uint8Array/Buffer instead). (Spec preserved above.)
+#   - Functions, Symbols: not codec-faithful (functions don't survive
+#     JSON.stringify(encode(...)); Symbols are identity-only). Behavior IS
+#     defined by the spec (a function passed as both args -> NODE 1 identity
+#     -> true; two distinct functions -> ctor Function===Function, none of
+#     NODE 3..8 match, NODE 9 -> false) but excluded from the generator.
+#   - Cyclic / self-referential structures: infinite recursion (no cycle
+#     guard). Codec cannot encode cycles; excluded.
+#   - undefined / NaN / ±Infinity / -0 as STANDALONE top-level args: these DO
+#     round-trip in the factory codec per the decomposer addendum and ARE
+#     emitted. (Note: undefined/NaN/±Infinity are NOT placed as array elements
+#     or object/Map values unless that specific composite round-trips; the
+#     generator keeps them at positions the codec preserves — see generator.)
+
+PROVENANCE dequal@2.0.3 — repo lukeed/dequal — MIT license — source file dist/index.js (CJS dist; the loaded `main`). Verified by executing the installed package across every branch (identity, constructor-dispatch Array/RegExp/Set/Map/typed-array/plain-object, NaN tail, +0/-0, 1-vs-'1', key-count mismatch, different-constructor, bigint, null-proto). Observed returns matched this SIR exactly.

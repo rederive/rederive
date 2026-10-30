@@ -1,0 +1,250 @@
+# SIR — Semantic Intermediate Representation
+# Authored by the SIGHTED decomposer. Language-neutral. Comments use '#' only.
+
+UNIT isTypedArray
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isTypedArray(value: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; all helpers are inlined below
+
+# ============================================================================
+# EXPORT SHAPE
+# ============================================================================
+# CommonJS source: `module.exports = isTypedArray`.
+# Emission target is a .mjs loaded via import(): the re-emitter MUST direct
+#   export default isTypedArray
+# i.e. the function itself is the module default export (importKind 'default').
+
+# ============================================================================
+# BEHAVIOR  (predicate: returns true iff `value` is a JS typed array)
+# ============================================================================
+# The real package selects ONE of two implementations at load time:
+#
+#   isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray
+#
+# where nodeIsTypedArray = (the Node 'util' binding).isTypedArray IF it can be
+# obtained via the legacy `process.binding('util')` call, else undefined.
+#
+# On the grading runtime (Node v24, VERIFIED) the Node fast path IS active, so
+# the real package runs `nodeIsTypedArray(value)` — i.e. Node's internal
+# util.types.isTypedArray, which inspects the [[TypedArrayName]] internal slot.
+#
+# BOTH paths are SPECIFIED to agree on the entire in-envelope input set (the
+# value set genInputs can emit). A blind re-emitter MAY implement EITHER:
+#   (A) the base path (tag-table predicate, fully specified below), OR
+#   (B) the node path:  v => util.types.isTypedArray(v)   (Node 'util' import)
+# Both produce identical results on every codec-faithful input in genInputs
+# (VERIFIED by execution — 0 mismatches across the in-envelope battery; see
+# PROVENANCE/verification note). Path (A) is the canonical, dependency-free
+# reconstruction and is RECOMMENDED.
+#
+# ---- BASE PATH (canonical reconstruction) ----------------------------------
+# baseIsTypedArray(value) returns the AND of three gates, short-circuiting:
+#
+#   NODE 1  isObjectLike(value)
+#           := (!!value) && (typeof value === 'object')
+#           # truthy AND typeof 'object'. null -> false (null is falsy AND
+#           # typeof 'object', the !! short-circuits it out). undefined ->
+#           # false. Numbers/strings/booleans/bigints/symbols/functions ->
+#           # false (typeof not 'object', or function not 'object').
+#           # NOTE: this is `!!value`, NOT `value != null`. They differ only
+#           # for falsy-but-typeof-object values, of which JS has NONE
+#           # (document.all is the lone host quirk; not in scope), so the two
+#           # forms are observationally identical here. Use either.
+#
+#   NODE 2  isLength(value.length)
+#           let n = value.length            # property read (NOT a throw site
+#                                           # for any in-envelope value)
+#           isLength(n) := (typeof n === 'number')
+#                          && (n > -1)
+#                          && (n % 1 === 0)         # integer-valued
+#                          && (n <= MAX_SAFE_INTEGER)
+#           MAX_SAFE_INTEGER = 9007199254740991     # 2^53 - 1, exact literal
+#           # A real typed array's own `.length` is a non-negative integer in
+#           # [0, MAX_SAFE_INTEGER] -> passes. A plain object lacking .length
+#           # has value.length === undefined -> typeof 'number' fails -> false.
+#           # An object {length: 3} passes this gate but fails NODE 3.
+#
+#   NODE 3  !!typedArrayTags[ Object.prototype.toString.call(value) ]
+#           # baseGetTag in THIS bundle is EXACTLY:
+#           #     objectToString.call(value)
+#           #     where objectToString = Object.prototype.toString
+#           # There is NO Symbol.toStringTag fast-path branch and NO
+#           # null/undefined special-casing in this version (those were added
+#           # in LATER lodash). It is a plain Object.prototype.toString.call.
+#           # The result string is looked up in the typedArrayTags table; a
+#           # missing key yields undefined -> !! -> false.
+#
+#   RESULT  NODE1 && NODE2 && NODE3   (all boolean; '&&' short-circuits)
+#
+# ---- typedArrayTags TABLE (complete, in-contract, NOT carried data) --------
+# A plain object map from "[object X]" tag strings to boolean. Build it
+# literally with these 24 entries (9 true, 15 false). Any tag NOT present
+# (e.g. "[object Null]", "[object Undefined]", "[object Symbol]",
+# "[object BigInt]", "[object Promise]", "[object GeneratorFunction]") is
+# absent -> lookup undefined -> false.
+#
+#   MAPPED TRUE  (the 9 typed-array kinds):
+#     "[object Float32Array]"      -> true
+#     "[object Float64Array]"      -> true
+#     "[object Int8Array]"         -> true
+#     "[object Int16Array]"        -> true
+#     "[object Int32Array]"        -> true
+#     "[object Uint8Array]"        -> true
+#     "[object Uint8ClampedArray]" -> true
+#     "[object Uint16Array]"       -> true
+#     "[object Uint32Array]"       -> true
+#
+#   MAPPED FALSE (15 explicit non-typed-array tags):
+#     "[object Arguments]"   -> false
+#     "[object Array]"       -> false
+#     "[object ArrayBuffer]" -> false
+#     "[object Boolean]"     -> false
+#     "[object DataView]"    -> false
+#     "[object Date]"        -> false
+#     "[object Error]"       -> false
+#     "[object Function]"    -> false
+#     "[object Map]"         -> false
+#     "[object Number]"      -> false
+#     "[object Object]"      -> false
+#     "[object RegExp]"      -> false
+#     "[object Set]"         -> false
+#     "[object String]"      -> false
+#     "[object WeakMap]"     -> false
+#
+# (The explicit-false entries are behaviorally redundant with "absent key ->
+#  false", but are listed so a reconstruction matches the source table shape.)
+#
+# NODE-PATH NOTE (Buffer): a Node Buffer is a Uint8Array subclass; both the
+# node path and the base path return true for it (its toString tag is
+# "[object Uint8Array]"). VERIFIED true for Buffer and Buffer.alloc(0).
+
+# ============================================================================
+# DETERMINISTIC TRUTH TABLE  (in-envelope — every value genInputs can emit)
+# ============================================================================
+# Each row computed by EXECUTING the real package at the source path; the
+# codec round-trip (encode->JSON->decode) preserves the listed result.
+#
+#   Uint8Array  (any byte contents, incl. empty)  -> true
+#   Buffer      (any byte contents, incl. empty)  -> true   # decodes to Buffer
+#   Array       (incl. empty [])                  -> false
+#   plain object {} / {a:1}                        -> false
+#   object {length: <int>}  (no TA tag)            -> false  # passes NODE2, fails NODE3
+#   Set                                            -> false
+#   Map                                            -> false
+#   RegExp                                         -> false
+#   string                                         -> false  # typeof not 'object'
+#   number (incl. integers, floats)                -> false
+#   NaN, Infinity, -Infinity                       -> false
+#   -0                                             -> false
+#   bigint                                         -> false  # typeof 'bigint'
+#   boolean (true/false)                           -> false
+#   boxed Number / boxed String / boxed Boolean    -> false  # tag mapped false; no .length
+#   null                                           -> false
+#   undefined                                      -> false
+
+# ============================================================================
+# OUT-OF-ENVELOPE  (behavior specified here; EXCLUDED from genInputs because
+#                   the oracle codec cannot carry the value faithfully — it
+#                   would corrupt the stored arg and produce a false expected)
+# ============================================================================
+# These are NOT bugs in the unit — they are limits of the persistence codec.
+# Their TRUE behavior under the REAL package (computed by execution) is:
+#
+#   Int8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array,
+#   Uint32Array, Float32Array, Float64Array
+#       REAL RESULT: true  (all 8 are typed arrays).
+#       WHY EXCLUDED: the codec's u8 branch is `value instanceof Uint8Array`,
+#       which is FALSE for these kinds. They fall through to the generic-object
+#       branch and are stored as a plain {"0":..,"1":..} index map, which
+#       decodes to a PLAIN OBJECT -> the unit would then return false. The
+#       codec flips true->false. VERIFIED. Therefore they cannot be graded and
+#       are kept out of genInputs. (Only Uint8Array & Buffer represent the
+#       TRUE class in the gradable set.)
+#
+#   ArrayBuffer            REAL RESULT: false  (tag "[object ArrayBuffer]";
+#                          also no integer .length). Codec stores it as a
+#                          generic object; not emitted to avoid ambiguity.
+#   DataView               REAL RESULT: false  (tag "[object DataView]";
+#                          .byteLength not .length). Not codec-representable
+#                          as itself; excluded.
+#   function / arrow       REAL RESULT: false  (typeof 'function', not
+#                          'object'). The codec DROPS function-valued data;
+#                          not emitted.
+#   Symbol                 REAL RESULT: false  (typeof 'symbol'). Not JSON/
+#                          codec representable; excluded.
+#
+#   ADVERSARIAL DIVERGENCE (documented; NOT emittable and would diverge BETWEEN
+#   the two impl paths — kept out so quorum is not poisoned):
+#     - plain object with Symbol.toStringTag === 'Uint8Array' and a numeric
+#       .length: BASE path -> true (toString yields the TA tag); NODE path
+#       -> false (no internal slot). The real package on Node returns FALSE.
+#       Not codec-carryable (Symbol key is dropped) -> excluded.
+#     - typed array whose own `.length` has been redefined out of range, or
+#       Object.create(Uint8Array.prototype): the two paths diverge and/or the
+#       base path THROWS reading .length. Not codec-carryable -> excluded.
+#   A re-emitter implementing the NODE path (util.types.isTypedArray) matches
+#   the real package on ALL of these; one implementing the BASE path matches
+#   on every in-envelope input but would differ on these adversarial values.
+#   Since none are emittable, either reconstruction passes quorum.
+
+# ============================================================================
+# ERROR / THROW BEHAVIOR
+# ============================================================================
+# For EVERY in-envelope input (everything genInputs emits) the unit does NOT
+# throw — it returns a boolean. The base path's `value.length` read is the
+# only potential throw site, and it cannot throw for any in-envelope value
+# (plain property read on objects, or short-circuited away by NODE1 for
+# primitives/null/undefined). No throw vectors are in scope.
+
+# ============================================================================
+# PURITY / SEAM
+# ============================================================================
+# Pure. No clock, RNG, env, fs, or network read. No mutation of the argument
+# or any global. The load-time selection of node-vs-base path is an ambient
+# capability probe (process.binding('util')); it is NOT an input-dependent
+# seam and both selected paths are specified to agree on all in-scope inputs,
+# so the unit is ORACLE-CLASS deterministic (value mode). No seam injection,
+# no quarantine, no side-effect harness (read-only predicate).
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the 3-gate base predicate (isObjectLike, isLength, tag-table lookup),
+#   - the complete 24-entry typedArrayTags table (above),
+#   - MAX_SAFE_INTEGER = 9007199254740991,
+#   - baseGetTag == Object.prototype.toString.call (no toStringTag branch),
+#   - the default-export shape.
+# CARRIED DATA: none. (The 24-entry tag table is small in-contract logic,
+#   transcribed in full above; it is NOT a carried-data table and there is no
+#   <unit>.carried.json.)
+# OUT-OF-CONTRACT: none (no stateful mutators / side APIs).
+# OUT-OF-ENVELOPE (codec limits; specified above, excluded from genInputs):
+#   the 8 non-Uint8Array typed-array kinds (real result true), ArrayBuffer,
+#   DataView, functions, Symbols, and the adversarial divergence inputs.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+# package: lodash.istypedarray@4.0.1
+# repo:    lodash/lodash  (modularized build, exports="npm")
+# license: MIT  (Copyright jQuery Foundation and other contributors)
+# source:  index.js (single file; the bundle inlines baseIsTypedArray,
+#          baseUnary, isLength, isObjectLike, objectToString, typedArrayTags,
+#          and the nodeUtil/process.binding('util') fast-path probe)
+#
+# VERIFICATION (by execution at the source path on Node v24.16.0):
+#   - nodeUtil present AND nodeUtil.isTypedArray present -> the REAL package
+#     runs the NODE fast path on the grading runtime (confirmed).
+#   - node path vs reconstructed base path: 0 mismatches across a 33-value
+#     battery (all 9 TA kinds, Buffer, Array, ArrayBuffer, DataView, plain
+#     object, null, undefined, number, string, bool, Set, Map, RegExp,
+#     function, arrow, Date, Error, Symbol, bigint, arguments, WeakMap).
+#   - codec round-trip (encode->JSON.stringify->JSON.parse->decode) preserves
+#     the boolean for all in-envelope values; flips true->false for the 8
+#     non-Uint8Array typed-array kinds (=> excluded from genInputs).
+#   - in-envelope truth table above reflects ACTUAL executed results, not
+#     hypothesized values.

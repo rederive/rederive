@@ -1,0 +1,23 @@
+UNIT get_rgb
+LANG ts
+PRIMARY-SHA256 b0378dc3a8ba5eb040db7f4ad96183c769e6a688cb76770da16da9ab5a6f6d65
+SIG export default function get_rgb(input: string): readonly [number, number, number, number] | null
+ABI TypeScript compiles to the js runtime: text=string (UTF-16); num=number (f64); tuple=readonly [number, number,
+  number, number]; none=null. STRICT: the artifact must type-check under `strict: true` against this SIG, with no
+  `any`, no non-null assertions (`!`), and no `@ts-ignore` / `@ts-expect-error` — the type-checked rung.
+MECHANISM (restated from js — language files are self-contained, not inherited) RE flavor ECMAScript with the i
+  flag; "whole text" (R2) = ^ and $ anchors; "lowercased" (R8) = String.prototype.toLowerCase; "round halves toward
+  +infinity" (R6) = Math.round; word characters (R8) = \w.
+MECHANISM numeric parse (R5, R6) = parseFloat on the captured text; hex byte (R3, R4) = parseInt(pair, 16).
+CARRIED colorNames = ../carried-color-names.js (default export, typed Readonly<Record<string, readonly [number, number, number]>>;
+  membership (R8) = own-property lookup)
+DEPENDS-ON none
+PINNED regex HEX6    = /^#([a-f\d]{6})([a-f\d]{2})?$/i CITED R3 — the accept-set rides on it
+PINNED regex ABBR    = /^#([a-f\d]{3,4})$/i CITED R4
+PINNED regex NUMERIC = /^rgba?\(\s*([+-]?(?:\d*\.)?\d+(?:e\d+)?)(?=[\s,])\s*(?:,\s*)?([+-]?(?:\d*\.)?\d+(?:e\d+)?)(?=[\s,])\s*(?:,\s*)?([+-]?(?:\d*\.)?\d+(?:e\d+)?)\s*(?:[\s,|/]\s*([+-]?(?:\d*\.)?\d+(?:e\d+)?)(%?)\s*)?\)$/i CITED R5 — the (?=[\s,]) lookaheads after channels 1 and 2 ARE the "must be followed by whitespace or comma" rule; EARNED the transcription-register SIR established these lookaheads as load-bearing (percent-channel and 2-channel rejects)
+PINNED regex PERCENT = /^rgba?\(\s*([+-]?[\d.]+)%\s*,?\s*([+-]?[\d.]+)%\s*,?\s*([+-]?[\d.]+)%\s*(?:[\s,|/]\s*([+-]?[\d.]+)(%?)\s*)?\)$/i CITED R6
+PINNED regex KEYWORD = /^(\w+)$/ CITED R8 — applied to the lowercased text
+PROVENANCE blind TypeScript reconstruction: runs/ts/emit_1.ts — one cold sir-reemitter-cr emitter (Read+Write only) that
+  saw ONLY get_rgb.sir + this file + frozen.md, 2026-09-22, round 1. Earned: type-checked (tsc --strict --noEmit + any-ban,
+  zero `any`), harness-verified (42/42 frozen, 21/21 held-out), cross-verified (js ≡ rust ≡ ts, 3000/3000 seeded inputs).
+  Negative control controls/ts_any_widened: one `any` → type-checked withheld, harness-verified kept.

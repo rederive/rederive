@@ -1,0 +1,164 @@
+UNIT isMap
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isMap(value: any) -> boolean          # default export; single positional arg; returns a STRICT boolean
+
+DEPENDS-ON none                            # zero npm deps; all helpers inlined in the source file
+
+# ============================================================================
+# BEHAVIOR  (ordered; exact + complete)
+# ============================================================================
+#
+# CONTRACT (the single observable fact a blind re-emitter must reproduce):
+#   isMap(value) returns the BOOLEAN `true` if and only if `value` is a genuine
+#   ECMAScript Map instance (an object holding the internal [[MapData]] slot —
+#   i.e. created by `new Map(...)` or by a real Map subclass), and the BOOLEAN
+#   `false` for every other value. The return is ALWAYS a strict boolean
+#   (verified: `typeof isMap(x) === 'boolean'` for all inputs, including
+#   undefined/null/0/'' which yield strict `false`, never a falsy non-boolean).
+#
+# RE-EMITTER DIRECTIVE: emit a single default-exported function of one argument
+# returning a boolean:
+#     export default function isMap(value) { ... }
+#
+# ----------------------------------------------------------------------------
+# WHY THERE ARE TWO IMPLEMENTATIONS IN THE SOURCE, AND WHICH ONE IS ACTIVE
+# ----------------------------------------------------------------------------
+# The source selects ONE of two implementations AT MODULE-LOAD TIME:
+#
+#     var isMap = nodeIsMap ? baseUnary(nodeIsMap) : baseIsMap;
+#
+#   nodeIsMap = nodeUtil && nodeUtil.isMap
+#   nodeUtil  = (try { freeProcess && freeProcess.binding('util') } catch {})
+#   freeProcess = <Node's `process` when running as a CommonJS module>
+#
+#   * PATH A — node fast-path (ACTIVE under Node.js, where the deprecated
+#     `process.binding('util').isMap` exists; VERIFIED present on Node v24.16.0):
+#         isMap = baseUnary(nodeIsMap) = (value) => nodeIsMap(value)
+#     `nodeIsMap` is Node's internal V8-backed predicate. It inspects the
+#     object's INTERNAL [[MapData]] slot. It IGNORES Symbol.toStringTag, the
+#     prototype chain, and Proxy traps. Returns a strict boolean.
+#
+#   * PATH B — pure-JS fallback `baseIsMap` (used only where `nodeIsMap` is
+#     absent — e.g. a browser, or a Node build with the util binding removed):
+#         baseIsMap(value) = isObjectLike(value) && getTag(value) == mapTag
+#       where
+#         isObjectLike(v) = !!v && typeof v == 'object'
+#         getTag(v)       = Object.prototype.toString.call(v)   # the baseGetTag alias
+#         mapTag          = '[object Map]'
+#       (NOTE: this build's `getTag` is the simple `baseGetTag` alias; the
+#        IE11/Edge<14/Node-Promise fallback `getTag` reassignment at source
+#        lines 213-234 is guarded by a feature test that is FALSE on a conformant
+#        modern engine, so `getTag` === `Object.prototype.toString.call`.)
+#
+# ----------------------------------------------------------------------------
+# THE SEAM (this is the load-bearing question) — and why it does NOT matter
+# over the oracle's codec-faithful input space:
+# ----------------------------------------------------------------------------
+# `nodeIsMap` is a READ of an ambient host capability (the Node util binding).
+# It is a SEAM. PATH A and PATH B can OBSERVABLY DISAGREE — but ONLY for inputs
+# that are NOT reconstructible by the oracle codec. Verified disagreements
+# (real package, Node v24.16.0):
+#
+#   input                                 PATH A (active) | PATH B (getTag)
+#   ------------------------------------  --------------- | ---------------
+#   new Map(...) / new (class extends Map)      true      |     true     (AGREE)
+#   plain {} with Symbol.toStringTag='Map'      false     |     true     (DISAGREE)
+#   Set with forged toStringTag='Map'           false     |     true     (DISAGREE)
+#   Object.create(Map.prototype)                false     |     true     (DISAGREE)
+#   real Map with forged toStringTag='NotAMap'  true      |     false    (DISAGREE)
+#   new Proxy(new Map(), {})                    false     |     true     (DISAGREE)
+#   Proxy faking get(toStringTag)->'Map'        false     |     true     (DISAGREE)
+#
+# CRITICAL: NONE of these disagreement inputs are reachable through the oracle
+# codec (see SCOPE / OUT-OF-ENVELOPE). The codec reconstructs a Map ONLY as a
+# genuine `new Map(entries)` (tag `{__t:'map', entries:[...]}`); it cannot carry
+# a Map subclass, a forged Symbol.toStringTag, `Object.create(Map.prototype)`,
+# or a Proxy. Therefore over EVERY value the input-generator can emit:
+#   - a revived Map is a genuine Map           => PATH A == PATH B == true
+#   - a revived Set / Uint8Array / Buffer / RegExp / plain object / array /
+#     boxed primitive / null / undefined / number(incl NaN,±Inf,-0) / bigint /
+#     string / boolean                          => PATH A == PATH B == false
+# So the two implementations are OBSERVATIONALLY IDENTICAL on the entire
+# in-envelope domain. A blind re-emitter may implement EITHER path and converge.
+#
+# RECOMMENDED RE-EMITTER IMPLEMENTATION (either is correct; both converge):
+#   Preferred (matches the active Node fast-path semantics, no engine probing):
+#       export default function isMap(value) {
+#         return Object.prototype.toString.call(value) === '[object Map]'
+#                && !!value && typeof value === 'object';
+#       }
+#     # i.e. baseIsMap. Equivalent on the in-envelope domain to the active path.
+#   Or, equivalently for genuine Maps, an instanceof/internal-slot check:
+#       export default function isMap(value) {
+#         return value instanceof Map;   # true for genuine Map & subclasses, false otherwise
+#       }
+#     # NOTE on `instanceof Map`: agrees with the active path for all in-envelope
+#     # inputs (a revived Map IS `instanceof Map`; nothing else the codec carries
+#     # is). It would differ from the active path only on cross-realm Maps /
+#     # forged-prototype objects, NONE of which the codec can carry. Safe here.
+#   Whichever is chosen, the function MUST return a STRICT boolean (use `===`
+#   comparison or a `!!` coercion so undefined/null/0/'' yield boolean `false`,
+#   not a falsy non-boolean).
+#
+# DEGENERATE / EDGE INPUTS (all VERIFIED against the real package):
+#   isMap(undefined)        -> false   (strict boolean)
+#   isMap(null)             -> false
+#   isMap(NaN)              -> false
+#   isMap(Infinity)         -> false
+#   isMap(-0)               -> false
+#   isMap('')               -> false
+#   isMap(0)                -> false
+#   isMap(new Map())        -> true    (empty map)
+#   isMap(new Map([['a',1]]))-> true
+#   isMap(new Set([1,2]))   -> false
+#   isMap([])               -> false
+#   isMap({})               -> false
+#
+# NO-THROW: isMap never throws for any in-envelope input (no property access on
+# the value other than what the host predicate / Object.prototype.toString does;
+# both tolerate null/undefined). There is NO error/throw path in scope.
+#
+# ============================================================================
+ORACLE value -> oracle.json
+# ============================================================================
+#
+# SCOPE
+# -----
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The boolean predicate: true iff genuine Map, false otherwise.
+#   - Strict-boolean return type for ALL inputs.
+#   - The tag string compared in the pure path is EXACTLY '[object Map]'
+#     (from Object.prototype.toString.call), and isObjectLike guards null/non-object.
+#
+# CARRIED DATA: none. (No large literal table. The only constants are short
+#   inline tag strings such as '[object Map]', reproduced verbatim in BEHAVIOR.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs,
+#   NOT graded — because the oracle codec cannot reconstruct them, so any stored
+#   `expected` would be un-reproducible):
+#   - Map SUBCLASS instances (`new (class extends Map)()`): real package -> true,
+#     but codec carries a Map only as a plain `new Map(entries)`. OUT.
+#   - Plain object / Set / anything with a FORGED Symbol.toStringTag === 'Map':
+#     active path -> false, fallback path -> true (they DISAGREE). Not codec-
+#     carryable (codec stores no symbol-keyed props). OUT.
+#   - `Object.create(Map.prototype)`: active -> false, fallback -> true. Not
+#     codec-carryable. OUT.
+#   - Proxy wrapping a Map, or a Proxy faking toStringTag: active -> false. Not
+#     codec-carryable. OUT.
+#   - Cross-realm Map (e.g. from a vm context): not codec-carryable. OUT.
+#   - functions: real package -> false, but NOT codec-faithful (functions do not
+#     survive JSON.stringify(encode(args))). OUT — documented FALSE.
+#   - Symbols: real package -> false, NOT codec-faithful. OUT — documented FALSE.
+#   - WeakMap: real package -> false (its tag is '[object WeakMap]' and it lacks
+#     [[MapData]]); but WeakMap is NOT codec-carryable (no `{__t:'weakmap'}` tag).
+#     OUT — documented FALSE.
+#
+# PROVENANCE
+# ----------
+# package: lodash.ismap@4.4.2
+# repo:    lodash/lodash  (modularized build: `lodash modularize exports="npm"`)
+# license: MIT (Copyright jQuery Foundation and other contributors)
+# source:  node_modules/lodash.ismap/index.js  (export: module.exports = isMap; default export)
+# verified-on: Node.js v24.16.0 (process.binding('util').isMap present => active path A;
+#              both paths confirmed observationally equivalent over the codec domain)

@@ -1,0 +1,42 @@
+UNIT detect_features
+LANG rust
+PRIMARY-SHA256 a5adf4883c5ba961a4dbe1cd80cb7cf1ce72a729ebfbc5ed3e7b5a75481febea
+SIG pub fn detect_features(input: &serde_json::Value) -> Vec<String>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn detect_features) depending on serde_json only; no main,
+  no I/O, no unsafe. The verifier's harness binds the vector's one json argument as a serde_json::Value and passes it BY
+  REFERENCE (&serde_json::Value, the argument-position rule for a json argument); the function must take exactly that
+  type, not a Value by value. It prints the returned Vec<String> as one JSON line. A throw (R1, R2, R10, R11) is a panic;
+  the message is not graded.
+ABI type mapping: none = Value::Null; bool = Value::Bool; number = Value::Number; text = Value::String; list =
+  Value::Array; map = Value::Object. R1 ABSENT = the key is not in the object (Map::get returns None); Value::Null under a
+  key is the value none (sirText Null panics; carriedData, envelope, sirFiles and variants read it as ABSENT; a Null lang
+  or sir inside a variant panics). A non-object input other than Null: all six fields ABSENT. Object key order is
+  serde_json's (sorted unless preserve_order): it changes only which throw is met first in R11, never whether one is.
+MECHANISM TRIMS (one rule for every rule): no trim is str::trim or char::is_whitespace; a physical line (R3) is the split
+  piece with every U+FEFF inside its leading run of ' ', '\t' and U+FEFF removed (the spaces and tabs kept) and then
+  its trailing spaces and tabs removed, so it KEEPS its leading spaces
+  and tabs (INDENT, R6 and PROSE see them); every other trim of R5, R7, TABLE FEATURES and R10 is
+  trim_matches(|c| c == ' ' || c == '\t'). EARNED round-2 frozen v13 (ts) — two emitters applied the whole space/tab trim to each line, lost the INDENT, and read indented PAR and ENVELOPE as directives
+MECHANISM no regex crate: every rule is a scan. Work on Vec<char> or char_indices (chars are Unicode scalars; every token
+  and pinned set member compares as a scalar, and the json text holds no lone surrogate). WORD is
+  char::is_ascii_alphanumeric or '_'. Line cut (R3): split at "\r\n", '\r' or '\n' only, never str::lines (it keeps a lone
+  '\r' inside a line); an NBSP-only line is not empty.
+MECHANISM R4-R5: collect quoted spans as (open, close) char indices by the R4 walk over the chars of the text in question
+  (an opener at index 0, after a char of the primary's OPENERS, or at the index right after the previous span's closer; a
+  backslash skips exactly one following char; an unclosed opener ends the walk); UNQUOTE rebuilds the chars with two '"'
+  in place of each span. R5: the first index i whose char is '#', whose previous char is ' ' or '\t',
+  whose next char is ' ', '\t' or absent, and that is not open < i < close for a span. R7: walk the piece; at each maximal
+  run of ' '/'\t' test whether CITED, EARNED or ANCHOR follows and is itself followed by ' ', '\t' or the end; a match
+  consumes the run and the keyword (the next search starts right after the keyword), and is discarded when the keyword's
+  index lies inside a quoted span of the same piece. Keep attributes as a Vec<(String, String)> in order.
+MECHANISM R8: a PROSE text is the R7 walk over ' ' followed by UNQUOTE(line), keeping only its body. UNQUOTE the EFFECT
+  FULL after joining, each ANCHOR PIECE alone, and the JOINED-ANCHOR after joining; the CARRIED-DATA FULL and each of its attribute values (every keyword, in order) are only space/tab-trimmed, each tested alone, never UNQUOTEd.
+MECHANISM R10-R11: B is the text after the last '/' or '\\', space/tab-trimmed. HIDDEN-tail: strip the trailing chars
+  outside '\u{21}'..='\u{7e}'; when at least one was stripped and the rest ends with ".sir" under eq_ignore_ascii_case,
+  panic. The ".sir" test is eq_ignore_ascii_case on the last four chars (U+017F never matches s); the segments are
+  split('.') of B without them; UNIT-NAME and the R11 key grammar are ASCII byte tests (is_ascii_alphanumeric, '_',
+  '-'; is_ascii_lowercase, is_ascii_digit).
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@69b68b4a1c39 cli/features.mjs detectFeatures and languagesOf, cli/sir/sir-parse.mjs parse and quotedSpans.
+  Language file cut with the primary, before any blind re-emission; ABI per the verifier's rust harness (a json argument
+  crosses as &serde_json::Value at argument position, FINDINGS 54).

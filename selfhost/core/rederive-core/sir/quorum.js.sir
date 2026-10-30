@@ -1,0 +1,12 @@
+UNIT quorum
+LANG js
+PRIMARY-SHA256 ece801dc428005b1cf887ee7a8bf2acec2607638c1208195ce76669d9807b969
+SIG export default function quorum(fulls, need)
+ABI fulls = Array of boolean; need = number. The result is a fresh plain object with own properties fullCount (number),
+  hasQuorum (boolean), winnerIdx (number). A throw (R1) is a thrown Error; the message is not graded. The artifact is an
+  ES module default-exporting the function and imports nothing.
+ENVELOPE widening: need may be any finite number; a need that is not an integer (1.5, 0.5) throws exactly as R1 does.
+  fulls may hold non-boolean entries; only the boolean true counts as full (1, "true", an object do not).
+MECHANISM R1 is the test: not Number.isInteger(need), or need < 1 -> throw. "true entry" (R2, R4) is entry === true.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/verdict.mts quorum, cut 2026-10-26 (round 2) before any blind re-emission.

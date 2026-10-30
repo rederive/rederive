@@ -1,0 +1,175 @@
+# SIR — lodash.defaults @ 4.2.0  (the module.exports / default export `defaults`)
+# Authored by the SIGHTED decomposer. Every BEHAVIOR line below was pinned by EXECUTION
+# against the real installed package (node, requiring the source index.js), not by reading alone.
+
+UNIT defaults
+KIND STATE                       # MUTATES the first argument (`object`) IN PLACE.
+ORACLE-CLASS deterministic       # Pure-deterministic above no seam: no clock/RNG/io/net. Output is a
+                                 # deterministic function of the (deep) input arg graph. The OBSERVABLE is
+                                 # the returned object value, which IS the same reference as the mutated
+                                 # `object` argument — capture its POST-CALL state.
+
+SIG  defaults(object, ...sources) -> object
+     # Variadic. `object` is the destination (mutated and returned). `sources` is zero or more source values.
+     # Re-emitter MUST `export default <fn>` (CommonJS `module.exports = fn` equivalence; default export).
+
+DEPENDS-ON  none
+     # Zero runtime deps. Self-contained. (The real package inlines a slice of lodash; the re-emitter
+     # reconstructs the behavior below directly — it does NOT need lodash.)
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+BEHAVIOR
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+# Helper definitions used below (all pinned by execution):
+#
+#   objectProto      := Object.prototype
+#   hasOwn(o, k)     := Object.prototype.hasOwnProperty.call(o, k)
+#   eq(x, y)         := (x === y) || (x !== x && y !== y)        # SameValueZero: === plus NaN==NaN.
+#                                                                  # Note +0 and -0 are EQUAL under === so eq(+0,-0)=true.
+#
+# N0. COERCE DESTINATION.  Let `object := Object(object)`.
+#     - For an ordinary object/array this is the SAME reference (identity preserved).
+#     - For `null` or `undefined` -> a fresh empty plain object `{}`.
+#     - For a primitive (string/number/boolean/bigint/symbol) -> a boxed wrapper object.
+#       (genInputs does NOT emit non-object `object` args — boxed wrappers are NOT codec-round-trippable.
+#        This branch is IN-CONTRACT and a blind re-emitter must implement `Object(object)`, but it is
+#        documented OUT-OF-ENVELOPE for the oracle. See SCOPE.)
+#
+# N1. ITERATE SOURCES LEFT-TO-RIGHT.  For index = 0,1,2,... over `sources` in argument order:
+#       let source := sources[index]
+#       BRANCH N1a — FALSY SOURCE SKIP: if `source` is falsy (one of: null, undefined, 0, -0, NaN, '',
+#                    false), SKIP it entirely (do nothing, continue to next source). The guard is a plain
+#                    truthiness test `if (source)`. (Verified: null/undefined/0/''/false sources skipped.)
+#       BRANCH N1b — TRUTHY SOURCE: process the source via N2 + N3 below.
+#     A "first source to define a key wins" precedence emerges naturally from N1 order + the N3 guard:
+#     once a key holds a defined value, later sources cannot overwrite it.
+#
+# N2. ENUMERATE SOURCE KEYS  (`keysIn(source)` — own AND inherited ENUMERABLE STRING-keyed props):
+#       props := the list of keys produced by a `for (key in source)` enumeration of the source,
+#                i.e. ALL enumerable keys reachable on `source` and its prototype chain, in for-in order,
+#                EXCEPT:
+#         - SYMBOL keys are NEVER included (for-in yields only string keys). (Verified: symbol NOT copied.)
+#         - NON-ENUMERABLE props (own or inherited) are NEVER included. (Verified: own & inherited
+#           non-enumerable NOT copied.)
+#         - the 'constructor' special-case: 'constructor' is excluded ONLY when source is a prototype object
+#           OR source does not own 'constructor'; an OWN enumerable 'constructor' key IS included.
+#           (Verified: {constructor:'CTOR',a:1} copies constructor.)
+#         - For ARRAY / array-like sources: numeric index keys (as strings '0','1',...) and other own/inherited
+#           enumerable string props are included, but 'length' and valid array indices beyond the dense run
+#           are handled by the array-like path; in practice an array source ['x','y'] with `arr.extra='E'`
+#           yields keys ['0','1','extra'] (length excluded). (Verified.)
+#       IN-CONTRACT NOTE: own + INHERITED enumerable string keys ARE copied (verified with a source built via
+#       a constructor whose prototype carries an enumerable prop — both 'own' and 'inh' were copied).
+#       genInputs emits ONLY plain-object sources (own enumerable string keys) because a prototype chain is
+#       not codec-round-trippable; plain sources fully exercise the N3 guard + N4 assign branches. The
+#       inherited-key COPY branch is IN-CONTRACT and the blind re-emitter implements for-in (own+inherited),
+#       but it is documented OUT-OF-ENVELOPE for the oracle.
+#
+# N3. PER-KEY DEFAULTS GUARD (this is the heart of the unit; pinned by execution, see SCOPE/evidence):
+#       For each `key` in props (in N2 order):
+#         let objValue := object[key]            # property GET (may read down object's own prototype chain)
+#         let srcValue := source[key]            # property GET on source
+#         # Decide the value to assign:
+#         if ( objValue === undefined
+#              OR ( eq(objValue, objectProto[key]) AND NOT hasOwn(object, key) ) ):
+#               assignedValue := srcValue        # the default takes effect
+#         else:
+#               assignedValue := objValue        # keep the existing value (no-op on this key, see N4)
+#
+#       This is EXACTLY lodash's `assignInDefaults(objValue, srcValue, key, object)` customizer. The two
+#       disjuncts mean a key is "defaulted" when EITHER:
+#         (a) the destination's value for the key is literally `undefined`  (missing key reads `undefined`,
+#             OR present-but-undefined), OR
+#         (b) the destination does NOT own the key AND the value it reads is the value that
+#             `Object.prototype` itself carries for that key  — i.e. the key is an inherited
+#             Object.prototype member (toString/valueOf/hasOwnProperty/isPrototypeOf/propertyIsEnumerable/
+#             toLocaleString/constructor) that the destination has not shadowed with its own property.
+#       Consequences pinned by execution:
+#         - defaults({}, {toString:'SRC'})            -> own toString = 'SRC'   (branch b fires: inherited proto fn, not own)
+#         - defaults({}, {hasOwnProperty:'HOP'})      -> own hasOwnProperty = 'HOP'
+#         - defaults({}, {valueOf:'V',constructor:'C',isPrototypeOf:'P'}) -> all assigned
+#         - defaults({toString:'OWN'}, {toString:'SRC'}) -> 'OWN'  (own non-undefined value, eq(_,proto.toString)=false -> keep)
+#         - defaults({toString: Object.prototype.toString /*own*/}, {toString:'SRC'}) -> still proto.toString
+#                                                       (eq(objValue,proto.toString)=true BUT hasOwn=true -> branch b's
+#                                                        `NOT hasOwn` is false -> keep objValue)
+#         - defaults({a:1}, {a:3}) -> a=1   ;  defaults({a:undefined}, {a:5}) -> a=5
+#         - defaults({a:null}, {a:5}) -> a=null   (null !== undefined; eq(null, objectProto['a']=undefined)=false -> keep)
+#         - defaults({a:NaN}, {a:1}) -> a=NaN      (NaN !== undefined; eq(NaN, undefined)=false -> keep)
+#
+# N4. ASSIGNMENT (`assignValue(object, key, assignedValue)`):
+#       value := assignedValue                  # from N3
+#       # lodash writes only when it would change the property (SameValueZero) or when defining a brand-new
+#       # undefined slot. The OBSERVABLE EFFECT is identical to: ensure object owns `key` with `value`.
+#       if NOT ( hasOwn(object, key) AND eq(object[key], value) )
+#          OR ( value === undefined AND NOT (key in object) ):
+#               object[key] = value
+#       Observable net effect (what the oracle sees):
+#         - branch N3=(b) for a proto-key (e.g. toString) -> object gains an OWN enumerable key = srcValue.
+#         - branch N3=(a) with key absent -> object gains an OWN enumerable key = srcValue.
+#         - branch N3=(a) where srcValue is `undefined` -> object gains an OWN key whose value is `undefined`
+#           (verified: defaults({}, {a:undefined}) -> own key 'a' present with value undefined; later
+#            sources may then overwrite it because object[a]===undefined again).
+#         - "keep" branch (assignedValue===objValue) -> typically a no-op; the property keeps its value.
+#       FROZEN/SEALED DESTINATION: the source index.js is NON-strict, so `object[key] = value` on a
+#       frozen object SILENTLY FAILS (no throw); the key is simply not added. (Verified: defaults(frozen{a:1},
+#       {b:2}) -> {a:1}, no throw, same reference.) genInputs does NOT emit frozen objects.
+#       `__proto__` AS A SOURCE KEY: writing `object['__proto__'] = v` re-targets the prototype rather than
+#       creating an own property; result has NO own '__proto__'. (Verified.) genInputs does NOT emit a
+#       '__proto__' key — IN-CONTRACT but OUT-OF-ENVELOPE for the oracle.
+#
+# N5. RETURN `object` (the SAME reference coerced in N0, now mutated). Identity holds: returned === input
+#     `object` for any object input. (Verified: ret === obj.)
+#
+# DETERMINISM / SHALLOWNESS:
+#   - Values are copied BY REFERENCE (shallow). A nested object/array/Date/RegExp from a source is shared,
+#     not cloned. (Verified: result.n === sourceNested.)
+#   - No clock/RNG/env/fs/net. Fully deterministic given the arg graph.
+#   - The `isIterateeCall` shorthand-guard inside lodash's createAssigner does NOT fire for `defaults`
+#     (defaults always passes a real `assignInDefaults` customizer and a trailing `undefined`); normal
+#     (object, ...sources) calls process every source. No observable effect to model.
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+ORACLE value -> oracle.json
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+# The harness deep-clones each input tuple, calls defaults(...tuple), and records the RETURN value (which
+# is the mutated `object`, same reference). Capture = post-call state of the returned object. Equality is
+# structural over own enumerable string keys + values (SameValueZero for NaN; undefined-valued own keys are
+# part of the contract and must be preserved). Inputs are persisted as JSON.stringify(encode(args)); all
+# emitted values are codec-round-trippable (see SCOPE / genInputs).
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+SCOPE
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+# IN-CONTRACT LOGIC (reproduce exactly — fully specified above, exercised by genInputs):
+#   - N0 identity-preserving coercion for object inputs that are already objects.
+#   - N1 left-to-right source iteration + falsy-source skip (null/undefined/0/-0/''/false/NaN).
+#   - N2 enumeration of OWN enumerable string keys of plain-object sources (and, in full generality,
+#     inherited enumerable string keys — see below).
+#   - N3 the exact defaults guard: `objValue===undefined || (eq(objValue, Object.prototype[key]) && !hasOwn(object,key))`,
+#     with `eq` = SameValueZero. INCLUDING the Object.prototype special-key family
+#     (toString, valueOf, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, constructor).
+#   - N4 assignment semantics incl. creating own keys with `undefined` source values; first-defined-wins precedence.
+#   - N5 returning the same (mutated) reference.
+#   IN-CONTRACT BUT OUT-OF-ENVELOPE FOR THE ORACLE (blind re-emitter MUST implement; genInputs does NOT emit,
+#   because the value is not codec-round-trippable or its observable is fragile):
+#     * non-object `object` arg (boxed-wrapper result of Object(object)); null/undefined object -> {}.
+#     * INHERITED enumerable string keys on a source (source with a real prototype chain).
+#     * '__proto__' source key (prototype retarget, no own key).
+#     * frozen/sealed destination (silent non-write in non-strict mode).
+#     * SYMBOL keys on sources (never copied) — documented; cannot be JSON-persisted anyway.
+#     * function/Symbol VALUES — not codec-round-trippable; behavior is identical pass-by-reference, documented.
+#
+# CARRIED DATA: none. (No large literal tables. The only constant family referenced — the Object.prototype
+#               member names — is a language built-in, not carried data; no carried.json.)
+#
+# OUT-OF-CONTRACT: none beyond the in-place mutation itself, which is the unit's defining STATE effect and
+#                  is fully captured by observing the returned (mutated) object.
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+PROVENANCE
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────
+# package: lodash.defaults@4.2.0   (npm; "The lodash method `_.defaults` exported as a module.")
+# repo:    lodash/lodash           license: MIT
+# source:  index.js  (module.exports = defaults; defaults = baseRest(args -> apply(assignInWith, undefined,
+#          args.push(undefined, assignInDefaults))); customizer = assignInDefaults; guard at index.js:116-122)
+# Based on Underscore.js 1.8.3. Copyright jQuery Foundation and other contributors.

@@ -1,0 +1,25 @@
+# Frozen oracle for f64_from_bits — worked input -> output; reproduce EXACTLY. 24 shown; 48 more are HELD OUT.
+  f64_from_bits("0000000000000000") => 0
+  f64_from_bits("") => throw("f64 bits must be 16 lowercase hex digits (got \"\")")
+  f64_from_bits("8000000000000000") => -0
+  f64_from_bits("3ff000000000000") => throw("f64 bits must be 16 lowercase hex digits (got \"3ff000000000000\")")
+  f64_from_bits("3ff0000000000000") => 1
+  f64_from_bits("03ff0000000000000") => throw("f64 bits must be 16 lowercase hex digits (got \"03ff0000000000000\")")
+  f64_from_bits("bff0000000000000") => -1
+  f64_from_bits("3FF0000000000000") => throw("f64 bits must be 16 lowercase hex digits (got \"3FF0000000000000\")")
+  f64_from_bits("400921fb54442d18") => 3.141592653589793
+  f64_from_bits("3ff0000000000000\n") => throw("f64 bits must be 16 lowercase hex digits (got \"3ff0000000000000\\n\")")
+  f64_from_bits("0000000000000001") => 5e-324
+  f64_from_bits(" 3ff0000000000000") => throw("f64 bits must be 16 lowercase hex digits (got \" 3ff0000000000000\")")
+  f64_from_bits("000fffffffffffff") => 2.225073858507201e-308
+  f64_from_bits("3ff0000000000000 ") => throw("f64 bits must be 16 lowercase hex digits (got \"3ff0000000000000 \")")
+  f64_from_bits("0010000000000000") => 2.2250738585072014e-308
+  f64_from_bits("0x3ff00000000000") => throw("f64 bits must be 16 lowercase hex digits (got \"0x3ff00000000000\")")
+  f64_from_bits("7fefffffffffffff") => 1.7976931348623157e+308
+  f64_from_bits("3ff000000000000g") => throw("f64 bits must be 16 lowercase hex digits (got \"3ff000000000000g\")")
+  f64_from_bits("ffefffffffffffff") => -1.7976931348623157e+308
+  f64_from_bits("-3ff000000000000") => throw("f64 bits must be 16 lowercase hex digits (got \"-3ff000000000000\")")
+  f64_from_bits("7ff0000000000000") => Infinity
+  f64_from_bits("3ff00000000000００") => throw("f64 bits must be 16 lowercase hex digits (got \"3ff00000000000００\")")
+  f64_from_bits("fff0000000000000") => -Infinity
+  f64_from_bits("3ff0 00000000000") => throw("f64 bits must be 16 lowercase hex digits (got \"3ff0 00000000000\")")

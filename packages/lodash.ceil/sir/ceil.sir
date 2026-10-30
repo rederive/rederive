@@ -1,0 +1,286 @@
+UNIT ceil
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG ceil(number: any, precision?: any = 0) -> number
+DEPENDS-ON none   # self-contained; the helpers below are INLINED, not external requires
+
+# ----------------------------------------------------------------------------
+# PROVENANCE
+# ----------------------------------------------------------------------------
+PROVENANCE lodash.ceil@4.0.4
+  repo: lodash/lodash  (Custom modular build: `lodash modularize exports="npm" -o ./`)
+  license: MIT
+  source file: index.js  (single file; module.exports = ceil)
+  ceil is built as: var ceil = createRound('ceil'); module.exports = ceil;
+  The blind re-emitter MUST emit a DEFAULT export of a single function:
+      export default function ceil(number, precision) { ... }
+  (Loaded by the harness via dynamic import(); default export shape is required.)
+
+# ----------------------------------------------------------------------------
+# CONSTANTS (exact, from source)
+# ----------------------------------------------------------------------------
+CONST INFINITY    = 1 / 0                       # === Number.POSITIVE_INFINITY
+CONST MAX_INTEGER = 1.7976931348623157e+308     # this exact double literal; note MAX_INTEGER % 1 === 0
+CONST NAN         = 0 / 0                        # NaN
+CONST reTrim      = /^\s+|\s+$/g                 # leading+trailing whitespace, global
+CONST reIsBadHex  = /^[-+]0x[0-9a-f]+$/i         # signed hex strings -> NaN
+CONST reIsBinary  = /^0b[01]+$/i
+CONST reIsOctal   = /^0o[0-7]+$/i
+CONST UPPER_CLAMP = 292                          # the ONLY clamp; applied to precision via Math.min
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (this is createRound('ceil') with all helpers inlined)
+# The Math method used for rounding is Math.ceil (round UP toward +Infinity).
+# ----------------------------------------------------------------------------
+
+BEHAVIOR
+
+# === TOP-LEVEL PIPELINE (the body of the returned round function) ===
+# func := Math.ceil
+#
+# step 1:  number    = toNumber(number)                    # see HELPER toNumber
+# step 2:  precision  = Math.min(toInteger(precision), 292) # see HELPER toInteger
+#          # NOTE (LOAD-BEARING / CORRECTS THE HINT): there is NO lower clamp.
+#          # The ONLY clamp is the UPPER bound 292 via Math.min.
+#          # precision can be arbitrarily negative (e.g. -300, -1000, or
+#          # -MAX_INTEGER when precision was -Infinity). It is NOT clamped to -292.
+# step 3:  if (precision)        # i.e. precision is TRUTHY (non-zero, non-NaN; note -0 is falsy)
+#            -> EXPONENTIAL-SHIFT branch (NODE A)
+#          else                  # precision is 0, -0, or NaN
+#            -> DIRECT branch (NODE B): return Math.ceil(number)
+#
+# IMPORTANT about "if (precision)": after step 2, precision is an integer-valued
+# double or 0 or NaN... actually toInteger never returns NaN (it returns 0 for
+# NaN), and Math.min(0,292)=0, Math.min(NaN-impossible). So precision here is a
+# finite integer-valued double (possibly negative, possibly 0). The test
+# `if (precision)` is true for every value except 0 (and -0, which cannot occur
+# here because toInteger maps -0 -> 0 ... but treat 0 and -0 identically: both
+# take the DIRECT branch).
+
+# --- NODE B: DIRECT branch (precision === 0) ---
+#   return Math.ceil(number)
+#   Edge results (Math.ceil semantics, verified against the real package):
+#     Math.ceil(-0)        === -0   (sign preserved)
+#     Math.ceil(0)         === 0
+#     Math.ceil(NaN)       === NaN
+#     Math.ceil(Infinity)  === Infinity
+#     Math.ceil(-Infinity) === -Infinity
+#     Math.ceil(0.5)       === 1
+#     Math.ceil(-0.5)      === -0    (rounds UP toward +Inf -> -0, sign preserved)
+
+# --- NODE A: EXPONENTIAL-SHIFT branch (precision !== 0) ---
+#   This is the FP-error-avoidance trick. Reproduce these steps EXACTLY,
+#   including the string concatenations and the `(toString(x) + 'e').split('e')`
+#   idiom. Do NOT replace with number*10^p arithmetic; the whole point is to
+#   shift via the decimal-exponent of the string form.
+#
+#   Let S = toString(number)   # see HELPER toString (preserves "-0", uses JS String())
+#   pair  = (S + 'e').split('e')        # array of strings, split on every 'e'
+#         # For a plain number string like "4.006": (S+'e') = "4.006e",
+#         #   split('e') -> ["4.006", ""].  pair[0]="4.006", pair[1]="".
+#         # For an exponential string like "1e-7": (S+'e') = "1e-7e",
+#         #   split('e') -> ["1", "-7", ""].  pair[0]="1", pair[1]="-7".
+#         #   (pair[2]="" is ignored.)
+#         # For "Infinity": "Infinitye".split('e') -> ["Infinity",""].
+#   value = Math.ceil( Number( pair[0] + 'e' + ( (+pair[1]) + precision ) ) )
+#         # (+pair[1]) coerces the exponent string to a number:
+#         #   +"" === 0, +"-7" === -7, +"21" === 21.
+#         # Then add `precision`. Build the new numeric string
+#         #   pair[0] + 'e' + (that sum), coerce with Number()/unary +, apply Math.ceil.
+#         # If pair[0] is non-numeric ("Infinity","NaN"), Number(...) -> NaN ->
+#         #   Math.ceil(NaN) -> NaN (this is why ceil(Infinity, 2) === NaN).
+#
+#   Then SHIFT BACK by the negation of precision:
+#   pair  = (toString(value) + 'e').split('e')     # re-stringify `value`, same idiom
+#   return Number( pair[0] + 'e' + ( (+pair[1]) - precision ) )
+#         # i.e. +(pair[0] + 'e' + ((+pair[1]) - precision)).
+#
+#   Worked trace ceil(4.006, 2):
+#     number=4.006, precision=min(toInteger(2),292)=2 (truthy).
+#     S="4.006"; pair=["4.006",""]; +pair[1]=0; 0+2=2;
+#     value=Math.ceil(Number("4.006e2"))=Math.ceil(400.6)=401.
+#     toString(401)="401"; pair=["401",""]; +pair[1]=0; 0-2=-2;
+#     return Number("401e-2")=4.01.   ✓
+#
+#   Worked trace ceil(-Infinity, 2):
+#     number=-Infinity; precision=min(toInteger(-Infinity..wait this is precision)
+#     -> for ceil(4.006,-Infinity): toInteger(-Infinity) = -MAX_INTEGER (see toInteger),
+#        Math.min(-MAX_INTEGER,292) = -MAX_INTEGER (truthy, very negative).
+#        S="4.006"; value=Math.ceil(Number("4.006e"+(0+(-MAX_INTEGER))))
+#                        =Math.ceil(Number("4.006e-1.79e308"))=Math.ceil(NaN)?
+#        Actually Number("4.006e-1.797...e308") is a malformed exponent string -> NaN;
+#        Math.ceil(NaN)=NaN. toString(NaN)="NaN"; Number("NaNe...")=NaN.
+#        => ceil(4.006, -Infinity) === NaN.   ✓ (verified)
+#   For ceil(4.006, +Infinity): toInteger(Infinity)=MAX_INTEGER, Math.min(MAX,292)=292.
+#        precision=292 (truthy). 4.006 shifted by 292 then back => 4.006.  ✓
+
+
+# ============================================================================
+# HELPER: toNumber(value)   -- applied to BOTH `number` (always) and indirectly
+#                              to `precision` (via toInteger -> toFinite -> toNumber).
+# ============================================================================
+# function toNumber(value):
+#   1. if typeof value === 'number'  -> return value           (NaN, ±Infinity, -0 pass through unchanged)
+#   2. if isSymbol(value)            -> return NaN              (typeof 'symbol', or object w/ [object Symbol] tag)
+#   3. if isObject(value)  (typeof 'object'&&value!=null, or 'function'):
+#        other = (typeof value.valueOf === 'function') ? value.valueOf() : value
+#        value = isObject(other) ? (other + '') : other        # coerce nested object via String concat
+#   4. if typeof value !== 'string':
+#        return value === 0 ? value : +value                   # preserves -0 (-0 === 0 is true so returns -0);
+#                                                              # booleans: +true=1, +false=0; null: +null=0;
+#                                                              # undefined: +undefined=NaN
+#   5. value is a string:
+#        value = value.replace(reTrim, '')                     # strip leading/trailing whitespace
+#        isBinary = reIsBinary.test(value)                     # /^0b[01]+$/i
+#        if (isBinary || reIsOctal.test(value)):               # /^0o[0-7]+$/i
+#             return parseInt(value.slice(2), isBinary ? 2 : 8)
+#        if (reIsBadHex.test(value)):                          # /^[-+]0x[0-9a-f]+$/i  (SIGNED hex)
+#             return NaN
+#        return +value                                         # plain numeric coercion:
+#                                                              #   +"" = 0, +"4.006" = 4.006,
+#                                                              #   +"0xff" = 255 (UNSIGNED hex OK via +),
+#                                                              #   +"abc" = NaN
+#   String coercion examples (verified):
+#     "  4.006  " -> 4.006 ;  "\t\n 4.006 \r" -> 4.006 ;  "" -> 0 ;  "   " -> 0
+#     "0b101" -> 5 ;  "0o17" -> 15 ;  "0xff" -> 255 ;  "-0xff" -> NaN ;  "+0x1" -> NaN
+
+# ============================================================================
+# HELPER: toFinite(value)
+# ============================================================================
+# function toFinite(value):
+#   if (!value)  return value === 0 ? value : 0   # falsy: 0/-0 -> itself (preserves -0); NaN/''/null/undefined/false -> 0
+#   value = toNumber(value)
+#   if (value === Infinity || value === -Infinity):
+#        sign = value < 0 ? -1 : 1
+#        return sign * MAX_INTEGER                 # +Inf -> +MAX_INTEGER ; -Inf -> -MAX_INTEGER
+#   return value === value ? value : 0             # NaN -> 0, else value
+
+# ============================================================================
+# HELPER: toInteger(value)   -- used ONLY on `precision`
+# ============================================================================
+# function toInteger(value):
+#   result    = toFinite(value)
+#   remainder = result % 1
+#   return result === result ? (remainder ? result - remainder : result) : 0
+#   # Truncates toward zero (drops fractional part): toInteger(2.9)=2, toInteger(1.5)=1,
+#   #   toInteger(-1.5)= -1 - (-0.5)? -> -1.5 % 1 = -0.5, -1.5 - (-0.5) = -1. So -1.5 -> -1 (toward 0).
+#   # toInteger(NaN)=0 (toFinite(NaN)=0). toInteger(Infinity)=MAX_INTEGER (integer-valued, remainder 0).
+#   # toInteger(-Infinity)=-MAX_INTEGER. toInteger(0)=0, toInteger(-0)=-0 (falsy in `if(precision)`).
+#   # toInteger("2")=2, toInteger("0x2")=2, toInteger("0b10")=2.
+
+# ============================================================================
+# HELPER: toString(value)    -- used on `number` and on intermediate `value`
+# ============================================================================
+# function toString(value):
+#   if (value == null) return ''            # null or undefined -> '' (cannot occur for the post-toNumber number)
+#   return baseToString(value)
+# function baseToString(value):
+#   if (typeof value === 'string') return value
+#   if (isSymbol(value)) return symbolToString.call(value) (or '')   # not reachable here (value is a number)
+#   result = (value + '')                    # JS default number->string
+#   return (result === '0' && (1 / value) === -Infinity) ? '-0' : result
+#     # SPECIAL CASE: -0 stringifies to "-0" (default (-0 + '') === "0", but this restores the sign).
+#   # Number string forms used by the shift:
+#   #   4.006 -> "4.006" ; 401 -> "401" ; 1e-7 -> "1e-7" ; 1e21 -> "1e+21" ;
+#   #   Infinity -> "Infinity" ; -Infinity -> "-Infinity" ; NaN -> "NaN" ; -0 -> "-0".
+
+# ----------------------------------------------------------------------------
+# DEMONSTRATED I/O TABLE (verified by RUNNING lodash.ceil@4.0.4; -0 shown as "-0")
+# ----------------------------------------------------------------------------
+# ceil(4.006)            => 5         # default precision 0 -> Math.ceil(4.006)
+# ceil(4.006, 2)         => 4.01      # FP-safe (naive Math.ceil(4.006*100)/100 also 4.01 here, but trick is canonical)
+# ceil(6.004, 2)         => 6.01
+# ceil(6.1, 2)           => 6.1
+# ceil(6040, -2)         => 6100
+# ceil(1.005, 2)         => 1.01
+# ceil(2.005, 2)         => 2.01
+# ceil(1.255, 2)         => 1.26
+# ceil(35.855, 2)        => 35.86
+# ceil(859.385, 2)       => 859.39
+# ceil(9.999, 2)         => 10
+# ceil(-9.999, 2)        => -9.99
+# ceil(0.07, 1)          => 0.1
+# ceil(0.5, 0)           => 1
+# ceil(-0.5, 0)          => -0
+# ceil(-4.006, 2)        => -4
+# ceil(-6.004, 2)        => -6
+# ceil(10, -1)           => 10
+# ceil(15, -1)           => 20
+# ceil(-15, -1)          => -10
+# ceil(NaN, 0)           => NaN
+# ceil(Infinity)         => Infinity
+# ceil(-Infinity)        => -Infinity
+# ceil(Infinity, 2)      => NaN       # "Infinity"+"e2" -> Number(...) -> NaN
+# ceil(-Infinity, 2)     => NaN
+# ceil(0, 0)             => 0
+# ceil(-0, 0)            => -0
+# ceil(-0, 2)            => -0        # shift preserves -0 through string "-0"
+# ceil("4.006", 2)       => 4.01      # string number coercion
+# ceil("6.004", "2")     => 6.01      # string precision coercion
+# ceil("  4.006  ", 2)   => 4.01      # whitespace trim
+# ceil("0xff", 0)        => 255       # unsigned hex via +value
+# ceil("0b101", 0)       => 5         # binary parse
+# ceil("0o17", 0)        => 15        # octal parse
+# ceil("-0x1", 0)        => NaN       # signed hex -> NaN
+# ceil("+0x1", 0)        => NaN
+# ceil("", 2)            => 0         # +"" = 0
+# ceil("   ", 2)         => 0
+# ceil(true, 2)          => 1         # toNumber(true)=1
+# ceil(false, 2)         => 0
+# ceil(null, 2)          => 0         # toNumber(null)=+null=0
+# ceil(undefined, 2)     => NaN       # +undefined=NaN
+# ceil(4.006, 2.9)       => 4.01      # toInteger(2.9)=2 (truncate)
+# ceil(4.006, 1.5)       => 4.1       # toInteger(1.5)=1
+# ceil(4.006, -1)        => 10        # precision -1
+# ceil(4.006, NaN)       => 5         # toInteger(NaN)=0 -> direct branch
+# ceil(4.006, -0)        => 5         # -0 falsy -> direct branch -> Math.ceil(4.006)=5
+# ceil(4.006, Infinity)  => 4.006     # precision clamped to 292 -> identity here
+# ceil(4.006, -Infinity) => NaN       # precision = -MAX_INTEGER -> malformed exp -> NaN
+# ceil(123.456, 300)     => 123.456   # precision clamped to 292
+# ceil(123.456, 1000)    => 123.456   # clamped to 292
+# ceil(123.456, -292)    => 1e+292    # NO lower clamp: shift by -292
+# ceil(123.456, -300)    => 1e+300    # NO lower clamp: shift by -300
+# ceil(123.456, -1000)   => 0         # 123.456e-1000 underflows to 0, Math.ceil(0)=0, back-shift +(0e1000)=0
+# ceil(1e21, 2)          => 1e+21     # exponential string form handled
+# ceil(1e-7, 9)          => 1e-7
+# ceil(1.5e-7, 9)        => 1.5e-7
+# ceil(1.23e21, -19)     => 1.23e+21
+# ceil(1e+308, 0)        => 1e+308
+# ceil(1e-308, 5)        => 0.00001
+# ceil(5e-324, 5)        => 0.00001   # smallest positive subnormal -> ceil to 5dp
+# ceil(123456789.123456789, 5) => 123456789.12346
+
+ORACLE value -> oracle.json
+  # Deterministic, pure: oracle stores expected return per input tuple.
+  # NO seam (no clock/RNG/io/net). Return value is the complete observable contract.
+  # Note: -0 vs 0 and NaN are SIGNIFICANT outputs; the oracle/codec must distinguish
+  #   -0 from 0 and represent NaN faithfully (the factory codec round-trips -0 and NaN).
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The whole pipeline above: toNumber(number); precision = Math.min(toInteger(precision), 292);
+      truthy-precision exponential-shift branch vs precision-0 direct Math.ceil branch.
+    - The inlined helpers toNumber / toFinite / toInteger / toString / baseToString,
+      including: whitespace trim, binary/octal parse, signed-hex -> NaN, unsigned-hex via +,
+      -0 string preservation, NaN/±Infinity handling, the MAX_INTEGER substitution for ±Infinity
+      inside toFinite (note: this substitution applies ONLY through toInteger to PRECISION,
+      because `number` goes through toNumber directly and keeps real ±Infinity).
+    - The asymmetric clamp: UPPER bound 292 via Math.min; NO lower bound.
+    - Math.ceil rounding semantics (round UP toward +Infinity), -0 sign preservation.
+  CARRIED DATA: none. (No large literal tables. The regexes/constants above ARE the full set
+    and are transcribed inline because they are tiny and standard JS literals.)
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because they
+    do not survive the factory codec's JSON round-trip, OR because they require host types):
+    - Symbol as `number` or `precision`: toNumber(Symbol) -> NaN. Behavior is defined
+      (ceil(Symbol(),0) => NaN; ceil(4.006, Symbol()) => 5 via toInteger(NaN)=0) but Symbols
+      are not codec-round-trippable -> NOT emitted.
+    - Functions / class instances with custom valueOf: toNumber walks valueOf(); defined but
+      identity-bearing host objects are not codec-faithful -> NOT emitted.
+    - Plain objects/arrays as `number`: toNumber coerces via valueOf/String -> usually NaN
+      (e.g. {} -> "[object Object]" -> NaN; [] -> "" -> 0; [5] -> "5" -> 5). These ARE
+      codec-faithful (plain objects/arrays round-trip) and a couple are included in genInputs
+      as bonus coverage, but the PRIMARY contract is numeric/string inputs.
+    No mutation, no side effects, no ambient reads -> read-only pure; no seam to inject.

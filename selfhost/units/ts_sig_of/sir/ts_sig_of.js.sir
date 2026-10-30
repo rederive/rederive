@@ -1,0 +1,21 @@
+UNIT ts_sig_of
+LANG js
+PRIMARY-SHA256 4a45cda772a4dd1f2eb7e95ebef5fad3180eff927793e041bd127916194064bf
+SIG ts_sig_of(sig: string): { exportName: string | null, fnType: string }
+NOTE default export
+ABI text = string (UTF-16; every delimiter is ASCII, so code-unit and character positions agree for the cuts and the
+  mask may blank one space per code unit); none = null; the record = a fresh plain object with exactly the own keys
+  exportName and fnType. A refusal (R10) is a thrown Error. The artifact is an ES module default-exporting the function;
+  it imports nothing.
+MECHANISM BLANK trims (R1, R7, R9) are explicit [ \t] scans or regexes — NOT String.prototype.trim and NOT \s. The ONE
+  place the full WS pin applies (R9's emptiness test) is String.prototype.trim, which is exactly that set. NAME's classes
+  are ASCII ([A-Za-z_$] then [\w$], no u flag). The bracket counts (R6, R8) are index scans over the masked string.
+MECHANISM R4's T is one left-to-right pass over the mask (a depth counter clamped at zero with Math.max; a ";" seen at depth
+  above zero becomes " "); ONE_DECL is tested on T, while ANY_NEVER and NO_VALUE_TYPE stay on the mask itself.
+DEPENDS-ON none
+PINNED regex HEAD = /^export[ \t]+(default[ \t]+)?function[ \t]+([A-Za-z_$][\w$]*)[ \t]*/ CITED R2 — matched against S; the match length is C
+PINNED regex LITERAL = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g CITED R3 — global replace on S; "." excludes the four line terminators, which is R3's backslash rule
+PINNED regex ONE_DECL = /[;`\r\n\u2028\u2029]|\/\/|\/\*|\*\/|=(?!>)/ CITED R4 — tested on T (the mask with in-brace ";" blanked)
+PINNED regex ANY_NEVER = /(?:^|[^\w$.])(?:any|never)(?![\w$])/ CITED R5 — tested on the mask
+PINNED regex NO_VALUE_TYPE = /(?:^|[^\w$.])(?:typeof|import|infer)(?![\w$])/ CITED R5 — tested on the mask
+PROVENANCE rederive@7f015c4d1023 cli/lang-ts.mts sigOf; language file re-cut 2026-10-27 (round 5k delta, #158) with the primary.

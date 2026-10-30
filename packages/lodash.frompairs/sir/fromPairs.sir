@@ -1,0 +1,175 @@
+UNIT fromPairs
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ---------------------------------------------------------------------------
+# Pure function. No seam (no clock/RNG/env/fs/net). Deterministic on its input.
+# Re-emitted module's DEFAULT export IS this function:
+#     export default function fromPairs(pairs) { ... }
+# The harness loads the .mjs via import() and calls the default export.
+# ---------------------------------------------------------------------------
+
+SIG fromPairs(pairs) -> object
+# pairs: an array (or array-like with a numeric .length) of [key, value] pair entries.
+# returns: a NEW plain object whose own/assigned keys come from pair[0] and values from pair[1].
+
+DEPENDS-ON none
+
+BEHAVIOR
+# Exact source (lodash.frompairs@4.0.1 index.js), reproduced verbatim in semantics:
+#
+#   function fromPairs(pairs) {
+#     var index = -1,
+#         length = pairs ? pairs.length : 0,
+#         result = {};
+#     while (++index < length) {
+#       var pair = pairs[index];
+#       result[pair[0]] = pair[1];
+#     }
+#     return result;
+#   }
+#
+# NODE 1 — INITIALIZE
+#   - result := a fresh empty plain object {} (prototype is Object.prototype).
+#   - index := -1.
+#   - length := (pairs is truthy) ? pairs.length : 0.
+#       * "truthy" is JS truthiness: null, undefined, false, 0, NaN, "" (empty string)
+#         all => length := 0 (the guard's else branch).
+#       * Any other value (arrays, non-empty strings, objects, numbers != 0, true):
+#         length := pairs.length. If `.length` is absent (e.g. a plain number 5,
+#         a boolean true, a plain object {} with no length) length := undefined,
+#         and the loop guard `++index < undefined` is false on the first test
+#         => loop never runs => returns {}.
+#
+# NODE 2 — ITERATE (pre-increment while loop, ascending index)
+#   - The loop runs for index = 0, 1, 2, ... up to length-1 (length read ONCE at start;
+#     it is a numeric snapshot — NOT re-read each iteration; mutating pairs.length mid-call
+#     is out of envelope and not tested).
+#   - Iteration is strictly ASCENDING by integer index. This order is observable:
+#     it determines which pair WINS on a duplicate key (see NODE 4).
+#   - For each index i:
+#       pair := pairs[i]
+#       result[ pair[0] ] := pair[1]
+#     i.e. read pair[0] (the key element), read pair[1] (the value element), then
+#     perform an OBJECT PROPERTY ASSIGNMENT  result[key] = value.
+#
+# NODE 3 — KEY COERCION (object-property-assignment semantics)
+#   - result[k] = v assigns under a COMPUTED PROPERTY KEY. JS coerces a non-symbol
+#     key to a STRING via ToPropertyKey / ToString. So pair[0] becomes a string key
+#     UNLESS it is already a Symbol (symbols are kept as symbol keys — OUT OF SCOPE,
+#     see SCOPE; not emitted by genInputs because Symbols do not survive the codec).
+#   - Demonstrated ToString coercions (verified against the real package; the blind
+#     re-emitter MUST reproduce each exactly):
+#       "a"            -> "a"            (string passes through)
+#       1   (number)   -> "1"
+#       42  (number)   -> "42"
+#       0   (number)   -> "0"
+#       -0  (number)   -> "0"           (negative zero stringifies to "0")
+#       true           -> "true"
+#       false          -> "false"
+#       null           -> "null"
+#       undefined      -> "undefined"
+#       NaN            -> "NaN"
+#       Infinity       -> "Infinity"
+#       -Infinity      -> "-Infinity"
+#       10n (bigint)   -> "10"          (bigint stringifies to its decimal digits)
+#       {}  (object)   -> "[object Object]"
+#       [1,2] (array)  -> "1,2"         (array ToString = join(","))
+#       []  (array)    -> ""            (empty array ToString = empty string)
+#     CONSEQUENCE — COLLISION: numeric key 1 and string key "1" BOTH coerce to "1"
+#       and therefore collide into the same property. So [[1,"x"],["1","y"]] yields
+#       {"1":"y"} (later wins) and [["1","y"],[1,"x"]] yields {"1":"x"} (later wins).
+#     CONSEQUENCE — VALUE TYPE PRESERVED: only the KEY is coerced. pair[1] (the value)
+#       is stored AS-IS with no coercion (number stays number, object stays object,
+#       undefined stays undefined).
+#
+#   - SPECIAL KEY "__proto__" (documented JS-native subtlety; OUT OF SCOPE for genInputs):
+#       result["__proto__"] = v invokes the Object.prototype __proto__ SETTER rather
+#       than creating an own data property. If v is an object/null it changes result's
+#       prototype; if v is a non-object primitive the setter is a no-op (prototype
+#       stays Object.prototype) and NO own "__proto__" property appears
+#       (Reflect.ownKeys(result) stays []). This is inherited from JS engine semantics,
+#       not lodash logic. Not emitted by genInputs (it makes the result shape engine-
+#       dependent and is not a stable codec value); documented here so a blind
+#       re-emitter is not surprised.
+#
+# NODE 4 — OVERWRITE ON DUPLICATE KEY (last-writer-wins, by ascending index)
+#   - Because NODE 2 iterates ascending and NODE 3 assigns into the same property for
+#     colliding keys, when two pairs coerce to the SAME string key, the LATER (higher
+#     index) pair's VALUE overwrites the earlier one. The earlier value is discarded.
+#       [["a",1],["a",2],["a",3]]  -> {"a":3}
+#       [[1,"x"],["1","y"]]        -> {"1":"y"}
+#   - The key's STRING IDENTITY (insertion position) is established by the FIRST writer;
+#     overwriting does not reorder keys. (Insertion order of string keys follows JS
+#     object property-ordering rules; for these inputs effectively first-seen order.
+#     Object key ordering is not part of the graded contract — see ORACLE; equality is
+#     by key/value mapping, not key order.)
+#
+# NODE 5 — VALUE READ pair[1]
+#   - pair[1] is read by index. If the pair has length < 2 (e.g. ["k"] or [] or a
+#     pair-element that is a primitive string/number), pair[1] is `undefined` and the
+#     assignment is result[key] = undefined, which CREATES an own property whose value
+#     is undefined (NOT absent — Object.keys lists it; JSON.stringify would drop it,
+#     so do NOT grade via JSON-stringify-of-result, grade via key/value map).
+#       [["k"]]   -> { "k": undefined }   (own key "k" present, value undefined)
+#       [[]]      -> { "undefined": undefined }  (pair[0]=undefined -> key "undefined")
+#   - Elements beyond index 1 in a pair are IGNORED:
+#       [["k","v","extra"]] -> {"k":"v"}
+#
+# NODE 6 — RETURN
+#   - Return result. For all empty/guarded/zero-length inputs the return is a fresh {}.
+#       []                -> {}
+#       null              -> {}
+#       undefined         -> {}
+#       false / 0 / "" / NaN -> {}    (falsy guard)
+#       5 / true / {}     -> {}       (truthy but no usable numeric length)
+#
+# THROW PATHS (TypeError) — codec-reachable, recorded as {__throw} by the harness:
+#   - Reading pair[0]/pair[1] requires `pair` to be non-null/non-undefined. If any
+#     visited element pairs[i] is `null` or `undefined`, then pair[0] throws
+#     "Cannot read properties of null/undefined (reading '0')" => TypeError.
+#       [null]      -> THROWS TypeError
+#       [undefined] -> THROWS TypeError
+#       [["a",1], null] -> THROWS TypeError (after assigning "a":1, then hits null)
+#   - A PRIMITIVE element does NOT throw: pair=5 gives 5[0]=undefined (autoboxing),
+#     pair[1]=undefined => result["undefined"]=undefined. So [5] -> {"undefined":undefined}.
+#       Only null/undefined elements throw.
+#   - A sparse array hole at a visited index reads `undefined` (the hole) => same as
+#     [undefined] => THROWS TypeError at that index. (Holes BEFORE the array's length
+#     that get visited throw; holes are not skipped — the index loop visits every i<length.)
+#
+# NO MUTATION (verified): fromPairs does not mutate `pairs` nor any inner pair array.
+#   It only READS pairs[i], pair[0], pair[1] and writes into the fresh `result`.
+#   Input-aliasing concerns are N/A. (Confirmed: input array and inner pair arrays are
+#   byte-identical before and after the call.)
+
+ORACLE value -> oracle.json
+# Grade by the returned object's (own-key -> value) mapping, comparing values by deep
+# structural equality, INCLUDING own keys whose value is `undefined` (do NOT collapse
+# them via JSON.stringify, which silently drops undefined-valued keys). Key ORDER is
+# NOT graded — equality is set-of-(key,value). Throw paths grade as {__throw: TypeError}.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — falsy/length guard,
+#   ascending index loop with length snapshot, pair[0]/pair[1] index reads, key ToString
+#   coercion (every demonstrated coercion in NODE 3), last-writer-wins overwrite,
+#   undefined values for short/empty pairs, the null/undefined-element TypeError paths,
+#   the {} return for all empty/guarded inputs, and no-mutation.
+# CARRIED DATA: none. (No literal tables; zero dependencies.)
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#   - SYMBOL keys: pair[0] a Symbol stays a symbol-keyed property (not stringified).
+#     Real behavior: [[Symbol("s"),"v"]] -> result has own symbol key Symbol(s)->"v".
+#     Excluded because Symbols do not survive the JSON.stringify(encode(args)) codec.
+#   - FUNCTION values / FUNCTION keys: not codec-round-trippable; excluded.
+#   - "__proto__" string key: engine prototype-setter semantics (NODE 3); excluded as
+#     its result shape is not a stable codec value.
+#   - String / non-array array-LIKE inputs with a numeric .length (e.g. "ab", arguments
+#     objects): behavior is defined (each indexed element treated as a "pair"; for a
+#     string each char is a 1-char string so pair[0]=char, pair[1]=char[1]=undefined =>
+#     e.g. "ab" -> {"a":undefined,"b":undefined}). Excluded from genInputs to keep the
+#     emitted inputs canonical arrays-of-pairs plus the explicit null/non-array guard
+#     scalars; the behavior is fully specified here for completeness.
+#   - Mutating pairs.length concurrently: out of envelope (length is snapshotted once).
+
+PROVENANCE lodash.frompairs@4.0.1, repo lodash/lodash, MIT license,
+#   source file: node_modules/lodash.frompairs/index.js (function fromPairs; module.exports = fromPairs)

@@ -1,0 +1,320 @@
+UNIT split
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG split(string, separator, limit) -> Array<string>
+DEPENDS-ON none   # zero runtime deps; self-contained custom lodash build
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# lodash.split@4.4.2 default export. module.exports = split.
+# Splits a string by `separator`, truncating the result array to `limit`.
+# Based on String.prototype.split (MDN), but adds:
+#   - lodash toString() coercion of `string` (number/null/undefined/array/etc.)
+#   - an isIterateeCall guard so it is safe to pass directly to _.map etc.
+#   - ToUint32 coercion of `limit` with MAX_ARRAY_LENGTH default
+#   - a Unicode-code-point-aware path for the EMPTY-string separator
+# The function is PURE: no I/O, no clock, no RNG, no mutation of inputs. No seam.
+# Output is ALWAYS an Array of primitive strings (JSON-serializable).
+
+# ============================================================================
+# CONSTANTS (literals in source — not carried data, small inline values)
+# ============================================================================
+# MAX_ARRAY_LENGTH = 4294967295          # = 2^32 - 1
+# MAX_SAFE_INTEGER = 9007199254740991    # = 2^53 - 1
+# INFINITY         = 1 / 0
+# funcTag   = '[object Function]'
+# genTag    = '[object GeneratorFunction]'
+# regexpTag = '[object RegExp]'
+# symbolTag = '[object Symbol]'
+# reIsUint  = /^(?:0|[1-9]\d*)$/         # used by isIndex
+#
+# Unicode regex pieces (used to build reHasUnicode and reUnicode):
+#   rsAstralRange       = '\ud800-\udfff'
+#   rsComboMarksRange   = '̀-ͯ︠-︣'
+#   rsComboSymbolsRange = '⃐-⃰'
+#   rsVarRange          = '︎️'              # variation selectors VS15/VS16
+#   rsAstral   = '[' + rsAstralRange + ']'                       # = '[\ud800-\udfff]'
+#   rsCombo    = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+#   rsFitz     = '\ud83c[\udffb-\udfff]'                # Fitzpatrick skin-tone modifiers
+#   rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')'
+#   rsNonAstral= '[^' + rsAstralRange + ']'                      # = '[^\ud800-\udfff]'
+#   rsRegional = '(?:\ud83c[\udde6-\uddff]){2}'         # a PAIR of regional indicators (flag)
+#   rsSurrPair = '[\ud800-\udbff][\udc00-\udfff]'       # any astral surrogate pair
+#   rsZWJ      = '‍'                               # zero-width joiner
+#   reOptMod   = rsModifier + '?'
+#   rsOptVar   = '[' + rsVarRange + ']?'
+#   rsOptJoin  = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+#   rsSeq      = rsOptVar + reOptMod + rsOptJoin
+#   rsSymbol   = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')'
+#
+# reUnicode (GLOBAL) = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+#   # Matches one "user-perceived character" (grapheme-ish): a base symbol followed
+#   # by an optional variation selector, optional modifier, and any number of
+#   # ZWJ-joined sequences. Used by unicodeToArray: string.match(reUnicode) || [].
+#
+# reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange + rsComboMarksRange + rsComboSymbolsRange + rsVarRange + ']')
+#   # Single-char test: TRUE iff the string contains ANY code unit in the union
+#   # of: ZWJ (U+200D), astral surrogate range (U+D800..U+DFFF), combining marks
+#   # (U+0300..U+036F, U+FE20..U+FE23), combining symbols (U+20D0..U+20F0),
+#   # or variation selectors (U+FE0E..U+FE0F). NOTE: this regex is NOT global and is
+#   # only .test()'d, so its lastIndex state is irrelevant / never advances.
+
+# ============================================================================
+# HELPER SEMANTICS (the exact pieces split() relies on)
+# ============================================================================
+#
+# isObject(v):        !!v && (typeof v == 'object' || typeof v == 'function')
+#                     # true for arrays, plain objects, functions, regexps; false for null & primitives.
+#
+# isObjectLike(v):    !!v && typeof v == 'object'
+#
+# eq(a, b):           a === b || (a !== a && b !== b)   # SameValueZero (NaN equals NaN)
+#
+# isLength(v):        typeof v == 'number' && v > -1 && v % 1 == 0 && v <= MAX_SAFE_INTEGER
+#
+# isFunction(v):      tag = isObject(v) ? Object.prototype.toString.call(v) : '';
+#                     tag == '[object Function]' || tag == '[object GeneratorFunction]'
+#
+# isArrayLike(v):     v != null && isLength(v.length) && !isFunction(v)
+#
+# isSymbol(v):        typeof v == 'symbol' || (isObjectLike(v) && Object.prototype.toString.call(v) == '[object Symbol]')
+#
+# isRegExp(v):        true iff v is a RegExp object.
+#                     # Source uses nodeUtil.binding('util').isRegExp when available, else
+#                     # baseIsRegExp(v) = isObject(v) && Object.prototype.toString.call(v) == '[object RegExp]'.
+#                     # On modern Node, process.binding('util') is unavailable/deprecated so baseIsRegExp is used.
+#                     # Both classify a literal /.../ RegExp as true; behavior is identical for in-scope inputs.
+#
+# reIsUint = /^(?:0|[1-9]\d*)$/
+# isIndex(value, length):
+#     length = (length == null) ? MAX_SAFE_INTEGER : length
+#     return !!length
+#         && (typeof value == 'number' || reIsUint.test(value))
+#         && (value > -1 && value % 1 == 0 && value < length)
+#
+# isIterateeCall(value, index, object):
+#     if (!isObject(object)) return false
+#     type = typeof index
+#     if (type == 'number'
+#           ? (isArrayLike(object) && isIndex(index, object.length))
+#           : (type == 'string' && index in object)):
+#         return eq(object[index], value)
+#     return false
+#     # Fires when split was called like a collection iteratee, e.g. arr.map(split)
+#     # invokes split(element, idx, arr): index is a number, object is array-like,
+#     # idx is a valid index, and arr[idx] === element. Also fires for string keys
+#     # when (index in object) and object[index] === value.
+#
+# --- string coercion ---
+# baseToString(value):
+#     if (typeof value == 'string') return value
+#     if (isSymbol(value)) return <symbol's String() form>        # OUT-OF-ENVELOPE: symbols not emitted
+#     result = (value + '')                                       # JS ToString of the primitive/object
+#     return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result
+#         # i.e. negative-zero is rendered '-0' (NOT '0'). All other values use native String().
+#
+# toString(value):
+#     return value == null ? '' : baseToString(value)
+#         # null AND undefined -> '' (empty string). Everything else -> baseToString.
+#
+# --- array slicing for the unicode path ---
+# baseSlice(array, start, end): standard slice with negative-index normalization, returns Array(end-start) copy.
+# castSlice(array, start, end):
+#     length = array.length
+#     end = (end === undefined) ? length : end
+#     return (!start && end >= length) ? array : baseSlice(array, start, end)
+#     # In split it is always called as castSlice(arr, 0, limit): since start=0 is falsy,
+#     # if limit >= arr.length the array is returned unchanged; otherwise sliced to [0, limit).
+#
+# asciiToArray(string):   string.split('')                    # native code-UNIT split (one element per UTF-16 unit)
+# unicodeToArray(string): string.match(reUnicode) || []       # code-POINT/grapheme-aware
+# hasUnicode(string):     reHasUnicode.test(string)
+# stringToArray(string):  hasUnicode(string) ? unicodeToArray(string) : asciiToArray(string)
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline of split(string, separator, limit))
+# ============================================================================
+#
+# NODE 1 — isIterateeCall guard (reset separator/limit for iteratee shape):
+#   if ( limit                              # limit is truthy
+#        && typeof limit != 'number'        # AND not a plain number
+#        && isIterateeCall(string, separator, limit) ):
+#       separator = undefined
+#       limit     = undefined
+#   # Rationale: arr.map(split) calls split(elem, idx, arr). The guard detects that
+#   # the 2nd/3rd args are an iteration index+collection rather than a real
+#   # separator+limit, and discards them so the element is split with default args.
+#   # NOTE the short-circuit ORDER: `limit && typeof limit != 'number'` must BOTH
+#   # hold before isIterateeCall is even called. So a numeric limit NEVER triggers
+#   # the guard, and a falsy limit (0, '', null, undefined, false, NaN) never does.
+#
+# NODE 2 — limit coercion (ToUint32):
+#   limit = (limit === undefined) ? MAX_ARRAY_LENGTH : (limit >>> 0)
+#   # `limit >>> 0` is JS ToUint32: ToNumber(limit), then if NaN/±Infinity -> 0,
+#   # else truncate toward zero (drop fraction) and reduce modulo 2^32 into [0, 2^32).
+#   # Confirmed by running:
+#   #   undefined -> 4294967295        (the MAX_ARRAY_LENGTH default)
+#   #   0         -> 0
+#   #   1.9       -> 1                  (fraction dropped)
+#   #   -1        -> 4294967295         (-1 mod 2^32)
+#   #   -1.5      -> 4294967295         (trunc to -1, then mod)
+#   #   NaN       -> 0
+#   #   Infinity  -> 0
+#   #   4294967295-> 4294967295
+#   #   4294967296-> 0                 (mod 2^32)
+#   #   4294967297-> 1
+#   #   true      -> 1                 (ToNumber(true)=1)
+#   #   false     -> 0
+#   #   '2'       -> 2                 (string numeric coercion)
+#   #   'abc'     -> 0                 (NaN -> 0)
+#   #   null      -> 0                 (ToNumber(null)=0)  [null !== undefined so it does NOT default to MAX]
+#   #   {}        -> 0                 (NaN -> 0)
+#   #   ['a','b'] -> 0                 (NaN -> 0)
+#   #   [5]       -> 5                 (single-element array ToNumber = 5)
+#
+# NODE 3 — empty-result short-circuit:
+#   if (!limit) return []
+#   # Any falsy limit AFTER coercion (only possible value is 0) returns [] immediately,
+#   # BEFORE string coercion and BEFORE the split. So limit==0 (or anything coercing
+#   # to 0: NaN, Infinity, null, {}, non-numeric string, 4294967296, etc.) -> [].
+#
+# NODE 4 — string coercion:
+#   string = toString(string)
+#   # null/undefined -> ''. number -> its String() ('-0' preserved for negative zero,
+#   # '123', 'Infinity', 'NaN', '1e+21' for 1e21, etc.). bigint -> decimal digits
+#   # ('10' for 10n). boolean -> 'true'/'false'. array -> Array.prototype.toString
+#   # (comma-joined, nested arrays flattened by join: [[1,2],[3]] -> '1,2,3'). plain
+#   # object -> '[object Object]'. (Symbols are OUT-OF-ENVELOPE; not emitted.)
+#
+# NODE 5 — empty-separator Unicode branch:
+#   if ( string                              # truthy AFTER coercion (NON-EMPTY string)
+#        && ( typeof separator == 'string'
+#             || (separator != null && !isRegExp(separator)) ) ):
+#       separator = baseToString(separator)  # coerce separator to string (only here)
+#       if (!separator && hasUnicode(string)):   # separator coerced to '' AND string contains unicode
+#           return castSlice(stringToArray(string), 0, limit)
+#   # The guard for entering this block:
+#   #   - string must be a non-empty string (so '' input never enters; '', '-' -> native ['']
+#   #     because the empty string falls through to NODE 6).
+#   #   - AND separator is either a JS string, OR a non-null non-RegExp value
+#   #     (numbers/booleans/objects -> baseToString'd). If separator is null or undefined
+#   #     or a RegExp, this whole block is skipped (separator left as-is for NODE 6).
+#   # Inside: separator = baseToString(separator). If the coerced separator is the EMPTY
+#   #   string AND string hasUnicode, return the code-POINT-aware split (graphemes per
+#   #   reUnicode), truncated to limit via castSlice(arr, 0, limit).
+#   #   - If separator coerces to non-empty, OR string has no unicode, we fall through
+#   #     to NODE 6 with `separator` now the COERCED string value.
+#   # IMPORTANT distinction (confirmed): empty-string separator on a NON-unicode string
+#   #   (e.g. 'abc','') does NOT take this branch's return; it falls to NODE 6 where
+#   #   'abc'.split('', limit) yields code-UNITS ['a','b','c']. For ASCII the two are
+#   #   identical; the unicode branch only matters when hasUnicode is true.
+#
+# NODE 6 — native split (terminal for all other cases):
+#   return string.split(separator, limit)
+#   # Standard String.prototype.split:
+#   #   - separator a STRING: literal split; multi-char separators supported;
+#   #     '' splits into UTF-16 code units; a separator not found -> [string];
+#   #     empty string '' input with non-empty separator -> [''].
+#   #   - separator a RegExp: regex split; CAPTURE GROUPS are spliced into the output
+#   #     (e.g. 'a1b2c'.split(/(\d)/) -> ['a','1','b','2','c']); global flag is irrelevant
+#   #     to split. NOTE: `separator` here may be the ORIGINAL RegExp/null/undefined
+#   #     (when NODE 5's block was skipped) OR the COERCED string (when NODE 5 entered
+#   #     but did not return).
+#   #   - separator undefined (1-arg call, or guard reset, or explicit undefined): split
+#   #     returns [string] (the whole string in a 1-element array), truncated to limit.
+#   #   - separator null: 'a-b'.split(null) -> ['a-b'] (null coerces to the string "null"
+#   #     as a search target which is absent) -> the WHOLE string; confirmed ['a-b'].
+#   # limit here is the ToUint32'd value (>=1, since 0 already returned at NODE 3).
+
+# ============================================================================
+# WORKED EXAMPLES (all verified against the real package, Node v24)
+# ============================================================================
+#   split('a-b-c','-')            -> ['a','b','c']
+#   split('a-b-c','-',2)          -> ['a','b']
+#   split('a-b-c','-',0)          -> []                     (NODE 3)
+#   split('a-b-c','-',undefined)  -> ['a','b','c']          (limit defaults to MAX)
+#   split('a-b-c')                -> ['a-b-c']              (separator undefined)
+#   split('','-')                 -> ['']                   (NODE 6; empty input, NODE5 skipped)
+#   split('','')                  -> []                     (NODE 6; ''.split('') -> [])
+#   split('abc','')               -> ['a','b','c']          (NODE 6; ascii code-units)
+#   split('abc','',2)             -> ['a','b']
+#   split('\u{1F600}\u{1F601}','') -> ['\u{1F600}','\u{1F601}']   (NODE 5 unicode path)
+#   split('\u{1F600}\u{1F601}\u{1F602}','',2) -> ['\u{1F600}','\u{1F601}']  (castSlice truncates)
+#   split('\u{1F1FA}\u{1F1F8}','') -> ['\u{1F1FA}\u{1F1F8}']      (regional-indicator pair = 1 elem)
+#   split('1\u{FE0F}\u{20E3}','') -> ['1\u{FE0F}\u{20E3}']        (keycap, VS16+combining = 1 elem)
+#   split('a\u{1F600}b','')       -> ['a','\u{1F600}','b']
+#   split('a\u{1F600}a','a')      -> ['','\u{1F600}',''] (native, sep non-empty -> NOT codepoint-aware)
+#   split('a1b2c',/\d/)           -> ['a','b','c']
+#   split('a1b2c',/(\d)/)         -> ['a','1','b','2','c']  (capture group included)
+#   split('a1b2c',/(\d)/,3)       -> ['a','1','b']          (limit caps total output)
+#   split(123,'')                 -> ['1','2','3']          (toString(123)='123')
+#   split(123,'2')                -> ['1','3']
+#   split(-0,'')                  -> ['-','0']              (toString(-0)='-0')  [OUT-OF-ENVELOPE input]
+#   split(-0,'-')                 -> ['','0']                                    [OUT-OF-ENVELOPE input]
+#   split(null,'')                -> []                     (toString(null)=''; ''.split('')=[])
+#   split(undefined,'')           -> []
+#   split([1,2,3],',')            -> ['1','2','3']          (toString([1,2,3])='1,2,3')
+#   split([[1,2],[3]],'|')        -> ['1,2,3']              (array join flattens)
+#   split('a-b-c','-',-1)         -> ['a','b','c']          (-1>>>0 = MAX)
+#   split('a-b-c','-',1.9)        -> ['a']                  (1.9>>>0=1)
+#   split('a-b-c','-',NaN)        -> []                     (NaN>>>0=0 -> NODE 3)
+#   split('a-b-c','-',4294967296) -> []                     (mod 2^32 = 0)
+#   split('a-b-c','-',true)       -> ['a']                  (true>>>0=1)
+#   split('a-b-c','-','2')        -> ['a','b']              ('2'>>>0=2)
+#   split('a-b-c','-',null)       -> []                     (null>>>0=0; null !== undefined)
+#   --- isIterateeCall guard ---
+#   split('a-b-c', 0, ['a-b-c','x']) -> ['a-b-c']           (guard fires: idx 0 valid, arr[0]===value
+#                                                            -> sep&limit reset to undefined -> full split)
+#   split('a-b-c', 0, ['ZZZ','x'])   -> []                  (guard does NOT fire: arr[0]!==value;
+#                                                            limit=['ZZZ','x']>>>0=0 -> NODE 3)
+#   split('a-b-c','foo',{foo:'a-b-c'}) -> ['a-b-c']         (guard fires via string-key path)
+#   split('a-b-c','-',{})         -> []                     (guard not fired; {}>>>0=0 -> NODE 3)
+#   ['a-b-c','x-y-z'].map(split)  -> [['a-b-c'],['x-y-z']]  (the canonical iteratee use)
+
+ORACLE value -> oracle.json
+# Oracle compares the returned Array<string> by JSON equality. Output is always an
+# array of primitive strings (verified). No throwing path is reachable from codec-
+# faithful in-scope inputs.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline NODE 1..6 above,
+#   including isIterateeCall guard, ToUint32 limit coercion, lodash toString/baseToString
+#   (with -0 -> '-0'), the empty-separator Unicode-grapheme branch (reUnicode/reHasUnicode/
+#   castSlice/stringToArray), and native String.prototype.split delegation (string,
+#   multi-char, RegExp-with-capture-groups, undefined/null separators).
+#
+# CARRIED DATA: none. The Unicode regex source strings (rsAstral..reUnicode/reHasUnicode)
+#   are small inline literals reproduced verbatim above; they are NOT a large external
+#   table, so there is no carried.json. A blind re-emitter MUST build reUnicode and
+#   reHasUnicode from the exact piece-strings listed in CONSTANTS.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; behavior still DEFINED here
+# so a blind re-emitter reconstructs it from the spec — these are codec hazards, not
+# behavior gaps):
+#   - `-0` AS the `string` arg: toString(-0) = '-0' (NODE 4, the baseToString -0 rule), e.g.
+#     split(-0,'') -> ['-','0']. BUT JSON.stringify(-0) === '0', so -0 does NOT round-trip
+#     the oracle codec (it decodes to 0, whose toString is '0'). NOT emitted by genInputs.
+#   - `undefined` AS the `limit` arg: behaves as the MAX_ARRAY_LENGTH default (NODE 2). BUT
+#     an `undefined` array element JSON-encodes to `null`, and a `null` limit coerces to 0
+#     (NODE 3 -> []), so an explicit-undefined limit does NOT round-trip. genInputs reaches
+#     the MAX-default path ONLY via SHORTER tuples (length 1 or 2 = genuinely-absent arg).
+#     (An `undefined` SEPARATOR is codec-safe — split treats undefined and null separators
+#     identically — but generated tuples use the absent/null forms.)
+#   - `string` or `separator` being a Symbol: baseToString routes symbols through
+#     symbolToString; Symbols are not JSON-codec-faithful and are excluded.
+#   - `string` being a bigint: toString yields decimal digits (10n -> '10'); bigint
+#     round-trips the codec but is a degenerate numeric path — documented, not emitted.
+#   - NaN / ±Infinity AS the `string` arg: would coerce via toString to 'NaN'/'Infinity'
+#     (in-contract), BUT NaN/Infinity are not JSON-codec-faithful, so they are NOT emitted.
+#   - NaN / ±Infinity AS the `limit` arg: ToUint32 -> 0 -> [] (NODE 2/3, in-contract), but
+#     not codec-faithful, so NOT emitted (the limit==0 path is covered by 0/'abc'/{} etc.).
+#   - Functions as any arg: not codec-faithful; excluded. (A function `limit` is truthy &
+#     non-number; isIterateeCall(object=function) -> isObject true, but typeof index
+#     mismatch -> guard usually false; then function>>>0 = 0 -> []. Documented, not emitted.)
+#   - No mutation/side effects: split does not mutate its inputs; pure value mode.
+
+PROVENANCE lodash.split@4.4.2 (custom modularized lodash build), repo lodash/lodash,
+  MIT license, source file index.js (function `split`, lines 540-559; module.exports line 561).

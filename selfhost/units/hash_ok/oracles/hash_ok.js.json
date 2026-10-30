@@ -1,0 +1,244 @@
+{
+ "unit": "hash_ok",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v3",
+   "args": [
+    "\ud800",
+    "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097"
+   ],
+   "expected": {
+    "__throw": "hashOk: text with a lone surrogate has no UTF-8 form of its own"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v5",
+   "args": [
+    "\ud800",
+    0
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got number)"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v10",
+   "args": [
+    [
+     "abc"
+    ],
+    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+   ],
+   "expected": {
+    "__throw": "The \"data\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of Array"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v11",
+   "args": [
+    null,
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   ],
+   "expected": {
+    "__throw": "The \"data\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received null"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      255,
+      254,
+      237
+     ],
+     "buf": false
+    },
+    "05cdd401ff6abecfbf8cd65180b869cd639ef287ced1e07d533e27f185a23e64"
+   ],
+   "expected": true,
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v15",
+   "args": [
+    "\ud800",
+    {
+     "__t": "undef"
+    }
+   ],
+   "expected": true,
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v20",
+   "args": [
+    "abc",
+    true
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got boolean)"
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v27",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      97,
+      98,
+      99
+     ],
+     "buf": false
+    },
+    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+   ],
+   "expected": true,
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v29",
+   "args": [
+    "abc",
+    [
+     "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    ]
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got object)"
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v31",
+   "args": [
+    "abc",
+    0
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got number)"
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v34",
+   "args": [
+    {},
+    {
+     "__t": "undef"
+    }
+   ],
+   "expected": true,
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v37",
+   "args": [
+    "abc",
+    {
+     "__t": "bigint",
+     "v": "0"
+    }
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got bigint)"
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v45",
+   "args": [
+    "\ud800",
+    ""
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got \"\")"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      97
+     ],
+     "buf": false
+    },
+    "A"
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got \"A\")"
+   },
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v55",
+   "args": [
+    5,
+    "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
+   ],
+   "expected": {
+    "__throw": "The \"data\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v62",
+   "args": [
+    "\udfffz",
+    "x"
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got \"x\")"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v65",
+   "args": [
+    "abc",
+    false
+   ],
+   "expected": {
+    "__throw": "hashOk: a pin is 64 lowercase hex digits (got boolean)"
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v70",
+   "args": [
+    "\ude00\ud83d",
+    "52793f8dc1d85e409f8c88be99d8b31d58f676246340150f406289e04a11151e"
+   ],
+   "expected": {
+    "__throw": "hashOk: text with a lone surrogate has no UTF-8 form of its own"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v71",
+   "args": [
+    true,
+    "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+   ],
+   "expected": {
+    "__throw": "The \"data\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type boolean (true)"
+   },
+   "outsideEnvelope": "not text"
+  }
+ ]
+}

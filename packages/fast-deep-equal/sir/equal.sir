@@ -1,0 +1,271 @@
+# =============================================================================
+# SIR — fast-deep-equal `equal`  (the default export, NON-es6 / NON-react build)
+# =============================================================================
+UNIT equal
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic        # pure value->value; no clock/RNG/io/net seam. N/A injection.
+
+SIG  equal(a: any, b: any) -> boolean
+     # Two positional args. Recursive. Returns a strict JS boolean (true | false).
+     # Emitted as a DEFAULT export: the blind re-emitter MUST `export default function equal(a,b){...}`.
+     # (Source is `module.exports = function equal(a, b) {...}`.)
+
+DEPENDS-ON none
+     # No imports. Uses only intrinsics: `===`, `!==`, typeof, Array.isArray, RegExp,
+     # Object.keys, Object.prototype.{valueOf,toString,hasOwnProperty}, `.constructor`,
+     # `.source`, `.flags`, `.length`, and recursion on itself.
+
+# =============================================================================
+# BEHAVIOR — EXACT ordered pipeline. Reproduce branch order PRECISELY.
+# The function is `equal(a, b)`. Evaluate the nodes top-to-bottom; the FIRST node
+# that returns is the answer. All recursion is into this same `equal`.
+# =============================================================================
+BEHAVIOR
+
+# ---- NODE 0 — identity short-circuit (FIRST line, before anything else) ------
+#   if (a === b) return true;
+# Uses JS strict equality `===`. Consequences (all VERIFIED against the package):
+#   * Equal primitives short-circuit here: 1===1, 'x'==='x', true===true, null===null,
+#     undefined===undefined, 1n===1n  -> return true.
+#   * +0 === -0 is TRUE in JS  ->  equal(+0,-0) returns true HERE (NOTE: NOT false).
+#   * NaN === NaN is FALSE in JS -> NaN does NOT short-circuit here; it falls all the
+#     way through to NODE 5 (the both-NaN tail). equal(NaN,NaN) -> true via NODE 5.
+#   * Same object reference (a===b) -> true here, regardless of contents (no recursion).
+#   * bigint: 1n===1n -> true here. 1n===1 -> false (continues). typeof 1n is 'bigint'
+#     (NOT 'object'), so a bigint NEVER enters NODE 1; if not ===-equal it falls to NODE 5.
+
+# ---- NODE 1 — "both are non-null objects" gate -------------------------------
+#   if (a && b && typeof a == 'object' && typeof b == 'object') { ... NODES 1a..4 ... }
+# The gate is, IN THIS EXACT ORDER (short-circuit &&):
+#       a   (truthy)   AND   b   (truthy)   AND   typeof a == 'object'   AND   typeof b == 'object'
+# Critical consequences (VERIFIED):
+#   * `a && b` is TRUTHINESS, evaluated BEFORE the typeof checks. So null (falsy, even
+#     though typeof null == 'object'), 0, '', false, NaN, undefined on EITHER side make
+#     the gate false -> skip the whole block -> fall to NODE 5.
+#       - equal(null, {}) : a===b false; gate: null falsy -> skip -> NODE 5: null!==null is
+#         false -> return false.  (VERIFIED false.)
+#       - equal(0, null), equal('', null), equal(undefined, 0): gate false -> NODE 5 false.
+#   * Both sides must be typeof 'object'. typeof for arrays/plain objects/RegExp/Date/Map/
+#     Set/typed-arrays/boxed Number|String|Boolean is 'object'. typeof for number/string/
+#     boolean/bigint/symbol/undefined/function is NOT 'object'.
+#       - equal(1, '1'): a===b false; 1 is truthy, '1' truthy, but typeof 1 == 'number' ->
+#         gate false -> NODE 5: 1!==1 false -> return false.  (VERIFIED false.)
+# If the gate is TRUE, execute NODES 1a..4 (return from the FIRST that returns). If the
+# block completes to its end it returns true (NODE 4 tail). If the gate is FALSE, go to NODE 5.
+
+  # ---- NODE 1a — constructor check (FIRST line inside the object block) -------
+  #   if (a.constructor !== b.constructor) return false;
+  # `.constructor` compared by `!==` (reference identity of the constructor function).
+  #   * Array vs plain Object: Array !== Object  -> return false.
+  #       equal([1], {0:1}) -> false.  equal([], {}) -> false.  equal([1,2,3], {0:1,1:2,2:3,length:3}) -> false.
+  #   * Plain object {} vs Object.create(null): {}.constructor is Object; the null-proto
+  #     object has NO `.constructor` (reading it yields undefined) -> Object !== undefined
+  #     -> return false.  equal({}, Object.create(null)) -> false.  (VERIFIED false.)
+  #   * Array subclass vs Array: MySubArray !== Array -> false.
+  #   * Uint8Array vs Buffer: their constructors differ -> false.  equal(Uint8Array([1,2]),
+  #     Buffer.from([1,2])) -> false.  (VERIFIED false.)
+  #   * Map vs Set: Map !== Set -> false.
+  #   * RegExp subclass vs RegExp: differ -> false (and would NOT take the RegExp branch).
+  # If constructors are EQUAL (same constructor reference), continue to NODE 2.
+
+  # ---- NODE 2 — Array branch -------------------------------------------------
+  #   if (Array.isArray(a)) {
+  #     length = a.length;
+  #     if (length != b.length) return false;     # NOTE: `!=` (loose), not `!==`. b is an
+  #                                               # Array here (same constructor as a), so
+  #                                               # b.length is a number; loose vs strict is
+  #                                               # immaterial for arrays.
+  #     for (i = length; i-- !== 0;)              # iterate indices length-1 .. 0 (descending)
+  #       if (!equal(a[i], b[i])) return false;   # recurse per element
+  #     return true;
+  #   }
+  # Notes (VERIFIED):
+  #   * Because NODE 1a already passed, if a is an Array then b is an Array too (same ctor).
+  #   * Length mismatch -> false BEFORE any element compare. equal([1,2,3],[1,2]) -> false;
+  #     equal([1,2],[1,2,3]) -> false.
+  #   * Element order MATTERS (positional). equal([{a:1},{a:2}], [{a:2},{a:1}]) -> false.
+  #   * Recursion handles nesting: equal([1,[2,3]],[1,[2,3]]) -> true; ...[2,4] -> false.
+  #   * NaN element: equal([NaN],[NaN]) -> recurse equal(NaN,NaN) -> NODE 5 true -> array true.
+  #   * +0/-0 element: equal([0],[-0]) -> recurse equal(0,-0) -> NODE 0 true -> array true.
+  #   * Empty arrays: equal([],[]) -> length 0, loop skipped -> return true.
+  # If a is NOT an Array, continue to NODE 3a. (b's array-ness is irrelevant past NODE 1a
+  # because same-constructor already guaranteed both-or-neither array.)
+
+  # ---- NODE 3a — RegExp branch -----------------------------------------------
+  #   if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+  # Compares `.source` (the pattern text) by `===` AND `.flags` by `===` (both strict string).
+  #   * `.flags` is the JS-normalized flag string (alphabetical canonical order: d,g,i,m,s,u,y).
+  #     So /a/gi and /a/ig both have .flags === 'gi' -> equal(/a/gi,/a/ig) -> true.  (VERIFIED.)
+  #   * A RegExp with no flags has .flags === '' (empty string).
+  #   * equal(/a/g,/a/g) -> true; equal(/a/g,/a/i) -> false (flags differ);
+  #     equal(/a/,/b/) -> false (source differs); equal(/a/,/a/) -> true.  (VERIFIED.)
+  #   * Triggered ONLY when a.constructor === RegExp exactly (a true RegExp). A RegExp
+  #     SUBCLASS instance has constructor !== RegExp, so it would FALL THROUGH to NODE 3b.
+  # If a.constructor !== RegExp, continue to NODE 3b.
+
+  # ---- NODE 3b — valueOf branch ----------------------------------------------
+  #   if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+  # Condition: a's `valueOf` method is NOT the default Object.prototype.valueOf (i.e. the
+  # type/instance OVERRIDES valueOf). If so, compare a.valueOf() === b.valueOf() by `===`.
+  #   * Date OVERRIDES valueOf (returns epoch ms via getTime). So Dates take THIS branch:
+  #       equal(new Date(0), new Date(0)) -> 0 === 0 -> true.
+  #       equal(new Date(0), new Date(1)) -> 0 === 1 -> false.
+  #       equal(new Date(NaN), new Date(NaN)) -> NaN === NaN -> FALSE (invalid Dates are
+  #         NEVER equal here — bug-preserving). (ALL VERIFIED.)
+  #   * Boxed Number/String/Boolean OVERRIDE valueOf (return the wrapped primitive):
+  #       equal(new Number(1), new Number(1)) -> 1===1 -> true; new Number(1) vs new Number(2)
+  #       -> false; new String('x') vs new String('x') -> true; new Boolean(true) vs
+  #       new Boolean(true) -> true.  (VERIFIED.) (Boxed are out-of-envelope for genInputs;
+  #       see SCOPE — documented for the blind engineer, not emitted.)
+  #   * An object with a CUSTOM valueOf method takes this branch: {valueOf(){return 5}} vs
+  #       {valueOf(){return 5}} -> 5===5 -> true; vs {valueOf(){return 6}} -> false. (VERIFIED.)
+  #       (Custom-method objects are out-of-envelope for genInputs; functions don't round-trip.)
+  #   * Uint8Array / Buffer / typed arrays: their `valueOf` IS Object.prototype.valueOf
+  #     (NOT overridden) -> this branch is SKIPPED for them; they continue to NODE 3c. (VERIFIED.)
+  #   * Plain objects, plain arrays (already handled), Map, Set: valueOf is the default ->
+  #     this branch is SKIPPED -> continue to NODE 3c.
+  # If valueOf is the default, continue to NODE 3c.
+
+  # ---- NODE 3c — toString branch ---------------------------------------------
+  #   if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
+  # Condition: a's `toString` method is NOT the default Object.prototype.toString. If so,
+  # compare a.toString() === b.toString() by `===` (strict string compare).
+  #   * Typed arrays (Uint8Array, Int8Array, Float64Array, ...) OVERRIDE toString. Their
+  #     toString() is the COMMA-JOINED decimal of their elements (e.g. Uint8Array([1,2])
+  #     -> "1,2"). So:
+  #       equal(Uint8Array([1,2]), Uint8Array([1,2])) -> "1,2"==="1,2" -> true.
+  #       equal(Uint8Array([1,2]), Uint8Array([1,3])) -> "1,2"==="1,3" -> false.
+  #       equal(Uint8Array([1,2]), Uint8Array([1]))   -> "1,2"==="1"   -> false.  (ALL VERIFIED.)
+  #     Element values are taken AS STORED (after the typed-array's own wrap/clamp on
+  #     construction), so e.g. Uint8Array([300]).toString() === "44".
+  #   * Buffer (Node, subclass of Uint8Array): Buffer.toString() (no args) DECODES bytes as
+  #     UTF-8 — this is LOSSY: distinct byte sequences that both decode to the Unicode
+  #     replacement char compare EQUAL. equal(Buffer.from([0xff]), Buffer.from([0xfe])) ->
+  #     "U+FFFD" === "U+FFFD" -> TRUE (bug-preserving). (VERIFIED.) Buffer is therefore
+  #     NOT emitted in genInputs (host/decoding-dependent); use Uint8Array for the
+  #     lossless toString path. Documented here for completeness.
+  #   * Plain objects {} and Map/Set do NOT override toString relative to
+  #     Object.prototype.toString in the way that matters here:
+  #       - Plain {} : toString IS Object.prototype.toString -> branch SKIPPED -> NODE 4.
+  #       - Map      : toString IS Object.prototype.toString (Map has no own toString) ->
+  #                    branch SKIPPED -> NODE 4.  (VERIFIED: m.toString===Object.prototype.toString.)
+  #       - Set      : same as Map -> branch SKIPPED -> NODE 4.
+  # If toString is the default, continue to NODE 4.
+
+  # ---- NODE 4 — generic own-enumerable-keys branch (the default tail) --------
+  #   keys = Object.keys(a);
+  #   length = keys.length;
+  #   if (length !== Object.keys(b).length) return false;   # `!==` strict, both numbers
+  #   for (i = length; i-- !== 0;)                            # descending
+  #     if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;  # every key of a
+  #                                                                            # must be an OWN
+  #                                                                            # prop of b
+  #   for (i = length; i-- !== 0;) {                          # descending
+  #     var key = keys[i];
+  #     if (!equal(a[key], b[key])) return false;             # recurse per matched key
+  #   }
+  #   return true;
+  # `Object.keys` = own ENUMERABLE STRING keys (no symbols, no inherited, no non-enumerable).
+  # Three sub-steps, in order: (i) key COUNT must match; (ii) every key of `a` must be a
+  # hasOwnProperty of `b`; (iii) recurse equal on each key's values. Any failure -> false;
+  # completing all -> true.
+  # Consequences (VERIFIED):
+  #   * Plain objects: equal({},{}) -> 0 keys -> true. equal({a:1},{a:1}) -> true.
+  #     KEY-ORDER independent: equal({a:1,b:2},{b:2,a:1}) -> true (count + presence +
+  #     value all match). equal({a:1},{a:2}) -> recurse value -> false. equal({a:1},{a:1,b:2})
+  #     -> count 1 !== 2 -> false. equal({a:1,b:2},{a:1}) -> count 2 !== 1 -> false.
+  #     equal({a:1},{b:1}) -> count equal, but key 'a' not own on b -> false.
+  #     equal({a:1,b:2},{a:1,c:2}) -> count equal, key 'b' not own on b -> false. (VERIFIED.)
+  #   * Nesting via recursion: equal({a:{b:1}},{a:{b:1}}) -> true; ...{b:2} -> false.
+  #     equal({a:[1,2]},{a:[1,2]}) -> true; ...{a:[2,1]} -> false (array order). (VERIFIED.)
+  #   * Nested NaN value: equal({a:NaN},{a:NaN}) -> recurse equal(NaN,NaN) -> NODE 5 true ->
+  #     object true. (VERIFIED.)
+  #   * ***MAP / SET ARE NOT SPECIAL-CASED IN THIS BUILD.*** They reach NODE 4 (their valueOf
+  #     and toString are the Object.prototype defaults). Object.keys(aMap) === [] and
+  #     Object.keys(aSet) === [] (entries/values are INTERNAL slots, not own enumerable keys).
+  #     Therefore ANY two same-constructor Maps (or two same-constructor Sets) compare EQUAL
+  #     regardless of contents:
+  #       equal(new Map([['a',1]]), new Map([['a',1]])) -> true
+  #       equal(new Map([['a',1]]), new Map([['a',2]])) -> true   (!! contents ignored)
+  #       equal(new Map(), new Map())                   -> true
+  #       equal(new Map([['a',1],['b',2]]), new Map())  -> true   (!! sizes ignored)
+  #       equal(new Set([1,2]), new Set([1,2]))         -> true
+  #       equal(new Set([1,2]), new Set([1,3]))         -> true   (!! contents ignored)
+  #       equal(new Set([1,2,3]), new Set())            -> true   (!! sizes ignored)
+  #     (ALL VERIFIED.) This is the headline divergence from lodash.isequal; reproduce it
+  #     EXACTLY. A Map/Set comparison's result is decided ENTIRELY by NODE 1a (constructor
+  #     equality) + the empty-keys NODE 4 => true whenever constructors match.
+  #   * Uint8Array does NOT reach NODE 4 (it returns at NODE 3c via toString) — do not
+  #     confuse the two paths.
+
+# ---- NODE 5 — the both-NaN tail (final fallthrough; only reached when NODE 1 gate false) ----
+#   return a !== a && b !== b;
+#   `x !== x` is true IFF x is NaN. So this returns true ONLY when BOTH a and b are NaN,
+#   else false.
+#     * equal(NaN, NaN) -> true.   equal(NaN, 1) -> false.   equal(1, 2) -> false.
+#     * equal(null, {}) reaches here (gate false): null!==null is false -> false.
+#     * equal(1,'1') reaches here: 1!==1 false -> false.
+#   (ALL VERIFIED.)
+
+ORACLE value -> oracle.json
+     # Pure deterministic function. The harness records equal(a,b) as the boolean result
+     # (true|false). No seam; no trace; codec-faithful inputs only (see SCOPE).
+
+# =============================================================================
+SCOPE
+# -----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the entire NODE 0..5 pipeline above. All
+# branch conditions, operators (=== vs !== vs !=), order, recursion direction, and the
+# bug-preserving outcomes (Map/Set ignored-contents, Date(NaN) inequality, Buffer UTF-8
+# lossiness, +0/-0 true, constructor-mismatch-before-Array-check) are CONTRACT. There are
+# no options and no configuration.
+#
+# CARRIED DATA: NONE. (No literal tables; this is a pure structural util.)
+#
+# IN-ENVELOPE VALUE CLASSES (codec-faithful; genInputs DOES emit; SIR fully defines each):
+#   * JSON primitives: number (incl. NaN, +/-Infinity, +0, -0), string, boolean, null.
+#   * undefined  — ONLY as a STANDALONE top-level argument (legal: equal(undefined,undefined)
+#                  -> NODE 0 true; equal(null,undefined) -> NODE 5 false; equal(undefined,0)
+#                  -> NODE 5 false). genInputs NEVER buries `undefined` inside an array element
+#                  or object value, because the factory codec does NOT reliably round-trip an
+#                  `undefined` array-element/object-value (it would poison the held-out). The
+#                  array/object recursion onto undefined holes is therefore NOT exercised by
+#                  the generator; its behavior is nonetheless fully defined here (a hole recurses
+#                  to equal(undefined,undefined) -> NODE 0 true) for a blind engineer.
+#   * bigint: 1n etc. (primitive; settled by NODE 0 or NODE 5). Emitted standalone AND as
+#                  array elements / object values (bigint DOES round-trip the codec).
+#   * RegExp: source+flags compared (NODE 3a). Emitted.
+#   * Set, Map: same-constructor -> always equal (NODE 4 empty-keys); cross Map/Set -> false
+#               (NODE 1a). FULLY in-envelope and emitted to lock the headline divergence.
+#   * Uint8Array (and other typed arrays): toString path (NODE 3c). Emitted (lossless toString).
+#   * Plain objects and arrays, arbitrarily nested with the above.
+#
+# OUT-OF-ENVELOPE (DOCUMENTED so a blind engineer can reconstruct behavior; NOT emitted by
+# genInputs because they either don't round-trip the codec or are host/identity-dependent):
+#   * Date: behavior is the NODE 3b valueOf path (epoch ms; Date(NaN) pair -> false). The
+#           factory codec LACKS a Date tag, so Dates are NOT emitted (would poison held-out).
+#   * Buffer: NODE 3c toString path but UTF-8-DECODING is LOSSY (distinct bytes can compare
+#             equal). Host/decoding-dependent -> NOT emitted; use Uint8Array for the toString path.
+#   * Boxed Number/String/Boolean (new Number(..) etc.): NODE 3b valueOf path. Documented;
+#           not emitted (boxed-primitive round-trip is fragile and the lossless valueOf-branch
+#           behavior is already covered structurally by typed-array toString + primitives).
+#   * Objects with a CUSTOM valueOf/toString METHOD: NODE 3b/3c. Functions don't round-trip ->
+#           NOT emitted; behavior documented (compare valueOf()/toString() results by ===).
+#   * Object.create(null) / null-prototype objects: NODE 1a constructor-mismatch -> false.
+#           Documented; not emitted (identity/host edge).
+#   * functions, symbols: NOT codec-faithful AND typeof not 'object' -> they would fall to
+#           NODE 0 (=== identity) then NODE 5 (false). NOT emitted.
+#   * Cyclic / self-referential structures: would infinitely recurse (the source has NO cycle
+#           guard). NOT emitted; NOT a defined behavior of the unit (out of contract).
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): NONE — the function performs no mutation,
+# no I/O, no global access. Read-only and pure.
+# =============================================================================
+
+PROVENANCE
+  package: fast-deep-equal@3.1.3
+  repo:    https://github.com/epoberezkin/fast-deep-equal
+  license: MIT
+  source:  node_modules/fast-deep-equal/index.js  (package.json "main" === "index.js";
+           the NON-es6, NON-react build; module.exports = function equal(a, b) { ... })
+  export:  default (module.exports is the function itself)

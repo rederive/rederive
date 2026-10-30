@@ -1,0 +1,18 @@
+UNIT pin_lint
+LANG ts
+PRIMARY-SHA256 71b5c53b93026436f6ad4f4694173c0bedc8007608077a347838df9dd49e5e92
+SIG export default function pin_lint(text: string): { hits: { line: number; what: string; text: string }[]; pins: number }
+ABI TypeScript compiles to the js runtime: text = string (UTF-16); i64 = number (an integer, far below 2^53); a record =
+  a fresh plain object with exactly the named own properties ({ hits, pins }, each hit { line, what, text }). STRICT: the
+  artifact must type-check under strict: true against this SIG, with no any, no non-null assertions (!), and no
+  @ts-ignore / @ts-expect-error. The artifact is an ES module default-exporting the function and importing nothing.
+MECHANISM (restated from js — language files are self-contained) SP (R1-R5) is exactly space and tab: never \s, trim()
+  or trimEnd(). The cut (R7) counts code points: Array.from(line).slice(0, 96), never String.prototype.slice. The escape of
+  R4 skips one code point. Names (R3) and attribute words (R5) compare case-sensitively. VISIBLE (R6) tests against
+  the primary's INVISIBLE range list as written, never \s, \p{Cf} or \p{White_Space} (host Unicode tables move, and
+  White_Space takes U+0085, which is visible here).
+ENVELOPE as the primary; no widening is claimed.
+DEPENDS-ON none
+PINNED regex LINE-BREAK = /\r\n|\r|\n/ CITED R1, the split
+PINNED regex ATTRIBUTE = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R5, matched over the piece
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs pinLint over cli/sir/sir-parse.mjs. Language file re-cut 2026-10-27 with the primary; round 5b delta.

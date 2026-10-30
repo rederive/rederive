@@ -1,0 +1,416 @@
+{
+ "unit": "min_indent",
+ "sig": "min_indent(input: text) -> u64",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "abc",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": " a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "1"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "\ta",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "1"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "  a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "        indented",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "8"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "    a\n  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "  b\n    a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n    b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "      a\n\t\n   b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "3"
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "   a\n   \n\t\t\tb\n c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "1"
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "   \n\t\n  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "   ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\n\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "    a\r\n  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "    a\r  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "    a   b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "    a   b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "        x\r\n\r\n   y\r\n\t\tz",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n\r\n    only",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "4"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n    a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "4"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "  a\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": " \t x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "3"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "\t\ta\n  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "2"
+   }
+  },
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "\ta\n  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "1"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": " \fa",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": " \u000ba",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "  a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": " a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "u64",
+    "v": "0"
+   }
+  }
+ ],
+ "canonicalSha256": "c16fea5d533fba6de5bab3c86cbc5376ec35426cf83c4e85a35eac8b25d599c2"
+}

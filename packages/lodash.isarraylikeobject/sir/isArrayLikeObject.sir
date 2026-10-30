@@ -1,0 +1,179 @@
+UNIT isArrayLikeObject
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isArrayLikeObject(value: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; all helpers (isObjectLike, isArrayLike, isLength, isFunction, isObject) are INLINED in the source file and reproduced below
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact, ordered; all helper predicates inlined from source)
+# ---------------------------------------------------------------------------
+#
+# Top-level definition (source line 81-83):
+#     isArrayLikeObject(value) := isObjectLike(value) && isArrayLike(value)
+#
+# JS short-circuit AND: if isObjectLike(value) is false, return false WITHOUT
+# evaluating isArrayLike. Both predicates are pure reads (no throw on any
+# in-envelope value; reading `.length` off a primitive does not throw, it
+# coerces to the primitive's boxed length or undefined). The result is always
+# a strict boolean (true / false) because both helpers return booleans and
+# `&&` of two booleans is a boolean.
+#
+# CONSTANT (source line 11):
+#     MAX_SAFE_INTEGER = 9007199254740991   # == Number.MAX_SAFE_INTEGER == 2^53 - 1
+#
+# Object#toString tag references (source lines 14-15), used only by isFunction:
+#     funcTag = '[object Function]'
+#     genTag  = '[object GeneratorFunction]'
+#
+# --- Helper: isObjectLike(value)  (source line 194-196) ---
+#     isObjectLike(value) := (!!value) && (typeof value == 'object')
+#   NODE O1: !!value      -> coerces falsy values (null, undefined, 0, -0, NaN,
+#                            '', false) to false; everything else truthy.
+#                            Key effect: null short-circuits to false here.
+#   NODE O2: typeof value == 'object'
+#                          -> true for: plain objects, arrays, typed arrays,
+#                             Buffer, Map, Set, RegExp, Date, arguments,
+#                             boxed primitives (new String/new Number/new
+#                             Boolean), Error, etc.
+#                          -> FALSE for: strings, numbers, booleans, bigints,
+#                             symbols, functions (typeof 'function'),
+#                             undefined.
+#   => isObjectLike is TRUE iff value is a non-null value whose typeof is
+#      exactly 'object'.
+#
+# --- Helper: isArrayLike(value)  (source line 52-54) ---
+#     isArrayLike(value) := (value != null)
+#                           && isLength(value.length)
+#                           && !isFunction(value)
+#   NODE A1: value != null    # loose: false ONLY for null and undefined
+#   NODE A2: isLength(value.length)   # reads the .length property (or undefined)
+#   NODE A3: !isFunction(value)
+#   Evaluated left-to-right with short-circuit.
+#
+# --- Helper: isLength(value)  (source line 135-138) ---
+#     isLength(v) := typeof v == 'number'
+#                    && v > -1
+#                    && v % 1 == 0
+#                    && v <= MAX_SAFE_INTEGER
+#   NODE L1: typeof v == 'number'   # bigint, string, boolean, undefined -> false
+#   NODE L2: v > -1                 # excludes negatives; NaN > -1 is false; -0 > -1 is TRUE
+#   NODE L3: v % 1 == 0             # excludes non-integers; Infinity % 1 is NaN, NaN==0 is false
+#   NODE L4: v <= MAX_SAFE_INTEGER  # excludes > 2^53-1
+#   isLength TRUE iff v is a number integer in [0 .. 9007199254740991].
+#   NOTE: isLength(-0) == true  (-0 > -1, -0 % 1 == 0, -0 <= MAX).
+#   NOTE: isLength(0) == true.
+#   NOTE: isLength(9007199254740991) == true; isLength(9007199254740992) == false.
+#   NOTE: isLength(Infinity) == false; isLength(NaN) == false; isLength(1.5) == false.
+#   NOTE: isLength('3') == false (typeof 'string'); isLength(5n) == false (typeof 'bigint').
+#   NOTE: isLength(true) == false; isLength(null) == false; isLength(undefined) == false.
+#
+# --- Helper: isFunction(value)  (source line 102-107) ---
+#     tag := isObject(value) ? Object.prototype.toString.call(value) : ''
+#     isFunction(value) := tag == '[object Function]' || tag == '[object GeneratorFunction]'
+#   where isObject(value) := !!value && (typeof value == 'object' || typeof value == 'function')
+#   isFunction TRUE iff value's toString tag is '[object Function]' or
+#   '[object GeneratorFunction]'. (Async/arrow/class functions ALSO have tag
+#   '[object Function]' or '[object AsyncFunction]'; note only Function and
+#   GeneratorFunction tags are matched -- async functions get tag
+#   '[object AsyncFunction]' which is NOT matched, but they are typeof
+#   'function' so they fail isObjectLike anyway -> moot for isArrayLikeObject.)
+#
+# ---------------------------------------------------------------------------
+# COMPOSED DECISION (what actually determines the result for isArrayLikeObject)
+# ---------------------------------------------------------------------------
+# Because isObjectLike requires typeof value == 'object', any value reaching
+# isArrayLike has already passed (truthy && typeof=='object'). For such a
+# value:
+#   - value != null is ALWAYS true (it is a truthy object).
+#   - isFunction(value) is ALWAYS false (typeof is 'object', never 'function';
+#     a plain object's toString tag is never '[object Function]'/'[object
+#     GeneratorFunction]' unless it is an actual function, which would have
+#     failed isObjectLike). So NODE A3 is effectively always true here.
+#   => For an object-like value, the result reduces to: isLength(value.length).
+#
+# Therefore, OPERATIONALLY:
+#     isArrayLikeObject(value) ==
+#         (value is non-null && typeof value == 'object')
+#         && isLength(value.length)
+#
+# RESULT TABLE (the discriminating cases):
+#   array (incl. empty [], sparse, with extra props)   -> true   (Array has numeric .length in range)
+#   typed array (Uint8Array(n), incl. n==0)            -> true
+#   Buffer.from(...)                                   -> true   (Buffer is a Uint8Array subclass)
+#   arguments object                                   -> true   (.length is a number >=0)
+#   { length: 3 } / { length: 0 }                      -> true   (isLength true)
+#   { length: -0 }                                     -> true   (isLength(-0) is true)
+#   { length: 9007199254740991 }                       -> true
+#   { length: -1 }                                     -> false  (fails L2: -1 > -1 is false)
+#   { length: 1.5 }                                    -> false  (fails L3)
+#   { length: Infinity }                               -> false  (fails L3)
+#   { length: NaN }                                    -> false  (fails L2)
+#   { length: 9007199254740992 }                       -> false  (fails L4)
+#   { length: '3' }                                    -> false  (fails L1, typeof string)
+#   { length: 5n }                                     -> false  (fails L1, typeof bigint)
+#   { length: true } / { length: null } / { length: undefined }  -> false (fails L1)
+#   {} (plain object, no .length -> .length is undefined) -> false (isLength(undefined) false)
+#   {} (RegExp, Date, Map, Set, Error: no numeric .length) -> false
+#   "abc" (string)                                     -> FALSE  *** DISCRIMINATING vs isArrayLike ***
+#                                                                 (typeof 'string' -> isObjectLike false)
+#   "" (empty string)                                  -> FALSE  (same reason)
+#   42 (number) / true (boolean) / 5n (bigint)         -> false  (typeof not 'object')
+#   Symbol(...)                                        -> false  (typeof 'symbol')
+#   function / arrow / generator-function (the func)   -> false  (typeof 'function' -> isObjectLike false)
+#   null                                               -> false  (isObjectLike short-circuits on !!null)
+#   undefined                                          -> false  (typeof 'undefined', and !!undefined false)
+#
+# WHY "abc" -> false is THE discriminating case:
+#   isArrayLike('abc') is TRUE (string != null, isLength('abc'.length==3) true,
+#   string is not a function). But isObjectLike('abc') is FALSE (typeof is
+#   'string', not 'object'). The leading isObjectLike short-circuits to false,
+#   so isArrayLikeObject('abc') == false. This is the entire raison d'etre of
+#   isArrayLikeObject as distinct from isArrayLike.
+
+ORACLE value -> oracle.json
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the whole unit. A pure total
+#   predicate over `value`. No I/O, no clock, no RNG, no mutation, no throw on
+#   any in-envelope value. Both helper short-circuits and the isLength integer
+#   range check [0 .. 2^53-1] are in-contract and reproduced above byte-exact
+#   (MAX_SAFE_INTEGER = 9007199254740991, the four isLength conjuncts in order,
+#   the loose `!= null`, the `typeof == 'object'` requirement).
+#
+# CARRIED DATA: none. (The two toStringTag string constants funcTag/genTag are
+#   inlined above; they are tiny literals, not a carried table, and in practice
+#   never decide the isArrayLikeObject result because any value reaching
+#   isFunction inside the object-like branch is already a non-function object.)
+#
+# OUT-OF-CONTRACT (none -- pure). But OUT-OF-ENVELOPE for the generator (NOT
+#   codec-round-trippable, so EXCLUDED from genInputs / the held-out by design;
+#   their documented behavior is still fully reconstructable from this SIR):
+#     - functions / arrow fns / generator-FUNCTIONS / class constructors
+#         -> false  (LOAD-BEARING semantics: a function fails isObjectLike
+#                    because typeof is 'function'; isArrayLike would ALSO
+#                    exclude it via !isFunction. Either way -> false.)
+#     - Symbols                       -> false (typeof 'symbol')
+#     - boxed primitives:
+#         new String('abc')          -> TRUE   (typeof 'object', .length is a
+#                                                number in range)
+#         new Number(3) / new Boolean(true) -> false (no numeric .length)
+#       (boxed primitives do not survive JSON-encode round-trip, so excluded
+#        from emission, but documented here.)
+#     - { length: <getter> } objects, Proxy, host objects (NodeList/HTMLCollection)
+#         -> result follows the same rule (isLength(value.length)); not emitted.
+#   These are documented so a SOURCE-BLIND engineer reconstructs them, but
+#   genInputs MUST NOT emit them (codec poisoning / identity loss).
+
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ---------------------------------------------------------------------------
+# This is the DEFAULT export of a CommonJS module (module.exports =
+# isArrayLikeObject). The blind re-emitter MUST produce an ES module whose
+# DEFAULT export is a single function taking one argument:
+#     export default function isArrayLikeObject(value) { ... }
+# Re-emit all five inlined helpers (isObjectLike, isArrayLike, isLength,
+# isFunction, isObject) exactly as composed above; do NOT import lodash.
+
+PROVENANCE lodash.isarraylikeobject@4.2.0 ; repo lodash/lodash ; license MIT ; source file index.js (lines 81-83 top-level; helpers 52-54,102-107,135-138,165-168,194-196; MAX_SAFE_INTEGER line 11)

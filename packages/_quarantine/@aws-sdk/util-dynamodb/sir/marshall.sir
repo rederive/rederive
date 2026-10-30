@@ -1,0 +1,392 @@
+UNIT marshall
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG marshall(data: any, options?: { convertEmptyValues?: boolean, removeUndefinedValues?: boolean, convertClassInstanceToMap?: boolean, convertTopLevelContainer?: boolean }) -> AttributeValue | AttributeValueMap | AttributeValueList | <inner-value>
+DEPENDS-ON none
+# tslib is a TypeScript runtime helper only (no functional behavior); re-emit plain JS.
+# NumberValue is an INTERNAL class (exported in CJS index as NumberValueImpl). Its only
+# in-contract surface is `.toString()` (returns the stored numeric string) and `.toAttributeValue()`
+# => { N: <string> }. Reproduce inline; no external dependency.
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# marshall converts a JS value into the DynamoDB AttributeValue wire shape.
+# It is PURE: no I/O, no clock, no RNG, no global mutation. Same input -> same output.
+# It is the composition:  convertToAttr(data, options)  then a TOP-LEVEL UNWRAP step.
+#
+# Pure FUNCTIONAL, value-mode. ORACLE value -> oracle.json.
+#
+# Two layers:
+#   (A) convertToAttr(data, options) : the recursive dispatcher -> a single-key AttributeValue
+#       object, one of { S | N | BOOL | NULL | B | L | M | SS | NS | BS } (or throws).
+#   (B) marshall's top-level unwrap of convertToAttr's result (see TOP-LEVEL UNWRAP).
+
+# ============================================================================
+# LAYER A — convertToAttr(data, options): DISPATCH ORDER (exact, first match wins)
+# ============================================================================
+# Evaluate these guards IN ORDER. The FIRST guard whose condition is true determines
+# the branch. Order matters: e.g. a plain object is matched by the Object branch before
+# the binary branch; a Boolean object is matched before the Number/String branches.
+#
+#  1. data === undefined
+#         -> THROW Error("Pass options.removeUndefinedValues=true to remove undefined
+#            values from map/array/set.")
+#         NOTE: this throw fires at the SCALAR level. Callers (List/Set/Map/Object) pre-filter
+#         undefined when removeUndefinedValues is set so this throw is not reached there.
+#         A *top-level* `marshall(undefined)` ALWAYS throws this, even with
+#         removeUndefinedValues=true (the option only filters undefined inside containers,
+#         not a bare top-level undefined). VERIFIED.
+#
+#  2. data === null && typeof data === "object"   (i.e. data is null)
+#         -> { NULL: true }
+#
+#  3. Array.isArray(data)        (true for Array AND Array subclasses)
+#         -> convertToListAttr  => { L: [...] }   (see LIST below)
+#
+#  4. data?.constructor?.name === "Set"
+#         -> convertToSetAttr   => { SS | NS | BS } or throw   (see SET below)
+#         DETECTION IS BY constructor.name EXACTLY "Set". A subclass of Set
+#         (constructor.name e.g. "MySet") is NOT matched here and falls through to
+#         the final unsupported-type throw (branch 13). VERIFIED.
+#
+#  5. data?.constructor?.name === "Map"
+#         -> convertToMapAttrFromIterable  => { M: {...} }   (see MAP below)
+#         DETECTION IS BY constructor.name EXACTLY "Map".
+#
+#  6. data?.constructor?.name === "Object"  OR  (!data.constructor && typeof data === "object")
+#         -> convertToMapAttrFromEnumerableProps  => { M: {...} }   (see OBJECT below)
+#         The second disjunct catches Object.create(null) (a prototype-less object,
+#         which has no `.constructor`). VERIFIED: { M: {...} } for null-proto objects.
+#
+#  7. isBinary(data)   (see isBinary BELOW)
+#         -> if data.length === 0 && options?.convertEmptyValues  => { NULL: true }
+#            else                                                  => { B: data }
+#         The B value is the SAME binary object passed in (Uint8Array / Buffer / typed array /
+#         ArrayBuffer / etc.) by reference — NOT copied, NOT re-encoded. VERIFIED.
+#
+#  8. typeof data === "boolean"  OR  data?.constructor?.name === "Boolean"
+#         -> { BOOL: data.valueOf() }
+#         valueOf() unwraps boxed Boolean objects to a primitive boolean. VERIFIED:
+#         new Boolean(false) -> { BOOL: false }.
+#
+#  9. typeof data === "number"  OR  data?.constructor?.name === "Number"
+#         -> convertToNumberAttr(data)  => { N: <string> } or throw   (see NUMBER below)
+#         Boxed Number objects are accepted (new Number(5) -> { N: "5" }). VERIFIED.
+#
+# 10. data instanceof NumberValue
+#         -> data.toAttributeValue()  => { N: data.toString() }
+#         NumberValue stores a numeric string and emits it verbatim (arbitrary precision).
+#
+# 11. typeof data === "bigint"
+#         -> convertToBigIntAttr(data)  => { N: data.toString() }
+#         bigint.toString() is base-10, no suffix. 0n -> "0", -42n -> "-42",
+#         123456789012345678901234567890n -> "123456789012345678901234567890". VERIFIED.
+#
+# 12. typeof data === "string"  OR  data?.constructor?.name === "String"
+#         -> if data.length === 0 && options?.convertEmptyValues  => { NULL: true }
+#            else                                                  => { S: data.toString() }
+#         Boxed String objects are accepted (new String("z") -> { S: "z" }) via .toString().
+#         Empty string "" -> { S: "" } unless convertEmptyValues, then { NULL: true }. VERIFIED.
+#
+# 13. else if options?.convertClassInstanceToMap && typeof data === "object"
+#         -> convertToMapAttrFromEnumerableProps  => { M: {...} }
+#         This is the fallback for arbitrary class instances / Date / etc. ONLY when
+#         convertClassInstanceToMap is set. It enumerates own+inherited enumerable string
+#         keys via for-in (same as OBJECT below).
+#         VERIFIED: new Date(0) with convertClassInstanceToMap -> { M: {} } (Date has no
+#         enumerable own props); class C {a=1} -> { M: { a: {N:"1"} } }.
+#
+# 14. (no branch matched)
+#         -> THROW Error(`Unsupported type passed: ${data}. Pass
+#            options.convertClassInstanceToMap=true to marshall typeof object as map attribute.`)
+#         IMPORTANT — SYMBOL & throw-message coercion: the message embeds `${data}`. If `data`
+#         is a Symbol, building this string throws a *TypeError*: "Cannot convert a Symbol
+#         value to a string" — so a Symbol value surfaces as a TypeError, not the Error above.
+#         For other unsupported types (e.g. a top-level function, a Date without the option,
+#         a Set subclass) the Error above is thrown with `${data}` = String(data). VERIFIED.
+
+# ============================================================================
+# LIST  (branch 3) — convertToListAttr(data, options)
+# ============================================================================
+# Returns { L: array } where array is built as:
+#   data
+#     .filter(item => !options?.removeUndefinedValues || item !== undefined)
+#         # i.e. if removeUndefinedValues is set, drop items === undefined; else keep all
+#     .map(item => convertToAttr(item, options))
+# - Without removeUndefinedValues, an `undefined` element is kept and recurses into
+#   convertToAttr(undefined) which THROWS (branch 1). VERIFIED.
+# - With removeUndefinedValues, undefined elements are dropped before mapping. VERIFIED:
+#   [1, undefined, 3] -> { L: [{N:"1"},{N:"3"}] }.
+# - Order is preserved. Empty array -> { L: [] } (convertEmptyValues has NO effect on
+#   arrays). VERIFIED.
+# - Element of unsupported type (e.g. a Symbol) throws as in branch 14 (TypeError for Symbol).
+
+# ============================================================================
+# SET  (branch 4) — convertToSetAttr(set, options)
+# ============================================================================
+# Step 1 — undefined handling:
+#   setToOperate = removeUndefinedValues
+#       ? new Set([...set].filter(v => v !== undefined))
+#       : set
+#   If NOT removeUndefinedValues AND setToOperate.has(undefined):
+#       THROW Error("Pass options.removeUndefinedValues=true to remove undefined values
+#       from map/array/set.")
+#   VERIFIED: Set([1, undefined]) throws; with removeUndefinedValues -> { NS: ["1"] }.
+# Step 2 — empty check (AFTER undefined filtering):
+#   If setToOperate.size === 0:
+#       if options?.convertEmptyValues  => { NULL: true }
+#       else  THROW Error("Pass a non-empty set, or options.convertEmptyValues=true.")
+#   VERIFIED: new Set() throws; new Set() with convertEmptyValues -> { NULL: true }.
+# Step 3 — element-type detection by the FIRST element:
+#   item = setToOperate.values().next().value     # first element in insertion order
+#   - item instanceof NumberValue:
+#         { NS: Array.from(setToOperate).map(_ => _.toString()) }
+#   - typeof item === "number":
+#         { NS: Array.from(setToOperate).map(convertToNumberAttr).map(x => x.N) }
+#         # each element is run through convertToNumberAttr (so each can THROW on NaN/Inf/
+#         # out-of-safe-range), then its .N string is taken.
+#   - typeof item === "bigint":
+#         { NS: Array.from(setToOperate).map(convertToBigIntAttr).map(x => x.N) }
+#   - typeof item === "string":
+#         { SS: Array.from(setToOperate).map(convertToStringAttr).map(x => x.S) }
+#         # convertToStringAttr is x.toString().
+#   - isBinary(item):
+#         { BS: Array.from(setToOperate).map(convertToBinaryAttr).map(x => x.B) }
+#         # each B is the binary object by reference; order preserved.
+#   - else: THROW Error("Only Number Set (NS), Binary Set (BS) or String Set (SS) are
+#         allowed.")   (e.g. Set<boolean>, Set<object>). VERIFIED.
+# QUIRK — only the FIRST element decides the wire type; subsequent elements are mapped
+#   THROUGH that type's converter regardless of their own type. VERIFIED:
+#     new Set([1, "a"]) -> { NS: ["1", "a"] }   # "a" goes through convertToNumberAttr:
+#         "a".toString()==="a"; the special-value/range guards are all FALSE for "a"
+#         (NaN comparisons), so it passes as N:"a".
+#     new Set([5, "10"]) -> { NS: ["5", "10"] }.
+#   genInputs keeps Sets HOMOGENEOUS by element type to avoid relying on this quirk in
+#   the graded envelope, but the SIR documents it for completeness.
+# ORDER: Array.from(set) preserves insertion order; duplicate primitives are de-duplicated
+#   by Set semantics at construction. VERIFIED: new Set([3,1,2,1]) -> NS:["3","1","2"].
+
+# ============================================================================
+# MAP  (branch 5) — convertToMapAttrFromIterable(data, options)
+# ============================================================================
+# Returns { M: map } built by iterating the Map's [key, value] entries (insertion order):
+#   for (const [key, value] of data):
+#       if (typeof value !== "function" && (value !== undefined || !removeUndefinedValues)):
+#           map[String(key)] = convertToAttr(value, options)
+# - Function-valued entries are SILENTLY SKIPPED (the typeof !== "function" filter).
+#   VERIFIED: Map([["a",1],["f",fn]]) -> { M: { a: {N:"1"} } }.
+# - undefined-valued entries: if removeUndefinedValues set, the entry is skipped; otherwise
+#   the entry is kept and recurses into convertToAttr(undefined) which THROWS. VERIFIED.
+# - Map keys are object keys, so non-string keys are coerced via JS object-key assignment
+#   to their string form. VERIFIED: Map([[1,"a"],[2,"b"]]) -> { M: { "1": {S:"a"},
+#   "2": {S:"b"} } }.
+# - Empty Map -> { M: {} } (convertEmptyValues has NO effect on Maps). VERIFIED.
+
+# ============================================================================
+# OBJECT  (branch 6, and branch 13 fallback) — convertToMapAttrFromEnumerableProps(data, options)
+# ============================================================================
+# Returns { M: map } built with a for-in loop (enumerable string keys, OWN + INHERITED):
+#   for (const key in data):
+#       const value = data[key]
+#       if (typeof value !== "function" && (value !== undefined || !removeUndefinedValues)):
+#           map[key] = convertToAttr(value, options)
+# - Function-valued props are SILENTLY SKIPPED. VERIFIED: { a:1, f:fn } -> { M:{a:{N:"1"}} }
+#   (and a top-level object whose only prop is a function -> { M: {} } -> unwrapped to {}).
+# - undefined-valued props: with removeUndefinedValues the prop is skipped; without it the
+#   prop recurses into convertToAttr(undefined) and THROWS. VERIFIED:
+#     { a:1, b:undefined, c:3 } throws without the option; with removeUndefinedValues ->
+#     { M: { a:{N:"1"}, c:{N:"3"} } }.
+# - Key iteration order follows JS for-in order (integer-like keys ascending first, then
+#   string keys in insertion order). genInputs uses string keys to keep order stable.
+# - Empty object -> { M: {} } (convertEmptyValues has NO effect). VERIFIED.
+
+# ============================================================================
+# NUMBER  (branch 9) — convertToNumberAttr(num)
+# ============================================================================
+# Let s = num.toString().
+#   if s is one of NaN.toString() / Infinity.toString() / (-Infinity).toString()
+#       i.e. s ∈ { "NaN", "Infinity", "-Infinity" }:
+#       THROW Error(`Special numeric value ${s} is not allowed`)
+#   else if num > Number.MAX_SAFE_INTEGER (9007199254740991):
+#       THROW Error(`Number ${s} is greater than Number.MAX_SAFE_INTEGER. Use BigInt. `)
+#       (note the trailing space in the message)
+#   else if num < Number.MIN_SAFE_INTEGER (-9007199254740991):
+#       THROW Error(`Number ${s} is lesser than Number.MIN_SAFE_INTEGER. Use BigInt. `)
+#   else: { N: s }
+# - The boundary is STRICT (>): num === MAX_SAFE_INTEGER is allowed; MAX_SAFE_INTEGER+1
+#   throws. VERIFIED.
+# - Wire string is EXACTLY Number.prototype.toString() (base-10), which uses JS's standard
+#   shortest round-trip formatting, INCLUDING exponential notation for very small/large
+#   magnitudes within the safe range. VERIFIED:
+#       3.14    -> "3.14"
+#       0.1     -> "0.1"
+#       100000  -> "100000"
+#       1e-7    -> "1e-7"      # exponential form, lowercase 'e'
+#       -0      -> "0"         # negative zero stringifies to "0"
+#   Note 1e21 (= 1000000000000000000000) is > MAX_SAFE_INTEGER so it THROWS with message
+#   "Number 1e+21 is greater than..." (the message uses (1e21).toString() === "1e+21").
+# - For a number passed to convertToNumberAttr from inside a numeric Set, the same guards
+#   apply per element.
+
+# ============================================================================
+# isBinary(data)  (used by branch 7 and Set BS detection)
+# ============================================================================
+# Returns true iff data?.constructor exists AND data.constructor.name is one of:
+#   "ArrayBuffer", "Blob", "Buffer", "DataView", "File",
+#   "Int8Array", "Uint8Array", "Uint8ClampedArray",
+#   "Int16Array", "Uint16Array", "Int32Array", "Uint32Array",
+#   "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array".
+# - Buffer IS a Uint8Array subclass but constructor.name === "Buffer", which IS in the list,
+#   so Buffer -> binary -> { B: <Buffer> }. VERIFIED.
+# - Uint8Array -> { B: <Uint8Array> }. VERIFIED.
+# - Detection is by constructor.name string membership, NOT instanceof.
+# - .length === 0 with convertEmptyValues -> { NULL: true }; else { B: data }.
+
+# ============================================================================
+# LAYER B — TOP-LEVEL UNWRAP (marshall) — applied to convertToAttr's result
+# ============================================================================
+# const av = convertToAttr(data, options)            # single-key object, may throw
+# const [key, value] = Object.entries(av)[0]         # the one entry
+# switch (key):
+#   case "M":
+#   case "L":
+#       return options?.convertTopLevelContainer ? av : value
+#       # DEFAULT (no convertTopLevelContainer): UNWRAP — return the bare M-map object or
+#       #   the bare L-array. So marshall({a:1}) -> { a: {N:"1"} } (NOT { M: {...} }), and
+#       #   marshall([1,2,3]) -> [ {N:"1"}, {N:"2"}, {N:"3"} ].
+#       # WITH convertTopLevelContainer=true: return the wrapped av (e.g. { M: {...} } /
+#       #   { L: [...] }). VERIFIED.
+#   default (every other key: S, N, BOOL, NULL, B, SS, NS, BS, $unknown):
+#       return av                                     # the full single-key AttributeValue
+#       # convertTopLevelContainer has NO effect on non-M/L top-level results.
+#       # VERIFIED: marshall("hi", {convertTopLevelContainer:true}) -> { S: "hi" };
+#       #           marshall(new Set([1,2]), {convertTopLevelContainer:true}) -> { NS:["1","2"] }.
+# - The common case marshall(plainObject) returns the bare AttributeValue MAP (the value of
+#   M), which is what callers feed to DynamoDB Item fields. VERIFIED.
+
+# ============================================================================
+# OPTIONS — exact semantics (all default false/undefined), VERIFIED by execution
+# ============================================================================
+# removeUndefinedValues:
+#   - Filters `undefined` ELEMENTS out of arrays, `undefined` VALUES out of object/Map
+#     entries, and `undefined` MEMBERS out of Sets, before recursing. Without it, an
+#     undefined reaching convertToAttr throws (branch 1) / a Set containing undefined throws.
+#   - Does NOT affect a bare top-level undefined: marshall(undefined, {removeUndefinedValues:true})
+#     STILL throws (the top-level scalar undefined is not inside a container). VERIFIED.
+# convertEmptyValues:
+#   - Maps an EMPTY string ("") -> { NULL: true }, an EMPTY binary (.length===0) ->
+#     { NULL: true }, and an EMPTY Set (size 0 after undefined filtering) -> { NULL: true }.
+#   - Has NO effect on empty arrays ({ L: [] }), empty objects ({ M: {} }), or empty Maps
+#     ({ M: {} }). VERIFIED.
+# convertClassInstanceToMap:
+#   - Enables branch 13: any leftover `typeof object` value (arbitrary class instance, Date,
+#     etc.) is converted via for-in enumerable-prop iteration to { M: {...} } instead of
+#     throwing "Unsupported type". VERIFIED.
+# convertTopLevelContainer:
+#   - See LAYER B: when true, a top-level M or L result is returned WRAPPED ({M:..}/{L:..})
+#     instead of unwrapped. No effect on scalar/Set/binary top-level results. VERIFIED.
+# Options are independent flags and may be combined; each acts as described above.
+
+# ============================================================================
+# THROW PATHS (summary) — the oracle records throws as a {__throw} marker
+# ============================================================================
+#  - top-level undefined (always, even with removeUndefinedValues)         -> Error
+#  - undefined element/value inside array/object/Map WITHOUT removeUndefinedValues -> Error
+#  - Set containing undefined WITHOUT removeUndefinedValues                 -> Error
+#  - empty Set WITHOUT convertEmptyValues                                   -> Error
+#  - Set whose first element is not number/bigint/string/binary/NumberValue -> Error
+#  - number/numeric-set-element that is NaN / Infinity / -Infinity          -> Error
+#  - number > MAX_SAFE_INTEGER or < MIN_SAFE_INTEGER                        -> Error
+#  - unsupported top-level type w/o convertClassInstanceToMap (function,
+#    Date, Set subclass, etc.)                                             -> Error
+#  - Symbol value (anywhere it reaches the unsupported-type throw)          -> TypeError
+#    (from `${data}` coercion in the throw-message template literal)
+# Error CLASS is `Error` for all paths except the Symbol path, which is `TypeError`.
+# Error MESSAGES are the exact strings quoted in the branches above.
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic: marshall is a pure function of (data, options). For each generated tuple
+# the oracle records either the returned AttributeValue structure (with binary serialized
+# by the codec's tagged round-trip) or a {__throw} marker. No seam, no injection.
+
+# ============================================================================
+# VALUE-MODE GRADABILITY ENVELOPE  (round-2 hardening note; does NOT change LOGIC)
+# ============================================================================
+# The behaviors above are ALL correct and complete. But the persisted-oracle codec
+# (orchestrator/lib/codec.mjs) stores each arg as JSON.parse(JSON.stringify(encode(arg))) and
+# grades the real package against decode(...). The codec has a FAITHFUL tagged round-trip ONLY
+# for: Set, Map, Uint8Array, Buffer, bigint, RegExp, plain objects, arrays, and JSON-safe
+# scalars (string / finite number / boolean / null). It has NO tag for the following value
+# classes, which are therefore LOSSY and CANNOT be value-graded (round 1 failed 0/3 because
+# they leaked into the held-out set as expecteds NO correct implementation reproduces):
+#   - undefined  (as array element, object/Set/Map member, or object/Map value):
+#         JSON.stringify turns array/Set/Map-element undefined into null and DROPS object-undefined
+#         keys. So a live [1, undefined, 3] is graded as [1, null, 3] -> {NULL} not filtered/throw.
+#   - NaN / Infinity / -Infinity:  JSON.stringify(NaN) === null -> graded as {NULL:true}, NOT the
+#         "Special numeric value ... is not allowed" throw.
+#   - boxed primitives new Number(5) / new String("z") / new Boolean(true) and a NumberValue
+#         instance:  serialize to {} or {"0":"z"} and LOSE class identity -> graded as {M}, not
+#         {N}/{S}/{BOOL}/{N}.
+#   - top-level function:  JSON.stringify(fn) === null -> graded as {NULL}, not the unsupported-type
+#         throw.  (A function as an OBJECT property value IS faithful — dropped by both stringify
+#         and marshall.  A function as a MAP value is NOT faithful — the codec stores Map entries as
+#         [key, value] arrays and a function in array position becomes null, so the decoded Map
+#         carries [k, null] -> {NULL} instead of being dropped.  Hence object-function is graded,
+#         map-function is NOT.)
+#   - top-level Symbol:  dropped by JSON.stringify -> graded as {} / {NULL}, not the TypeError.
+#   - top-level Date WITHOUT convertClassInstanceToMap:  encode -> {} -> graded as {M:{}}, not the
+#         unsupported-type throw.
+# Consequently these behaviors are DESCRIBED-BUT-NOT-VALUE-GRADED. The input-generator
+# (marshall.inputs.mjs) deliberately EXCLUDES every input whose value (at any depth) is one of the
+# above; its acceptance test asserts real(arg) === real(decode(JSON.parse(JSON.stringify(encode(arg)))))
+# for EVERY generated tuple (poisoned === 0).
+#
+# WHAT IS VALUE-GRADED (the full type surface stays INSIDE the envelope): string -> {S},
+# finite safe-range number -> {N:String(n)}, boolean -> {BOOL}, null -> {NULL}, array -> {L},
+# plain object / Map -> {M}, Set<number> -> {NS}, Set<string> -> {SS}, Set<bigint> -> {NS},
+# Set<Uint8Array|Buffer> -> {BS}, Uint8Array / Buffer -> {B}, bigint -> {N}, and ALL nested
+# combinations.  GRADED THROW PATHS = only those whose TRIGGER VALUE itself round-trips
+# faithfully: out-of-safe-range FINITE number (> MAX_SAFE / < MIN_SAFE, incl. 1e21 -> "1e+21"),
+# empty-Set-without-convertEmptyValues, and unsupported-Set-element (Set<boolean>/Set<object>).
+# GRADED convertEmptyValues edges: empty string, empty Uint8Array/Buffer, empty Set -> {NULL:true}.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+SCOPE
+#  IN-CONTRACT LOGIC (reproduce exactly): the full dispatch order, all wire shapes
+#    (S/N/BOOL/NULL/B/L/M/SS/NS/BS), String(n)/bigint.toString()/NumberValue.toString()
+#    formatting, isBinary constructor-name membership, Set first-element type detection +
+#    empty/undefined handling, Map/Object for-in iteration + function-skip + undefined-skip,
+#    all four option semantics, the top-level unwrap, and every throw path + error class +
+#    exact message.
+#  CARRIED DATA: none. (The isBinary constructor-name list and the option keys are small
+#    in-contract literals reproduced inline above, not a large carried table.)
+#  OUT-OF-CONTRACT: none. No effects, no side APIs, no statefulness. unmarshall /
+#    convertToNative / convertToAttr / NumberValueImpl are sibling exports of the package,
+#    not part of THIS unit's contract.
+#  NOT VALUE-GRADED (described above, but the persisted-oracle JSON codec cannot round-trip the
+#    trigger value, so these behaviors are NOT exercised by the input-generator — see the
+#    VALUE-MODE GRADABILITY ENVELOPE section): the undefined-handling behaviors (filter under
+#    removeUndefinedValues; throw without it; top-level-undefined always throws), the
+#    NaN/Infinity/-Infinity "Special numeric value" throws, boxed-primitive (new Number/String/
+#    Boolean) and NumberValue acceptance, the top-level-function / top-level-Symbol / top-level-Date
+#    unsupported-type throws, and the Map-value-is-a-function drop. These remain IN-CONTRACT LOGIC a
+#    blind re-emitter MUST reproduce (they are fully specified above); they are simply not among the
+#    inputs the value-mode oracle can store.  Every OTHER behavior — the full S/N/BOOL/NULL/B/L/M/
+#    SS/NS/BS surface, bigint, Map, binary, the empty-value convertEmptyValues edges, the
+#    convertTopLevelContainer unwrap toggle, and the FINITE out-of-safe-range / empty-Set /
+#    unsupported-Set-element throw paths — IS value-graded.
+
+# ============================================================================
+PROVENANCE
+# ============================================================================
+PROVENANCE @aws-sdk/util-dynamodb@3.515.0
+#   repo: https://github.com/aws/aws-sdk-js-v3 (directory packages/util-dynamodb)
+#   license: Apache-2.0
+#   source files: dist-es/marshall.js, dist-es/convertToAttr.js, dist-es/NumberValue.js
+#                 (CJS build dist-cjs/index.js is the bundled equivalent; main entry)

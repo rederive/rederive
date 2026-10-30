@@ -1,0 +1,334 @@
+# ============================================================================
+# SIR: lodash.topath toPath
+# A pure value -> property-path-array converter.
+# This SIR is the BLIND contract. A re-emitter who has never seen the source
+# MUST be able to reconstruct a behaviorally-equivalent toPath from this alone.
+# Every claim below was VERIFIED by running lodash.topath@4.5.2.
+# ============================================================================
+
+UNIT toPath
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toPath(value: any) -> Array            # single positional arg; returns a NEW array
+DEPENDS-ON none                            # zero runtime deps; self-contained
+
+# ----------------------------------------------------------------------------
+# EMISSION CONTRACT (read first)
+# ----------------------------------------------------------------------------
+# This unit is the DEFAULT export (CommonJS `module.exports = toPath`). The
+# re-emitter MUST emit it as the module's default export:
+#     export default function toPath(value) { ... }
+# It is called as a single-argument function: toPath(value).
+# It is PURE and READ-ONLY: no clock/RNG/env/fs/net seam. No injection needed.
+#
+# ONE internal-state caveat (does NOT make it non-deterministic for in-scope
+# inputs, but the re-emitter must reproduce it — see node S6 / SCOPE):
+# the string-parsing helper is MEMOIZED, and its cache compares keys with
+# SameValueZero (===, plus NaN===NaN treated equal). Among JSON/codec-faithful
+# inputs the ONLY pair that is `===`-equal yet would parse differently is
+# +0 vs -0 — and -0 is excluded from scope (it does not round-trip the codec
+# anyway). So for every in-scope input the output is a pure function of that
+# single input. (Implementation detail: a fresh memoize cache per process is
+# fine; results for distinct string keys are stable and order-independent.)
+
+# ----------------------------------------------------------------------------
+# BEHAVIOR  (ordered; the top-level dispatch is a 3-way BRANCH)
+# ----------------------------------------------------------------------------
+# Node S0  DISPATCH on `value`:
+#   BRANCH A  if value is a true Array (Array.isArray(value) === true)
+#             -> "array-clone" path (node S1)
+#   BRANCH B  else if value is a Symbol (typeof value === 'symbol', OR an
+#             object whose Object#toString tag is '[object Symbol]')
+#             -> return a one-element array holding the symbol UNCHANGED: [value]
+#             (NOTE: the symbol is returned by identity, not stringified.)
+#             # OUT-OF-ENVELOPE for genInputs: symbols are not codec-faithful.
+#   BRANCH C  else (everything else: string, number, bigint, boolean, null,
+#             undefined, plain object, ...)
+#             -> "scalar string-parse" path (node S2)
+#
+# ----------------------------------------------------------------------------
+# Node S1  ARRAY-CLONE PATH  (BRANCH A)
+# ----------------------------------------------------------------------------
+#   Produce a NEW array of the same length. result[i] = toKey(value[i]) for
+#   each index i in 0..length-1. (A shallow map; the input array is not
+#   mutated and a new array object is returned.)
+#   Empty array []  ->  [] (new empty array).
+#
+#   toKey(v)  (the per-element key normalizer):
+#     - if typeof v === 'string'  -> return v unchanged (NOT parsed; the whole
+#         string becomes ONE segment even if it contains '.' or '[' — e.g.
+#         toKey('a.b') === 'a.b', so toPath(['a.b']) -> ['a.b']).
+#     - if v is a Symbol          -> return v unchanged (identity).
+#     - else                      -> let r = (v + '')   # JS string coercion
+#                                     if r === '0' AND (1 / v) === -Infinity   # i.e. v is -0
+#                                         return '-0'
+#                                     else return r
+#       JS string coercion `(v + '')` table (VERIFIED, array elements):
+#           0        -> '0'        -0       -> '-0'   (the -0 guard fires)
+#           42       -> '42'       1.5      -> '1.5'
+#           1e21     -> '1e+21'    true     -> 'true'   false -> 'false'
+#           null     -> 'null'     undefined-> 'undefined'
+#           NaN      -> 'NaN'      Infinity -> 'Infinity'  -Infinity -> '-Infinity'
+#           10n      -> '10'  (bigint)      [1,2]    -> '1,2'   (nested array joins)
+#           {}       -> '[object Object]'
+#           {toString:()=>'x.y'} -> 'x.y'   (custom toString respected; NOT path-parsed)
+#     IMPORTANT: in the array branch, elements are NEVER run through the path
+#     parser. They are only string/symbol-passed-through or coerced via toKey.
+#
+# ----------------------------------------------------------------------------
+# Node S2  SCALAR STRING-PARSE PATH  (BRANCH C)
+# ----------------------------------------------------------------------------
+#   Step S2.1  s = toString(value)            # see node S3
+#   Step S2.2  return stringToPath(s)          # see nodes S4..S5; returns NEW array
+#   (Implementation returns a shallow copy of the parser's result array; treat
+#    it as a fresh array each call.)
+#
+# ----------------------------------------------------------------------------
+# Node S3  toString(value)  (lodash _.toString — coerces to a string)
+# ----------------------------------------------------------------------------
+#   if value === null OR value === undefined        -> '' (empty string)
+#   else if typeof value === 'string'               -> value unchanged
+#   else if value is a Symbol                        -> (handled earlier in S0;
+#         not reachable here for symbols since BRANCH B intercepts them)
+#   else  let r = (value + '')                       # JS string coercion
+#         if r === '0' AND (1 / value) === -Infinity # value is -0
+#              -> '-0'
+#         else -> r
+#   VERIFIED scalar coercions (the string that then enters the parser):
+#       0   -> '0'      42 -> '42'    1.5 -> '1.5'   1e21 -> '1e+21'
+#       true-> 'true'   false -> 'false'   NaN -> 'NaN'   Infinity -> 'Infinity'
+#       null-> ''       undefined -> ''    (no-arg) -> ''
+#       10n -> '10'     {} -> '[object Object]'   {toString:()=>'x.y'} -> 'x.y'
+#   (Then S4/S5 PARSE that resulting string. So e.g. scalar 1.5 -> '1.5' ->
+#    parsed -> ['1','5'] because '.' is a separator. See VERIFIED OUTPUTS.)
+#
+# ----------------------------------------------------------------------------
+# Node S4  stringToPath(s)  — overview
+# ----------------------------------------------------------------------------
+#   Build result = [].
+#   Step S4.1  s = toString(s)   # idempotent here; s is already a string
+#   Step S4.2  LEADING-DOT rule: if s matches /^\./ (s starts with '.'),
+#              push '' onto result FIRST.
+#   Step S4.3  Scan s left-to-right with the global regex rePropName (node S5).
+#              For EACH match m, in order, append exactly one segment computed
+#              by node S5's append rule.
+#   Step S4.4  return result.
+#
+# ----------------------------------------------------------------------------
+# Node S5  rePropName — the property-name matcher (EXACT regex, load-bearing)
+# ----------------------------------------------------------------------------
+#   reLeadingDot = /^\./
+#   rePropName   = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g
+#   reEscapeChar = /\\(\\)?/g
+#
+#   rePropName is one global regex with THREE top-level alternatives. The JS
+#   replace callback receives (match, number, quote, qstr) where:
+#       number = capture group 1 (the bracketed numeric index, if matched)
+#       quote  = capture group 2 (the opening quote char ' or ", if matched)
+#       qstr   = capture group 3 (the quoted body, if matched)
+#   APPEND RULE for each match:
+#       segment = qstr ? qstr.replace(reEscapeChar, '$1')
+#                       : (number || match)
+#       result.push(segment)
+#   In words:
+#     ALT-1  [^.[\]]+        a run of one or more chars that are none of
+#                            '.', '[', ']'. -> push the matched text verbatim
+#                            (as `match`; number & qstr are empty). This is the
+#                            "bare property name" token. Spaces, '+', letters,
+#                            digits, exponent-looking text, symbols, backslashes
+#                            all fall here. e.g. 'foo bar' -> 'foo bar',
+#                            '@#$' -> '@#$', '0e1' -> '0e1', '+1' -> '+1',
+#                            '01' -> '01', '0x1' -> '0x1'.
+#     ALT-2  \[ ( number | quoted ) \]   a bracketed segment, two sub-forms:
+#              (a) NUMBER form: \[(-?\d+(?:\.\d+)?)\]  — an OPTIONAL leading '-',
+#                  then >=1 digits, OPTIONALLY a '.' followed by >=1 digits.
+#                  The captured digits (group 1) are pushed (no brackets).
+#                  e.g. [0]->'0', [-1]->'-1', [1.5]->'1.5', [-0]->'-0'.
+#                  This sub-form requires the WHOLE bracket body to be exactly a
+#                  number. If it is not (e.g. [0e1], [1.], [+1], [01], [0x1],
+#                  [ 0 ]), ALT-2 fails for the bracket and the inner chars are
+#                  instead consumed by ALT-1 (the '[' and ']' are skipped, not
+#                  emitted). e.g. a[0e1] -> ['a','0e1']; a[1.]  -> ['a','1']
+#                  (the '1' matches ALT-2 number form '1', the lone '.' then is
+#                  a separator); a[ 0 ] -> ['a',' 0 '] (ALT-1 keeps the spaces).
+#              (b) QUOTED form: \[(["'])((?:(?!\2)[^\\]|\\.)*?)\2\]  — an opening
+#                  quote (single or double), a (lazy) body, the SAME closing
+#                  quote, all inside brackets. The body (group 3) allows any
+#                  char that is neither the matching quote nor a backslash, OR a
+#                  backslash-escaped char `\.` (any char after a backslash). The
+#                  captured body then has ESCAPES UNWRAPPED via
+#                  reEscapeChar.replace($1): /\\(\\)?/g  ->  replacement '$1'.
+#                  Effect of the unwrap, VERIFIED:
+#                     \"  (backslash + quote) -> "      # backslash dropped
+#                     \\  (backslash + backslash) -> \  # collapses to one '\'
+#                     \n  (backslash + 'n')      -> n   # backslash dropped, 'n' kept
+#                     i.e. each '\' is removed; '\\' becomes a single '\'.
+#                  e.g. a["x.y"].z -> ['a','x.y','z']  (dots inside quotes kept)
+#                       a['x.y'].z -> ['a','x.y','z']
+#                       a["x\"y"].z -> ['a','x"y','z']
+#                       a["x\\y"].z -> ['a','x\\y','z']  (one backslash segment)
+#                       a["x\ny"].z -> ['a','xny','z']
+#                       a["a]b"]    -> ['a','a]b']   (']' fine inside quotes)
+#                       a[""]       -> ['a','']      (empty quoted -> '')
+#     ALT-3  (?=(?:\.|\[\])(?:\.|\[\]|$))   a ZERO-WIDTH lookahead that matches
+#              the empty string at a position immediately FOLLOWED by either a
+#              '.' or an empty-bracket '[]', which is in turn followed by '.',
+#              '[]', or end-of-string. When this fires it pushes '' (since
+#              match is the empty string, number/qstr empty -> push match '').
+#              This is what produces the EMPTY segments for consecutive
+#              separators and empty brackets:
+#                   '.'   -> ['',''] (leading-dot rule pushes 1, lookahead 1)
+#                   '..'  -> ['','','']
+#                   'a..b'-> ['a','','b']
+#                   'a.'  -> ['a','']
+#                   'a[]' / 'a[].b' -> 'a' then '' (then 'b')
+#                   '[]'  -> ['']
+#                   'a[][]' -> ['a','','']
+#
+# ----------------------------------------------------------------------------
+# Node S6  MEMOIZATION (internal; reproduce but harmless for in-scope inputs)
+# ----------------------------------------------------------------------------
+#   stringToPath is memoized on its FIRST argument (the value, BEFORE toString
+#   in lodash's wiring — the memo key is the raw `value` passed to stringToPath,
+#   which in the scalar path is the ORIGINAL `value`). Key equality is
+#   SameValueZero: a === b, with NaN treated equal to NaN. Since +0 === -0,
+#   scalar +0 and scalar -0 COLLIDE in the cache and the FIRST-seen of the two
+#   determines the cached result for both within a process.
+#   -> This is why -0 is OUT-OF-SCOPE (also non-round-trippable in JSON). For
+#      every in-scope input no two distinct inputs collide, so behavior is a
+#      pure function of the single input. A re-emitter may implement the parser
+#      without a cache and still be behaviorally equivalent on all in-scope
+#      inputs (the cache only ever returns the same value the parser would).
+
+# ----------------------------------------------------------------------------
+# VERIFIED OUTPUTS  (actual observed outputs from lodash.topath@4.5.2)
+# These are the self-consistency anchors: genInputs emits these and the SIR
+# above must reproduce every one.
+# ----------------------------------------------------------------------------
+#   STRINGS (scalar path, parsed):
+#     'a.b.c'            -> ['a','b','c']
+#     'a'                -> ['a']
+#     'a[0].b.c'         -> ['a','0','b','c']
+#     'a[0].b'           -> ['a','0','b']
+#     'a["x.y"].z'       -> ['a','x.y','z']
+#     "a['x.y'].z"       -> ['a','x.y','z']
+#     ''                 -> []                 # EMPTY STRING -> EMPTY ARRAY (not [''])
+#     '.a'               -> ['','a']
+#     '.a.b'             -> ['','a','b']
+#     'a[0][1]'          -> ['a','0','1']
+#     'a[0][1].b'        -> ['a','0','1','b']
+#     '[0]'              -> ['0']
+#     'a[-1]'            -> ['a','-1']
+#     'a[1.5]'           -> ['a','1.5']
+#     'a.'               -> ['a','']
+#     'a..b'             -> ['a','','b']
+#     '.'                -> ['','']
+#     '..'               -> ['','','']
+#     '...a'             -> ['','','','a']
+#     'a...b'            -> ['a','','','b']
+#     '[0][1][2]'        -> ['0','1','2']
+#     'a[0].'            -> ['a','0','']
+#     '["x"]["y"]'       -> ['x','y']
+#     'a.0.b'            -> ['a','0','b']
+#     'foo bar.baz'      -> ['foo bar','baz']
+#     'a[""]'            -> ['a','']
+#     'a[].b'            -> ['a','','b']
+#     'a[][]'            -> ['a','','']
+#     '[]'               -> ['']
+#     '[].a'             -> ['','a']
+#     '.[0]'             -> ['','0']
+#     'a[0e1]'           -> ['a','0e1']
+#     'a[0x1]'           -> ['a','0x1']
+#     'a[+1]'            -> ['a','+1']
+#     'a[01]'            -> ['a','01']
+#     'a[ 0 ].b'         -> ['a',' 0 ','b']
+#     'a[1.].b'          -> ['a','1','b']
+#     'a[.5].b'          -> ['a','5','b']
+#     'a["a]b"]'         -> ['a','a]b']
+#     'a["a.b"]c'        -> ['a','a.b','c']
+#     'a["x\"y"].z'      -> ['a','x"y','z']     # source string has escaped quote
+#     'a["x\\y"].z'      -> ['a','x\\y','z']     # source has escaped backslash -> one '\'
+#     'a["x\ny"].z'      -> ['a','xny','z']      # source has literal backslash+n -> 'n'
+#     '@#$'              -> ['@#$']
+#     '\\'               -> ['\\']               # single backslash string -> ['\\']
+#     '\\.'              -> ['\\','']            # backslash literal, dot separator
+#     'a\\.b'            -> ['a\\','b']
+#   NUMBERS / BOOL / NULLISH / BIGINT (scalar path: toString THEN parse):
+#     0                  -> ['0']
+#     42                 -> ['42']
+#     1.5                -> ['1','5']            # '1.5' -> parsed; '.' is a separator!
+#     1e21               -> ['1e+21']            # '1e+21' has no '.','[',']' -> 1 token
+#     true               -> ['true']
+#     false              -> ['false']
+#     NaN                -> ['NaN']
+#     Infinity           -> ['Infinity']
+#     null               -> []                   # toString -> '' -> []
+#     undefined          -> []                   # toString -> '' -> []
+#     (no argument)      -> []
+#     10n  (bigint)      -> ['10']
+#     123456789012345678901234567890n -> ['123456789012345678901234567890']
+#     {}                 -> ['object Object']     # '[object Object]' parsed: '[' skipped,
+#                                                 # 'object Object' is one ALT-1 token,
+#                                                 # ']' skipped -> ['object Object']
+#   ARRAYS (array-clone path: each element via toKey, NO parsing):
+#     ['a','b']          -> ['a','b']
+#     []                 -> []
+#     [0,1]              -> ['0','1']
+#     [-0]               -> ['-0']               # toKey -0 guard -> '-0' (array branch ok)
+#     [null]             -> ['null']
+#     [undefined]        -> ['undefined']        # OUT for genInputs (codec), but spec-defined
+#     [true,false]       -> ['true','false']
+#     [1.5]              -> ['1.5']              # NOT parsed: whole '1.5' is one segment
+#     [{}]               -> ['[object Object]']  # NOT parsed
+#     [['x']]            -> ['x']                # nested array (['x'] + '') -> 'x'
+#     [[1,2],[3]]        -> ['1,2','3']
+#     [NaN]              -> ['NaN']              # OUT for genInputs (codec); spec-defined
+#     [Infinity,-Infinity] -> ['Infinity','-Infinity']  # OUT for genInputs (codec)
+#     [1e21]             -> ['1e+21']
+#     [10n,456n]         -> ['10','456']         # bigint elements; codec-faithful, IN scope
+#     ['a.b']            -> ['a.b']              # KEY: array element strings are NOT path-parsed
+#     [Symbol('k'),'a']  -> [Symbol('k'),'a']    # symbol kept by identity; OUT for genInputs
+
+ORACLE value -> oracle.json
+
+# ----------------------------------------------------------------------------
+# SCOPE
+# ----------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the 3-way DISPATCH (array / symbol / scalar);
+#   - toKey element normalization (string/symbol passthrough; else (v+'') with
+#     the -0 guard);
+#   - toString scalar coercion (null/undefined -> ''; else (v+'') with -0 guard);
+#   - the full rePropName / reLeadingDot / reEscapeChar parsing pipeline,
+#     including all three regex alternatives, the leading-dot rule, the number
+#     vs quoted vs bare-token classification, the bracket-number strictness, the
+#     escape unwrapping, and the empty-segment lookahead.
+#   - returns a NEW array (the input array is never returned by identity and is
+#     not mutated).
+# CARRIED DATA: NONE. (No large literal table; the only constants are three
+#   small regexes, transcribed verbatim above in node S5. No carried.json.)
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE for genInputs (codec or identity reasons —
+#   the SIR still DEFINES the behavior so a blind re-emitter is complete, but
+#   genInputs MUST NOT emit them because they would poison the held-out):
+#   - SYMBOL values, top-level (-> [value]) and as array elements (-> kept by
+#     identity): symbols are not JSON/codec-faithful and equality is by identity.
+#   - scalar -0: (a) does not round-trip JSON.stringify (-0 -> 0), and (b) the
+#     memoize cache makes +0/-0 collide and order-dependent. (Array element -0
+#     ALSO does not round-trip JSON, so [-0] is OUT for genInputs even though
+#     the array branch itself is deterministic; spec value documented above.)
+#   - array elements that are undefined / NaN / +Infinity / -Infinity: not
+#     codec-faithful as array members (JSON -> null). Spec values documented
+#     above; genInputs excludes them.
+#   - FUNCTIONS and objects with custom toString: behavior is defined (functions
+#     coerce via (v+''); custom toString respected) but they are not stably
+#     codec-faithful, so genInputs excludes them.
+#   No stateful mutators, no side APIs, no ambient reads. Pure function.
+
+# ----------------------------------------------------------------------------
+# PROVENANCE
+# ----------------------------------------------------------------------------
+# lodash.topath@4.5.2  (npm)
+# repo: lodash/lodash  (custom modularized build)
+# license: MIT
+# source file: node_modules/lodash.topath/index.js  (module.exports = toPath)
+# Verified live against the installed package on 2026-06-24 (node v24.16.0).

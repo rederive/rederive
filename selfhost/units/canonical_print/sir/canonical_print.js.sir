@@ -1,0 +1,24 @@
+UNIT canonical_print
+LANG js
+PRIMARY-SHA256 36f98b166280f5d86410337aa7795e62c1fbabe758a16522abf76b34781855a4
+SIG canonical_print(text: string): string
+NOTE default export
+ABI text = string (UTF-16; inside the envelope every string is well-formed, so code-unit and scalar-value scans agree on
+  every rule — all cut points are ASCII or WS characters). The artifact is an ES module default-exporting the function; it
+  imports nothing and never throws on a string.
+MECHANISM WS (R1) is exactly the ECMAScript \s class, and trimming is String.prototype.trim (the same set). BREAK is exactly
+  the set an unflagged . does not match. Line split (R2) = split on "\n"; the one trailing CR = a \r$ replace. INDENT (R3) =
+  the match of ^[ \t]*. Attribute merging (R7) = Object.assign onto the directive's attribute object (insertion order is the
+  print order); attribute concatenation inside one call (R8) = old + ' ' + new.
+MECHANISM the pins below ARE the package's matchers and realize R4, R5 and R8 exactly when used as stated: the trailing
+  comment is a match of TRAILING-COMMENT whose group 1 then loses its trailing \s run; the head is HEAD on CODE with a
+  colon-suffixed NAME-COLON head losing its colon before the NAME test; ATTRIBUTES loops ATTR on the shrinking body, cutting
+  at match.index each time, and trims the body at the end.
+DEPENDS-ON none
+PINNED regex TRAILING-COMMENT = /^(.*?)(?:^|\s)#(?=\s|$)(.*)$/ CITED R4
+PINNED regex HEAD = /^(\S+)(?:\s+(.*))?$/ CITED R5 — a null match is not a directive line
+PINNED regex NAME-COLON = /^[A-Z][A-Z0-9-]*:$/ CITED R5 and the NAME grammar
+PINNED regex NAME = /^[A-Z][A-Z0-9-]*$/ CITED R5 and the NAME grammar
+PINNED regex ATTR = /\s+(CITED|EARNED|ANCHOR)\s+(.+)$/ CITED R8 — leftmost match; value = group 2 trimmed
+PROVENANCE rederive@20bdd3dd041a cli/sir/sir-parse.mjs. Language file cut 2026-10-26 with the primary, before any blind
+  re-emission.

@@ -1,0 +1,189 @@
+UNIT toInteger
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toInteger(value: any) -> number          # default export: module.exports = toInteger
+DEPENDS-ON none                              # zero runtime deps; inlines toFinite + toNumber + isObject/isObjectLike/isSymbol
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+PROVENANCE lodash.tointeger@4.0.4
+           repo: lodash/lodash (modularized build: `lodash modularize exports="npm" -o ./`)
+           license: MIT (jQuery Foundation; based on Underscore.js 1.8.3)
+           source file: node_modules/lodash.tointeger/index.js
+           export shape: module.exports = toInteger  # SINGLE default export, no named members
+
+# ============================================================================
+# CONSTANTS (exact — a blind re-emitter MUST use these literal values)
+# ============================================================================
+# INFINITY     = 1 / 0                         # === +Infinity
+# MAX_INTEGER  = 1.7976931348623157e+308       # this is exactly Number.MAX_VALUE
+# NAN          = 0 / 0                          # === NaN
+# symbolTag    = '[object Symbol]'
+# reTrim       = /^\s+|\s+$/g                   # strips LEADING and TRAILING whitespace ONLY (global, both anchors)
+# reIsBadHex   = /^[-+]0x[0-9a-f]+$/i           # signed-hex string detector (case-insensitive)
+# reIsBinary   = /^0b[01]+$/i                   # binary string detector (case-insensitive)
+# reIsOctal    = /^0o[0-7]+$/i                  # octal string detector (case-insensitive)
+# freeParseInt = parseInt                       # the built-in global parseInt
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline — toInteger calls toFinite, toFinite calls toNumber)
+# ============================================================================
+# The public entry is toInteger(value). It is a 3-stage composition. Reproduce ALL three exactly.
+#
+# ----------------------------------------------------------------------------
+# STAGE A — toInteger(value):
+#   1. result    = toFinite(value)             # see STAGE B
+#   2. remainder = result % 1                   # JS float modulo; for integers => 0 (or -0); for fractions => the fractional part (signed)
+#   3. RETURN:
+#        if result === result:                  # i.e. result is NOT NaN (NaN !== NaN). toFinite never returns NaN, so this is always true here, but reproduce it.
+#            if remainder (truthy, i.e. != 0 and != -0):  result - remainder   # truncate toward zero
+#            else:                                          result               # already integral (incl. +0, -0, ±MAX_INTEGER) — returned UNCHANGED, sign-of-zero preserved
+#        else:
+#            0
+#
+#   TRUNCATION SEMANTICS (consequence of `result - remainder`):
+#     - Truncates TOWARD ZERO:  3.7 -> 3,  -3.7 -> -3,  -1.0000001 -> -1.
+#     - SIGN OF ZERO on the FRACTIONAL path:  a negative fraction whose integer part is 0 yields +0, NOT -0.
+#         e.g. -0.4  -> remainder = -0.4 (truthy) -> result - remainder = -0.4 - (-0.4) = 0  (POSITIVE zero)
+#              -0.9999 -> -0.9999 - (-0.9999) = 0 (POSITIVE zero)
+#       (Only the falsy-short-circuit path in toFinite can return -0 — see STAGE B step 1.)
+#     - Already-integral floats pass through:  2.0 -> 2, 100 -> 100.
+#     - ±MAX_INTEGER (1.7976931348623157e+308) is integral (% 1 === 0) -> returned unchanged.
+#
+# ----------------------------------------------------------------------------
+# STAGE B — toFinite(value):
+#   1. if (!value):                             # FALSY short-circuit, runs BEFORE toNumber.
+#          # Falsy values: 0, -0, NaN, '' (empty string), null, undefined, false, and 0n (bigint zero).
+#          RETURN  value === 0 ? value : 0
+#          # NOTE: `value === 0` is TRUE for both +0 and -0 (and for 0n, since 0n === 0 is... FALSE — see below).
+#          #   -> +0     -> value === 0 true  -> returns +0
+#          #   -> -0     -> value === 0 true  -> returns -0          (this is the ONLY way -0 is produced)
+#          #   -> NaN    -> value === 0 false -> returns 0
+#          #   -> ''     -> value === 0 false -> returns 0
+#          #   -> null   -> value === 0 false -> returns 0
+#          #   -> undefined -> false -> returns 0
+#          #   -> false  -> value === 0 ... 0 == false but === is strict: false === 0 is FALSE -> returns 0
+#          #   -> 0n     -> 0n === 0 is FALSE (bigint vs number strict-equal) -> returns 0.
+#          #               (CRUCIAL: 0n is falsy so it never reaches toNumber's +bigint throw — 0n -> 0, no throw.)
+#   2. value = toNumber(value)                  # only reached for TRUTHY value — see STAGE C
+#   3. if (value === INFINITY || value === -INFINITY):
+#          sign = (value < 0 ? -1 : 1)
+#          RETURN sign * MAX_INTEGER            # +Infinity -> +1.7976931348623157e+308 ; -Infinity -> -1.7976931348623157e+308
+#   4. RETURN value === value ? value : 0        # NaN -> 0 ; otherwise the finite number itself (UNTRUNCATED — truncation happens in STAGE A)
+#
+# ----------------------------------------------------------------------------
+# STAGE C — toNumber(value)   (only invoked from STAGE B step 2, i.e. value is TRUTHY):
+#   1. if (typeof value == 'number'):  RETURN value          # numbers pass straight through (incl. Infinity, -Infinity; NaN is falsy so never here)
+#   2. if (isSymbol(value)):           RETURN NaN
+#          # isSymbol(value) := typeof value == 'symbol'  OR  (isObjectLike(value) && Object.prototype.toString.call(value) == '[object Symbol]')
+#          # isObjectLike(value) := value is truthy AND typeof value == 'object'
+#          # => a primitive Symbol AND a boxed Symbol object both -> NaN -> (toFinite) -> 0. SYMBOLS DO NOT THROW.
+#   3. if (isObject(value)):                                  # isObject(value) := value truthy AND (typeof == 'object' OR typeof == 'function')
+#          other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#          value = isObject(other) ? (other + '') : other     # if valueOf still returns an object, force String(other) via (other + '')
+#          # Effect: objects are coerced via valueOf() first; if that yields a primitive, use it; if it yields another object, stringify it.
+#          #   {valueOf:()=>7.9}      -> 7.9   (then string-check below: 7.9 is a number, falls to step 4)
+#          #   {valueOf:()=>"3.2"}    -> "3.2" (string, falls to step 5)
+#          #   {toString:()=>"4.8"}   -> default Object.prototype.valueOf returns the object itself -> isObject(other) true -> (obj + '') -> "4.8"
+#          #   plain {}               -> valueOf returns {} -> (obj+'') -> "[object Object]" -> +"[object Object]" -> NaN
+#          #   []                     -> "" -> +"" -> 0  ... BUT [] is truthy so reaches here; "" -> falls to string path -> trim -> "" -> +"" -> 0
+#          #   [5]                    -> "5"  -> 5
+#          #   [5,6]                  -> "5,6" -> NaN
+#          #   new Number(9.9)        -> valueOf() -> 9.9
+#          #   new String("6.6")      -> valueOf() -> "6.6"
+#   4. if (typeof value != 'string'):  RETURN value === 0 ? value : +value
+#          # value is now a non-string primitive (number, boolean, or — if it reached here as bigint — bigint).
+#          #   true  -> +true  -> 1
+#          #   (false is falsy, never reaches toNumber)
+#          #   number -> itself (the value===0?value branch protects -0 but -0 is falsy and never here)
+#          #   BIGINT (non-zero): +bigint THROWS TypeError "Cannot convert a BigInt value to a number".
+#          #     => toInteger(5n), toInteger(-5n) THROW. (0n was short-circuited in STAGE B.)
+#   5. STRING PATH:
+#          value = value.replace(reTrim, '')                  # strip leading+trailing whitespace (\s: space, \t, \n, \r, \f, \v, NBSP, etc.)
+#          isBinary = reIsBinary.test(value)                  # /^0b[01]+$/i
+#          if (isBinary || reIsOctal.test(value)):            # reIsOctal = /^0o[0-7]+$/i
+#              RETURN freeParseInt(value.slice(2), isBinary ? 2 : 8)   # parse digits after "0b"/"0o" in base 2 / base 8
+#          else if (reIsBadHex.test(value)):                  # /^[-+]0x[0-9a-f]+$/i  (a SIGNED hex literal)
+#              RETURN NaN                                     # "+0x1","-0x1f","+0X1F" -> NaN -> (toFinite) -> 0
+#          else:
+#              RETURN +value                                  # standard JS numeric string coercion
+#                  # "3.7" -> 3.7 ; "  12  " -> (trimmed) "12" -> 12 ; "0x1f" -> 31 (UNSIGNED hex OK via +) ;
+#                  # "0X1F" -> 31 ; "1e3" -> 1000 ; ".5" -> 0.5 ; "abc" -> NaN ; "" -> 0 ;
+#                  # "Infinity" -> +Infinity (-> toFinite -> MAX_INTEGER) ; "1e400" -> +Infinity (overflow) ;
+#                  # "NaN" -> NaN ; "4 2" (inner space) -> NaN ; "0b201" (bad binary, fails reIsBinary) -> +value -> NaN ;
+#                  # "0o18" (bad octal) -> +"0o18" -> NaN ; "0x" -> +"0x" -> NaN ; "0xg" -> NaN.
+#
+# ============================================================================
+# DEMONSTRATED INPUT -> OUTPUT TABLE  (verified against the real package — self-consistent with genInputs)
+# ============================================================================
+#   NUMBERS:
+#     3.7              -> 3            -3.7            -> -3           3               -> 3
+#     0.4              -> 0            -0.4            -> 0   (+0)     2.0             -> 2
+#     -1.0000001       -> -1           -0.9999         -> 0   (+0)     100             -> 100
+#     -0 (literal)     -> -0           0               -> 0           -0.0            -> -0
+#     NaN              -> 0            Infinity        -> 1.7976931348623157e+308
+#     -Infinity        -> -1.7976931348623157e+308
+#     Number.MAX_VALUE -> 1.7976931348623157e+308     5e-324 (MIN_VALUE) -> 0
+#     1e308            -> 1e+308       1.5e308         -> 1.5e+308
+#     9007199254740993 -> 9007199254740992            -9007199254740993 -> -9007199254740992
+#   STRINGS:
+#     "3.7"  -> 3      "  12  " -> 12     "  -3.7  " -> -3    "1e3" -> 1000    ".5" -> 0
+#     "0x1f" -> 31     "0X1F"  -> 31      "0b101" -> 5        "0B101" -> 5
+#     "0o17" -> 15     "0O17"  -> 15      "+0x1" -> 0         "-0x1" -> 0      "+0X1F" -> 0
+#     "0x1g" -> 0      "0x"    -> 0       "0xg" -> 0          "0b201" -> 0     "0o18" -> 0
+#     ""     -> 0      "   "   -> 0       "abc" -> 0          "4 2" -> 0
+#     "\t\n 42 \r" -> 42          "Infinity" -> 1.7976931348623157e+308
+#     "-Infinity" -> -1.7976931348623157e+308    "1e400" -> 1.7976931348623157e+308   "NaN" -> 0
+#   NULL / BOOL / UNDEF:
+#     null -> 0    undefined -> 0    true -> 1    false -> 0
+#   BIGINT:
+#     0n -> 0      5n -> THROW TypeError "Cannot convert a BigInt value to a number"     -5n -> THROW (same)
+#   SYMBOL (does NOT throw):
+#     Symbol("x") -> 0
+#   OBJECTS (valueOf/toString coercion):
+#     {} -> 0      [] -> 0      [5] -> 5     [5,6] -> 0      [[5]] -> 5    ["3.7"] -> 3   ["  12  "] -> 12   [3.7] -> 3
+#     {valueOf:()=>7.9} -> 7    {valueOf:()=>"3.2"} -> 3     {toString:()=>"4.8"} -> 4    {valueOf:()=>({})} -> 0
+#     new Date(0) -> 0         new Number(9.9) -> 9         new String("6.6") -> 6       new Number(-0) -> -0
+#     new Boolean(true) -> 1   /abc/ -> 0       new Set([1,2]) -> 0    new Map() -> 0
+#     Uint8Array([7]) -> 7     Uint8Array([7,8]) -> 0       Buffer.from([9]) -> 0
+#
+# ============================================================================
+# THROW BEHAVIOR
+# ============================================================================
+# The ONLY throw path: a NON-ZERO bigint value reaching `+value` in STAGE C step 4
+#   -> TypeError: "Cannot convert a BigInt value to a number" (V8 wording; the throw is from the unary `+` operator).
+# (0n is falsy -> short-circuited by toFinite to 0, NO throw.)
+# Symbols DO NOT throw (handled to NaN -> 0). Objects do not throw (valueOf/toString coercion is total here).
+# The harness records this as {__throw} for codec-faithful non-zero bigint inputs.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the entire 3-stage pipeline above
+#   (toInteger -> toFinite -> toNumber, with isObject/isObjectLike/isSymbol helpers and the 4 regexes + 3 constants).
+#   Pure, total over codec-faithful inputs except the non-zero-bigint throw. No state, no I/O, no seam.
+# CARRIED DATA: NONE. No large literal table. (No carried.json.)
+# OUT-OF-CONTRACT: none (no side effects, no ambient reads).
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they do not survive the persistence codec
+#   JSON.stringify(encode(args)) faithfully, or have engine/realm-dependent toString):
+#     - functions as the argument (typeof 'function'): isObject true -> valueOf is the fn itself (not callable to a
+#       primitive in a useful way) -> (fn + '') -> source-text string -> +sourceText -> NaN -> 0. Behavior is "-> 0"
+#       but the exact path depends on Function.prototype.toString output; excluded from generated inputs.
+#     - primitive Symbols: round-trip is unreliable through the codec; documented above (-> 0) but not emitted.
+#   A blind re-emitter still reconstructs all of these from STAGE C; they are simply not graded via genInputs.
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic value oracle: for each generated [value] tuple, expected = toInteger(value) (or {__throw} for
+# non-zero bigint). The harness computes expecteds by running the real package. -0 vs +0 distinction MUST be
+# preserved by the oracle's equality (use Object.is semantics for zero-sign), since the unit deliberately
+# distinguishes -0 (falsy short-circuit) from +0 (fractional-subtraction path).
+
+# ============================================================================
+# RE-EMITTER DIRECTIVE
+# ============================================================================
+# The re-emitted ES module's DEFAULT export IS the function:  export default function toInteger(value) { ... }
+# (Original is CommonJS `module.exports = toInteger`; emit as ESM default export.)

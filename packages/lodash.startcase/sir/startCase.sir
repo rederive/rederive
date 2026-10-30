@@ -1,0 +1,371 @@
+UNIT startCase
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG startCase(string = '') -> string      # single positional arg; default '' applies only when arg is undefined
+DEPENDS-ON none                            # self-contained bundle; all helpers inlined below
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# lodash.startcase@4.4.0 default export. Pure, deterministic, no seam, no I/O,
+# no global state read/written along the value path. `module.exports = startCase`.
+#
+# startCase converts an input to "Start Case": it DEBURRS the string (maps
+# Latin-1 / Latin Extended-A accented letters to basic Latin and strips
+# combining marks), STRIPS ALL APOSTROPHES, splits into words, upper-cases the
+# first character of each word, and joins the words with a single ASCII space.
+#
+# The unit is built as:
+#   var startCase = createCompounder(function(result, word, index) {
+#     return result + (index ? ' ' : '') + upperFirst(word);
+#   });
+# and createCompounder yields:
+#   function(string) {
+#     return arrayReduce(words(deburr(string).replace(reApos, '')), callback, '');
+#   }
+#
+# So the EXACT, ORDERED data path is:
+#   1. s0 = deburr(string)                         # coerce + deburr  (see DEBURR)
+#   2. s1 = s0.replace(reApos, '')                 # remove ALL apostrophes
+#   3. w  = words(s1)                              # split into words (see WORDS)
+#   4. fold w left-to-right: result = result + (index ? ' ' : '') + upperFirst(word)
+#      starting from '' (arrayReduce with accumulator '', NOT seeded from w[0])
+#   5. return result
+#
+# Equivalently: w.map(upperFirst).join(' ')  with an EMPTY-array result of ''.
+# (arrayReduce over an empty array with accumulator '' returns '', so
+#  startCase of a no-word input is the empty string '' — verified.)
+
+# ============================================================================
+# DEPENDS-ON-DETAIL  (all inlined in the bundle — reproduce exactly)
+# ============================================================================
+
+# ---- toString(value) -> string  (nullish-safe coercion) -------------------
+# toString(value):
+#   if value == null (i.e. value === null OR value === undefined): return ''
+#   else return baseToString(value)
+# baseToString(value):
+#   if typeof value == 'string': return value
+#   if isSymbol(value): return symbolToString.call(value) (or '' if unavailable)
+#   result = (value + '')                       # default JS string coercion
+#   if result == '0' && (1 / value) == -Infinity: return '-0'   # preserve -0
+#   return result
+# NOTE on coercion seen along the path (VERIFIED by running real pkg):
+#   undefined / null / no-arg -> ''        -> startCase => ''
+#   number 123                -> '123'     -> startCase => '123'
+#   number -0                 -> '-0'      -> after deburr/word-split the '-' is a
+#                                              break char, so startCase(-0) => '0'
+#   number 1.5                -> '1.5'     -> startCase => '1 5'   ('.' is a break)
+#   boolean true              -> 'true'    -> startCase => 'True'
+#   array [1,2,3]             -> '1,2,3'   -> startCase => '1 2 3' (',' is a break)
+#   Symbol                    -> its description string (engine-dependent)
+#   (genInputs emits ONLY strings to keep the oracle codec-faithful; the above
+#    coercion is DOCUMENTED for the blind re-emitter but not generated.)
+
+# ---- isSymbol / isObjectLike ----------------------------------------------
+# isObjectLike(v): !!v && typeof v == 'object'
+# isSymbol(v): typeof v == 'symbol' || (isObjectLike(v) && Object.prototype.toString.call(v) == '[object Symbol]')
+
+# ---- DEBURR ---------------------------------------------------------------
+# deburr(string):
+#   string = toString(string)
+#   return string && string.replace(reLatin, deburrLetter).replace(reComboMark, '')
+#   # NOTE the `string && ...`: if string is '' (falsy) deburr returns '' (the
+#   #  empty string itself), NOT undefined — '' && x === ''. Fine downstream.
+#
+# reLatin  = /[\xc0-\xd6\xd8-\xf6\xf8-\xffĀ-ſ]/g
+#   Matches Latin-1 Supplement letters (excluding the math-operator code points
+#   \xd7 and \xf7 which sit in the gaps \xd7 and \xf7) and all of Latin
+#   Extended-A (U+0100..U+017F). Each match is replaced by deburrLetter(match),
+#   which looks the char up in the deburredLetters map (basePropertyOf):
+#     deburrLetter(ch) = deburredLetters[ch]   (undefined if absent, but reLatin
+#                                                only matches keys present in the
+#                                                table, so every match resolves)
+#
+# reComboMark = RegExp(rsCombo, 'g')  where
+#   rsCombo = '[' + '̀-ͯ︠-︣' + '⃐-⃰' + ']'
+#   i.e. /[̀-ͯ︠-︣⃐-⃰]/g
+#   This DELETES combining diacritical marks (and combining marks for symbols).
+#   So NFD-decomposed accents (e.g. 'e' + U+0301) lose the combining mark =>
+#   'café' (NFD) deburrs to 'cafe'. Precomposed 'é' (U+00E9) is mapped by
+#   reLatin/deburredLetters to 'e'. Both routes => 'e'. (VERIFIED.)
+#
+# deburredLetters TABLE (the in-scope subset exercised by genInputs — the full
+# table is reproduced here for completeness; every key below is a single char
+# whose hex code is given). This is NOT carried-data: it is small, in-contract
+# logic and is transcribed in full so a blind re-emitter has it:
+#   Latin-1 Supplement:
+#     À Á Â Ã Ä Å (\xc0..\xc5) -> 'A'      à á â ã ä å (\xe0..\xe5) -> 'a'
+#     Ç \xc7 -> 'C'                         ç \xe7 -> 'c'
+#     Ð \xd0 -> 'D'                         ð \xf0 -> 'd'
+#     È É Ê Ë (\xc8..\xcb) -> 'E'           è é ê ë (\xe8..\xeb) -> 'e'
+#     Ì Í Î Ï (\xcc..\xcf) -> 'I'           ì í î ï (\xec..\xef) -> 'i'
+#     Ñ \xd1 -> 'N'                         ñ \xf1 -> 'n'
+#     Ò Ó Ô Õ Ö Ø (\xd2..\xd6,\xd8) -> 'O'  ò ó ô õ ö ø (\xf2..\xf6,\xf8) -> 'o'
+#     Ù Ú Û Ü (\xd9..\xdc) -> 'U'           ù ú û ü (\xf9..\xfc) -> 'u'
+#     Ý \xdd -> 'Y'                         ý \xfd, ÿ \xff -> 'y'
+#     Æ \xc6 -> 'Ae'                        æ \xe6 -> 'ae'
+#     Þ \xde -> 'Th'                        þ \xfe -> 'th'
+#     ß \xdf -> 'ss'
+#   Latin Extended-A (selected; full set, each maps as shown):
+#     Ā Ă Ą -> 'A'   ā ă ą -> 'a'
+#     Ć Ĉ Ċ Č -> 'C'   ć ĉ ċ č -> 'c'
+#     Ď Đ -> 'D'   ď đ -> 'd'
+#     Ē Ĕ Ė Ę Ě -> 'E'   ē ĕ ė ę ě -> 'e'
+#     Ĝ Ğ Ġ Ģ -> 'G'   ĝ ğ ġ ģ -> 'g'
+#     Ĥ Ħ -> 'H'   ĥ ħ -> 'h'
+#     Ĩ Ī Ĭ Į İ -> 'I'   ĩ ī ĭ į ı -> 'i'
+#     Ĵ -> 'J'   ĵ -> 'j'
+#     Ķ -> 'K'   ķ ĸ -> 'k'
+#     Ĺ Ļ Ľ Ŀ Ł -> 'L'   ĺ ļ ľ ŀ ł -> 'l'
+#     Ń Ņ Ň Ŋ -> 'N'   ń ņ ň ŋ -> 'n'
+#     Ō Ŏ Ő -> 'O'   ō ŏ ő -> 'o'
+#     Ŕ Ŗ Ř -> 'R'   ŕ ŗ ř -> 'r'
+#     Ś Ŝ Ş Š -> 'S'   ś ŝ ş š -> 's'
+#     Ţ Ť Ŧ -> 'T'   ţ ť ŧ -> 't'
+#     Ũ Ū Ŭ Ů Ű Ų -> 'U'   ũ ū ŭ ů ű ų -> 'u'
+#     Ŵ -> 'W'   ŵ -> 'w'
+#     Ŷ Ÿ -> 'Y'   ŷ -> 'y'
+#     Ź Ż Ž -> 'Z'   ź ż ž -> 'z'
+#     Ĳ -> 'IJ'   ĳ -> 'ij'
+#     Œ -> 'Oe'   œ -> 'oe'
+#     ŉ -> "'n"   ſ -> 'ss'
+#   IMPORTANT: deburr multi-char expansions feed the NEXT stages as plain ASCII,
+#   so e.g. 'Æsop' -> 'Aesop' -> words -> 'Aesop' -> upperFirst -> 'Aesop'.
+#   The lone char 'Æ' (whole-string) -> deburr 'Ae' -> upperFirst('Ae')='Ae'.
+#   'ÆON' -> deburr 'AeON' -> words ['Ae','ON'] -> 'Ae ON' (VERIFIED).
+
+# ---- reApos / apostrophe strip --------------------------------------------
+# rsApos  = "['’]"   (ASCII apostrophe U+0027 and right single quote U+2019)
+# reApos  = RegExp(rsApos, 'g')   i.e. /['’]/g
+# After deburr, s1 = s0.replace(reApos, '')  deletes EVERY apostrophe of either
+# kind. So contractions collapse: "don't" -> "dont", "they've" -> "theyve",
+# "o'clock" -> "oclock", "l’étoile" -> deburr 'l’etoile' -> strip -> 'letoile'.
+# (The optional contraction sub-groups inside reUnicodeWord, rsOptLowerContr /
+#  rsOptUpperContr, are therefore DEAD for startCase because apostrophes are
+#  already gone before `words` runs — but they are reproduced verbatim in the
+#  WORDS regex for fidelity.)
+# NOTE ŉ maps to "'n" (an apostrophe!) during deburr — but reApos runs
+# AFTER deburr, so that apostrophe is also stripped: 'ŉ' -> "'n" -> 'n'.
+
+# ============================================================================
+# WORDS  (the word-splitter — the heart of the unit)
+# ============================================================================
+# words(string, pattern, guard):   # startCase calls words(s1) with no pattern
+#   string = toString(string)
+#   pattern = guard ? undefined : pattern
+#   if pattern === undefined:
+#       return hasUnicodeWord(string) ? unicodeWords(string) : asciiWords(string)
+#   return string.match(pattern) || []
+# Since startCase passes only one arg, pattern is undefined => ROUTING:
+#
+#   ROUTE = hasUnicodeWord(s1) ? unicodeWords(s1) : asciiWords(s1)
+#
+# hasUnicodeWord(s): reHasUnicodeWord.test(s)
+#   reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/
+#   TRUE if the string has: a lower->Upper boundary, a run of 2+ uppers followed
+#   by a lower, a digit adjacent to an ASCII letter (either order), OR ANY char
+#   that is not [A-Za-z0-9 space]. Otherwise FALSE.
+#   Consequences (VERIFIED):
+#     'HELLO WORLD'   -> FALSE -> asciiWords   (all uppers + spaces, no boundary)
+#     'foo bar'       -> FALSE -> asciiWords
+#     'camelCase'     -> TRUE  -> unicodeWords  (lower->Upper)
+#     'foo_bar'       -> TRUE  -> unicodeWords  ('_' is [^a-zA-Z0-9 ])
+#     '__FOO_BAR__'   -> TRUE  -> unicodeWords  ('_')
+#     'foo123bar'     -> TRUE  -> unicodeWords  (digit adjacent to letter)
+#     '123'           -> FALSE -> asciiWords
+#   The two routes can give DIFFERENT word boundaries; reproduce BOTH exactly.
+#
+# ---- asciiWords(s): s.match(reAsciiWord) || [] ----------------------------
+#   reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g
+#   i.e. maximal runs of chars OUTSIDE these ASCII control/punct ranges:
+#     \x00-\x2f  (controls, space, ! " # $ % & ' ( ) * + , - . /)
+#     \x3a-\x40  (: ; < = > ? @)
+#     \x5b-\x60  ([ \ ] ^ _ `)
+#     \x7b-\x7f  ({ | } ~ DEL)
+#   So word chars are: digits 0-9 (0x30-0x39), A-Z (0x41-0x5a), a-z (0x61-0x7a),
+#   AND any byte >= 0x80 (the regex class is single-byte ASCII-negated, so all
+#   non-ASCII code units are word chars here). asciiWords keeps letters+digits
+#   together as ONE word (no camel/digit splitting): on the ascii route a token
+#   like 'HELLO' stays 'HELLO'. (Reached only when hasUnicodeWord is FALSE, so
+#   in practice the token has no camel/digit/non-ascii structure to split.)
+#
+# ---- unicodeWords(s): s.match(reUnicodeWord) || [] ------------------------
+#   reUnicodeWord is composed from the pieces below. TRANSCRIBE THE COMPOSITION
+#   EXACTLY (it is built from string concatenation at module load):
+#
+#   # base ranges
+#   rsAstralRange        = '\\ud800-\\udfff'
+#   rsComboMarksRange    = '\\u0300-\\u036f\\ufe20-\\ufe23'
+#   rsComboSymbolsRange  = '\\u20d0-\\u20f0'
+#   rsDingbatRange       = '\\u2700-\\u27bf'
+#   rsLowerRange         = 'a-z\\xdf-\\xf6\\xf8-\\xff'
+#   rsMathOpRange        = '\\xac\\xb1\\xd7\\xf7'
+#   rsNonCharRange       = '\\x00-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\xbf'
+#   rsPunctuationRange   = '\\u2000-\\u206f'
+#   rsSpaceRange         = ' \\t\\x0b\\f\\xa0\\ufeff\\n\\r\\u2028\\u2029\\u1680\\u180e\\u2000\\u2001\\u2002\\u2003\\u2004\\u2005\\u2006\\u2007\\u2008\\u2009\\u200a\\u202f\\u205f\\u3000'
+#   rsUpperRange         = 'A-Z\\xc0-\\xd6\\xd8-\\xde'
+#   rsVarRange           = '\\ufe0e\\ufe0f'
+#   rsBreakRange         = rsMathOpRange + rsNonCharRange + rsPunctuationRange + rsSpaceRange
+#
+#   # capture groups
+#   rsApos      = "['’]"                       # NOTE literal chars, not escapes
+#   rsAstral    = '[' + rsAstralRange + ']'
+#   rsBreak     = '[' + rsBreakRange + ']'
+#   rsCombo     = '[' + rsComboMarksRange + rsComboSymbolsRange + ']'
+#   rsDigits    = '\\d+'
+#   rsDingbat   = '[' + rsDingbatRange + ']'
+#   rsLower     = '[' + rsLowerRange + ']'
+#   rsMisc      = '[^' + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + ']'
+#   rsFitz      = '\\ud83c[\\udffb-\\udfff]'
+#   rsModifier  = '(?:' + rsCombo + '|' + rsFitz + ')'
+#   rsNonAstral = '[^' + rsAstralRange + ']'
+#   rsRegional  = '(?:\\ud83c[\\udde6-\\uddff]){2}'
+#   rsSurrPair  = '[\\ud800-\\udbff][\\udc00-\\udfff]'
+#   rsUpper     = '[' + rsUpperRange + ']'
+#   rsZWJ       = '\\u200d'
+#
+#   # composed groups
+#   rsLowerMisc     = '(?:' + rsLower + '|' + rsMisc + ')'
+#   rsUpperMisc     = '(?:' + rsUpper + '|' + rsMisc + ')'
+#   rsOptLowerContr = '(?:' + rsApos + '(?:d|ll|m|re|s|t|ve))?'
+#   rsOptUpperContr = '(?:' + rsApos + '(?:D|LL|M|RE|S|T|VE))?'
+#   reOptMod        = rsModifier + '?'
+#   rsOptVar        = '[' + rsVarRange + ']?'
+#   rsOptJoin       = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+#   rsSeq           = rsOptVar + reOptMod + rsOptJoin
+#   rsEmoji         = '(?:' + [rsDingbat, rsRegional, rsSurrPair].join('|') + ')' + rsSeq
+#
+#   # FINAL pattern (global flag 'g'):
+#   reUnicodeWord = RegExp([
+#     rsUpper + '?' + rsLower + '+' + rsOptLowerContr + '(?=' + [rsBreak, rsUpper, '$'].join('|') + ')',
+#     rsUpperMisc + '+' + rsOptUpperContr + '(?=' + [rsBreak, rsUpper + rsLowerMisc, '$'].join('|') + ')',
+#     rsUpper + '?' + rsLowerMisc + '+' + rsOptLowerContr,
+#     rsUpper + '+' + rsOptUpperContr,
+#     rsDigits,
+#     rsEmoji
+#   ].join('|'), 'g')
+#
+#   ALTERNATION SEMANTICS (left-to-right, the order matters):
+#     A) optUpper + lower+ + (optContr) followed-by (break | Upper | end)
+#        => a lowercase word optionally prefixed by ONE uppercase
+#           ('Camel', 'foo', the 'Http' in 'XMLHttpRequest')
+#     B) (Upper|misc)+ + (optContr) followed-by (break | Upper-then-lowerMisc | end)
+#        => a run of UPPERCASE/misc that ENDS before an Upper+lower start
+#           ('XML' in 'XMLHttpRequest', 'HTTP' in 'getHTTPResponse', 'ABC')
+#     C) optUpper + (lower|misc)+ + (optContr)             # generic word
+#     D) Upper+ + (optContr)                               # pure upper run
+#     E) digits (\d+)                                      # numbers split out
+#     F) emoji sequence (dingbat/regional/surrogate-pair + ZWJ joins/modifiers)
+#   Observed splits (VERIFIED on real pkg):
+#     'XMLHttpRequest'  -> ['XML','Http','Request']
+#     'getHTTPResponseCode' -> ['get','HTTP','Response','Code']
+#     'HTML5parser'     -> ['HTML','5','parser']
+#     'foo123bar'       -> ['foo','123','bar']
+#     'a1b2c3'          -> ['a','1','b','2','c','3']
+#     'ABCdef'          -> ['AB','Cdef']   (B starts upper-run end before 'Cdef')
+#     'FOObar'          -> ['FO','Obar']
+#     'fooBAR'          -> ['foo','BAR']
+#     'iOS'             -> ['i','OS']      ('i' lower, then 'OS' upper run)
+#     'IPv4'            -> ['I','Pv','4']  (NOTE: not ['IP','v','4'])
+#     'userID'          -> ['user','ID']
+#     'foo 😀 bar'      -> ['foo','😀','bar']   (emoji kept as its own word)
+#     '🇺🇸'            -> ['🇺🇸']            (regional-indicator pair = 1 word)
+#     'ﬀ' (U+FB00)      -> ['ﬀ']  (1 misc word; upperFirst then expands to 'FF')
+
+# ============================================================================
+# upperFirst  (applied to each word in the fold)
+# ============================================================================
+# upperFirst = createCaseFirst('toUpperCase'):
+#   function(string):
+#     string = toString(string)                 # word is already a string here
+#     strSymbols = hasUnicode(string) ? stringToArray(string) : undefined
+#     chr      = strSymbols ? strSymbols[0]        : string.charAt(0)
+#     trailing = strSymbols ? castSlice(strSymbols,1).join('') : string.slice(1)
+#     return chr.toUpperCase() + trailing
+#   - hasUnicode(s): /[‍\ud800-\udfff̀-ͯ︠-︣⃐-⃰︎️]/.test(s)
+#     (= reHasUnicode; tests for ZWJ, astral, combining marks, variation sels)
+#   - If hasUnicode: split into an array of FULL code points (unicodeToArray via
+#     reUnicode) so the first *symbol* (e.g. an astral emoji) is upper-cased as a
+#     whole; trailing is the rest re-joined. For a normal ASCII word this branch
+#     is not taken and it's just: word[0].toUpperCase() + word.slice(1).
+#   - chr.toUpperCase() uses NATIVE String.prototype.toUpperCase. For ordinary
+#     letters this upper-cases the single first char and leaves the rest as-is.
+#     Edge: a single ligature first char expands ('ﬀ'->'FF', 'ﬁ'->'FI', 'ß'->'SS')
+#     — but ß never reaches here in startCase (deburr maps it to 'ss' first).
+#   - upperFirst('') = ''  (chr = '', trailing = '', '' + '' = '').
+#   IMPORTANT: only the FIRST character is upper-cased; the REST of the word is
+#   left exactly as `words` produced it. So 'BAR' stays 'BAR' (=> 'BAR'),
+#   'iOS' produces words ['i','OS'] => upperFirst => 'I','OS' => 'I OS'.
+
+# ============================================================================
+# FOLD / JOIN
+# ============================================================================
+# arrayReduce(words, callback, '') with callback(result, word, index):
+#     result + (index ? ' ' : '') + upperFirst(word)
+#   - accumulator starts at '' (the 3rd arg; initAccum is falsy, so the first
+#     element is NOT consumed as the seed — the loop runs from index 0).
+#   - For index 0 no leading space; for every later word, ONE ascii space ' '.
+#   - Equivalent to words.map(upperFirst).join(' ').
+#   - EMPTY words array => '' (loop body never runs) => startCase returns ''.
+#     (Inputs producing zero words: '', '   ', '---', '__', '...', whitespace-
+#      only, punctuation-only — all => '' . VERIFIED.)
+
+# ============================================================================
+# BEHAVIOR  (consolidated ordered pipeline — the contract)
+# ============================================================================
+# startCase(string):
+#   1. s0 = deburr(toString(string))            # nullish->'' ; accents->basic Latin ; combining marks removed
+#   2. s1 = s0.replace(/['’]/g, '')        # strip ALL apostrophes (both kinds)
+#   3. route = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/.test(s1)
+#   4. w = route ? (s1.match(reUnicodeWord) || []) : (s1.match(reAsciiWord) || [])
+#   5. return w.map(word => word[0_codepoint_aware].toUpperCase() + word_rest).join(' ')
+#      # (with upperFirst's code-point-aware first-char handling, and '' for [])
+#
+# DEGENERATE / EDGE BEHAVIOR (all VERIFIED):
+#   - startCase('')            => ''
+#   - startCase('   ')         => ''         (spaces are break chars, no words)
+#   - startCase('--foo-bar--') => 'Foo Bar'  (leading/trailing/inner separators dropped)
+#   - startCase('__FOO_BAR__') => 'FOO BAR'  (uppercase preserved, '_' splits)
+#   - startCase('HELLO WORLD') => 'HELLO WORLD'  (ascii route, caps preserved)
+#   - startCase('foo123bar')   => 'Foo 123 Bar' (digits become their own word)
+#   - startCase('déjà vu')     => 'Deja Vu'  (DEBURR = YES, confirmed)
+#   - startCase("don't")       => 'Dont'     (apostrophe removed)
+#   - startCase('a')           => 'A' ; startCase('A') => 'A'
+#   - startCase(123)           => '123' (coercion; not generated, documented)
+#   - NEVER THROWS for string inputs. (No code path throws on any string.)
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function of its single argument. The generator emits arg
+# tuples; the harness records startCase(...args) as the expected value. No seam.
+# Re-emitter exports: `export default startCase`  (harness import() picks .default).
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   toString coercion, deburr (incl. the full deburredLetters map + reLatin +
+#   reComboMark), apostrophe strip (reApos), the words router (reHasUnicodeWord),
+#   asciiWords (reAsciiWord), unicodeWords (reUnicodeWord composed byte-for-byte),
+#   upperFirst (createCaseFirst with code-point-aware first char), and the
+#   space-joining fold (arrayReduce from '').
+# CARRIED DATA: none. The deburredLetters map is small in-contract logic and is
+#   transcribed in full in this SIR (NOT a large published table — no carried.json).
+# OUT-OF-CONTRACT: none. Pure value function; no side effects, no ambient reads,
+#   no global mutation. (Symbol/array/object coercion is documented but NOT
+#   generated, to keep the oracle codec-faithful.)
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+PROVENANCE lodash.startcase@4.4.0
+  repo: lodash/lodash (custom modularized build: `lodash modularize exports="npm"`)
+  license: MIT (Copyright jQuery Foundation and other contributors)
+  source file: node_modules/lodash.startcase/index.js  (single bundled file, 581 lines)
+  export: module.exports = startCase  (default export)
+  VERIFIED: deburr=YES; reUnicodeWord reproduced byte-for-byte (splits match real
+            pkg on XMLHttpRequest/foo123bar/IPv4/iOS/ABCdef); ALLCAPS preserved;
+            digits split; apostrophes (' and ’) stripped; empty/whitespace => ''.

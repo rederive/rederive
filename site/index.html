@@ -12,30 +12,42 @@
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:image" content="https://rederive.ai/og.png">
-<title>rederive — Don't trust packages. Re-derive them.</title>
-<meta name="description" content="rederive is a trust-nothing package manager. Every package ships its contract — a spec and a held-out oracle — not bytes you have to trust. Verify the shipped code, or re-derive it locally from the spec. From Semcom.">
+<title>Replace npm dependencies &amp; verify AI-written code | rederive</title>
+<meta name="description" content="Cut npm supply-chain risk: replace packages with small verified copies you own, and check AI-written code against held-back tests. Free, open source.">
 
 <link rel="canonical" href="https://rederive.ai/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://rederive.ai/">
-<meta property="og:title" content="rederive — Don't trust packages. Re-derive them.">
-<meta property="og:description" content="A trust-nothing package manager. Packages ship a contract — a spec + a held-out oracle — not trusted bytes. Verify the shipped code, or re-derive it locally.">
+<meta property="og:title" content="Trust the code you didn't write — check it against an answer key it never saw">
+<meta property="og:description" content="Most of what you ship was written by open-source strangers or AI. rederive replaces it with your own copies, checked against hidden tests with answers from the original. Anyone can re-run the check, free. Open source.">
 <meta property="og:site_name" content="rederive">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="rederive — Don't trust packages. Re-derive them.">
-<meta name="twitter:description" content="A trust-nothing package manager. Verify the shipped code against its contract, or re-derive it yourself.">
+<meta name="twitter:title" content="Trust the code you didn't write — check it against an answer key it never saw">
+<meta name="twitter:description" content="Most of what you ship was written by open-source strangers or AI. rederive replaces it with your own copies, checked against hidden tests with answers from the original. Anyone can re-run the check, free. Open source.">
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
 a{color:#d4956a;text-decoration:none}
 a:hover{text-decoration:underline;color:#ecc4aa}
-code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:#e0e0e0;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:#e0e0e0;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;overflow-wrap:anywhere}
 
 /* ---- Nav ---- */
 .topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38}
 .topnav{max-width:960px;margin:0 auto;padding:0.9em 20px;display:flex;align-items:center;flex-wrap:wrap;gap:1.4em;font-size:0.92em}
 .topnav a{white-space:nowrap}
+.topnav .navlinks{display:flex;align-items:center;gap:1.4em;flex-wrap:wrap;min-width:0}
+.nav-toggle{display:none;background:none;border:1px solid #3a3f4e;border-radius:6px;color:#e8e8e8;padding:0.3em 0.55em;cursor:pointer;font-size:1.05em;line-height:1}
+.nav-toggle:hover,.nav-toggle:focus-visible{border-color:#c27c4e;color:#fff}
+@media(max-width:1040px){
+  .topnav .navlinks{order:3;flex-basis:100%;gap:1.1em;padding-top:0.1em}
+  .topnav .cta-nav{margin-left:auto}
+}
+@media(max-width:720px){
+  .topnav .navlinks{display:none}
+  .topnav.open .navlinks{display:flex;order:5;flex-basis:100%;flex-direction:column;align-items:flex-start;gap:0.95em;padding:0.9em 0 0.4em}
+  .nav-toggle{display:inline-flex}
+}
 .topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
 .topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
 .topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
@@ -43,57 +55,52 @@ code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:
 .topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
 .topnav a{color:#b0b0b0;transition:color 0.15s}
 .topnav a:hover{color:#fafafa;text-decoration:none}
-.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
 .topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600;transition:background 0.15s}
 .topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
 
 /* ---- Hero ---- */
 .hero-section{background:#0a0c12;color:#e0e0e0;padding:3.8em 24px 3.5em;position:relative;overflow:hidden}
-.hero-section::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:800px;height:520px;background:radial-gradient(ellipse at center,rgba(194,124,78,0.11) 0%,rgba(212,149,106,0.04) 40%,transparent 70%);pointer-events:none}
-.hero-inner{max-width:960px;margin:0 auto;position:relative}
-.hero-inner h1{font-size:2.8em;color:#fafafa;line-height:1.12;margin-bottom:0.35em;font-weight:800;letter-spacing:-0.025em}
+.hero-section::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:800px;max-width:100%;height:520px;background:radial-gradient(ellipse at center,rgba(194,124,78,0.11) 0%,rgba(212,149,106,0.04) 40%,transparent 70%);pointer-events:none}
+.hero-inner{max-width:912px;margin:0 auto;position:relative}
+.hero-inner h1{font-size:2.8em;color:#fafafa;line-height:1.12;margin-bottom:0.45em;font-weight:800;letter-spacing:-0.025em;overflow-wrap:break-word}
 .hero-inner h1 span{color:#d4956a}
-.hero-inner .tagline{font-size:1.18em;color:#e8e8e8;margin-bottom:0.6em;max-width:660px}
-.hero-inner .hook{font-size:1em;color:#b0b0b0;margin-bottom:1.8em;max-width:620px;line-height:1.65}
+.hero-inner .tagline{font-size:1.18em;color:#e8e8e8;margin-bottom:0.7em;max-width:680px}
+.hero-inner .hook{font-size:1em;color:#b0b0b0;margin-bottom:1.8em;max-width:640px;line-height:1.65}
 .kbadge{display:inline-block;background:#331b12;color:#ecc4aa;padding:0.3em 0.9em;border-radius:4px;font-size:0.82em;font-weight:600;margin-bottom:1.4em;letter-spacing:0.02em}
-.hero-ctas{display:flex;gap:1em;flex-wrap:wrap;margin-bottom:2.5em}
+.hero-ctas{display:flex;gap:1em;flex-wrap:wrap;margin-bottom:1.1em}
 .hero-ctas a{padding:0.7em 1.5em;border-radius:6px;font-weight:600;font-size:0.95em;transition:all 0.15s}
 .btn-primary{background:#a86539;color:#fff;box-shadow:0 0 20px rgba(194,124,78,0.3)}
-.btn-primary:hover{background:#8b522e;text-decoration:none;box-shadow:0 0 28px rgba(194,124,78,0.45)}
+.btn-primary:hover{background:#8b522e;text-decoration:none;box-shadow:0 0 28px rgba(194,124,78,0.45);color:#fff}
 .btn-secondary{border:1px solid #3a3f4e;color:#e8e8e8}
 .btn-secondary:hover{border-color:#505868;color:#fff;text-decoration:none}
+.install-line{font-size:0.85em;color:#808088;margin-bottom:1.1em;max-width:760px}
+.install-line code{white-space:nowrap}
 
-.stats-bar{display:flex;gap:2.5em;flex-wrap:wrap;padding-top:2em;border-top:1px solid #282c38}
-.stat{text-align:center}
-.stat .num{font-size:1.8em;font-weight:700;color:#fafafa;display:block}
+.stats-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.5em;padding-top:2em;border-top:1px solid #282c38}
+.stat{text-align:center;min-width:0}
+.stat .num{font-size:1.8em;font-weight:700;color:#fafafa;display:block;line-height:1.3}
 .stat:first-child .num{color:#d4956a}
-.stat .label{font-size:0.78em;color:#b0b0b0;text-transform:uppercase;letter-spacing:0.06em}
+.stat .label{font-size:0.78em;color:#b0b0b0;text-transform:uppercase;letter-spacing:0.06em;display:block;line-height:1.4}
+.stats-note{font-size:0.78em;color:#6a6f7e;margin-top:0.9em}
 
 /* ---- Sections ---- */
 .section{max-width:960px;margin:0 auto;padding:3.5em 24px}
-.section h2{font-size:1.8em;color:#fafafa;margin-bottom:0.25em;font-weight:800;letter-spacing:-0.02em}
-.section .section-sub{color:#b0b0b0;margin-bottom:1.5em;font-size:1em}
+.section h2{font-size:1.8em;color:#fafafa;margin-bottom:0.25em;font-weight:800;letter-spacing:-0.02em;line-height:1.25}
+.section .section-sub{color:#b0b0b0;margin-bottom:1.5em;font-size:1em;max-width:760px}
 .section-alt{background:#10131c;border-top:1px solid #282c38;border-bottom:1px solid #282c38}
+.note{font-size:0.9em;color:#b0b0b0;margin-top:0.6em;max-width:820px}
 
 .alert-box{background:#161924;border-radius:8px;padding:1.5em 1.8em;margin-bottom:2em;border-left:4px solid #d4956a}
 .alert-box .alert-title{font-weight:700;color:#ecc4aa;margin-bottom:0.4em;font-size:0.95em;text-transform:uppercase;letter-spacing:0.04em}
 .alert-box p{color:#e8e8e8;font-size:0.93em;line-height:1.6}
 
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.5em 0}
-.card{padding:1.4em 1.5em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;transition:border-color 0.15s}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{padding:1.4em 1.5em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;transition:border-color 0.15s;min-width:0}
 .card:hover{border-color:#c27c4e}
 .card h4{margin:0 0 0.4em;color:#ecc4aa;font-size:1.05em;font-weight:700}
 .card p{margin:0;font-size:0.92em;color:#e8e8e8;line-height:1.6}
 .card code{background:#0e1019}
-
-/* ---- Two paths ---- */
-.paths{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.5em 0}
-.path{background:#1a1d28;border:1px solid #282c38;border-radius:10px;padding:1.5em 1.6em}
-.path .ptag{font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#d4956a;margin-bottom:0.5em}
-.path h4{color:#fafafa;font-size:1.15em;margin-bottom:0.4em}
-.path p{color:#e8e8e8;font-size:0.92em;line-height:1.6;margin-bottom:0.8em}
-.path .pcmd{font-family:'SF Mono',ui-monospace,monospace;font-size:0.85em;background:#080a10;border:1px solid #282c38;border-radius:6px;padding:0.6em 0.8em;color:#d4956a}
-.path .pcost{font-size:0.78em;color:#808088;margin-top:0.5em;text-transform:uppercase;letter-spacing:0.05em}
 
 /* ---- Terminal ---- */
 .terminal{margin:1.5em 0;padding:1.8em;background:#080a10;color:#e0e0e0;border-radius:10px;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;font-size:0.86em;line-height:1.7;overflow-x:auto;border:1px solid #282c38;box-shadow:0 8px 32px rgba(194,124,78,0.06),0 4px 24px rgba(0,0,0,0.4)}
@@ -102,42 +109,39 @@ code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:
 .terminal-dot.red{background:#ff5f57}.terminal-dot.yellow{background:#febc2e}.terminal-dot.green{background:#28c840}
 .terminal .prompt{color:#d4956a}.terminal .output{color:#cfcfd6}.terminal .dim{color:#6a6f7e}
 .terminal .ok{color:#28c840;font-weight:600}.terminal .bad{color:#ff7a72;font-weight:600}.terminal .warn{color:#febc2e}
+.terminal .gap{display:block;height:0.85em}
 .cline{display:flex;align-items:baseline;gap:1em}
 .cline>span:first-child{min-width:0}
 .copybtn{margin-left:auto;flex:none;background:none;border:1px solid #282c38;border-radius:4px;color:#6a6f7e;cursor:pointer;font:inherit;font-size:0.8em;line-height:1;padding:3px 8px;opacity:0.45;transition:all 0.15s}
 .cline:hover .copybtn{opacity:1;color:#d4956a;border-color:#3a3f4e}
 .copybtn.copied{opacity:1;color:#28c840;border-color:#28c840}
-/* ---- Agent callout (hero) ---- */
-.agent-callout{display:flex;align-items:center;gap:0.8em;max-width:720px;margin-bottom:2.2em;padding:0.65em 1em;background:#10131c;border:1px solid #2e3442;border-radius:8px;font-size:0.88em}
+
+/* ---- Agent callout ---- */
+.agent-callout{display:flex;align-items:center;gap:0.8em;max-width:760px;margin-bottom:2.2em;padding:0.65em 1em;background:#10131c;border:1px solid #2e3442;border-radius:8px;font-size:0.88em}
 .agent-callout .ac-icon{color:#d4956a;font-weight:700}
-.agent-callout .ac-text{color:#b0b0b0;min-width:0}
+.agent-callout .ac-text{color:#b0b0b0;min-width:0;flex:1 1 auto}
 .agent-callout .ac-text strong{color:#e8e8e8}
-.agent-callout .copybtn{opacity:0.85;white-space:nowrap}
+.agent-callout .copybtn{opacity:0.85;white-space:nowrap;margin-left:0}
 .agent-callout:hover .copybtn{opacity:1;color:#d4956a;border-color:#3a3f4e}
 .agent-callout .ac-link{font-family:'SF Mono',ui-monospace,monospace;font-size:0.85em;color:#6f7480;white-space:nowrap}
-@media(max-width:768px){.agent-callout{flex-wrap:wrap}}
+.ask-box{display:flex;align-items:center;gap:1em;flex-wrap:wrap;background:#161924;border:1px solid #282c38;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1em 1.3em;margin:1.2em 0}
+.ask-box .ask-text{color:#e8e8e8;font-size:0.95em;flex:1 1 320px;min-width:0}
+.ask-box .ask-text strong{color:#ecc4aa}
+.ask-box .copybtn{opacity:0.9;margin-left:0}
+.ask-box:hover .copybtn{color:#d4956a;border-color:#3a3f4e}
 
-/* ---- Inventions ---- */
+/* ---- Steps / cards ---- */
 .invention-grid{display:grid;grid-template-columns:1fr;gap:1em;margin:1.5em 0}
-.invention-card{padding:1.4em 1.8em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;border-left:2px solid #353a48;transition:border-color 0.15s}
+.invention-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.invention-card{padding:1.4em 1.6em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;border-left:2px solid #353a48;transition:border-color 0.15s;min-width:0}
 .invention-card:hover{border-left-color:#d4956a}
 .invention-card .inv-num{font-size:0.75em;font-weight:700;color:#d4956a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3em}
 .invention-card h4{color:#fafafa;margin-bottom:0.3em;font-size:1.05em;font-weight:700}
 .invention-card p{font-size:0.92em;color:#e8e8e8;line-height:1.6}
 
-/* ---- Packages ---- */
-.pkg-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1em;margin:1.5em 0}
-.pkg-card{padding:1.3em 1.5em;background:#1a1d28;border-radius:8px;border:1px solid #282c38;transition:transform 0.15s,border-color 0.15s}
-.pkg-card.live:hover{transform:translateY(-2px);border-color:#c27c4e}
-.pkg-card.soon{opacity:0.6}
-.pkg-card .pname{font-family:'SF Mono',ui-monospace,monospace;font-weight:700;color:#fafafa;font-size:0.98em}
-.pkg-card .pstatus{float:right;font-size:0.7em;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 8px;border-radius:999px}
-.pstatus.v{background:#0f2417;color:#28c840}.pstatus.s{background:#1a1d28;color:#808088;border:1px solid #282c38}
-.pkg-card .pdesc{font-size:0.84em;color:#b0b0b0;margin-top:0.5em;line-height:1.5}
-
-/* ---- Open-core tiers ---- */
+/* ---- Open source & pricing ---- */
 .tiers{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.5em 0}
-.tier{background:#1a1d28;border:1px solid #282c38;border-radius:10px;padding:1.5em 1.6em}
+.tier{background:#1a1d28;border:1px solid #282c38;border-radius:10px;padding:1.5em 1.6em;min-width:0}
 .tier.open{border-color:rgba(40,200,64,0.35)}
 .tier .ttag{font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.5em}
 .tier.open .ttag{color:#28c840}
@@ -155,69 +159,111 @@ code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.9em;color:
 footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;border-top:1px solid #282c38}
 .footer-inner{max-width:960px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
 .footer-brand{display:flex;align-items:center;gap:0.5em;color:#b0b0b0;font-weight:600}
-.footer-links{display:flex;gap:1.5em}
+.footer-links{display:flex;gap:1.5em;flex-wrap:wrap;justify-content:center}
 .footer-links a{color:#b0b0b0;transition:color 0.15s}.footer-links a:hover{color:#fafafa;text-decoration:none}
 
+@media(max-width:900px){
+  .grid.three,.invention-grid.three{grid-template-columns:1fr}
+}
 @media(max-width:768px){
-  .hero-inner h1{font-size:2em}
-  .grid,.paths,.pkg-grid{grid-template-columns:1fr}
-  .stats-bar{gap:1.5em}
-  .topnav{flex-wrap:wrap;gap:1em}
+  .hero-section{padding:2.6em 16px 2.8em}
+  .section{padding:2.8em 16px}
+  .topnav{padding:0.9em 16px}
+  .hero-inner h1{font-size:2.05em}
+  .hero-inner .tagline{font-size:1.08em}
+  .grid,.tiers{grid-template-columns:1fr}
+  .stats-bar{grid-template-columns:repeat(2,minmax(0,1fr));gap:1.4em 1em}
+  .terminal{padding:1.2em;font-size:0.8em}
+  .agent-callout{flex-wrap:wrap}
+  .agent-callout .ac-icon{display:none}
   .footer-inner{flex-direction:column;text-align:center}
 }
 .skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+/* ---- Round 2 additions ---- */
+.hero-inner h1{font-size:2.45em}
+.hero-inner h1 span{color:#d4956a}
+.agent-callout .copybtn{opacity:1;color:#ecc4aa;border-color:#5a4030;padding:5px 10px;font-size:0.85em}
+.tiles-title{font-size:0.78em;color:#b0b0b0;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.8em}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1em;padding-top:1.6em;border-top:1px solid #282c38}
+.tile{display:block;background:#1a1d28;border:1px solid #282c38;border-radius:8px;padding:1em 1.1em;color:#e8e8e8;transition:border-color 0.15s,transform 0.15s;min-width:0}
+.tile:hover{border-color:#c27c4e;transform:translateY(-2px);text-decoration:none;color:#fff}
+.tile .t-q{display:block;font-weight:700;color:#fafafa;font-size:0.98em;line-height:1.35;margin-bottom:0.3em}
+.tile .t-a{display:block;font-size:0.84em;color:#b0b0b0;line-height:1.45}
+.tile .t-go{display:block;font-size:0.8em;color:#d4956a;margin-top:0.5em;font-weight:600}
+.story{max-width:780px;color:#e8e8e8;font-size:0.98em;margin-bottom:0.6em}
+.fit-box{background:#161924;border:1px solid #282c38;border-left:4px solid #28c840;border-radius:0 8px 8px 0;padding:1.3em 1.6em;margin:1.5em 0}
+.fit-box h4{color:#ecc4aa;font-size:1.05em;margin-bottom:0.5em}
+.fit-box ul{list-style:none;margin:0;padding:0}
+.fit-box li{font-size:0.92em;color:#e8e8e8;padding:0.28em 0 0.28em 1.4em;position:relative;line-height:1.55}
+.fit-box li::before{content:'·';position:absolute;left:0.35em;color:#d4956a;font-weight:700}
+.fit-box .catalog-line{font-size:0.88em;color:#b0b0b0;margin-top:0.8em}
+.plugin-box{background:#161924;border:1px solid #3a3f4e;border-radius:10px;padding:1.5em 1.7em;margin:1.8em 0 1em}
+.plugin-box h3{color:#fafafa;font-size:1.25em;margin-bottom:0.3em}
+.plugin-box .pb-sub{color:#b0b0b0;font-size:0.93em;margin-bottom:1em}
+.plugin-box .pcmds{font-family:'SF Mono',ui-monospace,monospace;font-size:0.85em;background:#080a10;border:1px solid #282c38;border-radius:6px;padding:0.8em 1em;margin-bottom:1.1em}
+.plugin-box .pcmds .cline .prompt{color:#d4956a}
+.plugin-box .pcmds .copybtn{opacity:0.8}
+.skills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1em}
+.skill{background:#1a1d28;border:1px solid #282c38;border-radius:8px;padding:1em 1.1em;min-width:0}
+.skill .sk-name{font-family:'SF Mono',ui-monospace,monospace;color:#ecc4aa;font-weight:700;font-size:0.92em;margin-bottom:0.3em}
+.skill p{font-size:0.88em;color:#e8e8e8;line-height:1.55}
+.plugin-box .pb-tip{margin-top:1em;font-size:0.93em;color:#e8e8e8}
+.plugin-box .pb-tip strong{color:#ecc4aa}
+.subhead{font-size:1.2em;color:#fafafa;margin:2em 0 0.2em;font-weight:700}
+.stats-bar.in-section{margin-top:1.6em;padding-top:1.6em}
+.stat .sub{display:block;font-size:0.74em;color:#808088;line-height:1.4;margin-top:0.25em}
+.faq{margin-top:1.5em;max-width:820px}
+.faq details{background:#1a1d28;border:1px solid #282c38;border-radius:8px;padding:0.9em 1.2em;margin-bottom:0.8em}
+.faq details[open]{border-color:#3a3f4e}
+.faq summary{cursor:pointer;font-weight:700;color:#fafafa;font-size:1em;list-style-position:inside}
+.faq summary:hover{color:#ecc4aa}
+.faq details p{margin-top:0.6em;font-size:0.93em;color:#e8e8e8;line-height:1.6}
+@media(max-width:900px){
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .skills{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  .hero-inner h1{font-size:1.8em}
+  .tiles{gap:0.7em}
+  .tile{padding:0.85em 0.9em}
+  .plugin-box{padding:1.2em 1.1em}
+  .fit-box{padding:1.1em 1.1em}
+}
+.dev-link{margin-top:14px;font-size:.92em;color:#9aa0ac}.dev-link a{color:#d4956a}
+.tiles.three-up{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:34px}
+@media(max-width:760px){.tiles.three-up{grid-template-columns:1fr}}
+.result-line{font-size:1.08em;color:#e8e8e8;max-width:760px;margin:0 0 18px;padding:14px 18px;border-left:3px solid #6cc28a;background:rgba(108,194,138,.06);border-radius:4px}
+#get-started .install-line{margin:0 0 16px}#get-started .agent-callout{margin:0 0 22px}
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
-{"@type":"Organization","@id":"https://rederive.ai/#org","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png","description":"A trust-nothing package manager: packages ship a verifiable contract — a spec and a held-out oracle — not bytes you have to trust.","parentOrganization":{"@type":"Organization","name":"Semcom","url":"https://semcom.ai"},"sameAs":["https://github.com/rederive","https://github.com/rederive/sir-factory","https://github.com/rederive/sir-toolkit","https://www.npmjs.com/package/rederive"]},
+{"@type":"Organization","@id":"https://rederive.ai/#org","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png","description":"Open-source tools that replace npm dependencies with small, verified copies you own and check AI-written code against held-back tests, for JavaScript, TypeScript and Rust.","parentOrganization":{"@type":"Organization","name":"Apilify Inc."},"sameAs":["https://github.com/rederive","https://github.com/rederive/rederive","https://github.com/rederive/sir-factory","https://www.npmjs.com/package/rederive"]},
 {"@type":"WebSite","@id":"https://rederive.ai/#website","url":"https://rederive.ai/","name":"rederive","publisher":{"@id":"https://rederive.ai/#org"}},
-{"@type":"SoftwareApplication","name":"rederive","applicationCategory":"DeveloperApplication","operatingSystem":"Node.js","url":"https://rederive.ai/","downloadUrl":"https://www.npmjs.com/package/rederive","softwareVersion":"0.2.0","license":"https://www.apache.org/licenses/LICENSE-2.0","description":"Verify a package's shipped code against its contract, or re-derive it locally from the spec — never trusting the publisher's bytes.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@id":"https://rederive.ai/#org"}}
+{"@type":"SoftwareApplication","name":"rederive","applicationCategory":"DeveloperApplication","operatingSystem":"Node.js","url":"https://rederive.ai/","downloadUrl":"https://www.npmjs.com/package/rederive","softwareVersion":"0.5.0","license":"https://www.apache.org/licenses/LICENSE-2.0","description":"Replace npm dependencies with small, zero-dependency copies you own, and check code — including AI-written code — against held-back tests whose answers come from running the original. The rdv checker re-runs every check offline, free, with no AI, for JavaScript, TypeScript and Rust. Includes a Claude Code plugin.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@id":"https://rederive.ai/#org"}},
+{"@type":"FAQPage","@id":"https://rederive.ai/#faq","mainEntity":[{"@type": "Question", "name": "Can it replace an abandoned or unmaintained npm package?", "acceptedAnswer": {"@type": "Answer", "text": "Often, yes — if it's small and self-contained, like a string, date, URL or parsing helper. The replacement lives in your repo, so you don't need anyone upstream to publish a fix. If rederive can't verify a package, it says so and leaves it in place."}}, {"@type": "Question", "name": "Aren't published tests leaked to the next model?", "acceptedAnswer": {"@type": "Answer", "text": "The tests are held back only while the AI builds the code. After that, their job is to let anyone re-check the result, so they ship with the package. A leaked test can't make wrong code pass, because the expected answers come from running the original package, not from the code being checked."}}, {"@type": "Question", "name": "How is this different from Socket or Snyk?", "acceptedAnswer": {"@type": "Answer", "text": "Scanners like Socket and Snyk flag risky packages. rederive removes a package by replacing it with verified code you own. They answer different questions, so use both."}}, {"@type": "Question", "name": "What does it cost?", "acceptedAnswer": {"@type": "Answer", "text": "The tools are free and open source. Building a replacement uses your own AI model usage, on your machine. Checking is free and offline, with no AI involved."}}, {"@type": "Question", "name": "What about licenses?", "acceptedAnswer": {"@type": "Answer", "text": "Every replacement keeps the original package's license notice and records where it came from."}}, {"@type": "Question", "name": "Does it work with Cursor or other agents?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. The command-line tools and the setup prompt at rederive.ai/prompt.md work with any agent that can run shell commands. The plugin is for Claude Code."}}]}
 ]}
 </script>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WF3PHQF0SX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-WF3PHQF0SX');
-  </script>
-<style>
-/* topnav hamburger */
-.nav-burger{display:none;margin-left:auto;background:none;border:0;color:#e8e8e8;font-size:1.55em;line-height:1;cursor:pointer;padding:0 2px}
-.topnav .nav-links{display:flex;align-items:center;gap:1.4em;flex:1}
-.topnav .nav-links a:not(.cta-nav){color:#b0b0b0;transition:color .15s}
-.topnav .nav-links a:not(.cta-nav):hover{color:#fafafa;text-decoration:none}
-.topnav .nav-links a.current{color:#fafafa;font-weight:600}
-@media(max-width:860px){
-  .topnav{flex-wrap:wrap;gap:0.5em}
-  .nav-burger{display:block}
-  .topnav .nav-links{display:none;flex:0 0 100%;flex-direction:column;align-items:flex-start;gap:0.1em;margin-top:0.6em}
-  .topnav.nav-open .nav-links{display:flex}
-  .topnav .nav-links a{padding:0.6em 0;width:100%;font-size:1.05em}
-  .topnav .cta-nav{margin-left:0;margin-top:0.3em}
-}
-</style>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
 
 <div class="topnav-wrap">
 <nav class="topnav">
-  <span class="logo">
+  <a href="/index.html" class="logo" style="text-decoration:none">
     <span class="logo-mark"><span></span><span></span><span></span></span>
-    rederive <span class="by">· from Semcom</span>
-  </span>
-  <button class="nav-burger" aria-label="Menu" aria-expanded="false" onclick="var o=this.parentNode.classList.toggle('nav-open');this.setAttribute('aria-expanded',o)">☰</button>
-    <div class="nav-links">
-  <a href="/#get-started">Get started</a>
-  <a href="/guide.html">Guide</a>
-  <a href="/spec.html">SIR Spec</a>
-  <a href="/blog.html">Blog</a>
-  <a href="https://github.com/rederive">GitHub</a>
-  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+    rederive
+  </a>
+  <div class="navlinks" id="navlinks">
+    <a class="nl" href="#get-started">Get started</a>
+    <a class="nl" href="#how">How it works</a>
+    <a class="nl" href="#compliance">Compliance</a>
+    <a class="nl" href="/spec.html">SIR Spec</a>
+    <a class="nl" href="/blog.html">Blog</a>
+    <a class="nl" href="/promise.html">Promise</a>
+    <a class="nl" href="https://github.com/rederive">GitHub</a>
   </div>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a call</a>
+  <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="navlinks">☰</button>
 </nav>
 </div>
 
@@ -226,273 +272,351 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 <!-- HERO -->
 <section class="hero-section">
 <div class="hero-inner">
-  <div class="kbadge">Open source · Apache-2.0 · a trust-nothing package manager</div>
-  <h1>Don't trust packages.<br><span>Re-derive them.</span></h1>
-  <p class="tagline">Every <code>rederive</code> package ships its <strong>contract</strong> — a spec and a held-out oracle — not bytes you have to trust. Verify the shipped code against it, or re-derive the code yourself from the spec.</p>
-  <p class="hook">The oracle is an independent source of truth no publisher can move. Tamper with a shipped package and it's caught two ways at once: the behavior fails the oracle, and the content hash mismatches.</p>
+  <div class="kbadge">Free &amp; open source</div>
+  <h1>Trust the code you didn’t write.<br><span>Check it against an answer key it never saw.</span></h1>
+  <p class="tagline">Most of what your company ships was written by someone else: strangers who publish open-source packages, and now AI. rederive replaces those parts with your own copies and checks each one against hidden tests, with answers taken from the original, not from whoever wrote the copy.</p>
+  <p class="hook">Anyone can re-run the check — your build pipeline, your auditor, your customer — for free, without trusting us.</p>
 
-  <div class="hero-ctas" style="margin-bottom:1em">
-    <a href="#get-started" class="btn-primary">Get started</a>
-    <a href="#how" class="btn-secondary">See it work</a>
-    <a href="https://github.com/rederive" class="btn-secondary">GitHub</a>
+  <div class="hero-ctas">
+    <a href="#demo" class="btn-primary">See it catch a sabotaged package</a>
+    <a href="https://calendly.com/lane-apilify/30min" class="btn-secondary">Talk to us</a>
   </div>
-  <p style="font-size:0.85em;color:#808088;margin-bottom:1.1em">Apache-2.0 · free forever · live now: <code>npm i -g rederive</code> · <a href="https://github.com/rederive/sir-factory">sir-factory</a> + <a href="https://github.com/rederive/sir-toolkit">sir-toolkit</a> open on GitHub</p>
+  <p class="dev-link">Developer? <a href="#get-started">Install it in one line ↓</a></p>
 
-  <div class="agent-callout">
-    <span class="ac-icon">▸</span>
-    <span class="ac-text"><strong>Using a coding agent?</strong> Hand it the setup prompt — it installs the tools and runs the first verified re-derivation with you.</span>
-    <button class="copybtn" data-copy="Fetch https://rederive.ai/prompt.md and follow it: set up rederive (the trust-nothing package manager) and run its verify / re-derive / preflight loop with me." aria-label="Copy the agent setup prompt">copy prompt</button>
-    <a class="ac-link" href="/prompt.md">prompt.md</a>
-  </div>
-
-  <div class="stats-bar">
-    <div class="stat"><span class="num">0</span><span class="label">Deps in the verified core</span></div>
-    <div class="stat"><span class="num">10/10</span><span class="label">Held-out verified</span></div>
-    <div class="stat"><span class="num">3/3</span><span class="label">Quorum re-derivations</span></div>
-    <div class="stat"><span class="num">2-way</span><span class="label">Tamper detection</span></div>
+  <div class="tiles three-up">
+    <a class="tile" href="#reduce"><span class="t-q">Fewer strangers in your build</span><span class="t-a">Replace small open-source packages with copies you own. Nobody outside your team can push an update into them.</span><span class="t-go">Reduce dependencies ↓</span></a>
+    <a class="tile" href="#how"><span class="t-q">AI code you can sign off on</span><span class="t-a">Hold AI-written code to tests the AI never saw — not to tests it wrote for itself.</span><span class="t-go">How it works ↓</span></a>
+    <a class="tile" href="#compliance"><span class="t-q">Evidence auditors can repeat</span><span class="t-a">For the EU Cyber Resilience Act and PCI DSS: a check anyone can run again and get the same answer.</span><span class="t-go">Compliance ↓</span></a>
   </div>
 </div>
 </section>
 
-<!-- WHY -->
-<section class="section" id="why">
-  <h2>You don't audit your dependencies. You trust the publisher.</h2>
-  <p class="section-sub">And the publisher is the attack.</p>
+<!-- DEMO: SUPPLY CHAIN -->
+<section class="section-alt" id="demo">
+<div class="section">
+  <h2>npm supply-chain protection: what happens when a package is sabotaged?</h2>
+  <p class="story">In January 2022 the maintainer of <code>colors</code> deliberately broke it: a new release, published with his own valid credentials, sent apps into an endless loop of garbage output. Nothing was hacked. Anyone who installed the update got it, because a package manager hands you whatever the publisher pushed.</p>
+  <p class="result-line"><strong>With rederive, that kind of change gets caught before it ships.</strong> We rebuilt the relevant part of <code>colors</code> as a copy you own, then changed a single character in it. The check failed at once: two hidden tests broke, and the file's fingerprint no longer matched.</p>
+  <p class="section-sub">The real output, for the technically curious. <code>@rederive/colors</code> is a zero-dependency rebuild of <code>strip()</code> — the part of <code>colors@1.4.0</code>, the last release before the sabotage, that removes color codes. Here is the rdv checker on it, before and after we drop one character from the shipped JavaScript.</p>
 
-  <div class="alert-box">
-    <div class="alert-title">January 2022 — the colors / faker sabotage</div>
-    <p>A maintainer pushed an infinite loop and garbage output into <code>colors</code> and <code>faker</code> — packages with millions of daily downloads, buried deep in transitive trees — breaking thousands of builds overnight. Nothing was technically "hacked." You ran the bytes the registry handed you, because that's the only thing a package manager ever gives you: <strong>bytes, and a name to trust.</strong></p>
+  <div class="terminal">
+    <div class="terminal-bar"><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div>
+<span class="dim"># 1. check the shipped code against its spec and held-back tests — offline, no AI</span><br>
+<span class="prompt">$ rdv check node_modules/@rederive/colors</span><br>
+<span class="output">rdv check  @rederive/colors@0.2.0   </span><span class="dim">source: colors@1.4.0   spec v0.5</span><br>
+<span class="ok">  &check; VERIFIED</span>  <span class="output">strip </span><span class="dim">strip(str: text) -&gt; text</span><br>
+<span class="dim">     v0.5 lint strict OK</span><br>
+<span class="ok">     &check; lang:js</span><span class="output">  held-out </span><span class="ok">8/8</span><span class="output">   hashes </span><span class="ok">match</span><span class="dim">   (9 frozen / 8 held-out)</span><br>
+<span class="ok">     &check; lang:rust</span><span class="output">  held-out </span><span class="ok">8/8</span><span class="output">   hashes </span><span class="ok">match</span><span class="dim">   (9 frozen / 8 held-out)   cargo check ok (library crate)</span><br>
+<span class="ok">     &check; lang:ts</span><span class="output">  held-out </span><span class="ok">8/8</span><span class="output">   hashes </span><span class="ok">match</span><span class="dim">   (9 frozen / 8 held-out)   tsc --strict ok, conforms to SIG</span><br>
+<br>
+<span class="ok">  ALL UNITS VERIFIED — shipped src matches its contract.</span><br>
+<br>
+<span class="dim"># 2. tamper with the shipped JavaScript — drop the one-character g flag from its pattern</span><br>
+<span class="prompt">$ rdv check node_modules/@rederive/colors</span><br>
+<span class="output">rdv check  @rederive/colors@0.2.0   </span><span class="dim">source: colors@1.4.0   spec v0.5</span><br>
+<span class="bad">  &cross; FAILED</span>  <span class="output">strip </span><span class="dim">strip(str: text) -&gt; text</span><br>
+<span class="bad">     &cross; lang:js</span><span class="output">  held-out </span><span class="bad">6/8</span><span class="output">   hashes </span><span class="bad">MISMATCH (src:false oracle:true sir:true spec:true)</span><br>
+<span class="bad">       first miss ("\u001b[31mhi\u001b[39m") expected "hi" got "hi\u001b[39m"</span><br>
+<span class="ok">     &check; lang:rust</span><span class="output">  held-out </span><span class="ok">8/8</span><span class="output">   hashes </span><span class="ok">match</span><span class="dim">   (9 frozen / 8 held-out)</span><br>
+<span class="ok">     &check; lang:ts</span><span class="output">  held-out </span><span class="ok">8/8</span><span class="output">   hashes </span><span class="ok">match</span><span class="dim">   (9 frozen / 8 held-out)</span><br>
+<br>
+<span class="bad">  VERIFICATION FAILED — do not trust this src; re-derive it from its contract with the sir-factory loop</span>
+  </div>
+  <p class="note">One dropped character, caught two ways at once: only 6 of 8 held-back tests pass, <em>and</em> the file's fingerprint (a hash of its exact bytes) no longer matches. In the output, "held-out" means the held-back tests and "frozen" means the examples the builders were shown. Don't trust the shipped file? The package carries its full spec and tests, so you can rebuild each language version yourself with sir-factory.</p>
+  <p class="note">The tests even record the original's real limits: <code>colors.strip</code> removes only color codes, so cursor and title escape sequences survive it. rederive writes that down in the spec instead of hiding it.</p>
+</div>
+</section>
+
+<!-- REDUCE (ad landing) -->
+<section class="section" id="reduce">
+  <h2>Reduce your npm dependencies — by replacing them.</h2>
+  <p class="section-sub">You chose a handful of dependencies. npm installed far more — code nobody on your team chose or read. Find out your own number — run this in any Node project:</p>
+
+  <div class="terminal">
+    <div class="terminal-bar"><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div>
+<span class="dim"># dependencies you chose vs. packages npm actually installed, and how many run install scripts</span>
+<div class="cline"><span><span class="prompt">$ npx -p rederive rdv audit</span></span><button class="copybtn" data-copy="npx -p rederive rdv audit" aria-label="Copy command">copy</button></div>
   </div>
 
   <div class="grid">
     <div class="card">
-      <h4>Ship the contract, not the bytes</h4>
-      <p>A rederive package carries a structural spec and a <em>held-out</em> oracle — worked input→output examples derived by executing the original. The implementation is something you verify or regenerate, not something you accept on faith.</p>
+      <h4>You can't read them all</h4>
+      <p>Nobody can. Scanners — <code>npm audit</code> and the good commercial ones — tell you which packages are <em>known-bad today</em>. The rest stay what they've always been: unread code with publish rights into your build.</p>
     </div>
     <div class="card">
-      <h4>Verify, deterministically</h4>
-      <p><code>rdv check</code> re-runs the held-out oracle against the shipped code and verifies its content hashes. No tokens, no network, no trust — just a pass/fail against an oracle the publisher can't edit.</p>
-    </div>
-    <div class="card">
-      <h4>Re-derive locally</h4>
-      <p>Don't want to trust the shipped binary at all? <code>rdv resynth</code> regenerates the code from the spec with isolated workers, independently, and accepts it only on quorum. Torch some tokens; trust your own build.</p>
-    </div>
-    <div class="card">
-      <h4>Tamper-evident by construction</h4>
-      <p>Change one byte and it's caught two ways at once: the behavior fails the held-out oracle, <em>and</em> the recorded content hash mismatches. Supply-chain tampering is detected from the contract alone.</p>
+      <h4>So stop shipping them</h4>
+      <p>rederive replaces a dependency with a verified, <strong>zero-dependency</strong> copy you own: rebuilt from its spec, checked on held-back tests, and fingerprinted in your tree. Your tree gets smaller; what remains is code you can answer for.</p>
     </div>
   </div>
+
+  <div class="fit-box">
+    <h4>What it can replace today</h4>
+    <ul>
+      <li><strong>Best fit:</strong> small, self-contained packages — string, number, date, URL, parsing and formatting helpers — including abandoned ones you can't get fixed upstream.</li>
+      <li><strong>Packages that talk to the network or file system:</strong> JavaScript only today (their effects are checked by replaying recorded traffic).</li>
+      <li><strong>Not yet:</strong> native add-ons and large frameworks.</li>
+      <li>Anything rederive can't verify is reported and left in place, never shipped unverified.</li>
+      <li>Every replacement keeps the original's license notice and records where it came from.</li>
+    </ul>
+    <p class="catalog-line"><code>@rederive/*</code> catalog: 218 packages verified in the repository, 3 published to npm so far, more as they're released.</p>
+  </div>
+
+  <div class="ask-box">
+    <span class="ask-text"><strong>Then ask your coding agent:</strong> "Re-derive my smallest runtime dependency as a verified, zero-dependency copy in this repo."</span>
+    <button class="copybtn" data-copy="Re-derive my smallest runtime dependency as a verified, zero-dependency copy in this repo." aria-label="Copy the agent ask">copy ask</button>
+  </div>
+  <p style="font-size:0.95em;color:#e8e8e8;max-width:720px"><strong style="color:#ecc4aa">Scanning flags packages. rederive removes them.</strong> <a href="#get-started">Set it up →</a></p>
 </section>
 
-<!-- HOW -->
-<section class="section section-alt" id="how">
-  <h2>See it work</h2>
-  <p class="section-sub">A real package: <code>@rederive/colors</code>, a zero-dependency re-derivation of <code>colors@1.4.0</code> — the last release before the sabotage.</p>
-
-  <div class="terminal">
-    <div class="terminal-bar"><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div>
-<span class="dim"># 1. verify the shipped code against its contract — deterministic, no tokens</span><br>
-<span class="prompt">$ rdv check @rederive/colors</span><br>
-<span class="ok">  &check; VERIFIED</span> <span class="output">strip (str) =&gt; string</span><br>
-<span class="output">     held-out 10/10 &nbsp; hashes match &nbsp; (zero-dep, FUNCTIONAL)</span><br>
-<span class="ok">  ALL UNITS VERIFIED — shipped src matches its contract.</span><br>
-<br>
-<span class="dim"># 2. tamper with the shipped code — flip one byte</span><br>
-<span class="prompt">$ rdv check @rederive/colors</span><br>
-<span class="bad">  &cross; FAILED</span> <span class="output">strip</span><br>
-<span class="output">     held-out </span><span class="bad">5/10</span><span class="output"> miss=[csi_clear, osc_set_title, …] &nbsp; hashes </span><span class="bad">MISMATCH (src:false)</span><br>
-<span class="bad">  VERIFICATION FAILED — do not trust this src; rebuild with: rdv resynth</span><br>
-<br>
-<span class="dim"># 3. so don't trust it — re-derive it yourself from the spec</span><br>
-<span class="prompt">$ rdv resynth @rederive/colors --n 3</span><br>
-<span class="output">  spawned 3 isolated workers (original deleted) …</span><br>
-<span class="output">  strip: emit_1 </span><span class="ok">10/10</span><span class="output"> &nbsp; emit_2 </span><span class="ok">10/10</span><span class="output"> &nbsp; emit_3 </span><span class="ok">10/10</span><br>
-<span class="ok">  QUORUM 3/3</span><span class="output"> → applied; manifest srcSha256 updated</span><br>
-<span class="ok">  &check; VERIFIED — trust your own build, not the publisher's.</span>
+<!-- HOW IT WORKS -->
+<section class="section-alt" id="how">
+<div class="section">
+  <h2>How rederive checks AI-written code</h2>
+  <p class="section-sub">The same three steps apply whether the code replaces an npm package or is a new feature an AI wrote.</p>
+  <div class="invention-grid three">
+    <div class="invention-card">
+      <div class="inv-num">1 · A spec</div>
+      <h4>Write down what the part must do</h4>
+      <p>Each part gets a <strong>spec</strong> written in SIR (the spec format): a short, language-neutral description of its behavior, plus worked examples of inputs and expected outputs. One spec drives JavaScript, TypeScript and Rust.</p>
+    </div>
+    <div class="invention-card">
+      <div class="inv-num">2 · Held-back tests</div>
+      <h4>Grade on examples the builders never saw</h4>
+      <p>Some examples are kept as <strong>held-back tests</strong>, with expected answers that come from running the original package (or a reference you choose), not from whoever writes the replacement. Held back means hidden from the AI builders while they build. Afterwards the tests ship with the package, fingerprinted, so anyone can re-generate them from the original and confirm nothing changed.</p>
+    </div>
+    <div class="invention-card">
+      <div class="inv-num">3 · Independent builds</div>
+      <h4>Several AI builds that can't see each other</h4>
+      <p>Each part is built more than once, by AI builds that can't see each other's work. If independent builds disagree, the spec left room for guessing, so it gets tightened. Agreement isn't the test of correctness — the held-back tests, whose answers come from the original package, are.</p>
+    </div>
   </div>
-  <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">The held-out oracle even documents the original's real limits — <code>colors.strip</code> removes only color codes, so cursor/title-injection escapes survive. rederive pins that in the contract instead of hiding it.</p>
+  <p class="note">After that, <code>rdv check</code> re-runs the held-back tests against the shipped code and compares fingerprints — free, offline, no AI — so it can run in your automated build pipeline (CI) on every change. Building uses your own AI model usage, on your machine. Each language is checked against the same tests, so the JavaScript, TypeScript and Rust versions can't quietly drift apart. Hand-written code can be held to the same tests. <a href="spec.html">Read the SIR specification →</a></p>
+</div>
 </section>
 
 <!-- GET STARTED -->
 <section class="section" id="get-started">
-  <h2>Get started</h2>
-  <p class="section-sub">Install once, then put it to work — from Claude Code, or just the verifier in CI.</p>
+  <h2>Get started: the CLI and the Claude Code plugin</h2>
+  <p class="section-sub">Install the command-line tools, try them where they can't touch anything, then add the plugin if you use Claude Code.</p>
+  <p class="install-line">Free, Apache-2.0 · install the rdv checker (rederive's command-line tool) and sir-factory (the build tool): <code>npm i -g rederive@^0.5 sir-factory</code> · see how many packages npm really installed for you: <code>npx -p rederive rdv audit</code></p>
+  <div class="agent-callout">
+    <span class="ac-icon">▸</span>
+    <span class="ac-text"><strong>Using a coding agent?</strong> It starts with a demo in a throwaway folder and asks before it touches your project.</span>
+    <button class="copybtn" data-copy="Fetch https://rederive.ai/prompt.md and follow it: start with the zero-footprint demo in a temporary directory, then ask me before you run anything in my project." aria-label="Copy setup prompt for your agent">Copy setup prompt for your agent</button>
+    <a class="ac-link" href="/prompt.md">prompt.md</a>
+  </div>
 
   <div class="terminal">
     <div class="terminal-bar"><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div>
-<span class="dim"># 1 · the CLIs — the rdv verifier + the build orchestrator (Node ≥ 18)</span>
-<div class="cline"><span><span class="prompt">$ npm i -g rederive sir-factory</span></span><button class="copybtn" data-copy="npm i -g rederive sir-factory" aria-label="Copy command">copy</button></div>
-<br>
-<span class="dim"># 2 · the Claude Code plugin — the skills &amp; agents that drive them</span>
-<div class="cline"><span><span class="prompt">&gt; /plugin marketplace add rederive/sir-toolkit</span></span><button class="copybtn" data-copy="/plugin marketplace add rederive/sir-toolkit" aria-label="Copy command">copy</button></div>
-<div class="cline"><span><span class="prompt">&gt; /plugin install sir@sir-toolkit</span></span><button class="copybtn" data-copy="/plugin install sir@sir-toolkit" aria-label="Copy command">copy</button></div>
-<br>
-<span class="dim"># 3 · put it to work — just ask Claude Code:</span>
-<div class="cline"><span class="output">&nbsp;&nbsp;"Get this project off <span class="warn">decode-uri-component</span> — re-derive it as a verified, zero-dep vendor."</span><button class="copybtn" data-copy="Get this project off decode-uri-component — re-derive it as a verified, zero-dep vendor." aria-label="Copy prompt">copy</button></div>
-<div class="cline"><span class="output">&nbsp;&nbsp;"This module has <span class="warn">zero tests</span> — preflight it: build a characterization oracle and give me the mutation score."</span><button class="copybtn" data-copy="This module has zero tests — preflight it: build a characterization oracle and give me the mutation score." aria-label="Copy prompt">copy</button></div>
-<br>
-<span class="dim"># and in CI, the verifier alone re-proves any verified unit — deterministic, offline, no AI</span>
+<span class="dim"># 1 · the CLIs — the rdv checker + the sir-factory build tool (Node ≥ 18)</span>
+<div class="cline"><span><span class="prompt">$ npm i -g rederive@^0.5 sir-factory</span></span><button class="copybtn" data-copy="npm i -g rederive@^0.5 sir-factory" aria-label="Copy command">copy</button></div>
+<span class="dim">#   no global install? run the checker as: npx -p rederive rdv &lt;command&gt;</span>
+<span class="gap"></span>
+<span class="dim"># 2 · try it in a throwaway folder — nothing in your project changes</span>
+<div class="cline"><span><span class="prompt">$ cd "$(mktemp -d)" &amp;&amp; npm i @rederive/colors</span></span><button class="copybtn" data-copy="cd &quot;$(mktemp -d)&quot; &amp;&amp; npm i @rederive/colors" aria-label="Copy command">copy</button></div>
+<div class="cline"><span><span class="prompt">$ rdv check node_modules/@rederive/colors</span></span><button class="copybtn" data-copy="rdv check node_modules/@rederive/colors" aria-label="Copy command">copy</button></div>
+<span class="dim">#   then change one character in node_modules/@rederive/colors/src/ and run the check again</span>
+<span class="gap"></span>
+<span class="dim"># 3 · set up your project — preview the plan first, then apply it</span>
+<div class="cline"><span><span class="prompt">$ rdv init . --dry-run</span></span><button class="copybtn" data-copy="rdv init . --dry-run" aria-label="Copy command">copy</button></div>
+<div class="cline"><span><span class="prompt">$ rdv init . --yes</span></span><button class="copybtn" data-copy="rdv init . --yes" aria-label="Copy command">copy</button></div>
+<span class="dim">#   TypeScript needs typescript + @types/node in the project; Rust needs cargo. rdv check stops with an install hint if one is missing</span>
+<span class="gap"></span>
+<span class="dim"># and in CI, the checker alone re-runs every check — same answer every time, offline, no AI</span>
 <div class="cline"><span><span class="prompt">$ rdv check vendor/decode-uri-component</span> <span class="dim">&amp;&amp; deploy</span></span><button class="copybtn" data-copy="rdv check vendor/decode-uri-component" aria-label="Copy command">copy</button></div>
   </div>
 
-  <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.8em;max-width:820px">Behind those two asks: <strong style="color:#e8e8e8"><code>sir-verify</code></strong> re-derives a unit from its contract — blind rebuilds, graded on held-out cases they never saw. <strong style="color:#e8e8e8"><code>preflight</code></strong> builds the oracle for untested code first — coverage + adversarial review + mutation testing + chaos, gated on a measured score. All Apache-2.0: <a href="https://github.com/rederive/sir-toolkit">sir-toolkit</a> · <a href="https://github.com/rederive/sir-factory">sir-factory</a> · <a href="https://www.npmjs.com/package/rederive">rederive</a>. Sending an agent instead? <a href="/prompt.md">rederive.ai/prompt.md</a> is the whole flow, written for it.</p>
-</section>
-
-<!-- THE TWO PATHS -->
-<section class="section">
-  <h2>Two ways to not trust a package</h2>
-  <p class="section-sub">Both anchored to the same independent oracle. Neither requires trusting the publisher's bytes.</p>
-  <div class="paths">
-    <div class="path">
-      <div class="ptag">The cheap path</div>
-      <h4>Verify</h4>
-      <p>Re-run the held-out oracle against the shipped code and check the content hashes. If the bytes don't match the behavior the contract promises, it fails — loudly.</p>
-      <div class="pcmd">$ rdv check &lt;pkg&gt;</div>
-      <div class="pcost">deterministic · no tokens · offline</div>
+  <div class="plugin-box" id="plugin">
+    <h3>The Claude Code plugin</h3>
+    <p class="pb-sub">Two commands inside Claude Code. The plugin adds three skills, so you can ask for the work in plain words.</p>
+    <div class="pcmds">
+      <div class="cline"><span><span class="prompt">&gt; /plugin marketplace add rederive/rederive</span></span><button class="copybtn" data-copy="/plugin marketplace add rederive/rederive" aria-label="Copy command">copy</button></div>
+      <div class="cline"><span><span class="prompt">&gt; /plugin install rederive@rederive</span></span><button class="copybtn" data-copy="/plugin install rederive@rederive" aria-label="Copy command">copy</button></div>
     </div>
-    <div class="path">
-      <div class="ptag">The paranoid path</div>
-      <h4>Re-derive</h4>
-      <p>Regenerate the implementation locally from the spec with N isolated workers — the original never in scope — and accept it only when independent rebuilds agree on the full held-out set.</p>
-      <div class="pcmd">$ rdv resynth &lt;pkg&gt; --n 3</div>
-      <div class="pcost">quorum-verified · your build, not theirs</div>
+    <div class="skills">
+      <div class="skill">
+        <div class="sk-name">sir-verify</div>
+        <p>Replaces a dependency. It writes the spec, records held-back tests by running the original, and runs the independent builds. Ask: "Get this project off decode-uri-component — re-derive it as a verified, zero-dependency copy in this repo."</p>
+      </div>
+      <div class="skill">
+        <div class="sk-name">preflight</div>
+        <p>For code with no tests. It records what the code does today as tests, then measures how strong those tests are by deliberately breaking the code and counting how often the tests notice.</p>
+      </div>
+      <div class="skill">
+        <div class="sk-name">greenfield-quorum</div>
+        <p>Builds a new feature part by part the same way, and brings the real design decisions to you instead of guessing.</p>
+      </div>
     </div>
+    <p class="pb-tip"><strong>Your team's existing AI-written code has no tests? Start with preflight.</strong> Using a different agent? The CLIs plus <a href="/prompt.md">rederive.ai/prompt.md</a> are the whole flow, written for any agent.</p>
   </div>
 </section>
 
-<!-- HOW IT WORKS (the ideas) -->
-<section class="section section-alt">
-  <h2>How it works</h2>
-  <p class="section-sub">Three ideas, one principle: the source text is fungible; the executable behavior is fundamental.</p>
+<!-- TESTED ON OUR OWN CODE -->
+<section class="section-alt" id="tested">
+<div class="section">
+  <h2>Tested on our own code</h2>
+  <p class="section-sub">Before asking you to trust it, we ran rederive on two things of our own: its own verifier, and a production app.</p>
 
+  <div class="stats-bar in-section">
+    <div class="stat"><span class="num">42/42</span><span class="label">Verifier parts pass</span><span class="sub">JavaScript and TypeScript for all 42, Rust for 38</span></div>
+    <div class="stat"><span class="num">67,976</span><span class="label">Cross-language comparisons</span><span class="sub">zero disagreements</span></div>
+    <div class="stat"><span class="num">114/114</span><span class="label">App builds passed</span><span class="sub">38 parts, each built three times</span></div>
+    <div class="stat"><span class="num">463</span><span class="label">Tests held back</span><span class="sub">from every builder of the app</span></div>
+  </div>
+
+  <h3 class="subhead" id="selfhost">Our own verifier, rebuilt with rederive</h3>
+  <p class="section-sub">A verification tool should survive being verified, so we rebuilt the part that decides whether <em>your</em> code passes.</p>
+  <div class="grid three">
+    <div class="card">
+      <h4>42 of 42 parts pass</h4>
+      <p>JavaScript and TypeScript for all 42, Rust for 38 — each rebuilt from its spec and checked against tests the builders never saw.</p>
+    </div>
+    <div class="card">
+      <h4>Three languages, one answer</h4>
+      <p>The JavaScript, TypeScript and Rust versions were run on the same inputs and compared: <strong>67,976</strong> cross-language comparisons, zero disagreements.</p>
+    </div>
+    <div class="card">
+      <h4>It found its own weak spots</h4>
+      <p>162 issues found in our own verifier this way; 25 high severity — all fixed in 0.5 with regression tests; 136 fixed in total, the rest tracked in the open.</p>
+    </div>
+  </div>
+
+  <h3 class="subhead" id="build">Our own production email categorizer, built at Apilify</h3>
+  <p class="section-sub">A real application we run, built part by part with rederive.</p>
+  <div class="grid three">
+    <div class="card">
+      <h4>38 parts, 114 builds, all passed</h4>
+      <p>Each part was built three times, blind. All 114 builds passed.</p>
+    </div>
+    <div class="card">
+      <h4>463 tests held back</h4>
+      <p>None of them was shown to any builder. The whole app is re-checked automatically on every change — offline, with no AI in the check.</p>
+    </div>
+    <div class="card">
+      <h4>One optional npm package</h4>
+      <p>Inside the app's own logic there is exactly one optional npm package: <code>zod</code>. The libraries the platform requires stay at the edges.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- COMPLIANCE -->
+<section class="section" id="compliance">
+  <h2>EU Cyber Resilience Act: evidence for your open-source components</h2>
+  <p class="section-sub">The CRA's reporting obligations apply from September 2026; its main obligations apply from December 2027. Its due-diligence question is old-fashioned: do you know what's in your product, and can you show your work? rederive supports that due diligence. It doesn't make a product compliant on its own.</p>
   <div class="invention-grid">
     <div class="invention-card">
-      <div class="inv-num">1 — The contract</div>
-      <h4>SIR spec + a held-out oracle</h4>
-      <p>Each unit decompiles to a structural spec (the SIR graph) and a behavioral oracle whose expected outputs are <em>stamped by executing the original</em> — never hand-authored. A frozen set teaches; a disjoint held-out set grades. Passing the held-out is evidence of behavior, not of matching a snapshot.</p>
+      <div class="inv-num">EU CRA · component due diligence</div>
+      <h4>A dependency tree you can answer for</h4>
+      <p>Fewer third-party components means a shorter inventory to defend. Each part you vendor with rederive carries its spec, its held-back tests and file fingerprints, so you can show what it does — not only where it came from. It complements your software bill of materials (SBOM); it doesn't replace it.</p>
     </div>
     <div class="invention-card">
-      <div class="inv-num">2 — Quorum re-derivation</div>
-      <h4>Independent rebuilds that must agree</h4>
-      <p>To re-derive, N workers reconstruct the unit from the spec + oracle with the original deleted, in isolation. The build is accepted only when ≥2 independent emissions pass the <em>full</em> held-out set. One passing rebuild is luck; agreement is evidence.</p>
+      <div class="inv-num">PCI DSS 4.0 · requirement 6.3.2</div>
+      <h4>An inventory of the components in your custom software</h4>
+      <p>PCI DSS 4.0 asks you to maintain an inventory of bespoke and custom software and the third-party components in it. Replacing components with small parts you own, each with checks anyone can re-run, makes that inventory shorter and easier to stand behind.</p>
     </div>
     <div class="invention-card">
-      <div class="inv-num">3 — An oracle no one can move</div>
-      <h4>Trust anchored to something the publisher can't edit</h4>
-      <p>The verdict isn't the publisher's say-so or even the rebuild's self-report — it's a held-out oracle plus content hashes. A tamper fails the behavior and the hash. Self-consistent verification can rubber-stamp a mistake; an independent oracle is a brake.</p>
+      <div class="inv-num">NIST SSDF · SOC 2 · auditors</div>
+      <h4>Verification an auditor can re-run</h4>
+      <p><code>rdv check</code> is offline, free and gives the same answer every time. Your evidence isn't a document saying a check happened once — it's a command the auditor can run again. Packaged evidence for teams is part of our hosted services, now in design-partner preview: <a href="https://calendly.com/lane-apilify/30min">book a call</a> if you're shipping into the EU and want to talk it through.</p>
     </div>
   </div>
-  <p style="margin-top:1.5em"><a href="spec.html" class="btn-secondary" style="display:inline-block;padding:0.6em 1.3em;border-radius:6px">Read the SIR specification →</a></p>
 </section>
 
-<!-- PACKAGES -->
-<section class="section" id="packages">
-  <h2>The catalog</h2>
-  <p class="section-sub">Verified re-derivations of the dependencies you can't trust to a maintainer anymore — starting with the abandoned and the once-sabotaged.</p>
-  <div class="pkg-grid">
-    <div class="pkg-card live">
-      <span class="pname">@rederive/colors</span><span class="pstatus v">verified</span>
-      <div class="pdesc">colors@1.4.0, zero-dep. <code>strip</code> re-derived, quorum 3/3, 10/10 held-out — the last good release before the sabotage.</div>
-    </div>
-    <div class="pkg-card live">
-      <span class="pname">@rederive/rdv</span><span class="pstatus v">verified</span>
-      <div class="pdesc">The verifier, in its own catalog. The verdict core — <code>eq</code> / <code>grade</code> / <code>quorum</code> / <code>hashOk</code> — adversarial held-out, quorum 3/3. Re-derive your own verifier.</div>
-    </div>
-    <div class="pkg-card live">
-      <span class="pname">@rederive/request</span><span class="pstatus v">core + effects</span>
-      <div class="pdesc">The deprecated HTTP client. Pure helpers, an <strong>env-boundary</strong> effect leaf (<code>getProxyFromURI</code>), <em>and</em> a full <strong>NET trace</strong> unit (<code>httpRequest</code>) — ordered EMIT + REQUEST verified with the http transport injected (record/replay). All quorum 3/3. Re-deriving request.js's whole Request class is the remaining frontier.</div>
-    </div>
-    <div class="pkg-card soon">
-      <span class="pname">@rederive/faker</span><span class="pstatus s">queued</span>
-      <div class="pdesc">The other half of the Jan-2022 sabotage. Seeded data generators — the bigger, harder target.</div>
-    </div>
-    <div class="pkg-card soon">
-      <span class="pname">@rederive/q</span><span class="pstatus s">queued</span>
-      <div class="pdesc">A dead promise library still in millions of trees.</div>
-    </div>
+<!-- FAQ -->
+<section class="section-alt" id="faq">
+<div class="section">
+  <h2>Questions</h2>
+  <div class="faq">
+    <details>
+      <summary>Can it replace an abandoned or unmaintained npm package?</summary>
+      <p>Often, yes — if it&#x27;s small and self-contained, like a string, date, URL or parsing helper. The replacement lives in your repo, so you don&#x27;t need anyone upstream to publish a fix. If rederive can&#x27;t verify a package, it says so and leaves it in place.</p>
+    </details>
+    <details>
+      <summary>Aren&#x27;t published tests leaked to the next model?</summary>
+      <p>The tests are held back only while the AI builds the code. After that, their job is to let anyone re-check the result, so they ship with the package. A leaked test can&#x27;t make wrong code pass, because the expected answers come from running the original package, not from the code being checked.</p>
+    </details>
+    <details>
+      <summary>How is this different from Socket or Snyk?</summary>
+      <p>Scanners like Socket and Snyk flag risky packages. rederive removes a package by replacing it with verified code you own. They answer different questions, so use both.</p>
+    </details>
+    <details>
+      <summary>What does it cost?</summary>
+      <p>The tools are free and open source. Building a replacement uses your own AI model usage, on your machine. Checking is free and offline, with no AI involved.</p>
+    </details>
+    <details>
+      <summary>What about licenses?</summary>
+      <p>Every replacement keeps the original package&#x27;s license notice and records where it came from.</p>
+    </details>
+    <details>
+      <summary>Does it work with Cursor or other agents?</summary>
+      <p>Yes. The command-line tools and the setup prompt at <a href="/prompt.md">rederive.ai/prompt.md</a> work with any agent that can run shell commands. The plugin is for Claude Code.</p>
+    </details>
   </div>
-  <p style="font-size:0.9em;color:#b0b0b0;margin-top:0.5em">Want a specific dead dependency re-derived and behavior-locked? <a href="https://calendly.com/lane-apilify/30min">Tell us which one.</a></p>
+</div>
 </section>
 
-<!-- VERIFIED NORMALIZATION (Mode 2) -->
-<section class="section" id="normalize">
-  <h2>Some code is too tangled to re-derive. Untangle it — without changing what it does.</h2>
-  <p class="section-sub">The catalog re-derives a unit from a compact contract. A 2,000-line promise machine or a stateful HTTP client has no compact contract. So you keep the original running as the oracle, propose a clean factoring, and prove the clean version still behaves exactly like the old one.</p>
-  <div class="invention-grid">
-    <div class="invention-card">
-      <div class="inv-num">Mode 1 — catalog</div>
-      <h4>Re-derive from the contract</h4>
-      <p>For a nameable unit with a compact spec + held-out oracle: delete the original and rebuild it by quorum. This is what the catalog ships.</p>
-    </div>
-    <div class="invention-card">
-      <div class="inv-num">Mode 2 — normalize</div>
-      <h4>Behavior-lock against the retained original</h4>
-      <p>For a tangle: keep the original as a <em>live</em> oracle, cut it into firewall-clean units, and verify the result reproduces the original on generated, held-out scenarios it never saw. Modernize legacy code and prove the behavior is unchanged.</p>
-    </div>
-    <div class="invention-card">
-      <div class="inv-num">even the hard parts</div>
-      <h4>Time, the event loop, concurrency</h4>
-      <p>Timers run on virtual time; the event loop is injected and replayed; genuinely concurrent code is verified by owning the message scheduler and checking the whole space of interleavings — scaled past brute force with partial-order reduction.</p>
-    </div>
-  </div>
-  <p class="section-sub" style="margin-top:1.4em">Proven on real modules: <code>debug</code>, <code>q</code>, <code>request</code>'s redirect state machine (256/256 on generated + held-out scenarios), and <code>p-map</code> (its concurrency contract verified across the entire interleaving space for small inputs, partial-order-reduction-scaled beyond). <strong>The method is validated today; <code>rdv normalize</code> as a one-command workflow is what we're building next — not a shipping command yet.</strong></p>
-</section>
-
-<!-- OPEN CORE -->
-<section class="section section-alt" id="opencore">
-  <h2>Open core. Honestly.</h2>
-  <p class="section-sub">The tools that verify trust are free and open, forever. We only ever charge for running them at team scale — never for the core.</p>
+<!-- OPEN SOURCE & PRICING -->
+<section class="section" id="opencore">
+  <h2>Open source. Hosted team services in preview.</h2>
+  <p class="section-sub">Everything on this page is open source under Apache-2.0. Hosted services for teams are in design-partner preview — if you'd like to shape them, book a call.</p>
   <div class="tiers">
     <div class="tier open">
-      <div class="ttag">Free &amp; open · Apache-2.0 · forever</div>
-      <h4>The open core</h4>
-      <div class="tsub">Everything you need to verify or re-derive any package.</div>
+      <div class="ttag">Free &amp; open · Apache-2.0</div>
+      <h4>The open-source tools</h4>
+      <div class="tsub">Everything you need to check, replace or build verified code.</div>
       <ul>
-        <li>The <code>rdv</code> CLI — check, vis, resynth (<a href="https://www.npmjs.com/package/rederive">npm</a>)</li>
-        <li>The <code>sir-factory</code> build orchestrator (<a href="https://github.com/rederive/sir-factory">GitHub</a>)</li>
-        <li>The Claude Code plugin — <code>sir-verify</code> + <code>preflight</code> skills, role agents (<a href="https://github.com/rederive/sir-toolkit">GitHub</a>)</li>
-        <li>The SIR specification &amp; package format</li>
-        <li>The public <code>@rederive/*</code> catalog</li>
+        <li>The <code>rdv</code> checker — <code>check</code>, <code>audit</code>, <code>init</code> and the rest (<a href="https://www.npmjs.com/package/rederive">npm</a>)</li>
+        <li>The <code>sir-factory</code> build tool (<a href="https://github.com/rederive/sir-factory">GitHub</a>)</li>
+        <li>The Claude Code plugin <code>rederive@rederive</code> — <code>sir-verify</code>, <code>greenfield-quorum</code> and <code>preflight</code> (<a href="https://github.com/rederive/rederive">GitHub</a>)</li>
+        <li>The SIR specification and package format</li>
+        <li>The <code>@rederive/*</code> catalog — 218 verified in the repository, 3 published so far</li>
       </ul>
     </div>
     <div class="tier cloud">
-      <div class="ttag">rederive Cloud · for teams, as the core matures</div>
-      <h4>The extra tools that make it better</h4>
-      <div class="tsub">Operating rederive across an org — not gatekeeping the core.</div>
+      <div class="ttag">Hosted team services · design-partner preview</div>
+      <h4>Running it across an organization</h4>
+      <div class="tsub">What we're building with design partners. No dates promised.</div>
       <ul>
-        <li>Managed re-derivation — don't run the fleet or spend your own tokens</li>
+        <li>Managed rebuilds — no build fleet to run, no AI usage of your own to spend</li>
         <li>Private catalogs for your internal code</li>
-        <li>Continuous verification &amp; behavioral-drift alerts</li>
-        <li>Governance — SSO, RBAC, policy, audit logs</li>
-        <li>Compliance attestation — EU CRA / SSDF / SOC 2 evidence</li>
+        <li>Continuous checks and alerts when behavior changes</li>
+        <li>Governance — SSO, roles, policy, audit logs</li>
+        <li>Packaged evidence for EU CRA, NIST SSDF and SOC 2 reviews</li>
       </ul>
+      <p style="margin-top:1em"><a href="https://calendly.com/lane-apilify/30min" class="btn-secondary" style="display:inline-block;padding:0.55em 1.2em;border-radius:6px">Book a call →</a></p>
     </div>
   </div>
   <div class="promise-cta">
     <h4>We wrote down what we'll never do.</h4>
-    <p>We will never paywall the ability to verify or re-derive a public package, never cripple the open core to force an upgrade, and never retroactively relicense what we've released. It binds the company through any funding, board, or acquisition — a written commitment, not a vibe.</p>
+    <p>We will never paywall the ability to verify or re-derive a public package, never cripple the open-source tools to force an upgrade, and never retroactively relicense what we've released.</p>
     <a href="promise.html" class="btn-secondary" style="display:inline-block;padding:0.55em 1.2em;border-radius:6px">Read the rederive Promise →</a>
   </div>
 </section>
 
 <!-- ABOUT -->
-<section class="section">
+<section class="section-alt" id="about">
+<div class="section">
   <h2>About</h2>
-  <p style="max-width:680px;margin-bottom:0.5em;color:#e8e8e8">rederive is built on <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine — the same machinery that compiles natural-language intent into verified, dependency-free machine code. <strong style="color:#fafafa">Lane Thompson</strong> is the inventor and CEO of Apilify Inc. The idea is simple and uncomfortable: most tooling makes the publisher's bytes the source of truth. rederive makes an independent oracle the source of truth, and lets you regenerate the bytes yourself.</p>
-  <p><a href="https://semcom.ai">semcom.ai</a> &middot; <a href="https://www.linkedin.com/in/lanestp">LinkedIn</a> &middot; <a href="mailto:lane@apilify.com">lane@apilify.com</a></p>
+  <p style="max-width:680px;margin-bottom:0.5em;color:#e8e8e8">rederive is built by Apilify Inc. It grew out of Semcom, Apilify's verified-compilation research. <strong style="color:#fafafa">Lane Thompson</strong> is the inventor and Apilify's CEO. The idea is simple and a little uncomfortable: most tooling treats the author's code as the source of truth. rederive treats behavior anyone can re-check as the source of truth, and rebuilds the code to match.</p>
+  <p><a href="https://www.linkedin.com/in/lanestp">LinkedIn</a> &middot; <a href="mailto:lane@apilify.com">lane@apilify.com</a> &middot; <a href="https://calendly.com/lane-apilify/30min">Book a call</a></p>
+</div>
 </section>
 
 </main>
 
+
 <footer>
   <div class="footer-inner">
-    <span class="footer-brand">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <span class="footer-brand">rederive &middot; by Apilify Inc.</span>
     <div class="footer-links">
       <a href="#get-started">Get started</a>
+      <a href="#opencore">Pricing</a>
       <a href="promise.html">The Promise</a>
       <a href="spec.html">SIR Spec</a>
+      <a href="blog.html">Blog</a>
       <a href="https://github.com/rederive">GitHub</a>
-      <a href="https://semcom.ai">Semcom</a>
       <a href="mailto:lane@apilify.com">Contact</a>
     </div>
     <span>&copy; 2026 Apilify Inc. &middot; Open source (Apache-2.0)</span>
@@ -501,11 +625,28 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
 <script>
 document.addEventListener('click', function (e) {
+  var t = e.target.closest('.nav-toggle');
+  if (t) {
+    var nav = t.closest('.topnav');
+    var open = nav.classList.toggle('open');
+    t.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return;
+  }
+  if (e.target.closest('.navlinks a')) {
+    var nav2 = document.querySelector('.topnav.open');
+    if (nav2) { nav2.classList.remove('open'); nav2.querySelector('.nav-toggle').setAttribute('aria-expanded', 'false'); }
+  }
   var b = e.target.closest('.copybtn'); if (!b) return;
+  if (!b.hasAttribute('data-label')) b.setAttribute('data-label', b.textContent);
+  var label = b.getAttribute('data-label');
+  function done(text, ok) {
+    b.textContent = text; if (ok) b.classList.add('copied');
+    setTimeout(function () { b.textContent = label; b.classList.remove('copied'); }, 1400);
+  }
+  if (!navigator.clipboard || !navigator.clipboard.writeText) { done('copy failed', false); return; }
   navigator.clipboard.writeText(b.getAttribute('data-copy')).then(function () {
-    b.textContent = '✓ copied'; b.classList.add('copied');
-    setTimeout(function () { b.textContent = 'copy'; b.classList.remove('copied'); }, 1400);
-  });
+    done('✓ copied', true);
+  }).catch(function () { done('copy failed', false); });
 });
 </script>
 </body>

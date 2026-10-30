@@ -1,0 +1,4201 @@
+{
+ "unit": "schema_lint",
+ "sig": "schema_lint(text: text, carried_name: text | none) -> record[hits: list[record[line: u64, what: text, text: text]]]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT u\nDEPENDS-ON none\n\n# ---- carried table ----\nCARRIED tbl FROM tbl.json\n  SHAPE map[text, text]",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON none # no carried data here\nDEPENDS-ON none #carried\nDEPENDS-ON none\t# tbl\nDEPENDS-ON x #\nNOTE carried",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none # no carried data here",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none #carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none\t# tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "# carried\nDEPENDS-ON none\n  # tbl\n\t#carried\nKIND k\n# carried",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x\n#  tbl\nDEPENDS-ON x\n#   tbl\nDEPENDS-ON x\n# tbl\nDEPENDS-ON x\n###\t tbl\nDEPENDS-ON x # \t tbl\nDEPENDS-ON x\n#",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x  tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "7"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a\n# tbl\nDEPENDS-ON b # tbl\nDEPENDS-ON c#\ttbl\nDEPENDS-ON d# tbl\nDEPENDS-ON e ## tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "# tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "6"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON e ## tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON none CITED carried\nDEPENDS-ON none\n  CITED tbl\nDEPENDS-ON none EARNED x ANCHOR carried\nDEPENDS-ON none CITED",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none CITED carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none EARNED x ANCHOR carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x CITED z\n  y\nDEPENDS-ON x CITED y\n  z\nDEPENDS-ON x CITED v # c\nDEPENDS-ON x # c\n  CITED v",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x CITED z",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x CITED v # c\nDEPENDS-ON x # c\n  CITED v\nDEPENDS-ON x # v\n  c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "v c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x CITED v # c",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x # c",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x CITED y\nDEPENDS-ON x CITED  CITED y\nDEPENDS-ON \"x CITED y\"\nDEPENDS-ON x CITEDy",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x CITED y",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON \"x CITED y\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x CITED\nDEPENDS-ON x CITED CITED\nDEPENDS-ON x\n  CITED",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x CITED CITED",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON \"colorNames, carried\"\nDEPENDS-ON \"a # carried\"\nDEPENDS-ON x\n  \"carried\"\nDEPENDS-ON \"colorNames\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "colorNames",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON \"colorNames, carried\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON \"a # carried\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON \"colorNames\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON \"tbl\"\nDEPENDS-ON x\"tbl\"\nDEPENDS-ON 12\"tbl\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON \"tbl\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x\"tbl\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON 12\"tbl\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON +\"y CITED z\"\nDEPENDS-ON ?\"y CITED z\"\nDEPENDS-ON *\"y CITED z\"\nDEPENDS-ON -\"y CITED z\"\nDEPENDS-ON ~\"y CITED z\"\nDEPENDS-ON &\"y CITED z\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y CITED z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON -\"y CITED z\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON ~\"y CITED z\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "6"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON &\"y CITED z\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x*\"a # tbl\"\nDEPENDS-ON x(\"a # tbl\"\nDEPENDS-ON /\"(?:a|b)*\" CITED R5\nDEPENDS-ON x+\"a # tbl\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a # tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x(\"a # tbl\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON miscarried\nDEPENDS-ON carried_tbl\nDEPENDS-ON carried2\nDEPENDS-ON écarried\nDEPENDS-ON carriedX\nDEPENDS-ON CARRIED-data\nDEPENDS-ON xCaRrIeD",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried_tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried2",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON écarried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "6"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON CARRIED-data",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON uncarried\nDEPENDS-ON carriedly\nDEPENDS-ON 9carried9\nDEPENDS-ON (Carried)\nDEPENDS-ON ſarried\nDEPENDS-ON carrİed\nDEPENDS-ON carried😀",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON 9carried9",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON (Carried)",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "7"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried😀",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON tbl_carried\nDEPENDS-ON tbl_x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl_carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON none\nDEPENDS-ON x none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "none",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON None\nDEPENDS-ON none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "None",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON None",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON NONE\nDEPENDS-ON none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "NONE",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON NONE",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON none ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "none ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x\n ﻿ ﻿tbl\nDEPENDS-ON x\n ﻿tbl\nDEPENDS-ON x\n\t﻿﻿\ttbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿DEPENDS-ON tbl\n﻿﻿DEPENDS-ON carried\nDEPENDS-ON ﻿tbl\n﻿ DEPENDS-ON tbl\n﻿\t﻿#carried",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON ﻿tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x\n﻿ ﻿\n﻿\n  ﻿ \t",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT x\rDEPENDS-ON tbl\rKIND k",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT x\r\nDEPENDS-ON tbl\r\n\r\nDEPENDS-ON carried\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON tbl   \t\nDEPENDS-ON x\n  ﻿ tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\r\n\r",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON none\n\n   \n\t\n  tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a\n  b\n\n  c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a b c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON a",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a\n   \n  b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a   b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON-X carried\nDEPENDS-ONX carried\ndepends-on carried\n DEPENDS-ON carried\nDEPENDS-ON carried",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "UNIT u\nDEPENDS-ON tbl\nDEPENDS-ON:tbl\nDEPENDS-ON: tbl\nDEPENDS-ON:\nNOTE x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "4"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON: tbl",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a\nCITED carried\nCITED: carried\nEARNED carried\nDEPENDS-ON b\nANCHOR tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON a",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a\n⁠KIND carried\nR7 tbl\nR carried\nA-1 x\n9X carried\nX_Y carried",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON a",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a\nlowercase carried here\n　tbl\n⁠# tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON a",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "NOTE tbl\nDEPENDS-ON\nDEPENDS-ON\t\nDEPENDS-ON",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "  DEPENDS-ON tbl\nDEPENDS-ON none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON\n  tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": " tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON tbl_v2\nDEPENDS-ON tbl.js\nDEPENDS-ON xtbl\nDEPENDS-ON tbl9\nDEPENDS-ON (tbl)\nDEPENDS-ON 9tbl\nDEPENDS-ON étblé",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl.js",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON (tbl)",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        },
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "7"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON étblé",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON TBL\nDEPENDS-ON Tbl\nDEPENDS-ON tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "TBL",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON TBL",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x\nDEPENDS-ON none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "DEPENDS",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON a.b\nDEPENDS-ON axb\nDEPENDS-ON a+b\nDEPENDS-ON (a\nDEPENDS-ON a|b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a.b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON a.b",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x(\nDEPENDS-ON [y\nDEPENDS-ON a\\b\nDEPENDS-ON ^$\nDEPENDS-ON y (",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "(",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON y (",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON -tbl-\nDEPENDS-ON x-tbl\nDEPENDS-ON tbl-",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "-tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON -tbl-",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON aaa\nDEPENDS-ON aa aaa\nDEPENDS-ON aaaa",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "aa",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "2"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON aa aaa",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x---\nDEPENDS-ON x--",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "--",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x---",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON 😀tbl\nDEPENDS-ON tbl😀\nDEPENDS-ON é😀é",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON é😀é",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON x \"\"\nDEPENDS-ON \"a\"",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "\"\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON x \"\"",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON 1.5\nDEPENDS-ON 12",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON 1.5",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON carried aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON carried cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc😀zz😀😀😀😀😀",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON carried cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc😀",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON tbl 日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語 # carried",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON tbl 日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON none CITED qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n  tbl",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none CITED qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "prose    \nDEPENDS-ON\nDESCRIPTION 1 # #tbl\nR3 +\"a 😀 colorNames\n﻿DEPENDS-ON serde_json carried2 #none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "5"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON serde_json carried2 #none",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "DESCRIPTION uncarriedX\r﻿DEPENDS-ON\nDEPENDS-ON écarried\tuncarriedX 　tbl\t# x qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n\nprose ANCHOR miscarried \"a b\"\r﻿DEPENDS-ON EARNED y\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "DEPENDS",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON écarried\tuncarriedX 　tbl\t# x qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿\r\ttbl.js DEPENDS 1) #carried \t\n##(\n﻿ ﻿a_b9 none tbl_v2\nDEPENDS-ON-X tbl -tbl *\"x CITED carried_x\ndepends-on -tbl NONE\t\r\nDEPENDS-ON",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "TBL",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": " #DEPENDS tblé\n  carried2 \r\n ANCHOR uncarriedX 　tbl\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "EARNED\rprose NONE DEPENDS 日本語 CITED TBL\nDEPENDS-ON EARNED \"carried \tCITED #tbl qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀😀😀\rprose\nprose \t\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "(",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON EARNED \"carried \tCITED #tbl qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "  ﻿# CITED\nDEPENDS-ON DEPENDS 　tbl \"a b\" ANCHOR\r\n﻿\nUNIT carried_x ANCHOR a_b9\rDEPENDS-ON colorNames  ANCHOR\tEARNED qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n﻿\n    #none # #x y",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "None",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "\t#carried DEPENDS\nDEPENDS-ON   ON\n\tTBL x",
+     "cu": "utf8"
+    },
+    {
+     "t": "none"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀😀😀\r\n# écarried NONE écarried",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x CITED y",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "1"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "# _ a|b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "ON",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "EARNED carried_x 1) x\r\nDEPENDS-ON qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀😀😀\nDEPENDS-ON \tON étbl\nDEPENDS-ON-X\r\nprose\r\nR3 CITED ANCHOR\rEARNED a|b ﻿ a.b\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "DEPENDS",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "    tbl ANCHOR \\\" \t\n﻿ ﻿axb -tbl carried CITED colorNames\nDEPENDS-ON miscarried 1 carried +\"a qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\nDEPENDS-ON: tbl_v2 y\r\n a|b # DEPENDS\nEARNED CITED\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "carried",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON miscarried 1 carried +\"a qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "DEPENDS-ON\tétbl\ttbl_v2 　tbl tblé\t\nDESCRIPTION (crate, EARNED\nDEPENDS-ONX 😀 NONE 　tbl miscarried\t# CITEDx",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x tbl",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "  😀 😀 x a|b\nDEPENDS-ON:\nDEPENDS-ON none ﻿ CITED , qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\ndepends-on \"carried 　tbl +\"a #x (crate,\nNOTE NONE EARNED\rUNIT \"a b\"\nDEPENDS-ON \\\" #CITED",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": [
+        {
+         "t": "record",
+         "v": [
+          [
+           "line",
+           {
+            "t": "u64",
+            "v": "3"
+           }
+          ],
+          [
+           "what",
+           {
+            "t": "text",
+            "v": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+            "cu": "utf8"
+           }
+          ],
+          [
+           "text",
+           {
+            "t": "text",
+            "v": "DEPENDS-ON none ﻿ CITED , qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "cu": "utf8"
+           }
+          ]
+         ]
+        }
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "#CITED CITED",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "record",
+    "v": [
+     [
+      "hits",
+      {
+       "t": "list",
+       "v": []
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "canonicalSha256": "0a0916d12c07d545826d2813aaf5d3246311e79169468c5db03e530958430540"
+}

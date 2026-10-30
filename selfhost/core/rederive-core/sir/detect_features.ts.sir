@@ -1,0 +1,59 @@
+UNIT detect_features
+LANG ts
+PRIMARY-SHA256 a5adf4883c5ba961a4dbe1cd80cb7cf1ce72a729ebfbc5ed3e7b5a75481febea
+SIG export default function detectFeatures(input: unknown): string[]
+ABI TypeScript compiles to the js runtime. STRICT: the artifact type-checks under strict: true against this SIG with no
+  any, no non-null assertion (!), and no ts-ignore or ts-expect-error. Narrow from unknown by typeof, Array.isArray and
+  === null; read fields of a non-null object through a Record<string, unknown> view.
+ABI json = a JS value: none = null; bool = boolean; number = number; text = string (UTF-16); list = Array; map = a plain
+  object with own string keys (entries in insertion order). The driver passes the vector's one argument positionally. The
+  result is a fresh Array of strings. A throw (R1, R2, R10, R11) is a thrown Error; the message is not graded. The artifact
+  is an ES module default-exporting the function and imports nothing: the reader of R3-R8 is written in the artifact (only
+  the part the rules name), and the registry is the pinned literal of the primary, not a read of capabilities.json.
+ENVELOPE as the primary; no widening is claimed. An undefined input or field behaves as ABSENT, which is what the code does,
+  but it is not a json value and stays unverified.
+MECHANISM R1-R2: input === null throws; otherwise read the six properties (a text, number, bool or Array input has none of
+  them). Only undefined is ABSENT; a null sirText throws, a null carriedData, envelope, sirFiles or variants reads as
+  ABSENT. R9 is a Set filled in TABLE FEATURES order, spread into an Array.
+MECHANISM TRIMS (one rule for every rule): no trim is String.prototype.trim and no separator is \s; a physical line (R3) is
+  the split piece with the LEAD-RUN match replaced by itself with every U+FEFF removed, and then TRIM-TAIL removed, so it KEEPS its leading spaces and tabs (INDENT,
+  R6 and PROSE see them); every other trim of R5, R7, TABLE FEATURES and R10 is TRIM-SP. EARNED round-2 frozen v13 — two emitters applied the whole TRIM-SP to each line, lost the INDENT, and read indented PAR and ENVELOPE as directives
+MECHANISM R3-R7: LINES splits the text; skip an empty physical line; INDENT = /^[ \t]*/; COMMENT = CONTENT.startsWith('#').
+  R4 spans are an index walk over the text in question, never a regex: i from 0; a '"' at i opens when i === 0,
+  OPENERS.includes(t[i - 1]) or i === the previous span's closer + 1; from i + 1, a backslash advances by 1 plus the
+  length of the code point after it (2 for an astral one), any other unit by 1, until a '"'; reaching the end stops the
+  walk (no span, no later span); else record [i, closer + 1] and resume at closer + 1. Inside = strictly between.
+  UNQUOTE rebuilds the text with '""' in place of each recorded [a, b). R5
+  scans indices of the CONTENT for the first qualifying sign. The column-0 token ends at CODE.search(/[ \t]/); COLON-NAME
+  drops the colon; NAME decides, CITED excluded. ATTR (global) finds keyword runs in a piece, the directive's REST keeping
+  its leading run; a hit whose keyword index lies inside a QUOTED span of that piece is discarded. A continuation piece is
+  ' ' + CODE.
+MECHANISM R8-R12: FULL is Array.prototype.join(' ') of ARGS and CONT, UNQUOTEd whole for the EFFECT row; the CARRIED-DATA row tests [FULL, ...attrList.map(([, v]) => v)] each TRIM-SPed as written (no UNQUOTE, every attribute keyword); PIECES are
+  UNQUOTEd and tested one by one; JOINED-ANCHOR is the ANCHOR values with an empty one skipped, join('; '), then UNQUOTE. A
+  PROSE text is the R7 split of ' ' + UNQUOTE(line) keeping only its body; they are tested one by one (or joined with '\n',
+  which no token pattern crosses). The token rows are the pinned regexes. R10: base =
+  p.split(/[\\/]/).pop() then TRIM-SP; HIDDEN-TAIL.test(base) throws; SIR-TAIL fails -> NONE; else base.slice(0, -4)
+  .split('.') gives the segments, and a non-empty first one failing UNIT-NAME throws. R11 variants entries by
+  Object.entries; "has a lang entry" is v.lang !== undefined, and likewise sir; a sir text is run through R10 (its throw
+  propagates) and then SIR-TAIL over its trimmed base; the key test is k === 'package' || VARIANT-KEY.test(k).
+DEPENDS-ON none
+PINNED regex LINES = /\r\n|\r|\n/ CITED R3
+PINNED regex LEAD-RUN = /^[ \t\uFEFF]+/ CITED R3 — one replace with a function: lead.replace(/\uFEFF/g, '')
+PINNED regex TRIM-TAIL = /[ \t]+$/ CITED R3 — the physical line's trailing half only
+PINNED regex TRIM-SP = /^[ \t]+|[ \t]+$/g CITED R5 R7 R10 TABLE FEATURES — spaces and tabs only, replaced with ''
+PINNED text OPENERS = ' \t([{,=:;|<>!&-~' CITED R4 — the primary's OPENERS as one JS string literal
+PINNED regex COLON-NAME = /^[A-Z][A-Z0-9-]*:$/ CITED R6
+PINNED regex NAME = /^(?:[A-Z][A-Z0-9-]*|R\d+)$/ CITED R6
+PINNED regex ATTR = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R7
+PINNED regex TRACE-CLASS = /^trace(?![A-Za-z0-9_])/ CITED TABLE FEATURES trace-seam, over the SP-trimmed FULL
+PINNED regex SET-TIMER = /\bsetTimer\b/ CITED TABLE FEATURES lifecycle
+PINNED regex EFFECT-TIMER = /\btime\.timer\b|\bmicrotask\b/ CITED TABLE FEATURES scheduler, over an EFFECT FULL
+PINNED regex SCHEDULER = /\bschedule\(|\bvirtual time\b|\btimers\./ CITED TABLE FEATURES scheduler, over a PROSE line
+PINNED regex REF = /\bref\([ \t]*([a-z][a-z0-9]*):/g CITED R12 — every match is judged (matchAll)
+PINNED regex HIDDEN-TAIL = /\.[sS][iI][rR][^\x21-\x7e]+$/ CITED R10 — no i and no u flag: no case folding beyond the listed letters
+PINNED regex SIR-TAIL = /\.[sS][iI][rR]$/ CITED R10
+PINNED regex UNIT-NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/ CITED R10
+PINNED regex VARIANT-KEY = /^lang:[a-z][a-z0-9]*$/ CITED R11
+PROVENANCE rederive@69b68b4a1c39 cli/features.mjs detectFeatures and languagesOf, cli/sir/sir-parse.mjs parse, quotedSpans and
+  sirLines (every regex above is the code's, verbatim; the R4 walk is the code's quotedSpans). Graded by the verifier-owned ts driver (tsc strict, the any-ban lint,
+  then the js grading path).

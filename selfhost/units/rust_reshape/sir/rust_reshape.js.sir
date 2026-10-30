@@ -1,0 +1,23 @@
+UNIT rust_reshape
+LANG js
+PRIMARY-SHA256 eef740648c2929d614081cce771da2f804adfd9fbd02865789bb357ff84dec6c
+SIG reshape(v: Json, t: Json): Json
+NOTE default export
+ABI json = the JSON values of the runtime: none = null; bool = boolean; number = number (finite, never -0 inside the
+  envelope); text = string; list = Array; map = a plain object with own enumerable string keys (key order is immaterial,
+  the canonical form sorts). The driver calls reshape(v, t) with both arguments decoded from the vector; "absent" in the
+  primary is a missing own property (undefined) and reads exactly as null. A throw (R8) is a thrown Error; the message is
+  not graded. The artifact is an ES module default-exporting the function and imports nothing. The result is fresh: never
+  write into v or t.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM "a map" (R2–R7) = a non-null object that is not an Array (Array.isArray). "k is exactly the text X" = t.k === 'X'
+  (a strict comparison; a non-string k never matches). R3 examines every alts element (a filter over the whole list, not a
+  search that stops early), so a null anywhere throws. A record's result (R4) and a map's result (R7) are built with
+  Object.fromEntries or Object.defineProperty, NEVER plain assignment o[name] = value: assignment to the name __proto__
+  sets the prototype and the entry silently disappears. R7's keys are Object.keys(v) (own enumerable keys). Duplicate
+  record names: the later entry's value wins, as Object.fromEntries gives. A field entry is read positionally (entry[0],
+  entry[1]); a non-list entry must throw by an explicit Array.isArray test, so a map entry cannot be read as {0, 1}
+  members. R4's length comparison is against fields.length only when fields is an Array.
+DEPENDS-ON none
+PROVENANCE rederive@bb8ded84fa50 cli/lang/rust.mjs reshape (lines 335–343). Language file re-cut 2026-10-27 with the primary
+  (round 5), before any blind re-emission.

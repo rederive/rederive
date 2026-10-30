@@ -1,0 +1,151 @@
+UNIT mean
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG mean(array) -> number          # default export: module.exports = mean. The blind re-emitter MUST `export default <fn>`.
+DEPENDS-ON none                    # zero runtime deps; baseMean/baseSum/identity are INLINED below — reproduce in-contract.
+
+# ============================================================================
+# OVERVIEW
+# ----------------------------------------------------------------------------
+# Pure arithmetic mean of an array's values. mean(array) === baseMean(array, identity)
+# where identity(v) = v. There is NO iteratee shorthand in this unit — the
+# iteratee is hard-wired to identity, so each "value" is simply array[index].
+#
+# The whole computation is:  result_of_baseSum / length
+# with three guard/skip subtleties that produce all the surprising edge cases.
+# READ-ONLY, deterministic, no seam, no carried data, value-mode oracle.
+# ============================================================================
+
+BEHAVIOR
+# ---- NODE 1: length guard (from baseMean) --------------------------------
+# length = array ? array.length : 0
+#   - "array ?" is JS truthiness of the ARGUMENT itself (NOT Array.isArray).
+#     Falsy args (null, undefined, 0, "", false, NaN) => length := 0.
+#     Truthy non-array args (a number like 5, a plain object {}, a non-empty
+#     string, an array-like {length, [i]}) => length := (array.length), which
+#     is `undefined` for objects/numbers without a `.length` property.
+#   - If length is 0  OR  falsy (e.g. undefined because the arg has no .length,
+#     or 0 from the falsy-arg branch): baseMean returns NAN immediately and
+#     baseSum is NEVER called.  ( `length ? (...) : NAN` )
+#     NAN is defined as `0 / 0` (an IEEE-754 NaN; identical to global NaN).
+#   - Otherwise (length is a truthy number) proceed to NODE 2.
+#
+#   CONSEQUENCES (all VERIFIED by executing the real package):
+#     mean([])            -> NaN   (length 0 -> length-0 path, NO division)
+#     mean(null)          -> NaN   (falsy arg -> length 0)
+#     mean(undefined)     -> NaN   (falsy arg -> length 0)
+#     mean(5)             -> NaN   (truthy, (5).length === undefined -> falsy -> NaN)
+#     mean("")            -> NaN   (falsy arg -> length 0)        # empty string
+#     mean({})            -> NaN   (truthy, ({}).length undefined -> NaN)
+#     mean("abc")         -> NaN   (length 3 -> proceeds, but see NODE 3 result)
+#
+# ---- NODE 2: baseSum accumulation ----------------------------------------
+# Called only when length is a truthy number. Inlined exactly:
+#   result = undefined            # starts UNDEFINED, not 0
+#   index  = -1
+#   length = array.length         # re-read here (same value as NODE 1 in practice)
+#   while (++index < length):
+#       current = array[index]    # iteratee == identity, so current IS the element
+#                                 # a SPARSE HOLE reads as `undefined`.
+#       if (current !== undefined):                  # SKIP test
+#           result = (result === undefined)
+#                      ? current                      # first non-undefined element seeds result
+#                      : (result + current)           # subsequent: JS `+` operator
+#   return result                 # may be undefined if every element was undefined/hole
+#
+#   KEY RULES (each VERIFIED):
+#   (a) SKIP-UNDEFINED: elements that are EXACTLY `undefined` (or sparse holes,
+#       which read as undefined) are SKIPPED — they do NOT enter the sum AND do
+#       NOT reduce the divisor (length still counts them). So undefined acts like
+#       "absent from the sum but present in the count".
+#         mean([1, undefined, 3]) -> (1+3)/3 = 1.3333333333333333   # NOT NaN, NOT 2
+#         mean([1, <hole>, 3])    -> (1+3)/3 = 1.3333333333333333   # sparse hole == undefined
+#         mean([undefined,2])     -> 2/2     = 1                     # leading undefined skipped
+#         mean([undefined,undefined,6]) -> 6/3 = 2
+#   (b) ALL-UNDEFINED / ALL-HOLES: result stays `undefined`; baseSum returns
+#       undefined; NODE 3 computes `undefined / length` === NaN.
+#         mean([undefined, undefined]) -> NaN
+#         mean(new Array(3))           -> NaN     # 3 holes
+#   (c) `null` is NOT skipped: `null !== undefined` is true, so null PARTICIPATES
+#       via `+`.  Numeric coercion of null is 0 in arithmetic `+`.
+#         mean([null, null]) -> (null + null=0)/2 ... result seeds null,
+#                               then null+null -> 0 ; 0/2 = 0
+#         mean([1, null, 3]) -> result=1; 1+null=1; 1+3=4 ; 4/3 = 1.3333333333333333
+#         mean([null, 4])    -> result=null; null+4=4 ; 4/2 = 2
+#   (d) The accumulator uses the JS `+` operator with LEFT-to-RIGHT, in-order
+#       semantics. `+` is string-concatenating if EITHER operand is a string (or
+#       coerces to one). The FIRST non-undefined element SEEDS result with its
+#       RAW value (no coercion yet); coercion happens only on the 2nd+ `+`.
+#         mean([1,"2",3]) -> result=1; 1+"2"="12"; "12"+3="123"; "123"/3 = 41
+#         mean(["a","b"]) -> result="a"; "a"+"b"="ab"; "ab"/2 = NaN
+#         mean("123")     -> chars "1","2","3": "1"+"2"+"3"="123"; "123"/3 = 41
+#         mean([1,[2],3]) -> 1+[2]="12"; "12"+3="123"; /3 = 41   # array coerces to "2"
+#         mean([[5]])     -> result=[5]; [5]/1 -> Number([5])=5 ; = 5
+#         mean([[1,2]])   -> result=[1,2]; [1,2]/1 -> Number("1,2")=NaN ; = NaN
+#         mean([1,{},3])  -> 1+{}="1[object Object]"; +3 -> NaN-ish string; /3 = NaN
+#         mean([{},{}])   -> {}+{} concatenation -> NaN at division
+#   (e) Booleans coerce numerically in `+` (after a numeric seed): true=1,false=0.
+#         mean([true,false]) -> result=true; true+false=1; 1/2 = 0.5
+#         mean([true,4])     -> result=true; true+4=5; 5/2 = 2.5
+#   (f) NaN element propagates: any `+ NaN` -> NaN -> NaN/length = NaN.
+#         mean([1, NaN, 3]) -> NaN
+#   (g) Infinity arithmetic is ordinary IEEE-754:
+#         mean([1, Infinity])         -> Infinity
+#         mean([1, -Infinity])        -> -Infinity
+#         mean([Infinity, -Infinity]) -> Infinity + -Infinity = NaN ; NaN/2 = NaN
+#
+# ---- NODE 3: division (back in baseMean) ---------------------------------
+# return baseSum(array, identity) / length
+#   - Plain JS `/`. If baseSum returned a number -> arithmetic mean.
+#   - If baseSum returned `undefined` (all-undefined case) -> undefined/length = NaN.
+#   - If baseSum returned a non-numeric-coercible value (string like "abc",
+#     object) -> coercion in `/` yields NaN.
+#   - -0 handling: a single `-0` (or sum that lands on -0) preserves the sign.
+#         mean([-0])     -> result=-0; -0/1 = -0          # NEGATIVE ZERO preserved
+#         mean([0])      ->  0/1 =  0
+#         mean([-0,-0])  -> result=-0; -0 + -0 = -0 ; -0/2 = -0
+#         mean([0,0])    ->  0
+#
+# ---- THROW PATHS (reached only by NON-codec-faithful elements; see SCOPE) --
+#   BigInt seed then numeric divide: result becomes a bigint, then `bigint / number`
+#   throws  TypeError "Cannot mix BigInt and other types, use explicit conversions".
+#         mean([1n])      -> THROWS (1n then 1n/1)
+#         mean([1n,2n])   -> THROWS (3n then 3n/2)
+#         mean([1, 2n])   -> THROWS at `1 + 2n` (mixing in the `+`)
+#   Symbol element: division/coercion throws
+#         mean([Symbol()]) -> THROWS TypeError "Cannot convert a Symbol value to a number"
+#   These are DOCUMENTED-OUT-OF-ENVELOPE (a blind re-emitter reconstructs them
+#   from this spec); genInputs does NOT emit them (see SCOPE / generator).
+
+ORACLE value -> oracle.json
+# Value-mode: the oracle records the returned number (incl. NaN, ±Infinity, -0)
+# for each generated arg-tuple by running the real package. No seam to inject.
+# Recompose target: a blind re-emitter implements mean per BEHAVIOR above and
+# `export default mean`. Compared by VALUE (Object.is-grade so -0 vs 0 and NaN
+# are distinguished).
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire NODE 1/2/3 pipeline above,
+#   including: falsy-arg length-0 guard, truthy-non-array `.length` read,
+#   undefined/hole SKIP (count-but-don't-sum), null participation, JS `+`
+#   left-to-right string-or-numeric coercion with raw first-seed, boolean
+#   coercion, NaN/Infinity IEEE-754 propagation, -0 sign preservation,
+#   undefined-result -> NaN division, NAN := 0/0.
+# CARRIED DATA: none. (No literal tables; the only constant is NAN = 0/0.)
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+#   they either throw or are not oracle-codec-faithful):
+#     - BigInt elements (throw at + or at division) — documented above.
+#     - Symbol elements (throw at coercion) — documented above.
+#     - Function elements as values: function `+`/`/` coerces via toString ->
+#       generally NaN; not emitted (identity of functions doesn't round-trip).
+#     - Object/Date/nested-array ELEMENTS: behavior is documented above for
+#       reference, but plain objects/dates/nested arrays as array elements are
+#       NOT emitted by genInputs (their `+`/`/` coercion is environment-stable
+#       here but they stress the codec/identity; the numeric/null/undefined/
+#       boolean/string envelope already covers every BRANCH). A blind engineer
+#       can still reconstruct them from NODE 2 rule (d).
+# No side effects, no mutation of `array`, no ambient reads (clock/RNG/env/io).
+
+PROVENANCE lodash.mean@4.1.0 (lodash 4.1.0 Custom Build, modularized export of `_.mean`).
+#   repo: lodash/lodash ; license: MIT ; source file: index.js (baseMean, baseSum,
+#   identity, mean all inlined in that single file). Copyright jQuery Foundation.

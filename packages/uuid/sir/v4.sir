@@ -1,0 +1,159 @@
+UNIT v4
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+  # DETERMINISTIC via INJECTED SEAM. v4's only source of nondeterminism is the RNG, which is an
+  # API-EXPOSED seam: the caller may supply options.random (a 16-element byte array) and/or
+  # options.rng (a function returning 16 bytes). When options.random is provided, v4 is a PURE
+  # function of (options, buf, offset) — no clock, no crypto, no env. The oracle injects a FIXED
+  # options.random (16 ints 0..255) on every vector, so every call is reproducible (value mode).
+  # NOT quarantined. What is VERIFIED here is the LOGIC: version/variant bit masks + hex formatting
+  # + buf/offset write path. The DEPLOYED wrapper supplies real crypto randomness at runtime
+  # (verified core + wrapper): the same masking/formatting logic runs, fed by crypto.randomBytes(16).
+
+SIG  v4(options?: string | {
+        random?: number[16],   # 16 ints 0..255. HIGHEST precedence. If present, used verbatim (then stamped).
+        rng?: () => number[16]  # a function returning 16 ints 0..255. Used only if options.random absent.
+      },
+      buf?: number[] | Buffer,  # optional output buffer. If truthy, 16 stamped bytes are WRITTEN into it.
+      offset?: number           # start index into buf. Only consulted when buf is truthy.
+     ) -> string | number[] | Buffer
+     # RETURN TYPE depends on buf:
+     #   - no buf (falsy)  -> a lowercased 36-char UUID STRING  "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
+     #   - buf truthy      -> the SAME buf object (===), with 16 stamped bytes written at offset; NOT a string.
+     # STRING-AS-FIRST-ARG QUIRK (v3.x legacy): if typeof options === 'string', then
+     #   buf := (options === 'binary') ? new Array(16) : null;  options := null.
+     #   i.e. v4('binary') returns a fresh 16-element stamped byte ARRAY; v4('<any other string>') returns a STRING.
+     #   BOTH string-arg forms then fall through to the DEFAULT rng (no options.random) -> NONDETERMINISTIC,
+     #   so they are documented but EXCLUDED from the deterministic value oracle (see SCOPE / ORACLE).
+
+DEPENDS-ON none
+  # Self-contained for the deterministic surface. The two require()s are:
+  #   require('./lib/rng')        -> nodeRNG = () => crypto.randomBytes(16). ONLY reached when neither
+  #                                   options.random NOR options.rng is supplied. The oracle never reaches it.
+  #   require('./lib/bytesToUuid') -> the hex formatter, INLINED into this SIR's BEHAVIOR (see step 7). It is
+  #                                   pure, tiny, and fully derivable (byteToHex = hex of 0..255), so it is
+  #                                   IN-CONTRACT LOGIC, not an external dependency to stub.
+  # No clock, no env, no fs, no net on the injected-seam path.
+
+BEHAVIOR
+  Arguments: (options, buf, offset).
+
+  1. OFFSET INDEX:   var i = (buf && offset) || 0;
+     # JS truthiness: i is `offset` ONLY when buf is truthy AND offset is truthy; otherwise 0.
+     # So offset is IGNORED unless buf is truthy. offset===0 or offset undefined both yield i=0.
+
+  2. STRING-OPTIONS QUIRK:  if (typeof options === 'string') {
+                               buf = (options === 'binary') ? new Array(16) : null;
+                               options = null;
+                             }
+     # A string first-arg REPLACES buf: 'binary' -> a fresh 16-elem array (so output is that array);
+     # any other string -> buf=null (so output is a STRING). Then options is cleared to null.
+     # (These paths use the default rng -> nondeterministic -> excluded from the value oracle.)
+
+  3. DEFAULT OPTIONS:  options = options || {};
+     # null / undefined / missing options -> {}.
+
+  4. RESOLVE 16 RANDOM BYTES (precedence is load-bearing):
+        var rnds = options.random || (options.rng || rng)();
+     # 4a. If options.random is TRUTHY (a non-empty array is truthy) -> rnds = options.random  (BY REFERENCE).
+     # 4b. else if options.rng is TRUTHY -> rnds = options.rng()      (call it; expects a 16-elem array/Buffer).
+     # 4c. else -> rnds = rng()  (the default nodeRNG -> crypto.randomBytes(16)).
+     # options.random takes precedence over options.rng; options.rng over the default.
+     # NOTE: rnds must be an indexable container of >=16 numeric byte values [0..255] at indices 0..15.
+
+  5. VERSION STAMP (RFC 4122 sec 4.4):  rnds[6] = (rnds[6] & 0x0f) | 0x40;
+     # Clears the high nibble of byte 6 and sets it to 0x4 -> the version-4 marker.
+     # The 13th hex digit of the UUID string is always '4'.
+
+  6. VARIANT STAMP:                     rnds[8] = (rnds[8] & 0x3f) | 0x80;
+     # Clears the top two bits of byte 8 and sets them to 10b -> the RFC 4122 variant.
+     # The 17th hex digit (first of group 4) is always one of 8,9,a,b.
+     # SIDE EFFECT: steps 5 & 6 MUTATE rnds IN PLACE. If rnds === options.random (the 4a path), the
+     #   CALLER'S array is mutated (bytes 6 and 8 are overwritten with the stamped values). Verified live.
+
+  7. HEX FORMAT (inlined bytesToUuid; the byteToHex table is derivable, NOT carried data):
+     # byteToHex[b] for b in 0..255 = ((b + 0x100).toString(16)).substr(1)
+     #   = the 2-char, ZERO-PADDED, LOWERCASE hex of b  (e.g. 0->"00", 5->"05", 16->"10", 255->"ff").
+     # bytesToUuid(rnds) emits, in this exact order, with dashes -> the 8-4-4-4-12 grouping:
+     #     hex(rnds[0]) hex(rnds[1]) hex(rnds[2]) hex(rnds[3])           # group 1 (8 hex digits)
+     #   - hex(rnds[4]) hex(rnds[5])                                     # group 2 (4)
+     #   - hex(rnds[6]) hex(rnds[7])                                     # group 3 (4) -- rnds[6] always 4x
+     #   - hex(rnds[8]) hex(rnds[9])                                     # group 4 (4) -- rnds[8] in {8,9,a,b}x
+     #   - hex(rnds[10]) hex(rnds[11]) hex(rnds[12]) hex(rnds[13]) hex(rnds[14]) hex(rnds[15])  # group 5 (12)
+     # Result is a 36-char string, all hex digits LOWERCASE, dashes at string indices 8,13,18,23.
+
+  8. BUF WRITE PATH:  if (buf) { for (var ii = 0; ii < 16; ++ii) buf[i + ii] = rnds[ii]; }
+     # When buf is truthy, copy the 16 STAMPED bytes into buf starting at index i (=offset-if-buf-truthy-else-0).
+     # buf is written IN PLACE; bytes outside [i, i+16) are left untouched.
+
+  9. RETURN:  return buf || bytesToUuid(rnds);
+     # If buf is truthy -> return buf (the SAME object reference; === the passed buf), NOT a string.
+     # Else -> return the formatted lowercase UUID string (step 7).
+
+  NO INPUT VALIDATION / NO THROWS on the supported surface:
+    - v4() with no args, v4({}), v4({random:[...]}), v4({rng:fn}), v4(opts, buf, offset) never throw.
+    - There is no type/length guard on options.random or rng()'s return: v4 simply indexes [0..15] and
+      reads/&s/|s the values. A short/malformed array yields NaN-tainted bytes (out of the value oracle's
+      scope, which always supplies well-formed 16-int arrays). No documented Error is thrown by v4 itself.
+
+BEHAVIORAL ANCHORS (verified live against uuid@3.3.3 in the temp install, 2026-06-23):
+  # rnds notation below = the 16 input bytes (before stamping). All produced via options.random injection.
+  random=[16,145,86,190,196,251,193,234,113,180,239,225,103,28,88,54]
+        # (= 0x10 91 56 be c4 fb c1 ea 71 b4 ef e1 67 1c 58 36)
+        # byte6 0xc1 -> (c1 & 0f)|40 = 0x41 ; byte8 0x71 -> (71 & 3f)|80 = 0xb1
+        -> "109156be-c4fb-41ea-b1b4-efe1671c5836"
+  random=[0,0,...,0]   (all 0x00)   -> "00000000-0000-4000-8000-000000000000"
+  random=[255,255,...,255] (all 0xff) -> "ffffffff-ffff-4fff-bfff-ffffffffffff"
+  random=[0..,0x0f at 6,0x3f at 8,..] -> "00000000-0000-4f00-bf00-000000000000"   (mask MAX-survive case)
+  random=[0..,0xf0 at 6,0xc0 at 8,..] -> "00000000-0000-4000-8000-000000000000"   (mask high-bits-cleared)
+  v4({random:R}, buf=Array(16) of 0, 0)
+        -> RETURNS buf (===), buf == [16,145,86,190,196,251,65,234,177,180,239,225,103,28,88,54]
+           # note byte6 65=0x41, byte8 177=0xb1 (STAMPED), rest verbatim from R
+  v4({random:R}, buf=Array(20) of 0xAA, 2)
+        -> RETURNS buf (===), the 16 stamped bytes at indices 2..17, indices 0,1,18,19 stay 0xAA (170)
+  v4({random:A, rng:()=>B})  -> uses A (random beats rng); A is stamped & returned.
+  MUTATION: after v4({random:R}), the caller's R has R[6] and R[8] overwritten with the stamped values.
+
+ORACLE value -> oracle.json
+  # Deterministic VALUE oracle. The harness imports the REAL uuid@3.3.3 named export `v4`, calls it with
+  # each arg-array genInputs emits, and freezes the returned value as `expected`.
+  # EVERY emitted input supplies options.random as a plain 16-int array (JSON-round-trippable). NO functions
+  # (options.rng) are emitted — a function cannot be JSON-serialized into the oracle, and the random-array
+  # path is exercised anyway (options.random has higher precedence; rng is documented, not vector-covered).
+  # Two return shapes are both deterministic and round-trip as JSON:
+  #   - string mode  (no buf)         -> expected is the 36-char UUID string.
+  #   - buffer mode  (buf as array)   -> expected is the returned array of 16/N ints (=== the input buf, mutated).
+  # SELF-CONSISTENCY: every byte value, option shape, buf array, and offset the generator emits is DEFINED
+  # by this SIR (in-contract logic only). The byteToHex table is derived per step 7, not carried. Each
+  # generated input is a FRESH array (no shared reference) so step-5/6 in-place mutation cannot cross-contaminate
+  # vectors. Verified by enumeration in v4.inputs.mjs (see its VERIFY/header notes).
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The 9-step pipeline above with its exact ORDER: offset index, string-options quirk, default options,
+      RNG-seam precedence (random ?? rng() ?? default rng()), version mask (&0x0f)|0x40 on byte 6,
+      variant mask (&0x3f)|0x80 on byte 8, the inlined byteToHex/bytesToUuid 8-4-4-4-12 lowercase formatting,
+      the buf write-at-offset loop, and the `buf || string` return discriminator.
+    - In-place mutation of rnds (and therefore of a passed options.random) by steps 5 & 6.
+    - byteToHex derivation (zero-padded lowercase hex of 0..255) — IN-CONTRACT, derivable, NOT carried data.
+  COVERED BY THE VALUE ORACLE (the injected-seam deterministic surface):
+    - options.random supplied as a 16-int array -> string return.
+    - options.random supplied + buf (plain array) + offset -> buffer return (=== buf, stamped at offset).
+    - Full byte-value matrix to exercise the version/variant masks (all-zero, all-0xff, high-bits set/clear
+      on bytes 6 & 8, arbitrary bytes), plus dash placement and lowercase hex padding across all 16 positions.
+  OUT-OF-CONTRACT (documented but NOT exercised by the value oracle — nondeterministic or non-serializable):
+    - DEFAULT rng path: v4(), v4({}), v4({rng:fn}) WITHOUT options.random -> draws crypto.randomBytes(16)
+      -> nondeterministic. (Shape-only check: matches /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.)
+      This is exactly the path the DEPLOYED wrapper uses at runtime (verified core + wrapper).
+    - options.rng FUNCTION seam: real and supported, but a function cannot be serialized into the oracle JSON,
+      so it is not a vector. Its behavior is identical to options.random for a fixed return (verified live).
+    - STRING-as-first-arg quirk: v4('binary') / v4('<other>') -> both use the default rng -> nondeterministic,
+      excluded from the value oracle. Logic documented in BEHAVIOR steps 1-2.
+
+PROVENANCE
+  package: uuid@3.3.3 (npm)
+  repo:    https://github.com/kelektiv/node-uuid.git
+  license: MIT
+  source:  node_modules/uuid/v4.js  (+ lib/bytesToUuid.js inlined at step 7; lib/rng.js = default seam, unused by oracle)
+  export:  index.js sets `uuid = v4` then `uuid.v4 = v4`; the NAMED export `v4` is the unit under test (importKind 'named').
+  verified-against: live uuid@3.3.3 in the provided temp install (probes 2026-06-23). All BEHAVIORAL ANCHORS reproduced.

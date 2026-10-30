@@ -1,0 +1,23 @@
+§20 — both branches of a race, on demand
+
+  reply wins    trace=["start","reply"]  value={"ok":"body"}  lifecycle=["armed(100ms)","armed(40ms)","fired","cancelled"]
+  timeout wins  trace=["start","timeout"]  value={"err":"timeout"}  lifecycle=["armed(40ms)","armed(100ms)","fired","fired"]
+
+  the tie (reply and timeout due at the same instant):
+    ["start","timeout"] -> {"err":"timeout"}   (deterministic: earlier-armed timer wins)
+
+  replayability: 50 runs of each scenario
+    reply wins    1 distinct outcome(s) in 50 runs  STABLE
+    timeout wins  1 distinct outcome(s) in 50 runs  STABLE
+    the tie       1 distinct outcome(s) in 50 runs  STABLE
+
+  microtask ordering: the reply deferred through 2 nested microtasks
+    drained 2 microtask(s); the timeout at 100ms never fired,
+    and the timer was cancelled -> ["armed(100ms)","armed(40ms)","fired","cancelled"]
+
+  the same race on the REAL clock, 20 runs:
+    winners: {"timeout":20}
+    -> the machine picks, and it picks the same way every run. The other branch
+       of this unit was never executed, and nothing went red to tell you.
+
+PHASE 1 (§20): PASS — both race branches reachable, each replayable, microtask order deterministic.

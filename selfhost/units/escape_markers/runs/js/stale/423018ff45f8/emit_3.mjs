@@ -1,0 +1,51 @@
+const MAX_VALUE_DEPTH = 100;
+const MARKERS = ['__t', '__throw', '__threw'];
+
+function walk(v, depth) {
+  if (depth > MAX_VALUE_DEPTH) throw new Error('a value nests deeper than 100');
+  if (Array.isArray(v)) {
+    const n = v.length;
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) {
+      if (Object.hasOwn(v, i)) out[i] = walk(v[i], depth + 1);
+    }
+    return out;
+  }
+  if (v instanceof Map) {
+    const out = new Map();
+    for (const [k, val] of Array.from(Map.prototype.entries.call(v))) {
+      const nk = walk(k, depth + 1);
+      const nv = walk(val, depth + 1);
+      out.set(nk, nv);
+    }
+    return out;
+  }
+  if (v instanceof Set) {
+    const out = new Set();
+    for (const m of Array.from(Set.prototype.values.call(v))) out.add(walk(m, depth + 1));
+    return out;
+  }
+  if (v !== null && typeof v === 'object') {
+    const p = Object.getPrototypeOf(v);
+    if (p === Object.prototype || p === null) {
+      const out = {};
+      for (const k of Object.keys(v)) {
+        Object.defineProperty(out, k, {
+          value: walk(v[k], depth + 1),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+      for (const m of MARKERS) {
+        if (Object.hasOwn(v, m)) return { __t: 'obj', v: out };
+      }
+      return out;
+    }
+  }
+  return v;
+}
+
+export default function escape_markers(value) {
+  return walk(value, 0);
+}

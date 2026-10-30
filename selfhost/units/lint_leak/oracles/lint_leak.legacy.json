@@ -1,0 +1,2260 @@
+{
+ "mode": "vectors",
+ "unit": "lint_leak",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "R1 x+\"null\"\nR2 x*\"null\"\nR3 x?\"null\"\nR4 x-\"null\"\nR5 x~\"null\"\nR6 x&\"null\"\nR7 /\"(?:a|b)*\" CITED null\nR8 a+\"b # null\"\nR9 a*\"x CITED y\" undefined\nR10 a?\"#\" # null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 x+\"null\""
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 x*\"null\""
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 x?\"null\""
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "R8 a+\"b # null\""
+     },
+     {
+      "line": 10,
+      "what": "JS value name (say none)",
+      "text": "R10 a?\"#\" # null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "R1 a+\"b\"+\"c # d\" null\nR2 (?\"null\")\nR3 x*\"a\"*\"undefined\"\nR4 x\"\"+\"null\"\nR5 x \"a\"+\"null\"",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 a+\"b\"+\"c # d\" null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 (?\"null\")"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 x*\"a\"*\"undefined\""
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 x\"\"+\"null\""
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 x \"a\"+\"null\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "UNIT x\n ﻿ ﻿\"null\"\n﻿ ﻿null\n\t﻿\t﻿﻿undefined\n ﻿ x﻿null\n﻿\t﻿\n﻿ ﻿# null\nR1﻿ null ﻿\n ﻿​﻿null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "undefined"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "x﻿null"
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "# null"
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "R1﻿ null ﻿"
+     },
+     {
+      "line": 9,
+      "what": "JS value name (say none)",
+      "text": "​﻿null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "​BEHAVIOR null\n⁠R1 undefined\n​# null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "​BEHAVIOR null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "⁠R1 undefined"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "​# null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "﻿ ﻿BEHAVIOR x\n﻿﻿ \tR1 x\n﻿​BEHAVIOR x\n​﻿R1 x\n﻿\t﻿",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "​BEHAVIOR x"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "​﻿R1 x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    "R1 x;\"null\"\nR2 x|\"null\"\nR3 x<\"null\">\nR4 x>\"null\"\nR5 x!\"null\"\nR6 x&\"null\"\nR7 x+\"null\"\nR8 x-\"null\"\nR9 x*\"null\"\nR10 x~\"null\"\nR11 x?\"null\"",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "R7 x+\"null\""
+     },
+     {
+      "line": 9,
+      "what": "JS value name (say none)",
+      "text": "R9 x*\"null\""
+     },
+     {
+      "line": 11,
+      "what": "JS value name (say none)",
+      "text": "R11 x?\"null\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    "R1 x/\"null\"\nR2 x.\"null\"\nR3 x1\"null\"\nR4 x#\"null\"\nR5 x\\\"null\"\nR6 x`\"null\"\nR7 x@\"null\"\nR8 x%\"null\"\nR9 x^\"null\"\nR10 x)\"null\"\nR11 x]\"null\"\nR12 x}\"null\"\nR13 x$\"null\"",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 x/\"null\""
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 x.\"null\""
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 x1\"null\""
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 x#\"null\""
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 x\\\"null\""
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "R6 x`\"null\""
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "R7 x@\"null\""
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "R8 x%\"null\""
+     },
+     {
+      "line": 9,
+      "what": "JS value name (say none)",
+      "text": "R9 x^\"null\""
+     },
+     {
+      "line": 10,
+      "what": "JS value name (say none)",
+      "text": "R10 x)\"null\""
+     },
+     {
+      "line": 11,
+      "what": "JS value name (say none)",
+      "text": "R11 x]\"null\""
+     },
+     {
+      "line": 12,
+      "what": "JS value name (say none)",
+      "text": "R12 x}\"null\""
+     },
+     {
+      "line": 13,
+      "what": "JS value name (say none)",
+      "text": "R13 x$\"null\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "R1 \"a\"\"null\"\nR2 \"a\"\"b\"\"undefined\"\nR3 \"a\"\"\"null\nR4 \"a\"\" null\nR5 \"a\"x\"null\"\nR6 \"a\"\" CITED b\" null\nR7 \"a\"\"# null\" x\nR8 \"\"\"\"null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 \"a\"\"\"null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 \"a\"\" null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 \"a\"x\"null\""
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "R6 \"a\"\" CITED b\" null"
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "R8 \"\"\"\"null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    "R1 a|\"b # null\"\nR2 a;\"x # undefined\" y\nR3 -\"a # b\" null\nR4 x|\"a CITED b\" null\nR5 x-\"CITED\" undefined\nR6 a+\"b\"+\"c # d\" null\nR7 a<\"x\"> # null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 -\"a # b\" null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 x|\"a CITED b\" null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 x-\"CITED\" undefined"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "R6 a+\"b\"+\"c # d\" null"
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "R7 a<\"x\"> # null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    "​BEHAVIOR x\n⁠R1\n​R1:x\n​R1::\n TABLE:​x\n​⁠INVARIANT\tx\n󠀁R2　x\n​UNIT x\n​CITED x\n​R1x\n​R1-\n​# BEHAVIOR\n​ BEHAVIOR\n​R\n​R01 x\n\u000bKIND:\nSCOPE x\n​BEHAVIORS x\n​LANG x\n​R1#",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "​BEHAVIOR x"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "⁠R1"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "​R1:x"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "​R1::"
+     },
+     {
+      "line": 5,
+      "what": "behavior in a language file",
+      "text": " TABLE:​x"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "​⁠INVARIANT\tx"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "󠀁R2　x"
+     },
+     {
+      "line": 15,
+      "what": "behavior in a language file",
+      "text": "​R01 x"
+     },
+     {
+      "line": 16,
+      "what": "behavior in a language file",
+      "text": "\u000bKIND:"
+     },
+     {
+      "line": 17,
+      "what": "behavior in a language file",
+      "text": "SCOPE x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    "UNIT x\n  ﻿\"null\"\n\t﻿﻿\"undefined\"\n ﻿ ﻿\"null\"\n﻿ ﻿\"null\"\n  ﻿# null\n  ﻿\t﻿\"b # null\"\n﻿﻿\tnull\n x﻿\"null\"",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "# null"
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "null"
+     },
+     {
+      "line": 9,
+      "what": "JS value name (say none)",
+      "text": "x﻿\"null\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "R1:​null\nBEHAVIOR: undefined\n⁠R1 null\nR1:: null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1:​null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "BEHAVIOR: undefined"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "⁠R1 null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R1:: null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null\nNOTE uses UTF-8, UTF-16, U+00A0 and SHA-256; IEEE-754 NaN and -0",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "anchored regex literal",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     },
+     {
+      "line": 1,
+      "what": "regex class escape",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     },
+     {
+      "line": 1,
+      "what": "regex property escape",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     },
+     {
+      "line": 1,
+      "what": "JS API name",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     },
+     {
+      "line": 1,
+      "what": "Rust API name",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     },
+     {
+      "line": 1,
+      "what": "line-terminator mechanism",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     },
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 /^a$/ \\d \\p{L} Math.floor JSON.parse Vec<u8> lineterminator null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "R1 Number() String(x) Boolean( BigInt(1)\nR2 x.toLowerCase() toUpperCase( charCodeAt( codePointAt( localeCompare( normalize( padStart( padEnd(\nR3 xtoLowerCase( and _normalize( and parseInteger and BigInt64",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS API name",
+      "text": "R1 Number() String(x) Boolean( BigInt(1)"
+     },
+     {
+      "line": 2,
+      "what": "JS API name",
+      "text": "R2 x.toLowerCase() toUpperCase( charCodeAt( codePointAt( localeCompare( normalize( padStart( pad"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "﻿ BEHAVIOR x\n  ﻿R1 rule\n﻿﻿TABLE t\n﻿ ﻿R2 x\n ﻿",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "TABLE t"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "R1 Object.keys Array.isArray Reflect.get Symbol.iterator Intl.collator\nR2 Object.Keys Number.isFinite String.fromCharCode Date.now RegExp.Escape Promise.all Boolean.x BigInt.asUintN\nR3 JSON. xJSON.parse Array a String. Date.1 Math.",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS API name",
+      "text": "R1 Object.keys Array.isArray Reflect.get Symbol.iterator Intl.collator"
+     },
+     {
+      "line": 2,
+      "what": "JS API name",
+      "text": "R2 Object.Keys Number.isFinite String.fromCharCode Date.now RegExp.Escape Promise.all Boolean.x "
+     }
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    "R1 String::new Vec::new char::from str::len i64::MAX u64:: usize:: Box::new HashMap::new BTreeMap::new f64:: u8::\nR2 Option<T> or Vec<T>\nR3 take &str\nR4 s&str and x&strs\nR5 (&str) and Option<&str>\nR6 fancy_regex\nR7 fancy-regex or to_lowercase()\nR8 xfancy_regex to_lowercases",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "Rust API name",
+      "text": "R1 String::new Vec::new char::from str::len i64::MAX u64:: usize:: Box::new HashMap::new BTreeMa"
+     },
+     {
+      "line": 2,
+      "what": "Rust API name",
+      "text": "R2 Option<T> or Vec<T>"
+     },
+     {
+      "line": 3,
+      "what": "Rust API name",
+      "text": "R3 take &str"
+     },
+     {
+      "line": 4,
+      "what": "Rust API name",
+      "text": "R4 s&str and x&strs"
+     },
+     {
+      "line": 5,
+      "what": "Rust API name",
+      "text": "R5 (&str) and Option<&str>"
+     },
+     {
+      "line": 6,
+      "what": "Rust API name",
+      "text": "R6 fancy_regex"
+     },
+     {
+      "line": 7,
+      "what": "Rust API name",
+      "text": "R7 fancy-regex or to_lowercase()"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "R1 newline terminator\nR2 the LINE TERMINATOR set\nR3 Line-Terminator and NewLineTerminator\nR4 line_terminator xline terminator anewline terminator newnewline terminator\nR5 line  terminator",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "line-terminator mechanism",
+      "text": "R1 newline terminator"
+     },
+     {
+      "line": 2,
+      "what": "line-terminator mechanism",
+      "text": "R2 the LINE TERMINATOR set"
+     },
+     {
+      "line": 3,
+      "what": "line-terminator mechanism",
+      "text": "R3 Line-Terminator and NewLineTerminator"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "R1 nullable NULL non-null\nR2 \\word \\section \\B.\nR3 /^abc/ and /abc$/\nR4 /^$/\nR5 /^a b$/ and /^a $/",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 nullable NULL non-null"
+     },
+     {
+      "line": 2,
+      "what": "regex class escape",
+      "text": "R2 \\word \\section \\B."
+     },
+     {
+      "line": 3,
+      "what": "anchored regex literal",
+      "text": "R3 /^abc/ and /abc$/"
+     },
+     {
+      "line": 4,
+      "what": "anchored regex literal",
+      "text": "R4 /^$/"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "R1:​x\nBEHAVIOR: x\nTABLE:⁠x\nR1::​x\nUNIT:​x\nCITED:​x\n⁠BEHAVIOR x\n​R1 rule\nR2:󠀁x\nKIND:\u000bx\nSCOPE:﻿x\nR3:x\nR4:\nINVARIANT:　",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "R1:​x"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR: x"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "TABLE:⁠x"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "⁠BEHAVIOR x"
+     },
+     {
+      "line": 8,
+      "what": "behavior in a language file",
+      "text": "​R1 rule"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "R2:󠀁x"
+     },
+     {
+      "line": 10,
+      "what": "behavior in a language file",
+      "text": "KIND:\u000bx"
+     },
+     {
+      "line": 11,
+      "what": "behavior in a language file",
+      "text": "SCOPE:﻿x"
+     },
+     {
+      "line": 13,
+      "what": "behavior in a language file",
+      "text": "R4:"
+     },
+     {
+      "line": 14,
+      "what": "behavior in a language file",
+      "text": "INVARIANT:　"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "R1 The result is \"null\" or \"undefined\"; \"\\d\" and \"/^x$/\" and \"Math.floor\" are quoted data\nR2 single 'null' and `undefined` are not exempt",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 single 'null' and `undefined` are not exempt"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "R1 \"a\\\"b\" null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 \"a\\\"b\" null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    "R1 /^a b$/ and /^\" \"$/",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "anchored regex literal",
+      "text": "R1 /^a b$/ and /^\" \"$/"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "R1 /^a b$/ and /^\" \"$/",
+    true
+   ],
+   "expected": {
+    "hits": []
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "UNIT x\nMECHANISM /^a$/ \\d null UTF-8 Math.floor\n  # undefined",
+    false
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "R1 \"a\\\"b null\"\nR2 \"a\\\" null\nR3 say \"null\nR4 \"a\\\\\" null \"b\"\nR5 \"a\\ \" null \"b\"\nR6 \"/^\" x \"$/\"\nR7 /^\" x \"$/",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 \"a\\\" null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 say \"null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 \"a\\\\\" null \"b\""
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 \"a\\ \" null \"b\""
+     },
+     {
+      "line": 7,
+      "what": "anchored regex literal",
+      "text": "R7 /^\" x \"$/"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "R1 a 12\" wide null \"x\"\nR2 a/\"/ null\nR3 a\"null\" and b\"undefined\"\nR4 (\"null\") [\"null\"] {\"null\"} ,\"null\" =\"null\" :\"null\"\nR5 x;\"null\" x.\"null\" x-\"null\" x'\"null\"",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 a 12\" wide null \"x\""
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 a/\"/ null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 a\"null\" and b\"undefined\""
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 x;\"null\" x.\"null\" x-\"null\" x'\"null\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    "R1 \"a\"\"null\"\nR2 \"a\"null\"\nR3 \"a\" \"null\"\nR4 \"null\"x\"undefined\"\n\"null\" at column 0\n  \"null\" first in a continuation",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 \"a\"null\""
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 \"null\"x\"undefined\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    "R1 \"a\\ \" # null \"c\"\nR2 \"a\\ \" null\nR3 \"a\\😀\" null\nR4 \"a\\ \" undefined\nR5 \"\\\\\" null\nR6 \"a\\\" null\nR7 x \"\\",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 \"a\\ \" # null \"c\""
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 \"a\\ \" null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 \"a\\😀\" null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 \"a\\ \" undefined"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 \"\\\\\" null"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "R6 \"a\\\" null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    "BEHAVIORx\nTABLE­x\nR1؜x\nSCOPE᠎x\nKIND​x\nR2⁠x\nINVARIANT‏x\nR3‪x\nORACLE￹x\nR4𑂽x\nSTATE󠀁x\nEMIT󠁿x\nR5𝅳x\nBRANCH𓐰x",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "BEHAVIORx"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "TABLE­x"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "R1؜x"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "SCOPE᠎x"
+     },
+     {
+      "line": 5,
+      "what": "behavior in a language file",
+      "text": "KIND​x"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "R2⁠x"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "INVARIANT‏x"
+     },
+     {
+      "line": 8,
+      "what": "behavior in a language file",
+      "text": "R3‪x"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "ORACLE￹x"
+     },
+     {
+      "line": 10,
+      "what": "behavior in a language file",
+      "text": "R4𑂽x"
+     },
+     {
+      "line": 11,
+      "what": "behavior in a language file",
+      "text": "STATE󠀁x"
+     },
+     {
+      "line": 12,
+      "what": "behavior in a language file",
+      "text": "EMIT󠁿x"
+     },
+     {
+      "line": 13,
+      "what": "behavior in a language file",
+      "text": "R5𝅳x"
+     },
+     {
+      "line": 14,
+      "what": "behavior in a language file",
+      "text": "BRANCH𓐰x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    "R1 x \"a # null\nR2 x a\" # null\nR3 x \"a # b\" undefined\nR4 x (\"a # b\") null\nR5 x \"a\\ \" # undefined",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 x \"a # null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 x a\" # null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 x \"a # b\" undefined"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 x (\"a # b\") null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 x \"a\\ \" # undefined"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    "R1 \"x CITED\" CITED null\nR2 a\" CITED null\"\nR3 (\"a ANCHOR b\") null\nR4 \"a EARNED\" null EARNED undefined\nR5 x\"CITED\" null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 (\"a ANCHOR b\") null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 \"a EARNED\" null EARNED undefined"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 x\"CITED\" null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    "CITED null\nCITED\tundefined\nCITED\nCITED: null\nCITED:\tundefined\nCITED null # undefined\nCITEDX null\nEARNED: null\nANCHOR: undefined",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "CITED: null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "CITED:\tundefined"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "CITED null # undefined"
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "CITEDX null"
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "EARNED: null"
+     },
+     {
+      "line": 9,
+      "what": "JS value name (say none)",
+      "text": "ANCHOR: undefined"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "R1 clean # null\nR2 clean #null\nR3 clean\t#\tnull\nR4 clean # null\nR5 clean #",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 clean # null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 clean #null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 clean\t#\tnull"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 clean # null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "UNIT x\nLANG js\nPRIMARY-SHA256 00\nSIG f(x: string): string\nABI text=string\nMECHANISM uses BEHAVIOR words\nDEPENDS-ON none\nPINNED regex A = /x/ CITED R1\nDESCRIPTION y\nNOTE z\nRATIONALE r\nPROVENANCE p\nENVELOPE e\nCARRIED t = m\nEARNED round-1\nCITED src",
+    false
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    "R1 \"x # null\" is quoted\nR2 \"x # y\" null\nX a\" # \"b\" null\nR4 say \"a # null\nR5 a # b # null\nR6 a # x CITED null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 \"x # y\" null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "X a\" # \"b\" null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 say \"a # null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 a # b # null"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "R6 a # x CITED null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    "R1 null # /^a$/\nR2 Vec<T> # Math.max null \\d\nR3 /^a$/ # null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 null # /^a$/"
+     },
+     {
+      "line": 1,
+      "what": "anchored regex literal",
+      "text": "R1 null # /^a$/"
+     },
+     {
+      "line": 2,
+      "what": "Rust API name",
+      "text": "R2 Vec<T> # Math.max null \\d"
+     },
+     {
+      "line": 2,
+      "what": "regex class escape",
+      "text": "R2 Vec<T> # Math.max null \\d"
+     },
+     {
+      "line": 2,
+      "what": "JS API name",
+      "text": "R2 Vec<T> # Math.max null \\d"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 Vec<T> # Math.max null \\d"
+     },
+     {
+      "line": 3,
+      "what": "anchored regex literal",
+      "text": "R3 /^a$/ # null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 /^a$/ # null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    "# null at the top\nUNIT x\n# null in a full-line comment\n  ## undefined\n\t#\tnull\n#null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "# null at the top"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "# null in a full-line comment"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "## undefined"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "#\tnull"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "#null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "R1 clean CITED null EARNED undefined ANCHOR /^x$/\nR2 CITED null\nR3\tCITED\tnull\nR4 null CITED\nR5 xCITED null\nR6 a CITEDx null\nR7 a cited null\nR8 a\tEARNED\tnull",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R4 null CITED"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R5 xCITED null"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "R6 a CITEDx null"
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "R7 a cited null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    "UNIT x\nBEHAVIOR\nR1 one space\nR12  two\nTABLE foo\nINVARIANT x\nKIND FUNCTIONAL\nANCHOR a\nSCOPE s\nORACLE value -> o.json",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "R1 one space"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "R12  two"
+     },
+     {
+      "line": 5,
+      "what": "behavior in a language file",
+      "text": "TABLE foo"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "INVARIANT x"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "KIND FUNCTIONAL"
+     },
+     {
+      "line": 8,
+      "what": "behavior in a language file",
+      "text": "ANCHOR a"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "SCOPE s"
+     },
+     {
+      "line": 10,
+      "what": "behavior in a language file",
+      "text": "ORACLE value -> o.json"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    "R1 \"a CITED b\" null\n  CITED null\nCITED null\nEARNED null\nANCHOR undefined",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 \"a CITED b\" null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "EARNED null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "ANCHOR undefined"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "PINNED charset X = a CITED ECMA-262 LineTerminator\n  null in a continuation CITED undefined",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "null in a continuation CITED undefined"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "the null value\n  indented null orphan\nlowercase null\nUNIT x\n  null continues\n\tundefined on a tab line\nnull at column 0",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "the null value"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "indented null orphan"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "lowercase null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "null continues"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "undefined on a tab line"
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "null at column 0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "FOO null\nR01 undefined\nR null\nr1 null\nR1: null\nTABLE: undefined\nR1:null\nFOO:: null\nR1 null\nNULL null\nnull",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "FOO null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R01 undefined"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "r1 null"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R1: null"
+     },
+     {
+      "line": 6,
+      "what": "JS value name (say none)",
+      "text": "TABLE: undefined"
+     },
+     {
+      "line": 7,
+      "what": "JS value name (say none)",
+      "text": "R1:null"
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "FOO:: null"
+     },
+     {
+      "line": 9,
+      "what": "JS value name (say none)",
+      "text": "R1 null"
+     },
+     {
+      "line": 10,
+      "what": "JS value name (say none)",
+      "text": "NULL null"
+     },
+     {
+      "line": 11,
+      "what": "JS value name (say none)",
+      "text": "null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    "R1 rule CITED src EARNED r1\nR2: colon\nTABLE: x\nOUT-OF-DOMAIN y\nSTATE mutates a\nBRANCH b\nGUARD-PINNED g\nNOTES n\nSIR 0.1",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "R1 rule CITED src EARNED r1"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "R2: colon"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "TABLE: x"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "OUT-OF-DOMAIN y"
+     },
+     {
+      "line": 5,
+      "what": "behavior in a language file",
+      "text": "STATE mutates a"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "BRANCH b"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "GUARD-PINNED g"
+     },
+     {
+      "line": 8,
+      "what": "behavior in a language file",
+      "text": "NOTES n"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "SIR 0.1"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    "UNIT x\r\nR1 null\r\n\r\nR2 undefined\r\n",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R1 null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "R2 undefined"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    "UNIT x\rR1 null\rR2 undefined\n\rR3 null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R1 null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R2 undefined"
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R3 null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "﻿R1 null\n﻿﻿R2 null  \t\n﻿  R3 null\n  ﻿null\n\n   \n \nR9 null",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 null"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 null"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "null"
+     },
+     {
+      "line": 8,
+      "what": "JS value name (say none)",
+      "text": "R9 null"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "R1 null  \n null\nR3 a null b",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 null  "
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": " null"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "R3 a null b"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "UNIT x\rBEHAVIOR\rR1 cr only\r\nR2 crlf\r\n",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "R1 cr only"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "R2 crlf"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "R1 null xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀tail",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 null xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "R1 null xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀🚀tail\n  R2 null 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀abcdef",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 null xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀🚀"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 null 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀abcdef"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    "R1 null 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\n  R2 null éééééééééééééééééééééééééééééééééééééééééééééééééé🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 null 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "R2 null éééééééééééééééééééééééééééééééééééééééééééééééééé🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "R1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx null\n  yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy undefined",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "JS value name (say none)",
+      "text": "R1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     },
+     {
+      "line": 2,
+      "what": "JS value name (say none)",
+      "text": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    "﻿BEHAVIOR\n  BEHAVIOR indented\n\tR1 tab\nbehavior lower\n# BEHAVIOR\nR\nR-1 x\nFOO y\nR01 z\nR1#\nBEHAVIOR::",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "R01 z"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "",
+    true
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    "\n",
+    true
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    "BEHAVIOR\nR1 rule\nTABLE x",
+    true
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "BEHAVIOR x\nR1　rule\nTABLE﻿x\nKIND\u000bx\nSCOPE\fx\nORACLE x\nR7 x",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR x"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "R1　rule"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "TABLE﻿x"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "KIND\u000bx"
+     },
+     {
+      "line": 5,
+      "what": "behavior in a language file",
+      "text": "SCOPE\fx"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "ORACLE x"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "R7 x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "BEHAVIORx\nTABLE᠎x\nUNIT x\nR1- x\nBEHAVIORS x\nR1 ",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "BEHAVIORx"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "TABLE᠎x"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "R1 "
+     }
+    ]
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    "VARIANT v\nSRC s\nTRIGGER t\nREACH r\nORACLE-CLASS d\nTRACE-SEAM h\nSEAM i\nUNGUARDED-PRECONDITION p\nSHAPE s\nCANONICAL-SHA256 c\nAUTHORITY a\nCARRIED-DATA d\nEMIT e\nREQUEST q\nON-ERROR o\nPAR p\nRING r\nLIFECYCLE l\nEFFECT e\nSURFACE s",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "VARIANT v"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "SRC s"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "TRIGGER t"
+     },
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "REACH r"
+     },
+     {
+      "line": 5,
+      "what": "behavior in a language file",
+      "text": "ORACLE-CLASS d"
+     },
+     {
+      "line": 6,
+      "what": "behavior in a language file",
+      "text": "TRACE-SEAM h"
+     },
+     {
+      "line": 7,
+      "what": "behavior in a language file",
+      "text": "SEAM i"
+     },
+     {
+      "line": 8,
+      "what": "behavior in a language file",
+      "text": "UNGUARDED-PRECONDITION p"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "SHAPE s"
+     },
+     {
+      "line": 10,
+      "what": "behavior in a language file",
+      "text": "CANONICAL-SHA256 c"
+     },
+     {
+      "line": 11,
+      "what": "behavior in a language file",
+      "text": "AUTHORITY a"
+     },
+     {
+      "line": 12,
+      "what": "behavior in a language file",
+      "text": "CARRIED-DATA d"
+     },
+     {
+      "line": 13,
+      "what": "behavior in a language file",
+      "text": "EMIT e"
+     },
+     {
+      "line": 14,
+      "what": "behavior in a language file",
+      "text": "REQUEST q"
+     },
+     {
+      "line": 15,
+      "what": "behavior in a language file",
+      "text": "ON-ERROR o"
+     },
+     {
+      "line": 16,
+      "what": "behavior in a language file",
+      "text": "PAR p"
+     },
+     {
+      "line": 17,
+      "what": "behavior in a language file",
+      "text": "RING r"
+     },
+     {
+      "line": 18,
+      "what": "behavior in a language file",
+      "text": "LIFECYCLE l"
+     },
+     {
+      "line": 19,
+      "what": "behavior in a language file",
+      "text": "EFFECT e"
+     },
+     {
+      "line": 20,
+      "what": "behavior in a language file",
+      "text": "SURFACE s"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    "R7 wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww\nTABLE 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "R7 wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "TABLE 😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    "TABLE xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀🚀tail",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "TABLE xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    "R1  # only a comment\nR2 \"a # b\"",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "R1  # only a comment"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "R2 \"a # b\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "BEHAVIOR͏x\nTABLEᅟx\nR1ㅤx\nKIND⠀x\nUNIT​x\nCITED​x\nR1-​x\nBEHAVIOR: x\nR1:​x\nANCHOR⁡x\nDESCRIPTIONx",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 8,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR: x"
+     },
+     {
+      "line": 9,
+      "what": "behavior in a language file",
+      "text": "R1:​x"
+     },
+     {
+      "line": 10,
+      "what": "behavior in a language file",
+      "text": "ANCHOR⁡x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    "CITED null\nCITED: null\nCITED\nR1 \"a CITED b\"\n  R1 indented",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 4,
+      "what": "behavior in a language file",
+      "text": "R1 \"a CITED b\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "",
+    false
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "\t#\\\"=.\"a\"x\"null\"​fancy_regex  toUpperCase(  😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\r\n    \r\n ﻿ ﻿12\"\t.(\"null\").\r\nNOTE\t日本 nullable=\" # \" ",
+    false
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    "﻿​UNIT \nNOTE\t😀./^éString.prototype\"Vec<u8>( ANCHOR \"#\"\nDESCRIPTION\tString.prototype 🚀😀  \" # String::new\n​#null\t'null'.parseInt;\" # \" \"\\d\"? \nSCOPE<\"null\">+\n",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "JS API name",
+      "text": "NOTE\t😀./^éString.prototype\"Vec<u8>( ANCHOR \"#\""
+     },
+     {
+      "line": 2,
+      "what": "Rust API name",
+      "text": "NOTE\t😀./^éString.prototype\"Vec<u8>( ANCHOR \"#\""
+     },
+     {
+      "line": 3,
+      "what": "JS API name",
+      "text": "DESCRIPTION\tString.prototype 🚀😀  \" # String::new"
+     },
+     {
+      "line": 3,
+      "what": "Rust API name",
+      "text": "DESCRIPTION\tString.prototype 🚀😀  \" # String::new"
+     },
+     {
+      "line": 4,
+      "what": "JS API name",
+      "text": "​#null\t'null'.parseInt;\" # \" \"\\d\"?"
+     },
+     {
+      "line": 4,
+      "what": "JS value name (say none)",
+      "text": "​#null\t'null'.parseInt;\" # \" \"\\d\"?"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    "PROVENANCE \n​R2::\t#x \\p( xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nPROVENANCE EARNED Number(x)=undefined/Option<T>,CITED  ANCHOR 🚀😀\n\t﻿﻿value \"/^x$/\"\"nullable(Boolean(-\\  yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy😀🚀😀\nR3　 😀　.\"null\"=Option<T> /^=\n  # #\"[\"a #\"]\" yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy😀🚀😀",
+    true
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "JS API name",
+      "text": "PROVENANCE EARNED Number(x)=undefined/Option<T>,CITED  ANCHOR 🚀😀"
+     },
+     {
+      "line": 3,
+      "what": "Rust API name",
+      "text": "PROVENANCE EARNED Number(x)=undefined/Option<T>,CITED  ANCHOR 🚀😀"
+     },
+     {
+      "line": 3,
+      "what": "JS value name (say none)",
+      "text": "PROVENANCE EARNED Number(x)=undefined/Option<T>,CITED  ANCHOR 🚀😀"
+     },
+     {
+      "line": 4,
+      "what": "JS API name",
+      "text": "value \"/^x$/\"\"nullable(Boolean(-\\  yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     {
+      "line": 5,
+      "what": "Rust API name",
+      "text": "R3　 😀　.\"null\"=Option<T> /^="
+     },
+     {
+      "line": 5,
+      "what": "JS value name (say none)",
+      "text": "R3　 😀　.\"null\"=Option<T> /^="
+     }
+    ]
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "R10\tundefined(&str;\t\r⁠R1: yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy😀🚀😀\r﻿UNIT:​\tline terminator\\b   😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\r    \\\\ f64::MAX \"a\"\"null\"=fancy-regex xline terminator ",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "R10\tundefined(&str;"
+     },
+     {
+      "line": 2,
+      "what": "behavior in a language file",
+      "text": "⁠R1: yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy😀🚀😀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    "BEHAVIOR:⁠a\"b;\\p  \nINVARIANT(\"null\") null-=\"x\"\t xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \nR1:\t",
+    false
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "behavior in a language file",
+      "text": "BEHAVIOR:⁠a\"b;\\p"
+     },
+     {
+      "line": 3,
+      "what": "behavior in a language file",
+      "text": "R1:"
+     }
+    ]
+   }
+  }
+ ]
+}

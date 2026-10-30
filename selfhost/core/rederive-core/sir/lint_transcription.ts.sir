@@ -1,0 +1,42 @@
+UNIT lint_transcription
+LANG ts
+PRIMARY-SHA256 b2ececf14eac4abb39082b925650a8c58ef7602ee2ee2e491830442bc97851be
+SIG export default function lint_transcription(text: string): { hits: { line: number, what: string, text: string }[], hitLines: number, lines: number, commentLines: number, density: number }
+NOTE the result type is the one the SIG spells; RegExpExecArray is never needed (only test is used).
+ABI TypeScript compiles to the js runtime; STRICT: the artifact type-checks under strict: true against this SIG with no any, no non-null assertions and no ts-ignore or ts-expect-error. text=string (UTF-16); json map = a plain object with the five keys of the primary's DESCRIPTION, each hit a plain object
+  with keys line, what, text; every count and density = number (f64). Key order is immaterial (the canonical form sorts keys).
+MECHANISM lines (R1) = split on the LINES pin, then each line = line.replace(NORMALIZE_LEAD, (lead) => lead.replace(/\uFEFF/g, ""))
+  (every FEFF of the lead dropped, its spaces and tabs kept), then line.replace(NORMALIZE_TRAIL, "") — in that order; trim (R5, R6) = String.prototype.trim, whose
+  set is the primary's WS; the cut (R6) = Array.from(t).slice(0, 96).join(""), which counts code points (a plain slice(0, 96)
+  would count UTF-16 units and could split a surrogate pair). Each shape (R3) = RegExp.prototype.test of its pin below on the
+  stripped line, non-global (no lastIndex state), in the table's order. Stripping (R2) = line.replace(QUOTED, (run) =>
+  run.replace(SPAN, '""')): QUOTED matches a RUN of side-by-side spans whose first quote is at a token start (R2 (a)); the
+  later spans of the run are R2 (b); SPAN re-splits the run left to right, so each span becomes two double quotes. Do NOT put
+  a quote into QUOTED's lookbehind for (b): a lookbehind re-parses backwards and finds spans the left-to-right scan never made
+  (";",}"">" — the quote after "}" opens nothing, yet a lookbehind sees the span ",}" after ";"). An escape pair takes one
+  UTF-16 unit after the backslash, and the low half of an escaped astral character is then an ordinary item, which spans
+  exactly what the primary's one-code-point pair spans. density (R5) = hitLines / lines in number arithmetic.
+MECHANISM RE flavor ECMAScript WITHOUT the u flag: \w and \b are ASCII (the primary's WORD and BOUNDARY), \s is the primary's
+  WS, . excludes \n \r \u2028 \u2029 (the primary's LT plus the line feed), ^ and $ are the line's own ends (no m flag), and
+  the i flag of the narration pin folds ASCII letters only.
+DEPENDS-ON none
+PINNED regex LINES = /\r\n|\r|\n/ CITED R1 — sir-parse.mjs sirLines; CR LF must be the FIRST alternative
+PINNED regex NORMALIZE_LEAD = /^[ \t\uFEFF]+/ CITED R1 — the LEAD, replaced by itself with every FEFF removed
+PINNED regex NORMALIZE_TRAIL = /[ \t]+$/ CITED R1 — removed, after the lead
+PINNED regex QUOTED = /(?<=^|[ \t(\[{,=:;|<>!&\-~])(?:"(?:\\[\s\S]|[^"\\])*")+/g CITED R2 — a run of spans; with SPAN, equivalent to the package's quotedSpans scan (checked on a 1000000-line seeded sample)
+PINNED regex SPAN = /"(?:\\[\s\S]|[^"\\])*"/g CITED R2 — one span, applied inside a QUOTED run only
+PINNED regex TYPEOF = /\btypeof\b/ CITED SHAPES row "typeof"
+PINNED regex ARROW = /=>/ CITED SHAPES row "arrow fn"
+PINNED regex METHOD = /\.(match|reduce|slice|test|exec|split|map|filter)\(/ CITED SHAPES row "method call"
+PINNED regex BUILTIN = /\b(parseInt|parseFloat|Number|String|Math)\s*[.(]/ CITED SHAPES row "JS builtin"
+PINNED regex IF = /\bif\s*\(/ CITED SHAPES row "if ("
+PINNED regex RETURN = /\breturn\b/ CITED SHAPES row "return"
+PINNED regex LOOP = /\bfor\s+\w+\s+in\b|\bfor\s*\(|\bwhile\s*\(/ CITED SHAPES row "loop"
+PINNED regex NARRATION = /^\s*#?\s*(STEP|NODE|BRANCH|GATE)\s+[\w-]+/i CITED SHAPES row "STEP/NODE/BRANCH narration"
+PINNED regex INDEXED = /\w\[\w+\]\s*(?:\*\*|<<|>>>?|&&|\|\||\?\?|[-+*\/%&|^])?=(?![=>])/ CITED SHAPES row "indexed assignment"
+PINNED regex DIALECT = /\/\^.*\$\/[a-z]*/ CITED SHAPES row "dialect regex literal"
+PINNED regex VALUENAME = /\b(null|undefined)\b/ CITED SHAPES row "JS value name (say none)"
+PINNED regex ASSIGN = /[A-Za-z_]\w*\s*=\s*[^=\s].*;\s*$/ CITED R7
+PINNED regex GROUP = /\bgroup\d\b/ CITED SHAPES row "capture-group reference"
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs and cli/sir/sir-parse.mjs — the pins are the package's CODE_SHAPES and
+  sirLines verbatim; QUOTED with SPAN is an equivalent of the package's quotedSpans scanner (stripQuoted's span finder).

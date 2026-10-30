@@ -1,0 +1,50 @@
+{
+ "status": "ok",
+ "unit": "escape_markers",
+ "primary": "selfhost/units/escape_markers/sir/escape_markers.sir",
+ "primarySha256": "28e3854d6f755c399768824b21f7bccc0b159cc34cd1db3d1454a97984e43d76",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "DEPTH. The value itself is at depth 0; every element of a list and every value of a map is one deeper than its container (lists and maps count alike; an escape map added by R4 adds no depth). If any node that is visited lies at depth greater than 100 -> throws \"a value nests deeper than 100\". A scalar or an empty list or map counts as a visited node at its own depth: 100 lists around a scalar returns, 101 lists around a scalar throws; 100 lists around an empty list returns, 100 lists around a one-element list throws.",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "R2",
+   "text": "SCALARS (none, bool, f64, text) -> returned unchanged.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R3",
+   "text": "LIST -> a new list of the same length; each element is the result of this contract applied to it, at its depth.",
+   "ambiguity": 0.62
+  },
+  {
+   "id": "R4",
+   "text": "MAP -> a new map with the same keys in the same order, each value the result of this contract applied to it, at its depth. Then, if the INPUT map holds the key \"__t\", \"__throw\" or \"__threw\" -> the result is the two-entry map {\"__t\": \"obj\", \"v\": <that new map>} (keys in that order); otherwise the result is the new map itself.",
+   "ambiguity": 0.6
+  },
+  {
+   "id": "R5",
+   "text": "The escape is on the KEY's presence alone: the marker key's value may be any json (text, number, none, bool, list, map, empty text) and the map is still escaped; any other keys in the map do not matter. CITED FIDELITY package — wider than the codec's own marker rule (an own TEXT-valued key), which reads only text-valued markers as tags.",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R6",
+   "text": "Only the three exact keys trigger R4: look-alikes (\"__T\", \"_t\", \"__t \" with a trailing space, \"__throws\", \"t\", \"threw\", \"v\") never do. A map already shaped like an escape ({\"__t\": \"obj\", \"v\": ...}) is escaped again, as is the \"v\" map inside it if it holds a marker key.",
+   "ambiguity": 0.42
+  }
+ ],
+ "ranked": [
+  "R3",
+  "R4",
+  "R1",
+  "R6",
+  "R2",
+  "R5"
+ ],
+ "at": "2026-10-28T03:31:33Z"
+}

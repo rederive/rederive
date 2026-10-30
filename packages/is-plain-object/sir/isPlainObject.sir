@@ -1,0 +1,168 @@
+UNIT isPlainObject
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isPlainObject(o: any) -> boolean
+DEPENDS-ON none   # zero runtime dependencies; uses only built-in Object.prototype methods
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+# Returns true iff `o` is a "plain object": an object whose
+# Object.prototype.toString tag is '[object Object]' AND whose constructor's
+# prototype is itself a '[object Object]' that owns 'isPrototypeOf' — OR whose
+# constructor is undefined (the Object.create(null) family). Otherwise false.
+#
+# IMPORTANT — VERSION-SPECIFIC ALGORITHM. is-plain-object@5.0.0 does NOT use the
+# older 2.x algorithm (Object.getPrototypeOf / ctor instanceof ctor /
+# Function.prototype.call comparison). Any prior-art hint describing those is
+# the 2.x algorithm and is WRONG for 5.0.0. The 5.0.0 algorithm is the
+# toString-tag + hasOwnProperty('isPrototypeOf') method given below. The CJS
+# build (dist/is-plain-object.js) and the ESM build (dist/is-plain-object.mjs)
+# are byte-for-byte identical in logic; both verified.
+
+# ============================================================================
+# BEHAVIOR  (exact ordered pipeline — reproduce verbatim)
+# ============================================================================
+# Helper (internal, not exported):
+#   isObject(x)  ==  ( Object.prototype.toString.call(x) === '[object Object]' )
+#
+# The exact toString gate: it calls the SPEC built-in Object.prototype.toString
+# bound to the value via .call(x). It returns the literal string '[object Object]'
+# for ordinary objects, Object.create(null) objects, and any object whose
+# Symbol.toStringTag is unset; it returns other tags ('[object Array]',
+# '[object Date]', '[object RegExp]', '[object Set]', '[object Map]',
+# '[object Number]', '[object String]', '[object Boolean]', '[object Null]',
+# '[object Undefined]', '[object Function]', '[object Arguments]',
+# '[object Error]', '[object Uint8Array]', '[object Promise]', '[object Symbol]',
+# '[object BigInt]', etc.) for everything else. ONLY the exact string
+# '[object Object]' passes the gate.
+#
+# isPlainObject(o):
+#   NODE-1 [tag gate]:
+#     if isObject(o) === false:           return false
+#       # i.e. if Object.prototype.toString.call(o) !== '[object Object]'.
+#       # This rejects: null, undefined, all primitives (number incl. 0/-0/NaN/
+#       # +-Infinity, string, boolean, symbol, bigint), arrays, functions,
+#       # Date, RegExp, Map, Set, WeakMap, WeakSet, Promise, Error, arguments,
+#       # Uint8Array/typed arrays, Buffer, boxed Number/String/Boolean, etc.
+#       # NOTE the primitives reach here because toString.call coerces a
+#       # primitive to its boxed tag ('[object Number]' etc.) which is not
+#       # '[object Object]'. null -> '[object Null]', undefined ->
+#       # '[object Undefined]'.
+#
+#   NODE-2 [constructor own-or-inherited lookup]:
+#     ctor = o.constructor          # ordinary property read; walks prototype chain
+#     if ctor === undefined:              return true
+#       # Reached when the object (and its whole prototype chain) has no
+#       # 'constructor' property. Canonically the Object.create(null) family,
+#       # and objects whose prototype is itself an Object.create(null) object,
+#       # and objects that explicitly set `obj.constructor = undefined`.
+#
+#   NODE-3 [prototype tag gate]:
+#     prot = ctor.prototype         # ordinary property read on the constructor
+#     if isObject(prot) === false:        return false
+#       # i.e. if Object.prototype.toString.call(prot) !== '[object Object]'.
+#       # Rejects objects whose constructor's .prototype is not a plain-tagged
+#       # object. Examples: an object with obj.constructor = String (String.prototype
+#       # tags '[object String]'); a constructor F with F.prototype = 5 (a primitive,
+#       # tags '[object Number]'); ctor with a null/primitive prototype.
+#
+#   NODE-4 [own 'isPrototypeOf' gate]:
+#     if prot.hasOwnProperty('isPrototypeOf') === false:   return false
+#       # Uses Object.prototype.hasOwnProperty via prot.hasOwnProperty(...).
+#       # 'isPrototypeOf' is an OWN method of the real Object.prototype. A genuine
+#       # plain object's constructor is Object, whose prototype is Object.prototype,
+#       # which owns 'isPrototypeOf' -> passes. A user-defined function F's
+#       # F.prototype is a fresh '[object Object]' that does NOT own
+#       # 'isPrototypeOf' (it only inherits it) -> fails here -> false. This is the
+#       # node that rejects class/function instances whose .prototype happens to
+#       # still tag as '[object Object]'.
+#       # CAUTION: prot.hasOwnProperty is the ordinary inherited method; the unit
+#       # does NOT use Object.prototype.hasOwnProperty.call(prot, ...). For the
+#       # in-envelope inputs this distinction never matters.
+#
+#   NODE-5 [success]:
+#     return true                          # "Most likely a plain Object"
+
+# ============================================================================
+# BRANCH-RESULT TABLE (every return statement, with a witnessing input)
+# ============================================================================
+#   NODE-1 false  <- []  /  null  /  5  /  'x'  /  true  /  new Date()  /  /re/
+#                    /  new Set()  /  new Map()  /  new Uint8Array(3)  /  Buffer
+#                    /  function(){}  /  Math? NO (Math tags '[object Math]')
+#   NODE-2 true   <- Object.create(null)  /  { constructor: undefined } literal-ish
+#                    /  Object.create(Object.create(null))
+#   NODE-3 false  <- (obj with obj.constructor = String)  /  (new F where
+#                    F.prototype = <primitive>)
+#   NODE-4 false  <- (new F where function F(){})  /  (new (class Bar{}))
+#   NODE-5 true   <- {}  /  {a:1}  /  {a:{b:1}}  /  new Object()
+#                    /  Object.create({})  /  Object.assign({},{a:1})
+#                    /  JSON.parse('{"a":1}')
+#
+# CONFIRMED-COUNTERINTUITIVE (verified against real 5.0.0):
+#   * Object.create({})  -> TRUE.  Its constructor is inherited from the proto's
+#     chain = Object; Object.prototype tags '[object Object]' and owns
+#     'isPrototypeOf'. So a one-level-derived object is still "plain".
+#   * Object.create(Object.create(null)) -> TRUE.  The proto chain has no
+#     'constructor', so ctor === undefined -> NODE-2 returns true.
+#   * Math, JSON tag '[object Math]' / '[object JSON]' -> NODE-1 false.
+
+# ============================================================================
+# ERROR / THROW BEHAVIOR
+# ============================================================================
+# None. The function never throws for any in-envelope input. It performs only
+# property reads (o.constructor, ctor.prototype) and method calls
+# (Object.prototype.toString.call, prot.hasOwnProperty). For all values that
+# reach NODE-2+ the object is guaranteed by NODE-1 to be a real object
+# ('[object Object]'), so o.constructor and ctor.prototype reads are safe.
+# (A pathologically crafted object with a throwing 'constructor' getter could
+# throw, but such objects are not codec-round-trippable and are OUT-OF-ENVELOPE.)
+
+ORACLE value -> oracle.json
+# Pure deterministic predicate, no seam. The blind re-emitter authors:
+#     export function isPlainObject(value) { ... }
+#     export default isPlainObject;
+# (a named export 'isPlainObject' MUST exist — the grader resolves
+#  m[exportName] with exportName === 'isPlainObject'). Read-only, no side effects.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire NODE-1..NODE-5 pipeline
+#   above, including the literal tag string '[object Object]', the
+#   ctor===undefined short-circuit returning true, the prot tag re-gate, and the
+#   own-property 'isPrototypeOf' check. No constants beyond the literal string
+#   '[object Object]' and the property name 'isPrototypeOf'.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+# they are not codec-round-trippable through the harness codec in a way that
+# preserves the predicate's identity; a blind re-emitter still reconstructs their
+# behavior FROM THIS SPEC, they are simply not differentially graded):
+#   * Object.create(null)  -> EXPECTED true (NODE-2).  The harness codec revives a
+#       null-prototype object as an ordinary plain {} (constructor Object), which
+#       would still be EXPECTED true but via NODE-5 not NODE-2. To avoid asserting
+#       on a value whose revived prototype differs from the authored one, it is
+#       OUT. The TRUE branch is already covered by {} (NODE-5); the
+#       ctor===undefined branch (NODE-2) is documented here but not codec-carried.
+#   * functions / arrow functions  -> EXPECTED false (NODE-1, tag
+#       '[object Function]'). Functions do not round-trip the codec. OUT.
+#   * Symbols  -> EXPECTED false (NODE-1, tag '[object Symbol]'). Symbols do not
+#       round-trip. OUT.
+#   * class / custom-constructor instances (new Foo(), new (class{}))  ->
+#       EXPECTED false (NODE-4: F.prototype tags '[object Object]' but lacks own
+#       'isPrototypeOf'). Class identity does not survive the codec (revives as a
+#       plain {} -> would flip to true). OUT — but the NODE-4 branch IS the most
+#       important false branch, so the SPEC pins it explicitly above.
+#   * boxed primitives (new Number/String/Boolean)  -> EXPECTED false (NODE-1,
+#       tags '[object Number]' etc.). Listed by the harness as a codec edge, but
+#       conservatively OUT here to keep the differential identity-stable.
+#   * objects with hand-mutated .constructor (e.g. obj.constructor=String,
+#       obj.constructor=undefined)  -> behavior pinned in the BRANCH-RESULT TABLE
+#       (NODE-3 false / NODE-2 true respectively); not codec-carried. OUT.
+
+PROVENANCE is-plain-object@5.0.0, repo jonschlinkert/is-plain-object, MIT License
+  (Copyright (c) 2014-2017, Jon Schlinkert). Source files (logic-identical):
+  dist/is-plain-object.js (CJS), dist/is-plain-object.mjs (ESM). CJS exports
+  `{ isPlainObject }` (exports.isPlainObject); ESM `export { isPlainObject }`.

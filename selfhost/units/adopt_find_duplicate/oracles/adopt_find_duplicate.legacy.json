@@ -1,0 +1,735 @@
+{
+ "mode": "vectors",
+ "unit": "adopt_find_duplicate",
+ "authority": "rederive@7b348e351c9f",
+ "authorityTreeSha256": "91baed7dcec37cb11b1e62d2abb16969b6b5bcbd6e9b99a96c3fe71291ceb15f",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "# My project\n\nIntro text that is mine alone.\n\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n\n## Later\nmy own later notes here\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 4,
+    "endLine": 16
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "<!--\nrederive:begin\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v2",
+   "args": [
+    "see `<!-- rederive:begin` in the docs\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v3",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n<!--rederive:begin",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v4",
+   "args": [
+    "<!-- rederive:beginning\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 1,
+    "endLine": 5
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+    "<!-- rederive:begin\n## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n-->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v6",
+   "args": [
+    "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+    "<!-- rederive:begin\n## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n<!-- note -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Intro",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+    "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n<!-- rederive:begin -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v8",
+   "args": [
+    "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+    "<!-- rederive:begin\n## Intro\nNever edit files under the protected paths by hand.\nA --> B flows here always\ncargo test --release -p verified-core\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v9",
+   "args": [
+    "## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n",
+    "<!-- rederive:begin x<!-->\n## Intro\nNever edit files under the protected paths by hand.\ncargo test --release -p verified-core\n## Hard rules\nRun `rdv check units/foo` before every commit."
+   ],
+   "expected": {
+    "heading": "## Intro",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~\n```\n## Mine\n```\n~~~\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## After\nx\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 8
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n````md\n```\n## Mine\n```\n````\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## After\nx\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 8
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n## Mine\n`````\n## After\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v13",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n## Mine\n```bash\n## After\n```\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## End\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 8
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~~\n~~~\n## Mine\n~~~~ \t\n## After\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v15",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n# c\n\t ```　\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v16",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n```x```\n## Mine\n```\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## End\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 7
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```markdown\n    ```\n# Hard rules\nexample\n```\n## Mine\nmine\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 11
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n````\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```\n## Mine\nmine\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 8
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Deploy the stack with care\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~\n```\n## Deploy the stack with care\n```\n~~~\n## Mine\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v20",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n````````````````\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n````````````````\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v22",
+   "args": [
+    "<!--\trederive:begin-->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v23",
+   "args": [
+    "<!-- rederive:begin\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "<!-- rederive:begin_x -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 1,
+    "endLine": 5
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "<!-- rederive:end -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 1,
+    "endLine": 5
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "Run `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v27",
+   "args": [
+    "## (draft)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## (draft)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v28",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n## ---\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v29",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nshort\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v30",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nRun `rdv check units/foo` before every commit.\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nRun `rdv check units/foo` before every commit.\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v31",
+   "args": [
+    "## Hard rules\nmy own very different words here\n## Elsewhere\nRun `rdv check units/foo` before every commit.\n# Top\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v32",
+   "args": [
+    "## Hard rules\nmine\n## Mine\nx\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## After\nkeep\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 4,
+    "endLine": 7
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "# T\n## Hard rules\nRun `rdv check units/foo` before every commit.\n### Commands\nnode tools/sir-validate.mjs <unitDir> must exit 0\n#### deep\n### sib\n## Mine\nkeep\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 1,
+    "endLine": 5
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n## Giver only section\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Commands\nNever edit files under the protected paths by hand.\n## After\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v35",
+   "args": [
+    "# Commands\nNever edit files under the protected paths by hand.\n# Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": {
+    "heading": "# Commands",
+    "startLine": 0,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    "# Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Mine\nmine\n",
+    "# Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "# Hard rules",
+    "startLine": 0,
+    "endLine": 3
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    "intro\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\nmy trailing words with no heading\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 1,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "### HARD -- Rules!! (v2)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n## Next\nx\n",
+    "# hard rules (draft)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "### HARD -- Rules!! (v2)",
+    "startLine": 0,
+    "endLine": 3
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    "## Hard rules (a) (b)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules (a)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v40",
+   "args": [
+    "## Hard rules (a (b)\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules (a (b)",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "## Keep İt\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## keep i t\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Keep İt",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "####### Hard rules\n#Hard rules\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "####### x\n#nospace\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 2,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n#  \nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v44",
+   "args": [
+    "## Hard rules\n## Hard rules x\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules x\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v45",
+   "args": [
+    "```bash\n# install deps\nnpm ci --ignore-scripts now\n```\nRun `rdv check units/foo` before every commit.\n## Other\n",
+    "## Setup\n```bash\n# install deps\nnpm ci --ignore-scripts now\n```\nRun `rdv check units/foo` before every commit."
+   ],
+   "expected": null
+  },
+  {
+   "name": "v46",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```sh\n# Other\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```\n## Mine\nx\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n~~~\n## Mine\n~~~\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 7
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```\n~~~\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 7
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n  ~~~x~~~\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n``````\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```````\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n```````\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v52",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```x``` is inline\n## Mine\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 6
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n\t```npm ci --ignore-scripts```  \n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\n```npm ci --ignore-scripts```"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "~~~\n## Mine\n~~~\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "<!-- rederive:begin -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v56",
+   "args": [
+    "## A\n```javascript lang\n123456789012345\n1234567890123456\n",
+    "## A\n```javascript lang\n123456789012345\n1234567890123456\n  ```javascript lang"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v57",
+   "args": [
+    "## A\n123456789012345😀\nabcdefghijklmn😀\n",
+    "## A\n123456789012345😀\nabcdefghijklmn😀"
+   ],
+   "expected": {
+    "heading": "## A",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "## Hard rules\n\tRun `rdv check units/foo` before every commit.  \nnode\t　tools/sir-validate.mjs\t　<unitDir>\t　must\t　exit\t　0﻿\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "## Hard rules\nRun`rdvcheckunits/foo`beforeeverycommit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v60",
+   "args": [
+    "## Hard rules\r\nRun `rdv check units/foo` before every commit.\r\nnode tools/sir-validate.mjs <unitDir> must exit 0\r\n## Tail\r\nmine\r\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 3
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    "## Hard rules\r\r\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v62",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\r\r\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v63",
+   "args": [
+    "## Intro\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Intro\n<!-- a note -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Intro",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "## Intro\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Intro\nRun `rdv check units/foo` before every commit.\n<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v65",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\n<!-- rederive:end -->\n## Tail\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v66",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n<!--   rederive:end\n -->\n"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "<!-- rederive:end -->\n## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v68",
+   "args": [
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n",
+    "<!-- rederive:begin -->Run `rdv check units/foo` before every commit.\n## Hard rules\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 0,
+    "endLine": 4
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    "\n\n## Hard rules  \t\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0",
+    "## Hard rules\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0"
+   ],
+   "expected": {
+    "heading": "## Hard rules",
+    "startLine": 2,
+    "endLine": 5
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "",
+    "<!-- rederive:begin (managed by `rdv init` — edits between markers are overwritten on re-init) -->\n## Hard rules\n\nRun `rdv check units/foo` before every commit.\nnode tools/sir-validate.mjs <unitDir> must exit 0\n\n### Commands\n\n```bash\ncargo test --release -p verified-core\n```\nNever edit files under the protected paths by hand.\n<!-- rederive:end -->\n"
+   ],
+   "expected": null
+  },
+  {
+   "name": "v71",
+   "args": [
+    "\n\n\n",
+    "#  x\n\n"
+   ],
+   "expected": null
+  }
+ ]
+}

@@ -1,0 +1,20 @@
+UNIT ringToken
+KIND FUNCTIONAL
+FIDELITY spec
+SIG ringToken(items, gate) -> Promise<Array>
+DESCRIPTION Appends each item to a result array, coordinating access through a single
+DESCRIPTION circulating permission (a "token") so that only one actor acts at a time.
+DESCRIPTION Each append is performed by awaiting `gate.open(item)`; the gate resolves it.
+DESCRIPTION The token is manipulated through `gate.token`, which offers exactly three calls:
+DESCRIPTION   gate.token.take(who)         — actor `who` acquires the permission
+DESCRIPTION   gate.token.pass(from, to)    — `from` hands the permission to `to`
+DESCRIPTION   gate.token.release(who)      — `who` gives the permission back
+DESCRIPTION Actors are identified by their index in `items` (0, 1, 2, …).
+DESCRIPTION Export the function as the DEFAULT export. No imports of any kind.
+RING the token circulates in index order: 0 takes it, passes to 1, 1 passes to 2, …
+INVARIANT the result is the items in INDEX ORDER (the token order determines it).
+INVARIANT MUTUAL EXCLUSION: at most ONE actor holds the token at any instant. Actor 0
+INVARIANT   TAKES it; every later actor RECEIVES it via pass(from, to) — never take().
+INVARIANT NO LOSS: the permission is released exactly once at the end, by the LAST actor,
+INVARIANT   so that no actor still holds it when the unit returns.
+INVARIANT an empty items array returns [] and touches neither gate.open nor gate.token.

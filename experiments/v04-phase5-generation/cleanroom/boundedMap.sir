@@ -1,0 +1,21 @@
+UNIT boundedMap
+KIND FUNCTIONAL
+FIDELITY spec
+SIG boundedMap(input, concurrency, gate) -> Promise<Array>
+DESCRIPTION Maps each element of `input` to element*2, running at most `concurrency`
+DESCRIPTION mappings at a time. THE DOUBLING IS THE UNIT'S OWN WORK. `gate.open(value)` is
+DESCRIPTION ONLY a completion source: it is the caller's permission to proceed, and it
+DESCRIPTION resolves with the value handed to it, unchanged — it computes nothing. Await it
+DESCRIPTION exactly once per element before that element's result is recorded. The unit never
+DESCRIPTION resolves it itself and must not use timers, Promise.resolve, or any other
+DESCRIPTION completion source.
+DESCRIPTION Export the function as the DEFAULT export. No imports of any kind.
+PAR the per-element mappings are independent sub-traces
+INVARIANT the returned array is keyed by INPUT POSITION: result[i] corresponds to
+INVARIANT   input[i], no matter which mapping settles first. Keying by completion order
+INVARIANT   is WRONG even though it looks correct when completions happen to arrive in order.
+INVARIANT at most min(concurrency, input.length) mappings are in flight at any instant —
+INVARIANT   a mapping is "in flight" from the moment gate.open is called until it settles.
+INVARIANT every element is mapped exactly once; the result has the same length as the
+INVARIANT   input, and result[i] === input[i] * 2 for every i.
+INVARIANT an empty input returns an empty array without calling gate.open at all.

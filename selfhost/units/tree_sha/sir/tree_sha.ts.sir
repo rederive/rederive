@@ -1,0 +1,15 @@
+UNIT tree_sha
+LANG ts
+PRIMARY-SHA256 e12613dad5808632c7fe28510214c96c79e264473e10d7833fc2a007d5805be8
+SIG export function tree_sha(files: Readonly<Record<string, string>>): string
+ABI TypeScript compiles to the js runtime: map[text, text] = Readonly<Record<string, string>> (a plain object); text = string
+  (UTF-16); the result is 64 lowercase hex characters; a throw (R2) is a thrown Error, message not graded. STRICT: the
+  artifact must type-check under `strict: true` against this SIG, with no `any`, no non-null assertions (`!`), and no
+  `@ts-ignore` / `@ts-expect-error`. It may import node:crypto and nothing else, and never touches the file system.
+MECHANISM (restated from js — language files are self-contained) SHA-256 (R4, R6, R7) = createHash('sha256').update(text,
+  'utf8').digest('hex') from node:crypto. NAMES (R1, R3) = path.split('/'). Validate every key (R1, R2) before hashing
+  anything. The sort (R5) = Array.prototype.sort with no comparator — the default comparison IS UTF-16 code-unit order;
+  never localeCompare, never Intl.Collator. The R2 message's path = JSON.stringify(path).
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/tree-sha.mjs + selfhost/seams/tree_sha.mjs. Language file cut 2026-10-26 with the
+  primary, before any blind re-emission; round 2 re-cut.

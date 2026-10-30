@@ -1,0 +1,218 @@
+UNIT dropRight
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG dropRight(array, n = 1, guard) -> Array        # default export; n optional, guard optional/internal
+DEPENDS-ON none                                     # zero runtime deps; toInteger/toFinite/toNumber/baseSlice are INLINED in the source and reproduced below
+
+# ---------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ---------------------------------------------------------------------------
+# The original is a CommonJS DEFAULT export (module.exports = dropRight).
+# The blind re-emission MUST expose the function as the module default:
+#     export default function dropRight(array, n, guard) { ... }
+# (an ES module with `export default`). It is a PURE, READ-ONLY function:
+# it never mutates `array`, returns a NEW Array, and reads nothing ambient
+# (no clock/RNG/env/io). There is NO seam. ORACLE-CLASS is plain deterministic.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered pipeline — exact, reproduced from source)
+# ---------------------------------------------------------------------------
+# Creates a slice of `array` with `n` elements dropped from the END.
+#
+# dropRight(array, n, guard):
+#   node-1  length = array ? array.length : 0
+#           # `array` truthiness gate: if array is null/undefined/0/""/false/NaN,
+#           #  length := 0. Otherwise length := array.length (may be undefined ->
+#           #  treated as falsy in node-2). `array` is used as an ARRAY-LIKE: it
+#           #  needs a numeric `.length` and integer-index access (plain Arrays,
+#           #  typed arrays, strings, and {length, 0:..,1:..} array-likes all work).
+#   node-2  if (!length) return []
+#           # Covers: null/undefined array, empty array [], array.length === 0,
+#           #  array.length undefined (e.g. a Set, which has .size not .length),
+#           #  array.length === NaN, or any falsy length. Returns a fresh [].
+#   node-3  n = (guard || (n === undefined)) ? 1 : toInteger(n)
+#           # GUARD SHORT-CIRCUIT (this modular 4.1.1 build): if `guard` is
+#           #  TRUTHY, OR `n` is exactly undefined, then n := 1 (the default).
+#           #  Otherwise n := toInteger(n) (full coercion below).
+#           #  NOTE: `guard` here is a plain truthy test (NOT the full
+#           #  isIterateeCall check from monolithic lodash). Any truthy 3rd arg
+#           #  forces n=1; any falsy 3rd arg (undefined / null / 0 / "" / false /
+#           #  NaN) is ignored and the real `n` is used.
+#   node-4  n = length - n
+#           # Convert "elements to drop from the end" into a slice END index.
+#   node-5  return baseSlice(array, 0, (n < 0 ? 0 : n))
+#           # Clamp the end index up at 0, then slice [0, end). Net effect:
+#           #   end = max(length - toInteger(n), 0)
+#           #   result = a NEW array of array[0 .. end-1].
+#
+# baseSlice(array, start, end):   # called as baseSlice(array, 0, end), so start=0
+#   index  = -1
+#   length = array.length
+#   # start (=0) >= 0, so the `start < 0` branch is not taken.
+#   end = (end > length) ? length : end          # clamp end DOWN to length
+#   # end >= 0 here (caller clamped), so the `end < 0` branch is not taken.
+#   length = (start > end) ? 0 : ((end - start) >>> 0)   # = end >>> 0 (since start=0, end>=0)
+#   start >>>= 0                                  # = 0
+#   result = Array(length)
+#   while (++index < length) result[index] = array[index + start]   # = array[index]
+#   return result
+#   # => result is a DENSE array of the first `end` elements of `array`,
+#   #    copied by index. Holes in a sparse source become `undefined` slots
+#   #    that DO exist in the result (result.length === end). Element values
+#   #    are copied by reference for objects (shallow copy).
+#
+# NET CONTRACT (single formula a re-emitter can implement directly):
+#   if array is falsy OR array.length is falsy  -> return []
+#   nn = (guard truthy || n === undefined) ? 1 : toInteger(n)
+#   end = length - nn ;  if (end < 0) end = 0 ;  if (end > length) end = length
+#   return [ array[0], array[1], ..., array[end-1] ]   # NEW dense Array, length === end
+#
+# WORKED EXAMPLES (verified against the real package):
+#   dropRight([1,2,3])        -> [1,2]      (n defaults to 1; end = 3-1 = 2)
+#   dropRight([1,2,3], 2)     -> [1]        (end = 3-2 = 1)
+#   dropRight([1,2,3], 0)     -> [1,2,3]    (end = 3-0 = 3; full shallow copy)
+#   dropRight([1,2,3], 3)     -> []         (end = 0)
+#   dropRight([1,2,3], 5)     -> []         (end = -2 -> clamped to 0)
+#   dropRight([1,2,3], -1)    -> [1,2,3]    (end = 3-(-1)=4 -> clamped down to 3)
+#   dropRight([1,2,3], -100)  -> [1,2,3]    (end clamped to length)
+#   dropRight([1,2,3], 1.9)   -> [1,2]      (toInteger(1.9)=1 -> end=2)
+#   dropRight([1,2,3], -1.9)  -> [1,2,3]    (toInteger(-1.9)=-1 -> end=4 -> 3)
+#   dropRight([1,2,3], 0.9)   -> [1,2,3]    (toInteger(0.9)=0 -> end=3)
+#   dropRight([1,2,3], "2")   -> [1]        (toInteger("2")=2)
+#   dropRight([1,2,3], "2.9") -> [1]        (toInteger("2.9")=2)
+#   dropRight([1,2,3], "abc") -> [1,2,3]    (toNumber("abc")=NaN -> toInteger=0)
+#   dropRight([1,2,3], "  3  ") -> []       (whitespace trimmed -> 3 -> end=0)
+#   dropRight([1,2,3], "")    -> [1,2,3]    (+"" = 0)
+#   dropRight([1,2,3], "   ") -> [1,2,3]    (trim -> "" -> +"" = 0)
+#   dropRight([1,2,3], NaN)   -> [1,2,3]    (toInteger(NaN)=0)
+#   dropRight([1,2,3], Infinity)  -> []     (toInteger(Infinity)=MAX_INTEGER -> end<0 -> 0)
+#   dropRight([1,2,3], -Infinity) -> [1,2,3](toInteger(-Infinity)=-MAX_INTEGER -> end>>len -> len)
+#   dropRight([1,2,3], null)  -> [1,2,3]    (null falsy as guard? no: null is `n` arg;
+#                                             n===undefined is false, so toInteger(null);
+#                                             toFinite(null): !null true & null!==0 -> 0)
+#   dropRight([1,2,3], true)  -> [1,2]      (toInteger(true): toNumber(true)=+true=1)
+#   dropRight([1,2,3], false) -> [1,2,3]    (toFinite(false): !false true & false!==0 -> 0)
+#   dropRight([1,2,3], 2, {}) -> [1,2]      (guard {} truthy -> n forced to 1)
+#   dropRight([1,2,3], 2, 0)  -> [1]        (guard 0 falsy -> ignored -> toInteger(2)=2)
+#   dropRight([1,2,3], 2, null) -> [1]      (guard null falsy -> ignored -> n=2)
+#   dropRight([], )           -> []
+#   dropRight(null)           -> []
+#   dropRight(undefined)      -> []
+#   dropRight([42])           -> []         (end = 1-1 = 0)
+#
+# ---------------------------------------------------------------------------
+# COERCION SUBROUTINES (INLINED in source — reproduce EXACTLY)
+# ---------------------------------------------------------------------------
+# Constants:
+#   INFINITY    = 1 / 0                         # +Infinity
+#   MAX_INTEGER = 1.7976931348623157e+308       # === Number.MAX_VALUE (NOT an integer, but n % 1 === 0)
+#   NAN         = 0 / 0                          # NaN
+#   reTrim    = /^\s+|\s+$/g                     # leading/trailing whitespace
+#   reIsBadHex= /^[-+]0x[0-9a-f]+$/i             # signed hex strings -> NaN
+#   reIsBinary= /^0b[01]+$/i                     # 0b... binary strings
+#   reIsOctal = /^0o[0-7]+$/i                    # 0o... octal strings
+#   symbolTag = '[object Symbol]'
+#   objectToString = Object.prototype.toString
+#
+# isObject(value):  type = typeof value ; return !!value && (type=='object' || type=='function')
+# isObjectLike(value): return !!value && typeof value == 'object'
+# isSymbol(value): return typeof value == 'symbol' ||
+#                         (isObjectLike(value) && objectToString.call(value) == symbolTag)
+#
+# toNumber(value):
+#   if (typeof value == 'number') return value
+#   if (isSymbol(value)) return NaN
+#   if (isObject(value)) {                       # objects (incl arrays, wrappers, functions)
+#       other = typeof value.valueOf == 'function' ? value.valueOf() : value
+#       value = isObject(other) ? (other + '') : other     # coerce to primitive
+#   }
+#   if (typeof value != 'string')                # non-string primitives:
+#       return value === 0 ? value : +value      #   numeric coercion via unary +
+#   value = value.replace(reTrim, '')            # strings: trim ends
+#   isBinary = reIsBinary.test(value)
+#   return (isBinary || reIsOctal.test(value))
+#       ? parseInt(value.slice(2), isBinary ? 2 : 8)        # 0b../0o.. parsed in base
+#       : (reIsBadHex.test(value) ? NaN : +value)           # bad signed hex -> NaN; else +value
+#   # Examples: toNumber("0x10")=16, toNumber("0b11")=3, toNumber("0o10")=8,
+#   #   toNumber("-0x1")=NaN, toNumber("+5")=5, toNumber("1e1")=10, toNumber("")=0,
+#   #   toNumber("abc")=NaN, toNumber([2])=2 (valueOf->[2], +"2"), toNumber({})=NaN
+#   #   (valueOf->"[object Object]"), toNumber([1,2])=NaN (+"1,2"), toNumber(true)=1,
+#   #   toNumber(false)=0.
+#
+# toFinite(value):
+#   if (!value) return value === 0 ? value : 0   # falsy: 0/-0 pass through (as 0), else 0
+#   value = toNumber(value)
+#   if (value === INFINITY || value === -INFINITY) {
+#       sign = (value < 0 ? -1 : 1)
+#       return sign * MAX_INTEGER                 # +-Infinity -> +-MAX_INTEGER
+#   }
+#   return value === value ? value : 0            # NaN -> 0; else the finite number
+#
+# toInteger(value):
+#   result = toFinite(value)
+#   remainder = result % 1
+#   return result === result ? (remainder ? result - remainder : result) : 0
+#   # Truncates toward zero: positive frac subtracts the +remainder, negative frac
+#   # subtracts the -remainder (so -1.9 -> -1.9 - (-0.9) = -1). NaN-guarded (toFinite
+#   # already removes NaN, so this is belt-and-suspenders -> 0).
+#   # toInteger(MAX_INTEGER) == MAX_INTEGER (its % 1 === 0).
+
+# ---------------------------------------------------------------------------
+# THROW / OUT-OF-ENVELOPE PATHS  (documented; NOT emitted by genInputs)
+# ---------------------------------------------------------------------------
+# - bigint `n` (e.g. 2n): toNumber does `+value` on a non-symbol/non-object
+#   primitive (typeof 'bigint'), which THROWS a TypeError
+#   ("Cannot convert a BigInt value to a number"). This is a real throw path of
+#   the unit, but bigint `n` is documented OUT-OF-ENVELOPE here and NOT emitted
+#   (host-VM TypeError text/identity is not part of the value contract).
+# - Symbol `n`: isSymbol(value) true -> toNumber returns NaN -> toInteger 0 ->
+#   full copy. No throw. Symbol does NOT JSON-round-trip, so NOT emitted; behavior
+#   documented (equivalent to n that toIntegers to 0).
+# - Element types that do not survive the JSON-stringify(encode(args)) codec:
+#   function elements, Symbol elements, undefined ARRAY elements (become null in
+#   JSON), NaN / +-Infinity numeric elements, boxed wrappers as elements. The
+#   function copies them by reference faithfully, but they are NOT codec-faithful
+#   as stored inputs, so genInputs does NOT emit them as array elements. Behavior:
+#   dropRight performs an index-copy, so any element value (whatever it is) at
+#   index < end is copied unchanged by reference; only positions matter.
+# - `n` values that do not round-trip (NaN, +-Infinity, -0, boxed Number/String):
+#   These ARE behaviorally exercised but via round-trippable SUBSTITUTES that
+#   reach the SAME branch (NaN/Infinity reached via the documented numeric/string
+#   coercions; -0 -> stored as 0, same full-copy result). genInputs uses string
+#   forms where the literal would not survive (e.g. "Infinity" is NOT special to
+#   toNumber -> NaN -> 0; to actually hit Infinity we'd need the JS Infinity which
+#   does not round-trip, so the Infinity end-clamp branch is covered structurally
+#   by large finite `n` like 1e308 which round-trips and yields the SAME [] result
+#   via the n<0 clamp, AND by huge n giving end<0).
+
+# ---------------------------------------------------------------------------
+# NO-MUTATION INVARIANT  (VERIFY target for the oracle)
+# ---------------------------------------------------------------------------
+# dropRight NEVER mutates its `array` argument. After the call:
+#   - the source array's length and every element are unchanged, AND
+#   - the returned array is a DIFFERENT object identity from the input
+#     (result !== array) whenever array is a real array.
+# The oracle must snapshot the source array before the call and assert it is
+# deep-equal afterward (read-only). There is no in-place variant.
+
+ORACLE value -> oracle.json
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above —
+#   the array-truthiness/length gate, the empty -> [] return, the
+#   guard-or-undefined -> 1 short-circuit, toInteger(n) (= toFinite = toNumber
+#   with all the string/binary/octal/hex/trim/valueOf rules, sign + fractional
+#   truncation, NaN->0, +-Infinity->+-MAX_INTEGER), the end = length - n
+#   computation, the max(end,0) clamp, baseSlice's end>length clamp and dense
+#   index-copy, and the no-mutation / new-array invariant.
+# CARRIED DATA: none. (The regex/number constants are tiny in-contract literals,
+#   reproduced inline above; there is no large literal table.)
+# OUT-OF-CONTRACT: none. No stateful mutators, no side APIs, no ambient reads.
+#   The throw/non-codec paths listed above are out-of-ENVELOPE for the generator
+#   but their behavior is fully specified here for a blind re-emitter.
+
+PROVENANCE lodash.dropright@4.1.1 (lodash modularized custom build);
+  repo lodash/lodash; license MIT; source file index.js
+  (copyright jQuery Foundation; based on Underscore.js 1.8.3).

@@ -1,0 +1,53 @@
+UNIT encode_value
+LANG js
+PRIMARY-SHA256 d91d945d8d17d24001cdc090bc43f8c5eb89a2c7df0116a28a0cb40c0dfc2727
+SIG encode_value(value, type) -> object
+NOTE default export
+ABI the artifact is an ES module default-exporting the function; it imports nothing (Buffer is the host global) and must
+  not import rederive. Types: json = a JSON-shaped JS value (null = none; number = IEEE-754 double, NaN, the infinities
+  and -0 included; string; Array; plain object = map, its keys OWN properties — a key spelled "__proto__" arrives as an
+  own data property); type = string. The result is a fresh tree of plain objects, arrays, strings and booleans (TABLE
+  NODES), member order immaterial. A throw (R1, R2, R5, R6, R7, R10, R13) is a thrown Error; the message is not graded.
+ENVELOPE widening (the js extension oracle): undefined IS the absent value (top-level, a field value, a list item); a
+  bigint IS an integer that is not a number (i64/u64 accept it by exact range; f64 and json reject it); a Uint8Array
+  (Buffer included) IS a byte string; a Map IS a keyed collection, its entries in insertion order before R9 sorts them
+  (a stable sort), keys of any kind encoded under K; a string holding an unpaired surrogate is not well-formed text
+  (text, a text key and json all throw); an Array with a hole fails json (R10); an object with a null prototype is a
+  map everywhere (record, map, json, and as a marker or tag carrier — no vector can carry one, the oracle codec
+  rebuilds it with Object.prototype, but the rule is one). OUT: holes under list or tuple, class instances,
+  functions.
+MECHANISM predicates. list = Array.isArray. ONE plain-object rule for record, map AND json: non-null, typeof 'object',
+  not an Array, Object.getPrototypeOf(x) === Object.prototype or === null (map also accepts instanceof Map). text =
+  typeof 'string' and well-formed = String.prototype.isWellFormed(). number = typeof 'number';
+  integral = Number.isInteger(x) or typeof 'bigint', converted with BigInt(x) and range-checked as bigints, decimal by
+  toString(). bytes = instanceof Uint8Array, payload Buffer.from(v).toString('base64').
+MECHANISM tags (R3, R5). ONE marker rule for __throw, __threw and __t: a plain object (the rule above) that is not
+  ESCAPED, with Object.hasOwn(v, key) and typeof v[key] === 'string' — never an Array, never an inherited member; a
+  THROW marker (__throw, __threw) also needs Object.keys(v).length === 1.
+  Keep ESCAPED maps in a module-level WeakSet: the obj unwrap first requires v.v to be a plain object (else throw), builds
+  o = {} and copies Object.keys(v.v) with Object.defineProperty (value, enumerable, writable, configurable — never
+  plain assignment, which would turn a "__proto__" key into a prototype), then adds o to the set. num: the four
+  spellings, else the pinned literal regex, then n = Number(v); throw when n === 0 and the mantissa (v with any
+  /[eE].*$/ removed) matches /[1-9]/, else throw unless Number.isFinite(n) and not Object.is(n, -0); bigint: the pinned regex then BigInt(v).
+MECHANISM reads and order. A record field is Object.hasOwn(value, name) ? value[name] : undefined. A map position takes
+  [...value] for a Map, else Object.entries(value). R9: sort the encoded pairs by sortKey = key.t === 'text' ? key.v :
+  CANON(key), comparator x < y ? -1 : x > y ? 1 : 0 (JS string comparison IS 16-bit code-unit order;
+  Array.prototype.sort is stable). CANON is compact JSON with Object.keys(o).sort() at every map, strings via
+  JSON.stringify, f64 nodes reduced to { bits, t } and throw nodes to { t }.
+MECHANISM numbers. RENDER = String(x), with -0 tested by Object.is(x, -0) first (String(-0) is "0"); BITS = DataView
+  setFloat64 (big-endian) then getBigUint64, toString(16) padded to 16 with "0", any NaN replaced by 7ff8000000000000.
+MECHANISM grammar. R1 is a hand-written recursive-descent reader: whitespace is exactly ' \t\r\n' — never
+  String.prototype.trim or \s — skipped before every token, "[" included. R2's coverage test runs on parsed nodes: a
+  canonical key per type (a union's alternative keys sorted, a record's "name:key" field strings sorted, other
+  composites in order) decides SAME; COVERS is a recursive predicate over parsed nodes (R2 a-d, a plain disjunction);
+  for each later alternative test against EVERY earlier one. A depth counter rises on each composite keyword and falls
+  at its "]"; reaching 17 throws. R13: pass the value's depth down — 0 at the call, depth + 1 into every child value,
+  unchanged into a union alternative, the json position and a tag's replacement — and throw when it exceeds 100;
+  ~100 host frames, far inside a default Node stack.
+PINNED regex NUM-LITERAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/ CITED R5 num
+PINNED regex BIGINT-LITERAL = /^(?:0|-?[1-9][0-9]*)$/ CITED R5 bigint, no -0
+PINNED regex NAME = /^[A-Za-z_][A-Za-z0-9_]*/ CITED R1 NAME, read greedily
+DEPENDS-ON none
+PROVENANCE rederive@7b348e351c9f cli/sir/canon.mjs (unchanged since bb8ded84fa50) (reader, parseType, typeKey, covers, encode, encodeJson,
+  legacyToNative, plainObj, marker, throwMarker, textTag, f64bits, f64str, canonicalString). Language file revised
+  2026-10-27 (round 5) with the primary.

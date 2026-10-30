@@ -1,0 +1,146 @@
+{
+ "status": "ok",
+ "unit": "detect_features",
+ "primary": "selfhost/units/detect_features/sir/detect_features.sir",
+ "primarySha256": "a5adf4883c5ba961a4dbe1cd80cb7cf1ce72a729ebfbc5ed3e7b5a75481febea",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "FIELDS. When input is a map, the six fields are read by exact key (sirText, carriedData, envelope, mode, sirFiles, variants); a missing key is ABSENT, a key holding none is the value none, and every other key is ignored. When input is text, a number, a bool or a list, all six are ABSENT. When input is none -> throws.",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "R2",
+   "text": "TYPES, checked before anything else. sirText present and not text (none included) -> throws; ABSENT reads as the empty text. carriedData that is neither ABSENT, none nor a list -> throws. envelope that is neither ABSENT, none nor text -> throws. mode is never checked: only its equality with a text matters.",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R3",
+   "text": "LINES. The SIR text is cut into lines at every CR LF pair, lone CR and lone LF (line separator, paragraph separator and next line are ordinary characters). From each line, every byte-order mark (FEFF) inside its leading run of spaces, tabs and FEFF marks is removed (the spaces and tabs of that run kept, in order), then trailing spaces and tabs are removed; a FEFF after the first other character stays. These are the PHYSICAL lines. An empty physical line is skipped (a line of only NBSP or other non-SP whitespace is NOT empty). The line's INDENT is its leading run of spaces and tabs; the CONTENT is the rest. A CONTENT beginning with the number sign is a COMMENT line: it is skipped and never changes which directive is current. SP below means exactly the two characters space and tab; SP-trimming removes runs of them at both ends, and no other character (NBSP, U+3000, next line, FEFF inside a line) is ever trimmed or separates anything.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R4",
+   "text": "QUOTED SPANS of a text, found left to right. A double quote OPENS a span only when it is the first character of the text, follows a character of OPENERS, or stands directly after the closer of the previous span (any other double quote is an ordinary character until a span is open). Inside a span, a backslash and the one character (code point) after it are read as a pair, whatever that character is; every other character but a double quote is read; the next unpaired double quote CLOSES the span, which covers opener to closer, and the search for the next opener resumes after the closer. An opener that reaches the end of the text unclosed (a trailing lone backslash included) forms no span, and no span starts after it. A position lies INSIDE a span when it is strictly between its opener and its closer. UNQUOTE(t) = t with every span of t (its quotes included) replaced by two double quotes. CITED FIDELITY package — in quote, backslash, U+2028, quote, space, number sign, space, quote, the first span closes at the third character and the number sign starts a comment; in 12, quote, space, number sign, space, quote, q the first quote opens nothing and the second never closes; \"a\"\"b\" is two spans; x/\"a\", x+\"a\", x*\"a\" and x?\"a\" hold none",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R5",
+   "text": "TRAILING COMMENT. In a CONTENT, the earliest number sign that is preceded by a space or tab, is followed by a space, a tab or the end, and does not lie inside a quoted span of the CONTENT (R4) starts a comment: CODE = the CONTENT before it, with trailing spaces and tabs removed. Without such a sign CODE = the CONTENT. Comment text reaches no directive (R6-R7).",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R6",
+   "text": "DIRECTIVES. A line without INDENT whose CODE's first token (up to the first space or tab, or all of CODE) is a NAME starts a new directive and makes it current; the token may carry one trailing colon, which is dropped. NAME = an uppercase letter A-Z followed by zero or more of A-Z, 0-9 and hyphen, or R followed by one or more digits; the name CITED is excluded with or without its colon (EARNED and ANCHOR are names). The directive's REST is CODE after the token, its leading run of spaces and tabs kept; R7 splits REST into the directive's ARGS and first attributes. Every other non-skipped line is a CONTINUATION of the current directive: one space followed by its CODE is split by R7; the body, when not empty, is appended to the directive's CONT list, and the attributes are added to the directive's. A CONTINUATION before the first directive is dropped. A column-0 line whose first token is a NAME is a directive even in wrapped prose; a NAME glued to what follows by any character but space or tab is no NAME. CITED FIDELITY package — DESCRIPTION x then a column-0 line PAR anything stamps par-interleaving",
+   "ambiguity": 0.51
+  },
+  {
+   "id": "R7",
+   "text": "ATTRIBUTES. In a piece of text, an attribute keyword is CITED, EARNED or ANCHOR standing after a run of spaces or tabs, followed by a space, a tab or the end of the piece, and not lying inside a quoted span of the piece (R4; such a keyword is plain text); this holds at the very start of a directive's REST too (`ORACLE-CLASS CITED trace` has empty ARGS). With no keyword the body is the piece SP-trimmed. Else the body is the text before the first keyword's run, and each keyword's value is the text from after the keyword to the start of the next keyword's run (or the end), each SP-trimmed (a value may be empty). A directive keeps every value of each keyword, from its line and its continuations, in order.",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R8",
+   "text": "TEXTS. has(N) = some directive is named N. FULL(d) = ARGS, then each CONT entry, joined with single spaces. PIECES(d) = ARGS, each CONT entry and each ANCHOR attribute value of d, each read alone; d's CITED and EARNED values are never pieces. JOINED-ANCHOR(d) = d's non-empty ANCHOR attribute values in order, joined with semicolon space (empty text when all are empty); it exists when d has at least one ANCHOR attribute. PROSE = one text per physical line (R3) that is not a COMMENT line, read alone and whole (directive names, trailing comments, indented lines and lines before the first directive included): L = space followed by UNQUOTE(line); the PROSE text is L before its first attribute keyword run (R7 over L), SP-trimmed, or all of L SP-trimmed when L has none. So a quoted literal and every attribute value (CITED, EARNED and ANCHOR alike) are never prose, and a column-0 ANCHOR or EARNED directive line leaves no prose. The quoted spans a row reads are those of the text the row names: per PROSE line, per PIECE, per JOINED-ANCHOR, per EFFECT FULL (so a quote opened in ARGS may close in a CONT entry). A token never spans two PROSE lines, two PIECES or two attribute values. CITED FIDELITY package — DESCRIPTION a virtual CITED time does not stamp scheduler; NOTE x, a number sign, then setTimer stamps lifecycle; ANCHOR x CITED a registered ref stamps nothing; NOTE then a quoted setTimer stamps nothing",
+   "ambiguity": 0.48
+  },
+  {
+   "id": "R9",
+   "text": "RESULT. The result lists, in the order of TABLE FEATURES, each feature whose row holds, each at most once; \"vectors\" is always first. R10-R11 are evaluated whatever the other rows give: their throw wins.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "TABLE FEATURES row 1",
+   "text": "vectors            | always",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE FEATURES row 2",
+   "text": "carried-data       | carriedData is a list with at least one element (any value, none included); or has(CARRIED); or some CARRIED-DATA directive has a CARRIED TEXT that, SP-trimmed, is non-empty and not exactly \"none\"; its CARRIED TEXTS are its FULL and each of its attribute values (CITED, EARNED and ANCHOR alike, from its line and its continuations), each read alone and as written, never UNQUOTEd (a quoted literal, \"none\" and the empty \"\" included, stamps)",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "TABLE FEATURES row 3",
+   "text": "envelope           | envelope is text that is not empty after SP-trimming; or has(ENVELOPE)",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE FEATURES row 4",
+   "text": "trace-seam         | mode is exactly the text \"trace\"; or has(TRACE-SEAM); or some ORACLE-CLASS directive's FULL, SP-trimmed, begins with \"trace\" WORD-CLOSED",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE FEATURES row 5",
+   "text": "par-interleaving   | mode is exactly the text \"par\"; or has(PAR)",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE FEATURES row 6",
+   "text": "ring               | mode is exactly the text \"ring\"; or has(RING)",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE FEATURES row 7",
+   "text": "lifecycle          | has(LIFECYCLE); or a PROSE text holds \"setTimer\" WORD-OPEN and WORD-CLOSED",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE FEATURES row 8",
+   "text": "scheduler          | UNQUOTE of some EFFECT directive's FULL holds \"time.timer\" or \"microtask\", WORD-OPEN and WORD-CLOSED; or a PROSE text holds \"schedule(\" WORD-OPEN, \"virtual time\" (one space character) WORD-OPEN and WORD-CLOSED, or \"timers.\" WORD-OPEN",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "TABLE FEATURES row 9",
+   "text": "lang-variant       | LANGS (R10-R11) is non-empty",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE FEATURES row 10",
+   "text": "cross-lang-anchor  | a directive named ANCHOR has a PIECE whose UNQUOTE holds a REGISTERED REF; or a directive named FIDELITY or VARIANT has a JOINED-ANCHOR whose UNQUOTE holds one (its other attributes, and ANCHOR attributes of other directives, are not read)",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R10",
+   "text": "SUFFIX(p) of a path text p is NONE, an id, or throws. B = p after its last \"/\" or \"\\\" (all of p when it has neither), SP-trimmed. TAIL = \".sir\" with each of s, i, r in either ASCII case (no other case mapping: U+017F is not s). When B ends with TAIL followed by one or more characters of HIDDEN -> throws. Else, when B does not end with TAIL -> NONE. Else cut TAIL off and split the rest at every \".\": a first segment that is neither empty nor a UNIT-NAME -> throws; three or more segments -> throws; one segment -> NONE; two segments with the second empty -> throws; else the id is the second segment exactly as written (case, spaces and NBSP kept). UNIT-NAME = one of A-Z a-z 0-9 _ followed by zero or more of A-Z a-z 0-9 _ and hyphen. CITED FIDELITY package — \"a.ts.\" then long s then \"ir\" is NONE, with or without a trailing soft hyphen, \"a.ts.siré\" throws, \".ts.sir\" names ts, \"README.md.sir\" names md, \"x.go.ts.sir\" throws, \"é.sir\" and \"x y.ts.sir\" throw, \"é.sir~\" is NONE",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R11",
+   "text": "LANGS, a set filled from sirFiles then variants; any of the following -> throws (no partial result). ADD(id): id outside LANG-REGISTRY -> throws, else id joins LANGS. sirFiles: ABSENT or none reads as the empty list; any other non-list -> throws; an element that is not text -> throws; each element whose SUFFIX is an id is ADDed. variants: ABSENT or none -> nothing; any other value that is not a map -> throws. For each entry k -> v: v not a map -> throws; v holding a \"lang\" entry that is not text (none included) -> throws; v holding a \"sir\" entry that is not text (none included), whose SUFFIX throws, or whose B (R10) does not end with TAIL -> throws (the empty text and a path ending in a slash included); k that is neither exactly \"package\" nor exactly \"lang:\" followed by a letter a-z and zero or more of a-z 0-9 -> throws. NAMED is the list of what is present among KEY-LANG (k after \"lang:\" when k is a lang: key), OWN-LANG (v's \"lang\" text, possibly empty) and PATH-LANG (SUFFIX of v's \"sir\" text, when that is an id; its throw propagates). Two NAMED entries differ -> throws. KEY-LANG or OWN-LANG present, v has a \"sir\" entry, and its SUFFIX is NONE -> throws. NAMED empty -> the entry adds nothing (a \"package\" key still names an id through OWN-LANG or PATH-LANG). Else its id is ADDed, and an id already added by an earlier variants entry -> throws (sirFiles and variants may share an id).",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R12",
+   "text": "POSITIONS. WORD-OPEN: the token starts the text or follows a character not in WORD. WORD-CLOSED: the token ends the text or is followed by a character not in WORD. A REGISTERED REF is a WORD-OPEN \"ref(\" followed by zero or more spaces and tabs, then ID = a letter a-z and every following a-z or 0-9, then \":\", with ID in LANG-REGISTRY; every ref( of the text is judged. All token matching is exact and case-sensitive except TAIL (R10).",
+   "ambiguity": 0.29
+  }
+ ],
+ "ranked": [
+  "R6",
+  "R8",
+  "TABLE FEATURES row 8",
+  "R3",
+  "R11",
+  "TABLE FEATURES row 10",
+  "R10",
+  "R4",
+  "R7",
+  "TABLE FEATURES row 2",
+  "R9",
+  "R12",
+  "R2",
+  "R5",
+  "TABLE FEATURES row 7",
+  "TABLE FEATURES row 9",
+  "TABLE FEATURES row 4",
+  "R1",
+  "TABLE FEATURES row 5",
+  "TABLE FEATURES row 3",
+  "TABLE FEATURES row 6",
+  "TABLE FEATURES row 1"
+ ],
+ "at": "2026-10-28T02:33:19Z"
+}

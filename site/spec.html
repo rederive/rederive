@@ -8,19 +8,19 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>SIR Specification v0.4 — rederive</title>
-<meta name="description" content="The Semantic Intermediate Representation (SIR): the contract format inside every rederive package. A kind-discriminated tree anchored to a differential oracle. Schema v0.4 (unified) — fidelity variants, effect seams, the verified-scope envelope, carried-data attestation, and the concurrency layer: PAR semantics, virtual time, the resource-lifecycle channel, and the token-coordinated ring.">
+<title>SIR Specification v0.5 — rederive</title>
+<meta name="description" content="The Semantic Intermediate Representation (SIR): the contract format inside every rederive package. Schema v0.5 — one language-neutral primary plus a language file per target (JavaScript, TypeScript, Rust), graded against one canonically encoded held-out oracle and cross-verified across languages; plus fidelity variants, effect seams, the verified-scope envelope, carried data and the concurrency layer.">
 <link rel="canonical" href="https://rederive.ai/spec.html">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://rederive.ai/spec.html">
 <meta property="og:site_name" content="rederive">
-<meta property="og:title" content="SIR Specification v0.4 — rederive">
+<meta property="og:title" content="SIR Specification v0.5 — rederive">
 <meta property="og:description" content="The contract format inside every rederive package: a kind-discriminated tree whose ground truth is a held-out, execution-derived oracle.">
 <meta property="og:image" content="https://rederive.ai/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="SIR Specification v0.4 — rederive">
+<meta name="twitter:title" content="SIR Specification v0.5 — rederive">
 <meta name="twitter:description" content="The contract format inside every rederive package: a kind-discriminated tree anchored to a held-out, execution-derived oracle.">
 <meta name="twitter:image" content="https://rederive.ai/og.png">
 
@@ -120,54 +120,39 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   .topnav{flex-wrap:wrap;gap:1em}
 }
 .skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+
+/* responsive nav (ported from index) */
+.topnav{flex-wrap:wrap}
+.topnav .navlinks{display:flex;align-items:center;gap:inherit;flex-wrap:wrap;min-width:0}
+.nav-toggle{display:none;background:none;border:1px solid #3a3f4e;border-radius:6px;color:#e8e8e8;padding:0.3em 0.55em;cursor:pointer;font-size:1.05em;line-height:1}
+.nav-toggle:hover,.nav-toggle:focus-visible{border-color:#c27c4e;color:#fff}
+@media(max-width:1040px){.topnav .by{display:none}.topnav .navlinks{order:3;flex-basis:100%;padding-top:0.1em}}
+@media(max-width:720px){.topnav .navlinks{display:none}.topnav.open .navlinks{display:flex;order:5;flex-basis:100%;flex-direction:column;align-items:flex-start;gap:0.95em;padding:0.9em 0 0.4em}.nav-toggle{display:inline-flex}}
 </style>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"TechArticle","headline":"SIR — the Semantic Intermediate Representation (v0.4)","description":"The contract format inside every rederive package: a kind-discriminated tree anchored to a held-out, execution-derived oracle.","url":"https://rederive.ai/spec.html","inLanguage":"en","version":"0.4","datePublished":"2026-06-22","dateModified":"2026-07-01","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"},"isPartOf":{"@type":"WebSite","url":"https://rederive.ai/"}}
+{"@context":"https://schema.org","@type":"TechArticle","headline":"SIR — the Semantic Intermediate Representation (v0.5)","description":"The contract format inside every rederive package: a kind-discriminated tree anchored to a held-out, execution-derived oracle.","url":"https://rederive.ai/spec.html","inLanguage":"en","version":"0.5","datePublished":"2026-06-22","dateModified":"2026-10-28","author":{"@type":"Person","name":"Lane Thompson"},"publisher":{"@type":"Organization","name":"rederive","url":"https://rederive.ai/","logo":"https://rederive.ai/apple-touch-icon.png"},"isPartOf":{"@type":"WebSite","url":"https://rederive.ai/"}}
 </script>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WF3PHQF0SX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-WF3PHQF0SX');
-  </script>
-<style>
-/* topnav hamburger */
-.nav-burger{display:none;margin-left:auto;background:none;border:0;color:#e8e8e8;font-size:1.55em;line-height:1;cursor:pointer;padding:0 2px}
-.topnav .nav-links{display:flex;align-items:center;gap:1.4em;flex:1}
-.topnav .nav-links a:not(.cta-nav){color:#b0b0b0;transition:color .15s}
-.topnav .nav-links a:not(.cta-nav):hover{color:#fafafa;text-decoration:none}
-.topnav .nav-links a.current{color:#fafafa;font-weight:600}
-@media(max-width:860px){
-  .topnav{flex-wrap:wrap;gap:0.5em}
-  .nav-burger{display:block}
-  .topnav .nav-links{display:none;flex:0 0 100%;flex-direction:column;align-items:flex-start;gap:0.1em;margin-top:0.6em}
-  .topnav.nav-open .nav-links{display:flex}
-  .topnav .nav-links a{padding:0.6em 0;width:100%;font-size:1.05em}
-  .topnav .cta-nav{margin-left:0;margin-top:0.3em}
-}
-</style>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 
 <div class="topnav-wrap">
 <nav class="topnav">
-  <a href="index.html" class="logo" style="text-decoration:none">
+  <a href="/index.html" class="logo" style="text-decoration:none">
     <span class="logo-mark"><span></span><span></span><span></span></span>
-    rederive <span class="by">· from Semcom</span>
+    rederive
   </a>
-  <button class="nav-burger" aria-label="Menu" aria-expanded="false" onclick="var o=this.parentNode.classList.toggle('nav-open');this.setAttribute('aria-expanded',o)">☰</button>
-    <div class="nav-links">
-  <a href="/#get-started">Get started</a>
-  <a href="/guide.html">Guide</a>
-  <a href="/spec.html" class="current">SIR Spec</a>
-  <a href="/blog.html">Blog</a>
-  <a href="https://github.com/rederive">GitHub</a>
-  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a Call</a>
+  <div class="navlinks" id="navlinks">
+    <a class="nl" href="/index.html#get-started">Get started</a>
+    <a class="nl" href="/index.html#how">How it works</a>
+    <a class="nl" href="/index.html#compliance">Compliance</a>
+    <a class="nl active" href="/spec.html">SIR Spec</a>
+    <a class="nl" href="/blog.html">Blog</a>
+    <a class="nl" href="/promise.html">Promise</a>
+    <a class="nl" href="https://github.com/rederive">GitHub</a>
   </div>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a call</a>
+  <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="navlinks">☰</button>
 </nav>
 </div>
 
@@ -175,8 +160,8 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <div class="doc-hero-inner">
     <div class="eyebrow">Specification</div>
     <h1>SIR — the <span>Semantic Intermediate Representation</span></h1>
-    <p>The contract format inside every rederive package. A kind-discriminated tree of a unit's behavior, anchored to a held-out, execution-derived oracle. The text is a skeleton; the oracle is the substrate.</p>
-    <div class="vbadge"><span class="dot"></span>SCHEMA v0.4 · 2026-07-01 · <a href="https://github.com/rederive/sir-spec" style="color:inherit">canonical repo</a></div>
+    <p>The contract format inside every rederive package. A unit's behavior is stated once, in a language-neutral primary, anchored to a held-out, execution-derived oracle; each target language gets a small language file of its own. The text is a skeleton; the oracle is the substrate.</p>
+    <div class="vbadge"><span class="dot"></span>SCHEMA v0.5 · revised 2026-10-28 · <a href="https://github.com/rederive/sir-spec" style="color:inherit">canonical repo</a></div>
   </div>
 </header>
 
@@ -192,13 +177,15 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <a href="#control">5 · Control &amp; data nodes</a>
   <a href="#effects">6 · Effects &amp; the boundary</a>
   <a href="#oracle">7 · The oracle</a>
-  <a href="#example">8 · Worked example</a>
-  <a href="#module">9 · Module-level SIR</a>
-  <a href="#bundle">10 · The bundle &amp; verification</a>
-  <a href="#annotations">11 · Non-normative annotations</a>
-  <a href="#governance">12 · Conformance &amp; governance</a>
-  <a href="#modes">13 · The two modes</a>
-  <a href="#lineage">14 · Lineage</a>
+  <a href="#languages">8 · One contract, many languages</a>
+  <a href="#example">9 · Worked example</a>
+  <a href="#encoding">10 · The canonical encoding</a>
+  <a href="#module">11 · Module-level SIR</a>
+  <a href="#bundle">12 · The bundle &amp; verification</a>
+  <a href="#annotations">13 · Non-normative annotations</a>
+  <a href="#governance">14 · Conformance &amp; governance</a>
+  <a href="#modes">15 · The two modes</a>
+  <a href="#lineage">16 · Lineage</a>
 </nav>
 
 <main class="doc-content" id="main">
@@ -217,7 +204,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p>Everything below is downstream of four rules. They hold for every unit, every package, every version.</p>
 
   <h3>i. The discriminator leads</h3>
-  <p>Every node declares its <code>KIND</code> first; kind is <em>never</em> inferred from the node's shape. A reader (human or machine) knows whether they are looking at a pure computation or a world effect before parsing anything else.</p>
+  <p><code>KIND</code> is declared in every unit's header and is never inferred from shape. A reader (human or machine) knows whether they are looking at a pure computation or a world effect before parsing anything else.</p>
 
   <h3>ii. The firewall</h3>
   <div class="note firewall">
@@ -235,33 +222,44 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 <!-- 3 -->
 <section id="header">
   <h2>3 · The unit header</h2>
-  <p>Every <code>.sir</code> file opens with a fixed header. Fields in <span class="ph">grey</span> are placeholders.</p>
-  <pre class="sir"><span class="lbl">unit header grammar</span><span class="k">SIR</span>     <span class="ph">&lt;name&gt;</span>                          <span class="c"># snake_case; a "name worth saying"</span>
-<span class="k">KIND</span>    FUNCTIONAL | EFFECT
-<span class="k">SRC</span>     <span class="ph">&lt;file&gt;:&lt;Class.&gt;?&lt;symbol&gt;</span>        <span class="c"># provenance; review diffs anchor here</span>
-<span class="k">SIG</span>     (<span class="ph">&lt;params&gt;</span>) -> <span class="ph">&lt;result&gt;</span>
-<span class="k">TRIGGER</span> call | http(<span class="ph">&lt;route&gt;</span>) | cli | cron | <span class="ph">&lt;custom&gt;</span>   <span class="c"># OPTIONAL; default call</span>
-<span class="k">REACH</span>   entry | internal | off-path
-<span class="k">ORACLE</span>  value | trace  @vectors: <span class="ph">&lt;path&gt;</span>  [VERIFIED <span class="ph">&lt;evidence&gt;</span>] | [not captured]</pre>
+  <p>Every primary <code>.sir</code> file opens with a header of directives, one per line at column 0; an indented line continues the directive above it. Fields in <span class="ph">grey</span> are placeholders. This is the v0.5 <strong>strict register</strong>, the one the toolchain writes and the validator enforces.</p>
+  <pre class="sir"><span class="lbl">primary header (v0.5 strict register)</span><span class="k">UNIT</span>          <span class="ph">&lt;name&gt;</span>
+<span class="k">KIND</span>          FUNCTIONAL | STATE | EFFECT
+<span class="k">FIDELITY</span>      package | spec
+<span class="k">ANCHOR</span>        <span class="ph">&lt;what the contract is anchored to: package@version and function, or a spec&gt;</span>
+<span class="k">ORACLE-CLASS</span>  deterministic | trace
+<span class="k">SIG</span>           <span class="ph">&lt;name&gt;(&lt;arg&gt;: &lt;abstract type&gt;, …) -&gt; &lt;abstract type&gt;</span>
+<span class="k">ENVELOPE</span>      <span class="ph">&lt;the verified input scope&gt;</span>
+<span class="k">DEPENDS-ON</span>    none | <span class="ph">&lt;named dependencies&gt;</span>
+<span class="k">DESCRIPTION</span>   <span class="ph">&lt;what the unit is for — prose&gt;</span>
+<span class="k">BEHAVIOR</span>
+<span class="k">R1</span>            <span class="ph">&lt;one numbered rule about the abstract signature&gt;</span>
+<span class="k">PINNED</span>        <span class="ph">&lt;kind&gt; &lt;name&gt; = &lt;literal&gt;</span> <span class="v">CITED</span> <span class="ph">&lt;why&gt;</span>
+<span class="k">ORACLE</span>        value -&gt; oracles/<span class="ph">&lt;unit&gt;</span>.json  CANONICAL-SHA256 <span class="ph">&lt;64 hex&gt;</span></pre>
 
   <table class="rtable">
     <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td>SIR</td><td>The unit's name. snake_case, and a "name worth saying" — it should appear in algorithm literature, an RFC, a spec, or a canonical library API. Nameable is oracle-able.</td></tr>
-      <tr><td>KIND</td><td>The discriminator. <code>FUNCTIONAL</code> (pure) or <code>EFFECT</code> (touches the world). Leads every node.</td></tr>
-      <tr><td>SRC</td><td>Provenance: the originating file and symbol. Review diffs and the catalog anchor here.</td></tr>
-      <tr><td>SIG</td><td>The signature — parameter and result shapes. Behavioral, not a language type declaration.</td></tr>
-      <tr><td>TRIGGER</td><td>How the unit is invoked: <code>call</code>, <code>http(route)</code>, <code>cli</code>, <code>cron</code>, custom. <strong>Metadata, never structure</strong> — see §6.</td></tr>
-      <tr><td>REACH</td><td>Reachability from the module surface: <code>entry</code> / <code>internal</code> / <code>off-path</code>. See §4.</td></tr>
-      <tr><td>ORACLE</td><td>The oracle mode (<code>value</code> or <code>trace</code>), the path to its vectors, and its verification evidence. See §7.</td></tr>
+      <tr><td>UNIT</td><td>The unit's name — snake_case, and a "name worth saying": it should appear in algorithm literature, an RFC, a spec, or a canonical library API. Nameable is oracle-able. Supersedes the v0.1 <code>SIR</code> header, which is still read but never written.</td></tr>
+      <tr><td>KIND</td><td>The discriminator: <code>FUNCTIONAL</code> (pure), <code>STATE</code> (mutates an argument; the oracle observes <code>{result, post}</code>) or <code>EFFECT</code> (touches the world). Leads every unit.</td></tr>
+      <tr><td>FIDELITY · ANCHOR</td><td>Whether the contract follows a package's real behavior (accidents included) or a written spec, and the exact authority it is anchored to.</td></tr>
+      <tr><td>SIG</td><td>The signature over the closed <a href="#languages">abstract types</a> (<code>text</code>, <code>i64</code>, <code>f64</code>, <code>json</code>, <code>list[T]</code>, <code>record[…]</code>, …) — never a language's type declaration. Each language file carries its own native <code>SIG</code>.</td></tr>
+      <tr><td>ENVELOPE</td><td>The verified input scope. Behavior outside it is not claimed.</td></tr>
+      <tr><td>BEHAVIOR · R<em>n</em></td><td>Numbered rules a blind engineer could implement — never a narration of the original's control flow. The oracle pins the edges.</td></tr>
+      <tr><td>PINNED</td><td>A literal the behavior genuinely rides on (a grammar, a code-point set), with a citation. In the primary a pin is language-neutral; a dialect regex belongs in a language file.</td></tr>
+      <tr><td>ORACLE</td><td>The oracle file and the hash of its vector set. A verifier checks both the file's hash and this declaration before grading anything.</td></tr>
     </tbody>
   </table>
+  <div class="note">
+    <div class="nt">No comments in the grammar</div>
+    A <code>#</code> outside a literal is a parse error. Prose has named, parsed, metered homes — <code>DESCRIPTION</code>, <code>NOTE</code>, <code>RATIONALE</code> — and citations are attributes (<code>CITED</code>, <code>EARNED round-<em>n</em> heldout <em>v</em></code>, <code>ANCHOR</code>). The census that forced it: 89% of the lines in the shipped corpus were comments, including load-bearing pins with nowhere else to live. Older bundles are still read (legacy mode reports each <code>#</code> as a warning); generation targets the strict register.
+  </div>
 </section>
 
 <!-- 4 -->
 <section id="kinds">
   <h2>4 · Kinds &amp; the firewall</h2>
-  <p>There are two kinds. The firewall (invariant ii) keeps them from mixing. But "is this unit pure?" has a third, honest answer — when a unit looks pure but calls something the analyzer can't see through.</p>
+  <p>There are three kinds: <span class="pill fun">FUNCTIONAL</span> (pure), <code>STATE</code> (mutates an argument it was handed; the oracle observes <code>{result, post}</code>) and <span class="pill eff">EFFECT</span> (touches the world). <code>STATE</code> sits on the pure side of the firewall — mutating a caller's value is not a world effect. The firewall (invariant ii) keeps the pure side and <code>EFFECT</code> from mixing. But "is this unit pure?" has a third, honest answer — when a unit looks pure but calls something the analyzer can't see through.</p>
 
   <h3>The tri-state firewall</h3>
   <table class="rtable">
@@ -292,17 +290,21 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
   <h3>STATE — accumulators are declared once, at unit level</h3>
   <p>A <code>LOOP</code> gets no first-class accumulator binding. A unit that reads or writes an accumulator declares it once:</p>
-  <pre class="sir"><span class="k">STATE</span>  <span class="ph">&lt;name&gt;</span> (in) | (out) | (in/out)     <span class="c"># e.g. STATE map (in/out)   STATE cache (out)</span></pre>
-  <p>The <em>oracle carries the fold semantics</em> — a unit-level <code>STATE</code> marker plus differential vectors is enough to round-trip a stateful fold (proven on dotenv's <code>parse</code> and editorconfig's caches). A caller-provided accumulator (a passed-in Map/array) is <code>STATE</code>, not a world effect — it stays <code>FUNCTIONAL</code>.</p>
+  <pre class="sir"><span class="k">STATE</span>  <span class="ph">&lt;name&gt;</span> (in) | (out) | (in/out)
+<span class="k">NOTE</span>   <span class="c">e.g. STATE map (in/out) · STATE cache (out)</span></pre>
+  <p>The <em>oracle carries the fold semantics</em> — a unit-level <code>STATE</code> marker plus differential vectors is enough to round-trip a stateful fold (proven on dotenv's <code>parse</code> and editorconfig's caches). A caller-provided accumulator (a passed-in Map/array) is <code>STATE</code>, not a world effect — it stays on the pure side of the firewall, never <code>EFFECT</code>. When the mutation <em>is</em> the unit's observable, the header says <code>KIND STATE</code> and the oracle observes <code>{result, post}</code>; a unit that only folds into a local accumulator stays <code>KIND FUNCTIONAL</code>.</p>
 
   <h3>BRANCH — including on-error</h3>
   <p>A <code>BRANCH</code> selects an arm by a predicate. Error handling is <em>not</em> a separate kind — <code>on-error</code> is sugar that desugars to a <code>BRANCH</code> with an error predicate, because an error arm carries the same verification obligation as any branch arm (arm coverage by captured inputs).</p>
-  <pre class="sir"><span class="k">BRANCH</span> on-error(<span class="ph">&lt;op&gt;</span>) { <span class="ph">&lt;arm&gt;</span> -> … }       <span class="c"># desugars to BRANCH with an error predicate</span></pre>
+  <pre class="sir"><span class="k">BRANCH</span> on-error(<span class="ph">&lt;op&gt;</span>) { <span class="ph">&lt;arm&gt;</span> -> … }
+<span class="k">NOTE</span>   <span class="c">desugars to BRANCH with an error predicate</span></pre>
 
   <h3>DEPENDS-ON — and the OPAQUE rule</h3>
   <p>In-module dependencies are named so the call graph is explicit. External calls that are <em>not</em> on the known-pure allowlist must be named as <code>OPAQUE</code> — this is what makes the firewall's blind spot visible (the unit becomes <span class="pill sus">FUNCTIONAL?</span>).</p>
-  <pre class="sir"><span class="k">DEPENDS-ON</span> <span class="ph">&lt;unit&gt;</span>, <span class="ph">&lt;unit&gt;</span>                      <span class="c"># in-module units</span>
-<span class="k">DEPENDS-ON</span> OPAQUE(<span class="ph">&lt;module&gt;.&lt;symbol&gt;</span>), …        <span class="c"># external, not on the known-pure allowlist</span></pre>
+  <pre class="sir"><span class="k">DEPENDS-ON</span> <span class="ph">&lt;unit&gt;</span>, <span class="ph">&lt;unit&gt;</span>
+<span class="k">NOTE</span>       <span class="c">in-module units</span>
+<span class="k">DEPENDS-ON</span> OPAQUE(<span class="ph">&lt;module&gt;.&lt;symbol&gt;</span>), …
+<span class="k">NOTE</span>       <span class="c">external, not on the known-pure allowlist</span></pre>
 </section>
 
 <!-- 6 -->
@@ -310,9 +312,12 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <h2>6 · Effects &amp; the boundary</h2>
   <p>An <code>EFFECT</code> unit's behavior <em>is</em> its sequence of boundary crossings. Outbound calls are <code>EMIT</code> (recorded, not performed during verification); inbound reads are <code>REQUEST</code> (injected at verify time from the captured trace).</p>
 
-  <pre class="sir"><span class="lbl">boundary grammar</span><span class="k">EMIT</span>    <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>) -> <span class="ph">&lt;name&gt;</span>    <span class="c"># outbound WITH a meaningful reply: one node</span>
-<span class="k">EMIT</span>    <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>)              <span class="c"># outbound, fire-and-forget</span>
-<span class="k">REQUEST</span> <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>) -> <span class="ph">&lt;name&gt;</span>    <span class="c"># purely inbound (fs.read, env.read, clock, rand)</span></pre>
+  <pre class="sir"><span class="lbl">boundary grammar</span><span class="k">EMIT</span>    <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>) -> <span class="ph">&lt;name&gt;</span>
+<span class="k">NOTE</span>    <span class="c">outbound WITH a meaningful reply: one node</span>
+<span class="k">EMIT</span>    <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>)
+<span class="k">NOTE</span>    <span class="c">outbound, fire-and-forget</span>
+<span class="k">REQUEST</span> <span class="t">&lt;boundary.op&gt;</span>(<span class="ph">&lt;args&gt;</span>) -> <span class="ph">&lt;name&gt;</span>
+<span class="k">NOTE</span>    <span class="c">purely inbound (fs.read, env.read, clock, rand)</span></pre>
 
   <p>An outbound call that returns a meaningful reply (a spawn whose stdout you read) is <strong>one</strong> protocol step — the trace records the emission and the injected reply together, so there is no artificial ordering ambiguity.</p>
 
@@ -333,7 +338,8 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
   <h3>Ordering, PAR &amp; concurrency</h3>
   <p>A trace is an <strong>ordered</strong> sequence of <code>EMIT</code>/<code>REQUEST</code> records. Canonicalization may normalize <em>representation</em> (key formatting, serialization) but <strong>never ordering</strong>. The one exception is an explicit concurrent window:</p>
-  <pre class="sir"><span class="k">PAR</span> { … }    <span class="c"># a concurrent window: sub-traces whose relative order is not fixed</span></pre>
+  <pre class="sir"><span class="k">PAR</span> { … }
+<span class="k">NOTE</span> <span class="c">a concurrent window: sub-traces whose relative order is not fixed</span></pre>
   <p><strong>A <code>PAR</code> block's canonical form depends on whether its sub-traces are independent.</strong> When they <em>commute</em> (touch no shared state — order is observationally irrelevant), the canonical form is the <strong>sorted multiset</strong> of sub-traces and verification collapses to one representative. When they are <em>dependent</em> (a shared resource — order changes the observable), sorting is unsound: the unit is verified over the <strong>space of interleavings</strong> against the retained reference's <strong>reachable-outcome set + invariants</strong> (safety, ordering, conservation), with the message-delivery order injected as the boundary the harness owns.</p>
   <p>Coverage of that space is reported on a ladder: <strong>exhaustive</strong> (small inputs — proven over all interleavings) → <strong>sampled</strong> (coverage-counted, when the space explodes) → <strong>partial-order reduction</strong> (one representative per equivalence class of independent reorderings — cheap exactly when the unit is correctly order-independent, thorough exactly when a refactor is not). A control effect additionally carries a <strong>resource-lifecycle</strong> channel (§7). (Specimens: <code>p-map</code>'s concurrency contract — interleaving-invariant output + a max-concurrency bound — verified exhaustively for small inputs and POR-scaled past 10¹² interleavings; a two-account transfer whose outcome is interleaving-dependent; <code>request</code>'s redirect state machine.)</p>
   <p><strong>A third option collapses the space at design time: a token <code>RING</code>.</strong> When the unit coordinates through a single circulating permission — only the token-holder acts — the interleaving reduces to a <strong>deterministic schedule</strong> (one outcome per token order; fixed-rotation is one schedule, verified in O(1)). It is the design-time dual of partial-order reduction: POR <em>detects</em> independence to shrink the space; a ring <em>imposes</em> coordination to shrink it. A ring is a behavior <strong>refinement</strong> — <code>R_ring ⊆ R_free</code> always (every ring run is a valid free run, so it can only <em>drop</em> outcomes, never invent one). The decomposer may <em>recognize</em> a ring (verify <code>R_ring = R_free</code>, behavior-preserving) or be <em>directed</em> to impose one — a behavior-changing transform that emits a mandatory <strong>divergence report</strong>, the dropped outcomes split into benign-determinization, <strong>safety-fix</strong> (a dropped outcome violated an invariant — a race removed), and <strong>narrowed-nondeterminism</strong> (a valid alternative dropped — confirm or refactor). (Specimen: <code>ringbuf.js</code>'s SPSC producer protocol, modeled at <code>Atomics</code>-operation granularity — its single-producer <em>contract is the ring</em>; two-producer use admits the lost-write race the ring drops.)</p>
@@ -348,12 +354,12 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 <!-- 7 -->
 <section id="oracle">
   <h2>7 · The oracle</h2>
-  <p>Each unit names exactly one oracle mode.</p>
+  <p>Each unit names exactly one oracle mode: the mode on its <code>ORACLE</code> line, matched by the class its header declares in <code>ORACLE-CLASS</code> (§3).</p>
   <table class="rtable">
-    <thead><tr><th>Mode</th><th>Asserts</th><th>Used for</th></tr></thead>
+    <thead><tr><th>Mode (<code>ORACLE</code>)</th><th><code>ORACLE-CLASS</code></th><th>Asserts</th><th>Used for</th></tr></thead>
     <tbody>
-      <tr><td>value</td><td>Output equality: <code>input -> expected</code>.</td><td>FUNCTIONAL units (pure computation).</td></tr>
-      <tr><td>trace</td><td>The ordered sequence of emissions and injected replies.</td><td>EFFECT units (world choreography).</td></tr>
+      <tr><td>value</td><td>deterministic</td><td>Output equality: <code>input -> expected</code> (for <code>KIND STATE</code>, the pair <code>{result, post}</code>).</td><td>FUNCTIONAL and STATE units (pure computation).</td></tr>
+      <tr><td>trace</td><td>trace</td><td>The ordered sequence of emissions and injected replies.</td><td>EFFECT units (world choreography).</td></tr>
     </tbody>
   </table>
   <p>Both are <strong>differential</strong>: the expected value (or trace) is captured by instrumenting and running the original. An oracle asserts <em>behavior</em> — wire bytes, claims, status, the trace shape — and <strong>never</strong> the source library's representation (error-string wording, object-vs-string body). Freezing representation is a trap; freezing behavior is the contract.</p>
@@ -362,33 +368,129 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 </section>
 
 <!-- 8 -->
-<section id="example">
-  <h2>8 · Worked example: <code>strip.sir</code></h2>
-  <p>This is the actual SIR shipped in <code>@rederive/colors</code> — the re-derivation of <code>colors.strip</code> from <code>colors@1.4.0</code>, the last release before the January-2022 maintainer sabotage. Eight lines; every one carries weight.</p>
-
-  <pre class="sir"><span class="lbl">packages/colors/sir/strip.sir</span><span class="k">SIR</span>    strip
-<span class="k">KIND</span>   FUNCTIONAL
-<span class="k">SRC</span>    colors@1.4.0 lib/colors.js:strip  <span class="c">(alias stripColors)</span>
-<span class="k">SIG</span>    (str: <span class="t">string</span>) -> <span class="t">string</span>
-<span class="k">REACH</span>  entry
-<span class="k">CONTROL</span> LOOP x1
-<span class="k">ORACLE</span> value @vectors: oracles/strip.json <span class="v">[VERIFIED value 10/10 ho, quorum 3/3, original deleted]</span>
-<span class="c"># Removes single-parameter SGR codes (ESC[&lt;digits&gt;m) only; combined-SGR / CSI / OSC survive (faithful).</span>
-<span class="c"># GENERATED by sir decompile (structural, SIR Schema v0.1) + verified-recompose.</span></pre>
-
-  <p>Reading it as a contract:</p>
-  <ul>
-    <li><strong><code>KIND FUNCTIONAL</code></strong> — pure; the firewall guarantees no file, network, or env access hides inside.</li>
-    <li><strong><code>SIG (str: string) -&gt; string</code></strong> — one string in, one string out.</li>
-    <li><strong><code>ORACLE value … [VERIFIED 10/10 ho, quorum 3/3, original deleted]</code></strong> — the load-bearing line. Ten <em>held-out</em> vectors (disjoint from the ten the re-emitter saw), passed by <strong>three independent re-derivations that agreed</strong>, with the original source deleted before any of them ran.</li>
-    <li><strong>The comment</strong> pins a real finding <em>as a documented limitation</em>: <code>strip</code> removes only single-parameter SGR codes, so combined-SGR / CSI / OSC terminal-injection escapes survive. rederive states that in the contract rather than hiding it — the held-out oracle includes the surviving-escape cases, so the limitation is <em>tested</em>, not just claimed.</li>
-  </ul>
-  <p>The shipped <code>src/strip.ts</code> is graded against <code>oracles/strip.json</code> by <code>rdv check</code>. Anyone who distrusts the shipped bytes runs <code>rdv resynth</code> and re-derives them from this contract locally.</p>
+<section id="languages">
+  <h2>8 · One contract, many languages</h2>
+  <p class="lead">Since v0.5 a unit can ship in more than one language without its behavior being written more than once. The behavior lives in a language-neutral <strong>primary</strong>; each target language gets a <strong>language file</strong> holding only what that language needs. Every language is graded against the <em>same</em> oracle, and the languages are checked against each other.</p>
+  <pre class="sir"><span class="lbl">a unit's contract family</span>sir/<span class="ph">&lt;unit&gt;</span>.sir            <span class="c">the PRIMARY: behavior, once, over abstract types</span>
+sir/<span class="ph">&lt;unit&gt;</span>.js.sir         <span class="c">one LANGUAGE FILE per target language</span>
+sir/<span class="ph">&lt;unit&gt;</span>.ts.sir
+sir/<span class="ph">&lt;unit&gt;</span>.rust.sir
+oracles/<span class="ph">&lt;unit&gt;</span>.json       <span class="c">the one held-out oracle, sir-canonical-v1</span>
+oracles/<span class="ph">&lt;unit&gt;</span>.js.json    <span class="c">optional: the js envelope extension (§10)</span></pre>
+  <h3>The firewall, both ways</h3>
+  <p>The primary may not contain language mechanism: a dialect regex, a built-in's name or a host value name in a primary is an error. A language file may not contain behavior: no <code>BEHAVIOR</code>, no rules, no <code>INVARIANT</code>. A language file holds only its native <code>SIG</code>, an <code>ABI</code> (how abstract types map to native ones), <code>MECHANISM</code> notes (which built-ins realize which rules, and what an emitter in that language would otherwise get wrong), dialect pins, and an optional <code>ENVELOPE</code> — a narrowing for what the language cannot represent, or, for js only, a widening graded from the js extension.</p>
+  <h3>Binding</h3>
+  <p>A language file carries <code>PRIMARY-SHA256</code>: the hash of the primary's <em>canonical text</em> (a formatting-only normalization — line endings, trailing blanks, indentation). Reformatting the primary never breaks a binding; any content change does. A language file bound to an older primary is <strong>stale</strong>: declared, not a claim, and never graded. The toolchain stamps the binding; an author never computes it. Languages come from a closed, versioned registry: <code>js</code>, <code>ts</code>, <code>rust</code>, <code>php</code>, <code>csharp</code>, <code>python</code>.</p>
+  <h3>The abstract types</h3>
+  <table class="rtable">
+    <thead><tr><th>Type</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>text</td><td>Unicode scalar values</td></tr>
+      <tr><td>bytes · bool · none</td><td>a byte string; true/false; the absent value, equal only to itself</td></tr>
+      <tr><td>i64 · u64</td><td>64-bit integers, compared exactly</td></tr>
+      <tr><td>f64</td><td>an IEEE-754 double, compared on its bits</td></tr>
+      <tr><td>json</td><td><code>none | bool | f64 | text | list[json] | map[text, json]</code></td></tr>
+      <tr><td>tuple · list · map · record · T | U</td><td>composites and unions; <code>T | none</code> is the optional form</td></tr>
+    </tbody>
+  </table>
+  <h3>Verification rungs</h3>
+  <p>A language variant records the highest rung it earned; none is implied by another language's. <strong>type-checked</strong> — the artifact satisfies its language file's <code>SIG</code> under that language's own checker (<code>tsc --strict</code> with <code>any</code> rejected; <code>cargo check</code>). <strong>harness-verified</strong> — frozen and held-out vectors pass through a <em>verifier-owned</em> harness. <strong>cross-verified</strong> — two or more languages agree on held-out vectors and on a differential against each other. <strong>oracle-anchored</strong> — the oracle comes from a reference implementation in another language (<code>ANCHOR ref(&lt;lang&gt;:…)</code>), so agreement is not self-consistency.</p>
 </section>
 
 <!-- 9 -->
+<section id="example">
+  <h2>9 · Worked example: <code>cmp_ver</code> in three languages</h2>
+  <p><code>cmp_ver</code> compares two dotted version texts. It is one of the 42 units of rederive's own verifier, which rederive re-derived from itself. The function is the real <code>cmpVer</code> in <code>cli/features.mjs</code>; these are the actual contract files, abridged only where marked.</p>
+  <pre class="sir"><span class="lbl">sir/cmp_ver.sir — the primary (NOTE, SCOPE and PROVENANCE lines omitted)</span><span class="k">UNIT</span> cmp_ver
+<span class="k">KIND</span> FUNCTIONAL
+<span class="k">FIDELITY</span> package
+<span class="k">ANCHOR</span> rederive@b15b56613f9d cli/features.mjs cmpVer and isVersion — the spec-version comparison behind rdv&#x27;s coarse gate
+<span class="k">ORACLE-CLASS</span> deterministic
+<span class="k">SIG</span> cmp_ver(a: text, b: text) -&gt; i64
+<span class="k">ENVELOPE</span> any two well-formed Unicode texts (no lone surrogates). A text that is not a VERSION (PINNED below) throws (R1);
+  every pair of VERSIONs yields -1, 0 or 1. Non-text arguments are out of the envelope (the js file says they throw).
+<span class="k">DEPENDS-ON</span> none
+<span class="k">DESCRIPTION</span> Compare two dotted version texts as sequences of non-negative integers and return the sign of a minus b:
+  -1 when a is older, 0 when equal, 1 when a is newer. rdv refuses a bundle when cmp_ver(specVersion, supported) is 1.
+<span class="k">BEHAVIOR</span>
+<span class="k">R1</span> VALIDATE — a is checked, then b: if either text is not a VERSION -&gt; throws. The WHOLE text must match, with nothing
+  before or after: no whitespace or line break at either end, no sign, prefix, suffix, exponent, empty segment, leading or
+  trailing full stop, leading zero (&quot;0&quot; alone is the only segment that may start with 0), or non-ASCII digit. The throw
+  message is not graded.
+<span class="k">R2</span> SEGMENTS — a VERSION is cut at each full stop &quot;.&quot; into segments; each segment is a non-negative integer of ANY size,
+  read exactly (no rounding, no width limit: &quot;9007199254740993&quot; is greater than &quot;9007199254740992&quot;).
+<span class="k">R3</span> PAD — when one version has fewer segments, its missing trailing segments count as 0 (&quot;0.5&quot; equals &quot;0.5.0&quot;).
+<span class="k">R4</span> ORDER — walk positions from the first; at the first position whose integers differ the result is -1 if a&#x27;s is smaller
+  and 1 if larger; if none differs the result is 0.
+<span class="k">R5</span> The result is always exactly -1, 0 or 1.
+<span class="k">INVARIANT</span> cmp_ver(a, b) = -cmp_ver(b, a) on versions, and cmp_ver(a, a) = 0.
+<span class="k">PINNED</span> grammar VERSION = SEG ( &quot;.&quot; SEG )* <span class="v">CITED</span> R1 — SEG = &quot;0&quot; | NZDIGIT DIGIT*; DIGIT = the ten ASCII digits, NZDIGIT = &quot;1&quot;..&quot;9&quot;; the grammar covers the whole text
+<span class="k">ORACLE</span> value -&gt; oracles/cmp_ver.json  CANONICAL-SHA256 fa0b26db62debb57c18b54882bb03c800470f0573183e991db0825c03d42cce4</pre>
+  <p>Everything above is about the abstract signature <code>cmp_ver(a: text, b: text) -&gt; i64</code>. There is no regex flavor, no <code>BigInt</code>, no <code>parseInt</code> in it — those belong to the languages:</p>
+  <pre class="sir"><span class="lbl">sir/cmp_ver.ts.sir — the TypeScript language file</span><span class="k">UNIT</span> cmp_ver
+<span class="k">LANG</span> ts
+<span class="k">PRIMARY-SHA256</span> b2087b4c7c8740ff879851f7acb0fbd2767c3584f9eb5f2dd8f3e7abf547ad8b
+<span class="k">SIG</span> export function cmpVer(a: string, b: string): number
+<span class="k">ABI</span> TypeScript compiles to the js runtime: text = string (UTF-16); the result = number, exactly -1, 0 or 1; a throw (R1) is
+  a thrown Error, message not graded. STRICT: the artifact must type-check under strict: true against this SIG, with no
+  any, no non-null assertions (!), and no @ts-ignore / @ts-expect-error. BigInt needs target ES2020 or later.
+<span class="k">ENVELOPE</span> as the primary: string arguments only.
+<span class="k">MECHANISM</span> (restated from js — language files are self-contained) R1 = the VERSION pin below with test(); an unflagged $
+  matches only at the very end, so a trailing line feed fails. R2 = split(&#x27;.&#x27;) then BigInt(segment); never Number or
+  parseInt. R3 = a missing index is 0n. R4 compares the BigInts.
+<span class="k">DEPENDS-ON</span> none
+<span class="k">PINNED</span> regex VERSION = /^(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))*$/ <span class="v">CITED</span> R1 — features.mjs VERSION</pre>
+  <pre class="sir"><span class="lbl">sir/cmp_ver.rust.sir — the Rust language file</span><span class="k">UNIT</span> cmp_ver
+<span class="k">LANG</span> rust
+<span class="k">PRIMARY-SHA256</span> b2087b4c7c8740ff879851f7acb0fbd2767c3584f9eb5f2dd8f3e7abf547ad8b
+<span class="k">SIG</span> pub fn cmp_ver(a: &amp;str, b: &amp;str) -&gt; i64
+<span class="k">ABI</span> crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn cmp_ver), no main, no I/O, no dependencies; the
+  verifier owns the harness. text = &amp;str; result = i64 in {-1, 0, 1}. A throw (R1) is a panic; the message is not graded.
+  Return a plain i64, not a Result (the harness records a panic as the throw).
+<span class="k">MECHANISM</span> R1 needs no regex crate: split on the byte &#x27;.&#x27;, and require every piece to be non-empty, all is_ascii_digit
+  bytes, and not to start with &#x27;0&#x27; unless it is exactly &quot;0&quot;. Do NOT trim, and do NOT use char::is_numeric or
+  char::to_digit with a Unicode notion of digit.
+<span class="k">MECHANISM</span> R2/R4 without a bignum: segments are digit strings with no leading zeros, so compare by length first, then
+  byte-lexicographically; a missing segment (R3) is &quot;0&quot;. Never parse to u64 or u128 — segments may be hundreds of digits.
+<span class="k">DEPENDS-ON</span> none</pre>
+  <p>Reading it as a contract:</p>
+  <ul>
+    <li><strong>One behavior, three renderings.</strong> The rules (R1–R5) are written once. The ts file says to read segments with <code>BigInt</code>; the Rust file says to compare digit strings by length and then bytes, with no bignum crate. Both realize R2's "integers of any size, read exactly".</li>
+    <li><strong>The hard parts are named in advance.</strong> Each <code>MECHANISM</code> line exists because an emitter in that language would otherwise get it wrong: <code>parseInt</code> rounds past 2<sup>53</sup>; <code>char::is_numeric</code> accepts non-ASCII digits.</li>
+    <li><strong>The result.</strong> Built blind from these files alone: js 3/3, ts 4/4, Rust 3/3 independent emissions passed every frozen and held-out vector, and the three languages agreed on <strong>2000/2000</strong> differential inputs.</li>
+  </ul>
+  <p class="note-inline" style="color:#808088;font-size:0.92em">The earlier worked example, <code>strip.sir</code> from <code>@rederive/colors</code>, is written in the v0.1 register (a <code>SIR</code> header and <code>#</code> comments). Bundles in that form remain valid and verifiable; new contracts are written as above.</p>
+</section>
+
+<!-- 10 -->
+<section id="encoding">
+  <h2>10 · The canonical encoding (<code>sir-canonical-v1</code>)</h2>
+  <p>One oracle grades every language, so its values cannot be any one language's. Every value is tagged with its abstract type, keyed by the primary's <code>SIG</code>:</p>
+  <table class="rtable">
+    <thead><tr><th>Tag</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td><code>{t:'text', v, cu}</code></td><td>Unicode scalar values (<code>cu:'utf8'</code>). A lone surrogate has no neutral form.</td></tr>
+      <tr><td><code>{t:'i64'|'u64', v}</code></td><td>a decimal string, exact, range-checked, one spelling per value</td></tr>
+      <tr><td><code>{t:'f64', v, bits}</code></td><td><strong>the 16 hex bits are normative</strong>; <code>v</code> is only a display hint. Every NaN is one NaN; <code>-0</code> ≠ <code>+0</code>; no tolerance.</td></tr>
+      <tr><td><code>{t:'bytes', v}</code></td><td>canonical base64</td></tr>
+      <tr><td><code>{t:'list'|'tuple'|'map'|'record', v}</code></td><td>map entries in one order (text keys by UTF-16 code units); record fields in declared order</td></tr>
+      <tr><td><code>{t:'throw', msg}</code></td><td>a throw is an observation, not a value: that it threw is the claim, the message is a hint</td></tr>
+    </tbody>
+  </table>
+  <p>Equality everywhere is equality of <strong>canonical strings</strong>, and an oracle file declares the SHA-256 of its vector set — the same hash the primary's <code>ORACLE</code> line carries. Two independent implementations (JavaScript and Python) produce identical bytes.</p>
+  <h3>Depth, throws and escaping</h3>
+  <ul>
+    <li><strong>One depth cap, counted one way.</strong> The whole value is depth 0 and each child value is one deeper; a value deeper than 100 is refused by every encoder, decoder and escape step alike — a grammar rule, never a stack overflow. A type nests at most 16 composites.</li>
+    <li><strong>A throw is exactly one key.</strong> A map is a throw marker only if its single own key is the marker; anything else is a value.</li>
+    <li><strong>Returned values are escaped.</strong> Before encoding a result, a verifier escapes every map that carries a marker key, at any depth, through Maps and Sets — so an artifact that <em>returns</em> <code>{"__threw": "x"}</code> is graded as the map it returned, never as a throw.</li>
+  </ul>
+  <h3>The js envelope extension</h3>
+  <p>Some JavaScript units take or return values with no language-neutral meaning: a <code>BigInt</code>, <code>undefined</code>, a sparse array, a lone surrogate, a <code>Map</code> or <code>Set</code>. Those vectors live in <code>oracles/&lt;unit&gt;.js.json</code>, are graded only for the js variant, and are declared by the js file's <code>ENVELOPE</code> widening — so the neutral form never absorbs JavaScript quirks. The expected values are escaped exactly as results are; an expected value the verifier cannot encode is the verifier's fault, refused when the oracle is written. A unit whose result depends on its input's <strong>key order</strong> keeps those probes here, because the shared oracle carries every map in canonical order.</p>
+</section>
+
+<!-- 11 -->
 <section id="module">
-  <h2>9 · Module-level SIR</h2>
+  <h2>11 · Module-level SIR</h2>
   <p>A multi-unit package also carries a <code>MODULE.sir</code> — the auditor's one-page surface. It draws the firewall cut explicitly, lists every unit and its <code>.sir</code> file, sketches the call tree (marking <code>║CALL</code> across the firewall and <code>·</code> dependencies within <code>FUNCTIONAL</code>), and — the key line for a security review — declares the <strong>effect surface</strong>: the complete set of inbound injections and outbound emissions the whole module's traces may touch. Nothing outside <code>SURFACE</code> is allowed to appear in a trace.</p>
   <pre class="sir"><span class="lbl">MODULE.sir — the shape (abridged from dotenv-core, the first EFFECT-tier decompile)</span><span class="k">MODULE</span>  dotenv-core
 <span class="k">FIREWALL</span>  FUNCTIONAL ⊅ EFFECT
@@ -408,11 +510,16 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
 <!-- 10 -->
 <section id="bundle">
-  <h2>10 · The bundle &amp; the verification contract</h2>
+  <h2>12 · The bundle &amp; the verification contract</h2>
   <p>A self-contained, shippable rederive unit is a bundle:</p>
-  <pre class="sir"><span class="lbl">bundle layout</span>bundle/
-  <span class="k">sir/</span><span class="ph">&lt;unit&gt;</span>.sir            <span class="c"># specs per this schema</span>
-  <span class="k">oracles/</span><span class="ph">&lt;cluster&gt;</span>.json    <span class="c"># { unit, captured_from, vectors: [{name, input|args, expected}] }</span></pre>
+  <pre class="sir"><span class="lbl">bundle layout (v0.5)</span>bundle/
+  <span class="k">sir.manifest.json</span>                 <span class="c">specVersion, units, one variant per language, every hash</span>
+  <span class="k">sir/</span><span class="ph">&lt;unit&gt;</span>.sir                    <span class="c">the primary</span>
+  <span class="k">sir/</span><span class="ph">&lt;unit&gt;</span>.<span class="ph">&lt;lang&gt;</span>.sir             <span class="c">one language file per language</span>
+  <span class="k">oracles/</span><span class="ph">&lt;unit&gt;</span>.json               <span class="c">the held-out oracle, sir-canonical-v1</span>
+  <span class="k">oracles/</span><span class="ph">&lt;unit&gt;</span>.js.json            <span class="c">the js envelope extension, when the unit has one</span>
+  <span class="k">src/</span><span class="ph">&lt;unit&gt;</span>.mjs · .ts · -rs/        <span class="c">the shipped implementations (a Rust one is its crate)</span></pre>
+  <p>Each language is a <strong>variant</strong> in the manifest (<code>lang:js</code>, <code>lang:ts</code>, <code>lang:rust</code>) with its own language-file, oracle and source hashes, and the rung it earned. A js variant whose unit has an extension names it and its hash; it is verified only if <em>both</em> the shared oracle and the extension pass, and a named extension that is missing or altered fails the variant. A variant without <code>src</code> is <strong>spec-only</strong>: shipped for the consumer to re-derive locally. Toolchains are the consumer's own; a missing one halts the check with an install hint rather than skip a language.</p>
 
   <p>Three rules make the bundle verifiable rather than merely descriptive:</p>
   <ul>
@@ -420,6 +527,17 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <li><strong>The original is deleted.</strong> The re-emit gate consumes <em>only</em> the bundle. The implementation is reconstructed from the contract, never copied from the source.</li>
     <li><strong>Closure by density, not by a single pass.</strong> A round closes only when (a) the <em>full</em> held-out set is re-run — a new vector can regress a previously-passing seam — and (b) <strong>N≥2 independent emissions agree</strong>. One passing emission on an uncovered class is luck; agreement is evidence. Priors are outvoted by evidence density, never overridden by a single contradiction.</li>
   </ul>
+
+  <h3>How a verifier calls and judges an artifact</h3>
+  <p>These rules were forced by rederive re-deriving its own verifier. Each one closed a way a correct artifact was rejected or a wrong one accepted.</p>
+  <ol>
+    <li><strong>The export is the one the <code>SIG</code> names</strong> — the default for <code>export default function f</code>, <code>f</code> for <code>export function f</code> or <code>export const f = …</code>. Never "the first function": a verifier that guesses can type-check one function and grade another.</li>
+    <li><strong>TypeScript conformance runs in the artifact's own scope</strong>, so a <code>SIG</code> may name types the artifact declares. The <code>SIG</code> is one declaration and may not use <code>any</code>, <code>never</code>, <code>typeof</code>, <code>import</code> or <code>infer</code>; a deliberately foreign canary must <em>fail</em> to conform, or the check itself is broken.</li>
+    <li><strong>The any-ban is a lexer and fails closed.</strong> It reads code positions only, as whole words, honoring every directive tsc honors; where it must guess whether a <code>/</code> is a regex or a division, it reads the source both ways.</li>
+    <li><strong>A result outside the shared envelope is narrowed, never compared</strong> across languages — comparing values one language cannot represent proves nothing either way.</li>
+    <li><strong>Rust</strong>: every harness line is an <code>{ok}</code>/<code>{throw}</code> envelope, a scalar result is pinned to the declared type, and crates build with <code>--locked</code>.</li>
+    <li><strong>One judge.</strong> Anything that grades — a factory, a lab, CI — must use the shipped verifier's own modules, generated from them and hash-locked. A verdict from a different judge is not a claim.</li>
+  </ol>
 
   <div class="note">
     <div class="nt">This is supervised learning with a held-out test set</div>
@@ -429,14 +547,14 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
 <!-- 11 -->
 <section id="annotations">
-  <h2>11 · Non-normative annotations</h2>
+  <h2>13 · Non-normative annotations</h2>
   <p>Decompilers emit human-facing prose to orient a reader: <code>ABOUT</code>, <code>INVARIANT</code>, <code>NOTES</code>, <code>CONTROL</code>, <code>CHOREOGRAPHY</code>, <code>TRACE-INVARIANT</code>. These are <strong>annotations, not contract</strong>. By invariant iii they carry no verification weight — they can be incomplete, and they have been observed to be <em>wrong</em>. A re-emitter may read them; a verifier ignores them. If an annotation and the oracle disagree, the oracle wins, every time.</p>
   <p>The practical consequence: never encode a behavioral guarantee in a comment and expect it to hold. If a behavior matters, it belongs in a vector, where execution proves it and the held-out gate enforces it.</p>
 </section>
 
 <!-- 12 -->
 <section id="governance">
-  <h2>12 · Conformance &amp; governance</h2>
+  <h2>14 · Conformance &amp; governance</h2>
   <p>This specification is <strong>normative</strong>. The key words <strong>MUST</strong>, <strong>MUST NOT</strong>, <strong>SHOULD</strong>, and <strong>MAY</strong> are interpreted as in RFC&nbsp;2119. SIR is intended to develop as an <strong>open, royalty-free standard</strong> for verified software contracts — implementable by anyone, in any language, without license or fee.</p>
 
   <h3>Conformance classes</h3>
@@ -444,9 +562,9 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <table class="rtable">
     <thead><tr><th>Target</th><th>Requirements</th></tr></thead>
     <tbody>
-      <tr><td>conforming bundle</td><td>MUST contain a <code>sir/&lt;unit&gt;.sir</code> per §3–§6 and an <code>oracles/</code> set with <em>disjoint</em> frozen and held-out vectors (§10); MUST record the schema version it targets; every expected value MUST be execution-derived (§2.iv), never hand-authored.</td></tr>
-      <tr><td>conforming checker</td><td>Given a bundle and an implementation, MUST re-run the <em>held-out</em> oracle and MUST verify the recorded content hashes; MUST fail on any held-out miss or hash mismatch; MUST NOT treat a frozen / in-prompt pass as evidence of conformance.</td></tr>
-      <tr><td>conforming producer</td><td>MUST reconstruct an implementation from the bundle alone, with the original deleted (§2.iv); MUST report a unit "verified" only when N≥2 independent emissions agree on the <em>full</em> held-out set (§10).</td></tr>
+      <tr><td>conforming bundle</td><td>MUST contain a primary <code>sir/&lt;unit&gt;.sir</code> per §3–§6 and, per language, a language file bound to that primary (§8); MUST carry an oracle with <em>disjoint</em> frozen and held-out vectors in <code>sir-canonical-v1</code> (§10, §12); MUST record the schema version it targets; every expected value MUST be execution-derived (§2.iv), never hand-authored.</td></tr>
+      <tr><td>conforming checker</td><td>Given a bundle, MUST verify every recorded hash and binding, and MUST re-run the <em>held-out</em> oracle — and the js extension where one is named — for each language variant through its own harness (§12); MUST fail on any miss, mismatch or stale binding; MUST NOT treat a frozen / in-prompt pass as evidence of conformance; MUST halt, not skip, on a language it cannot harness.</td></tr>
+      <tr><td>conforming producer</td><td>MUST reconstruct an implementation from the bundle alone, with the original deleted (§2.iv); MUST report a unit "verified" only when N≥2 independent emissions agree on the <em>full</em> held-out set; MUST grade with the checker's own judge (§12).</td></tr>
     </tbody>
   </table>
   <p>The whole pipeline — bundle, checker, and producer — is in scope of the open standard. The standard defines <em>what conformance is</em>; it does not mandate <em>how</em> a producer reconstructs an implementation (the quality of that engine is where implementations compete).</p>
@@ -455,7 +573,7 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   <p>SIR is developed as an <strong>open, royalty-free standard</strong>. The format and the <strong><code>rdv</code> reference checker</strong> are licensed <strong>Apache-2.0</strong> and free to implement — in any language, by anyone, with no fee, no license negotiation, and <strong>no patent assertion against conforming implementations</strong>. The format is not encumbered, and our commitment to keep it that way is written down and binding in <a href="promise.html">The rederive Promise</a>.</p>
 
   <h3>Versioning</h3>
-  <p>The normative schema lives at <a href="https://github.com/rederive/sir-spec"><strong>github.com/rederive/sir-spec</strong></a>, currently <strong>v0.4</strong> (unified 2026-07-01). The lineage: <strong>v0.1</strong> frozen 2026-06-10; <strong>v0.2</strong> (2026-06-26) — <code>KIND STATE</code>'s <code>{result, post}</code> observable, fidelity variants (package- vs spec-anchored), decision-table fidelity, and the <code>specVersion</code>'d bundle contract; <strong>v0.3</strong> (2026-07-01) — <code>ORACLE-CLASS</code>/<code>TRACE-SEAM</code> declarations, export-shape <code>SEAM</code>s (data-object &amp; chainable-constructor exports), the verified-scope <code>ENVELOPE</code>, and carried-data authority attestation; <strong>v0.4</strong> (2026-07-01) — the concurrency layer: validated <code>PAR</code> semantics, the scheduler control effect + virtual time, the resource-lifecycle oracle channel, and the token-coordinated <code>RING</code> shape. <em>(Renumbering note: the concurrency layer was previously described on this page as "v0.2/v0.3 of 2026-06-22" — the schema evolved on two parallel workstreams that were unified 2026-07-01; shipped bundles pin <code>specVersion</code> of the unified lineage, so nothing in the wild changes meaning.)</em> Each addition is forced by a named specimen (<code>lodash.pullat</code>, <code>aws4</code>, <code>p-map</code>, <code>q</code>, a two-account transfer, <code>request</code>'s redirect, <code>ringbuf.js</code>, the boxen terminal stack). Every decision still cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong>, never silent; a conforming bundle records the version it targets.</p>
+  <p>The normative schema lives at <a href="https://github.com/rederive/sir-spec"><strong>github.com/rederive/sir-spec</strong></a>, currently <strong>v0.5</strong> (2026-10-23, revised 2026-10-28). <strong>v0.5</strong> splits a unit into a language-neutral primary and one language file per target language, adds the <code>sir-canonical-v1</code> encoding and the js envelope extension, freezes the practiced directive vocabulary, and — in the 2026-10-28 revision — the rules for how a verifier calls and judges an artifact, learned by rederive re-deriving its own verifier (42/42 units — js and ts for all 42, rust for 38). The lineage: <strong>v0.1</strong> frozen 2026-06-10; <strong>v0.2</strong> (2026-06-26) — <code>KIND STATE</code>'s <code>{result, post}</code> observable, fidelity variants (package- vs spec-anchored), decision-table fidelity, and the <code>specVersion</code>'d bundle contract; <strong>v0.3</strong> (2026-07-01) — <code>ORACLE-CLASS</code>/<code>TRACE-SEAM</code> declarations, export-shape <code>SEAM</code>s (data-object &amp; chainable-constructor exports), the verified-scope <code>ENVELOPE</code>, and carried-data authority attestation; <strong>v0.4</strong> (2026-07-01) — the concurrency layer: validated <code>PAR</code> semantics, the scheduler control effect + virtual time, the resource-lifecycle oracle channel, and the token-coordinated <code>RING</code> shape. <em>(Renumbering note: the concurrency layer was previously described on this page as "v0.2/v0.3 of 2026-06-22" — the schema evolved on two parallel workstreams that were unified 2026-07-01; shipped bundles pin <code>specVersion</code> of the unified lineage, so nothing in the wild changes meaning.)</em> Each addition is forced by a named specimen (<code>lodash.pullat</code>, <code>aws4</code>, <code>p-map</code>, <code>q</code>, a two-account transfer, <code>request</code>'s redirect, <code>ringbuf.js</code>, the boxen terminal stack). Every decision still cites the specimen that forced it — nothing is resolved from taste alone. Changes are <strong>versioned</strong>, never silent; a conforming bundle records the version it targets.</p>
 
   <h3>Deferred (named, not frozen)</h3>
   <ul>
@@ -463,17 +581,19 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
     <li>Optimal source-set DPOR for the interleaving ladder (§6) — sleep/persistent-set reduction is validated; the optimal variant (one explored execution per class) is future.</li>
     <li>An ambient-read tier (<code>env.cwd</code>, locale, timezone).</li>
     <li>The <code>ui</code> domain verbs (a frontend target is a non-goal at this phase).</li>
+    <li>Cross-language oracle anchors (<code>ANCHOR ref(&lt;lang&gt;:…)</code>) are declared but not yet executed; carried data inside a language variant is supported by the factory, not yet by the checker.</li>
+    <li>Grading the ts variant on the js envelope extension; language-file inheritance (<code>ts</code> from <code>js</code>).</li>
   </ul>
-  <p style="margin-top:1.5em;color:#808088;font-size:0.9em">SIR is the representation produced by <a href="https://semcom.ai">Semcom</a>'s verified-recompose engine. The format and the <code>rdv</code> checker are open (Apache-2.0); the engine is a separate implementation that competes on quality, not on access to the standard.</p>
+  <p style="margin-top:1.5em;color:#808088;font-size:0.9em">SIR comes from <a href="https://semcom.ai">Semcom</a>'s verified-recompose method. All of it is open (Apache-2.0): the format, the <code>rdv</code> checker, and the loop that produces contracts — <code>sir-factory</code> and the Claude Code plugin. Anyone may build a competing implementation; it competes on quality, never on access.</p>
 </section>
 
 <!-- 13 -->
 <section id="modes">
-  <h2>13 · The two modes — re-derivation &amp; verified normalization</h2>
+  <h2>15 · The two modes — re-derivation &amp; verified normalization</h2>
   <p>The verified-recompose method runs in two modes, differing in <em>what plays the oracle</em> and <em>whether the original survives</em>. Both produce the same SIR units under the same firewall (§4); only the source of ground truth differs.</p>
 
   <h3>Mode 1 — catalog re-derivation</h3>
-  <p>What §10's bundle describes: a unit with a compact spec and a <strong>frozen, held-out</strong> oracle. The original is <strong>deleted</strong> before re-emit; N isolated rebuilds must agree on the full held-out set (quorum). This is how the catalog ships verified packages.</p>
+  <p>What §12's bundle describes: a unit with a compact spec and a <strong>frozen, held-out</strong> oracle. The original is <strong>deleted</strong> before re-emit; N isolated rebuilds must agree on the full held-out set (quorum). This is how the catalog ships verified packages.</p>
 
   <h3>Mode 2 — verified normalization</h3>
   <p>For a monolith whose behavior won't compress into a compact contract — a large stateful class, an async state machine, a concurrent coordinator — the original is <strong>retained as a live differential oracle</strong>. You propose a firewall-clean factoring (the same kinds and <code>FUNCTIONAL&nbsp;⊅&nbsp;EFFECT</code> firewall as §4) and verify it reproduces the original on <strong>generated, held-out scenarios it never saw</strong>. Mode&nbsp;1 guards against hallucination; Mode&nbsp;2 guards against an incomplete refactor (regression). A <strong>Phase-0 feasibility gate</strong> decides <em>normalizable vs. genuinely bespoke</em> before any cut: if no faithful, deterministic oracle can be captured, the honest answer is to stop.</p>
@@ -487,18 +607,18 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
 <!-- 14 -->
 <section id="lineage">
-  <h2>14 · Lineage <span style="font-weight:400;color:#808088;font-size:.62em">(non-normative)</span></h2>
+  <h2>16 · Lineage <span style="font-weight:400;color:#808088;font-size:.62em">(non-normative)</span></h2>
   <p>SIR is assembled from well-understood pieces, not invented whole. Each construct is named here with its origin — both as intellectual honesty and because a <em>named, classical</em> construct is one an implementer and a verifier can actually reason about. The recurrence is no accident: the abstractions that are verifiable are the ones with small, explicit, well-defined semantics — exactly what the classics, born under tight constraints, were forced to produce.</p>
   <ul>
     <li><b>The kind-discriminated tree (§3–5)</b> — compiler intermediate representations and the AST; structured / stepwise refinement (Dijkstra; Wirth).</li>
     <li><b>The <code>FUNCTIONAL ⊅ EFFECT</code> firewall &amp; injected boundaries (§6)</b> — effect systems and <em>algebraic effects &amp; handlers</em> (Plotkin &amp; Power; Plotkin &amp; Pretnar); monads (Moggi; Wadler). "Inject, never ambient" is the <em>object-capability</em> model (Dennis &amp; Van Horn; Miller) and least privilege (Saltzer &amp; Schroeder, 1975).</li>
     <li><b>The oracle — behavior over text (§7)</b> — denotational semantics (Scott &amp; Strachey); observational equivalence and <em>bisimulation</em> (Milner; Park); <em>property-based testing</em> (QuickCheck — Claessen &amp; Hughes, 2000).</li>
-    <li><b>Quorum re-emission (§10)</b> — <em>N-version programming</em> (Avižienis): independent implementations accepted on agreement; held-out grading is cross-validation.</li>
+    <li><b>Quorum re-emission (§12)</b> — <em>N-version programming</em> (Avižienis): independent implementations accepted on agreement; held-out grading is cross-validation.</li>
     <li><b>PAR &amp; concurrency (§6)</b> — CSP and refinement (Hoare, 1978); <em>Petri nets</em> (Petri, 1962) for the token and place-invariants; <em>model checking</em> (Clarke &amp; Emerson; Queille &amp; Sifakis) and <em>TLA+</em> (Lamport) for interleaving + refinement + invariants; <em>Mazurkiewicz traces</em> (1977) and <em>partial-order reduction</em> (Godefroid; Peled; Abdulla et&nbsp;al.) for the independence collapse.</li>
     <li><b>The actor shape</b> — the actor model (Hewitt, Bishop &amp; Steiger, 1973); E-language vats (Miller).</li>
     <li><b>The ring shape</b> — token-passing mutual exclusion (Le&nbsp;Lann; Suzuki &amp; Kasami); <em>Kahn Process Networks</em> (Kahn, 1974) for FIFO determinism-by-construction; the single-writer discipline as <em>linearity</em> (linear logic — Girard; ownership types).</li>
-    <li><b>Verified normalization (Mode&nbsp;2, §13)</b> — <em>term rewriting</em> and confluence / Church–Rosser; Knuth–Bendix completion; the <em>refinement calculus</em> (Back; Morgan).</li>
-    <li><b>The contract &amp; content hashes (§10, §12)</b> — <em>Design by Contract</em> (Meyer / Eiffel) and Hoare logic (1969); <em>content-addressed code</em> (Unison); reproducible builds (Nix — Dolstra).</li>
+    <li><b>Verified normalization (Mode&nbsp;2, §15)</b> — <em>term rewriting</em> and confluence / Church–Rosser; Knuth–Bendix completion; the <em>refinement calculus</em> (Back; Morgan).</li>
+    <li><b>The contract &amp; content hashes (§12, §14)</b> — <em>Design by Contract</em> (Meyer / Eiffel) and Hoare logic (1969); <em>content-addressed code</em> (Unison); reproducible builds (Nix — Dolstra).</li>
     <li><b>The runtime</b> — Forth (Moore) for the concatenative dictionary; Smalltalk (Kay; Goldberg &amp; Robson) for message passing and <code>doesNotUnderstand:</code>, the literal trigger for synthesis.</li>
   </ul>
   <p style="color:#808088;font-size:.9em"><b>On the roadmap — <em>definition hardening</em>:</b> lift invariants and refinement into a small declarative property language on the contract (TLA+ / refinement-calculus style), so more verification — and more deterministic codegen — keys off the definition than off hand-written checks; and <em>abstract interpretation</em> (Cousot &amp; Cousot, 1977) as the soundness theory for when sampled coverage is sound.</p>
@@ -509,11 +629,10 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
 
 <footer>
   <div class="footer-inner">
-    <span class="footer-brand">rederive &middot; from Semcom &middot; Apilify Inc.</span>
+    <span class="footer-brand">rederive &middot; by Apilify Inc.</span>
     <div class="footer-links">
       <a href="index.html">Home</a>
       <a href="spec.html">SIR Spec</a>
-  <a href="guide.html">Guide</a>
       <a href="https://semcom.ai">Semcom</a>
       <a href="mailto:lane@apilify.com">Contact</a>
     </div>
@@ -521,5 +640,9 @@ footer{background:#080a10;color:#b0b0b0;padding:2.5em 24px;font-size:0.85em;bord
   </div>
 </footer>
 
+<script>
+document.addEventListener('click',function(e){var t=e.target.closest('.nav-toggle');if(t){var n=t.closest('.topnav');var o=n.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');return}
+if(e.target.closest('.navlinks a')){var n2=document.querySelector('.topnav.open');if(n2){n2.classList.remove('open');n2.querySelector('.nav-toggle').setAttribute('aria-expanded','false')}}});
+</script>
 </body>
 </html>

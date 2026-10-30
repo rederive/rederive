@@ -1,0 +1,439 @@
+{
+  "unit": "encode_value",
+  "primarySha": "d91d945d8d17d24001cdc090bc43f8c5eb89a2c7df0116a28a0cb40c0dfc2727",
+  "features": [
+    "vectors",
+    "lang-variant"
+  ],
+  "lint": {
+    "ok": true,
+    "density": 0.006329113924050633,
+    "leaks": 0
+  },
+  "results": {
+    "js": {
+      "artifacts": [
+        {
+          "artifact": "runs/js/emit_10.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "23/23",
+          "heldout": "41/41",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "1/1",
+            "heldout": "7/7",
+            "ok": true,
+            "misses": []
+          }
+        },
+        {
+          "artifact": "runs/js/emit_11.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "23/23",
+          "heldout": "41/41",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "1/1",
+            "heldout": "7/7",
+            "ok": true,
+            "misses": []
+          }
+        },
+        {
+          "artifact": "runs/js/emit_12.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "23/23",
+          "heldout": "41/41",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "1/1",
+            "heldout": "7/7",
+            "ok": true,
+            "misses": []
+          }
+        }
+      ],
+      "divergence": {
+        "round": 3,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    },
+    "rust": {
+      "artifacts": [
+        {
+          "artifact": "runs/rust/emit_10",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "cargo check ok (library crate)"
+          },
+          "frozen": "19/19 (4 narrowed)",
+          "heldout": "40/40 (1 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 5,
+            "names": [
+              "v2",
+              "v3",
+              "v4",
+              "v5",
+              "v25"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[1,1.5,9007199254740992,9223372036854775000,9223372036854776000,-9223372036854776000,-9223372036854778000,1e+300,0.1,-7]",
+                  "\"list[i64 | json]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v3",
+                "args": [
+                  "[0,-1,18446744073709550000,18446744073709552000,9223372036854776000,2.5]",
+                  "\"list[u64 | json]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v4",
+                "args": [
+                  "[0,1.5,-2.5e-7,1e+21,100000000000000000000,123456789012345680000,5e-324,1.7976931348623157e+308,0.000001,1e-7,0.000001234,100,9007199254740994,-1e+21,123.456,1.5e-323,-1928372706752270.2,74379223166033.62]",
+                  "\"list[f64]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v5",
+                "args": [
+                  "[NaN,-0,Infinity,-Infinity]",
+                  "\"list[f64]\""
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v25",
+                "args": [
+                  "[-0,-0,-0]",
+                  "\"tuple[i64, u64, json]\""
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/rust/emit_11",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "cargo check ok (library crate)"
+          },
+          "frozen": "19/19 (4 narrowed)",
+          "heldout": "40/40 (1 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 5,
+            "names": [
+              "v2",
+              "v3",
+              "v4",
+              "v5",
+              "v25"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[1,1.5,9007199254740992,9223372036854775000,9223372036854776000,-9223372036854776000,-9223372036854778000,1e+300,0.1,-7]",
+                  "\"list[i64 | json]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v3",
+                "args": [
+                  "[0,-1,18446744073709550000,18446744073709552000,9223372036854776000,2.5]",
+                  "\"list[u64 | json]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v4",
+                "args": [
+                  "[0,1.5,-2.5e-7,1e+21,100000000000000000000,123456789012345680000,5e-324,1.7976931348623157e+308,0.000001,1e-7,0.000001234,100,9007199254740994,-1e+21,123.456,1.5e-323,-1928372706752270.2,74379223166033.62]",
+                  "\"list[f64]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v5",
+                "args": [
+                  "[NaN,-0,Infinity,-Infinity]",
+                  "\"list[f64]\""
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v25",
+                "args": [
+                  "[-0,-0,-0]",
+                  "\"tuple[i64, u64, json]\""
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/rust/emit_12",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "cargo check ok (library crate)"
+          },
+          "frozen": "19/19 (4 narrowed)",
+          "heldout": "40/40 (1 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 5,
+            "names": [
+              "v2",
+              "v3",
+              "v4",
+              "v5",
+              "v25"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[1,1.5,9007199254740992,9223372036854775000,9223372036854776000,-9223372036854776000,-9223372036854778000,1e+300,0.1,-7]",
+                  "\"list[i64 | json]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v3",
+                "args": [
+                  "[0,-1,18446744073709550000,18446744073709552000,9223372036854776000,2.5]",
+                  "\"list[u64 | json]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v4",
+                "args": [
+                  "[0,1.5,-2.5e-7,1e+21,100000000000000000000,123456789012345680000,5e-324,1.7976931348623157e+308,0.000001,1e-7,0.000001234,100,9007199254740994,-1e+21,123.456,1.5e-323,-1928372706752270.2,74379223166033.62]",
+                  "\"list[f64]\""
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v5",
+                "args": [
+                  "[NaN,-0,Infinity,-Infinity]",
+                  "\"list[f64]\""
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v25",
+                "args": [
+                  "[-0,-0,-0]",
+                  "\"tuple[i64, u64, json]\""
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        }
+      ],
+      "divergence": {
+        "round": 3,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    },
+    "ts": {
+      "artifacts": [
+        {
+          "artifact": "runs/ts/emit_10.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc --strict ok, conforms to SIG"
+          },
+          "frozen": "23/23",
+          "heldout": "41/41",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/ts/emit_11.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc --strict ok, conforms to SIG"
+          },
+          "frozen": "23/23",
+          "heldout": "41/41",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/ts/emit_12.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc --strict ok, conforms to SIG"
+          },
+          "frozen": "23/23",
+          "heldout": "41/41",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 0,
+            "names": [],
+            "reasons": []
+          },
+          "allMisses": [],
+          "misses": []
+        }
+      ],
+      "divergence": {
+        "round": 3,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    }
+  },
+  "cross": {
+    "languages": [
+      "js",
+      "rust",
+      "ts"
+    ],
+    "seeded": 2000,
+    "narrowed": 156,
+    "n": 1184,
+    "agree": 1184,
+    "ok": true,
+    "examples": [],
+    "envelopeProbes": {
+      "n": 660,
+      "agree": 660,
+      "disagree": 0,
+      "examples": []
+    }
+  },
+  "at": "2026-10-28T02:35:18.807Z",
+  "gradedAt": "2026-10-28T02:35:18.807Z",
+  "labHead": "88993fd"
+}

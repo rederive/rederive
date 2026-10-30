@@ -1,0 +1,22 @@
+UNIT canonical_print
+LANG rust
+PRIMARY-SHA256 36f98b166280f5d86410337aa7795e62c1fbabe758a16522abf76b34781855a4
+SIG pub fn canonical_print(text: &str) -> String
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn canonical_print) with no dependencies, no main, no I/O,
+  no unsafe. The verifier generates its own harness crate (text in, text out) that depends on the artifact by path;
+  compiling it against this SIG is the signature check. text = &str in, String out (UTF-8; the envelope has no lone
+  surrogates, so a char scan sees exactly the primary's scalar values). The function never panics on any &str.
+MECHANISM no regex crate: every rule is a scan. Work on a Vec<char> per line (or slice only at char boundaries found by
+  char_indices) — a byte-offset slice inside a multi-byte character panics, and the envelope is full of them (ü, 日本,
+  em dash, no-break space, byte order mark).
+MECHANISM WS (R1) is NOT char::is_whitespace: Rust's set includes 0085 (NEXT LINE), which the pin excludes, and lacks
+  FEFF (BYTE ORDER MARK), which the pin includes. So str::trim, trim_end, trim_start and split_whitespace are all WRONG
+  here — write is_ws(c) from the WS pin and trim with it. BREAK = '\n' | '\r' | '\u{2028}' | '\u{2029}'.
+MECHANISM line split (R2) = str::split('\n') (keeps the empty pieces, including the last after a final LF), then
+  strip_suffix('\r') ONCE per line. INDENT (R3) = leading ' ' and '\t' only. The attribute list (R7, R8) is an ordered
+  Vec<(&'static str, String)>: a merge replaces the value in place or pushes; R8's in-call repeat concatenates
+  old + " " + new. The NAME test (R5) is ASCII: 'A'..='Z' first, then 'A'..='Z' | '0'..='9' | '-', one optional ':' last.
+DEPENDS-ON none
+PINNED charset WS = '\u{9}' '\u{a}' '\u{b}' '\u{c}' '\u{d}' '\u{20}' '\u{a0}' '\u{1680}' '\u{2000}'..='\u{200a}' '\u{2028}' '\u{2029}' '\u{202f}' '\u{205f}' '\u{3000}' '\u{feff}' CITED R1 and the WS charset
+PROVENANCE rederive@20bdd3dd041a cli/sir/sir-parse.mjs. Language file cut 2026-10-26 with the primary, before any blind
+  re-emission; ABI per the lab's rust driver (text -> &str).

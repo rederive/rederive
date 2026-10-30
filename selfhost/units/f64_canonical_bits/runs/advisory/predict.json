@@ -1,0 +1,38 @@
+{
+ "status": "ok",
+ "unit": "f64_canonical_bits",
+ "primary": "selfhost/units/f64_canonical_bits/sir/f64_canonical_bits.sir",
+ "primarySha256": "3c0b7f98393070d57862813cef57df44b98940a1fb81567dc0cc6f17c633512d",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "If raw is not exactly 16 characters each drawn from 0123456789abcdef -> throws. Nothing is trimmed, case-folded, or prefixed away; the check is over the whole text, so a trailing line feed after 16 valid digits throws.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R2",
+   "text": "Read raw as an unsigned 64-bit integer, most significant digit first. Bit 63 is the sign, bits 62..52 the exponent, bits 51..0 the fraction.",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "R3",
+   "text": "The value is a NaN exactly when the exponent bits are all ones and the fraction is not zero. A NaN -> the text QNAN, whatever its sign bit, its quiet bit (bit 51), or its other payload bits.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R4",
+   "text": "Every other pattern -> raw itself, unchanged. This covers +0 and -0 (distinct), +Infinity and -Infinity (exponent all ones, fraction zero: NOT a NaN), subnormals, and normals: reading a non-NaN pattern as binary64 and writing it back is the identity.",
+   "ambiguity": 0.16
+  }
+ ],
+ "ranked": [
+  "R1",
+  "R2",
+  "R3",
+  "R4"
+ ],
+ "at": "2026-10-28T03:42:07Z"
+}

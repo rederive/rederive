@@ -1,0 +1,43 @@
+UNIT bytes
+LANG ts
+PRIMARY-SHA256 41de3c55a3958713a5469424817bccf19bea760a0ffa8b99deb9cb4bd5bbf171
+SIG export default function bytes(value: unknown, options?: unknown): string | number | null
+ABI TypeScript compiles to the js runtime and is driven exactly as js: the abstract trailing slot `...options: json` is
+  the native optional second parameter (the driver spreads the vector's args positionally; a third argument is ignored
+  at runtime). json = any JS value typed `unknown`: none = null; bool = boolean; f64 = number (NaN, ±Infinity and -0
+  are numbers); text = string (UTF-16); list = Array; map = plain object, read as `Record<string, unknown>`. ABSENT (R3)
+  = the key is not present, or holds undefined. Result: text = string; f64 = number, -0 preserved; none = null. A throw
+  is a thrown Error (RangeError from toFixed for R10; throw a TypeError yourself for R8 — the message is not graded).
+  STRICT: the artifact must type-check under `strict: true` against this SIG with no `any`, no non-null assertions
+  (`!`), no `@ts-ignore` / `@ts-expect-error` — the type-checked rung. Narrowing is by typeof, Array.isArray and null
+  checks; the options map is read through `options as Record<string, unknown>` after `typeof options === 'object' &&
+  options !== null` (an Array passes too and reads as all-ABSENT, exactly as the package does). The artifact is an ES
+  module default-exporting the function and imports nothing.
+ENVELOPE ts WIDENS value to any JS value exactly as js does: text = typeof 'string', f64 = typeof 'number' (primitives
+  only); everything else (undefined, bigint, symbol, functions, boxed primitives, Date, RegExp, collections, typed
+  arrays, Buffer, class instances) -> null. options may be undefined or any non-object (all ABSENT). An option value
+  of undefined is ABSENT; NaN and -0 are BLANK. Host-only option values are outside the verified envelope.
+MECHANISM (restated from js — language files are self-contained, not inherited) dispatch (R1): typeof value ===
+  'string' -> parse; typeof value === 'number' -> format; else null.
+MECHANISM parse (R4-R6): STRICT_RE.exec(value); on a match the numeral (group 1) is read with parseFloat and the unit
+  (group 4) lowercased with toLowerCase() to index UNIT_SCALE; otherwise parseInt(value, 10) realizes the LENIENT form
+  entirely (its whitespace skip IS LEADING_SPACE, ASCII digits only, stops at the first non-digit, NaN means none, "-0"
+  reads as -0). Then Math.floor(scale * numeral); -0 survives (R6). Do not use Number() or unary plus for the lenient
+  form ("0x10" must read 0 and "1e3" must read 1).
+MECHANISM format (R7-R16): Number.isFinite(value) gate first. Read unit: when it is a non-empty string, lowercase it and
+  look it up in a plain-object literal `Record<string, number>` holding the six UNIT_SCALE keys (the inherited-member
+  lookup is what makes "constructor"/"__proto__" behave as OUT-OF-DOMAIN says); when it is BLANK use the magnitude
+  ladder; when it is FILLED and not a string, throw a TypeError. Decimal places: `raw === undefined ? 2 : Number(raw)`
+  and pass that number to val.toFixed(...) — Number() is the same ToNumber that toFixed would apply to the raw value
+  (null 0, true 1, "1" 1, "abc" NaN), and toFixed then truncates, range-checks (RangeError, R10), rounds the exact value
+  with ties to the larger magnitude (R11) and switches to the ToString form at >= 1e21 (R12) — reimplement none of it.
+  Unless Boolean(fixedDecimals): str.replace(TRIM_RE, '$1') (R13). When thousandsSeparator is truthy: str.split('.')
+  with element 0 replaced by .replace(GROUP_RE, String(sep)) and joined back with '.' (R14) — a replacement string,
+  hence the "$" OUT-OF-DOMAIN. Result: str + (unitSeparator truthy ? String(unitSeparator) : '') + unit (R15).
+DEPENDS-ON none
+PINNED regex STRICT_RE = /^((-|\+)?(\d+(?:\.\d+)?)) *(kb|mb|gb|tb|pb)$/i CITED R4 — the STRICT grammar; group 1 is the signed numeral, group 4 the unit word
+PINNED regex TRIM_RE = /(?:\.0*|(\.[^0]+)0+)$/ CITED R13 — TABLE TRIM as the package's own pattern, replacement '$1'
+PINNED regex GROUP_RE = /\B(?=(\d{3})+(?!\d))/g CITED R14 — the insertion points of the thousands separator
+PROVENANCE bytes@3.1.2 index.js (visionmedia/bytes.js, MIT). Blind ts re-emissions are graded from runs/ts/ by the
+  verifier-owned driver (tsc --strict --noEmit + the any-ban lint, then the js grading path). Language file cut
+  2026-09-23 with the primary, before any blind re-emission.

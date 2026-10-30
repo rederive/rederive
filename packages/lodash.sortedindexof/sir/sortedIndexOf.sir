@@ -1,0 +1,234 @@
+UNIT sortedIndexOf
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG sortedIndexOf(array, value) -> number          # public entry; the default export IS this function
+
+DEPENDS-ON none                                     # bundle inlines baseSortedIndex, baseSortedIndexBy, eq,
+                                                    # isSymbol, isObjectLike, identity. Zero external deps.
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# Binary-search lookup of the FIRST (lowest) index of `value` in a SORTED
+# `array`, comparing with SameValueZero; returns -1 if not present.
+# The function is PURE: no mutation of array/value, no side effects, no I/O,
+# no ambient reads. No seam. ORACLE-CLASS deterministic.
+#
+# Two-stage pipeline:
+#   stage 1: baseSortedIndex(array, value)  -> the bisection INSERTION INDEX
+#            (the lowest index at which `value` could be inserted while keeping
+#             sort order; retHighest is hard-wired FALSE here).
+#   stage 2: confirm with eq(array[index], value) (SameValueZero) at that index.
+# The bisection itself does NOT decide presence; the eq gate at stage 2 does.
+
+# ============================================================================
+# CONSTANTS (exact, from source)
+# ============================================================================
+# MAX_ARRAY_LENGTH      = 4294967295            # 2^32 - 1
+# MAX_ARRAY_INDEX       = 4294967294            # MAX_ARRAY_LENGTH - 1
+# HALF_MAX_ARRAY_LENGTH = 2147483647            # MAX_ARRAY_LENGTH >>> 1  (== 2^31 - 1)
+# symbolTag             = '[object Symbol]'
+# nativeFloor           = Math.floor
+# nativeMin             = Math.min
+# objectToString        = Object.prototype.toString
+
+# ============================================================================
+# BEHAVIOR  (ordered; exact)
+# ============================================================================
+# sortedIndexOf(array, value):
+#   N1. length = array ? array.length : 0
+#       # TRUTHINESS guard on `array` itself (NOT `array == null`). For the
+#       # in-envelope inputs this generator emits (real Arrays or `null`/
+#       # `undefined`), `array ? .. : 0` and `array == null ? 0 : .length`
+#       # coincide. `length` is then whatever `array.length` is (read once here;
+#       # re-read inside baseSortedIndex as array.length again).
+#   N2. if (length) {                            # truthy length (non-zero, non-NaN)
+#         index = baseSortedIndex(array, value)  # see BRANCH A / BRANCH B below; retHighest defaults undefined(falsey)
+#         if (index < length && eq(array[index], value)) return index
+#       }
+#   N3. return -1
+#
+#   NOTE the order: the bisection runs UNCONDITIONALLY when length is truthy,
+#   then the result is filtered by `index < length && eq(...)`. `index` can
+#   legally equal `length` (value greater than every element -> insertion at the
+#   end); `index < length` rejects that -> -1. When `index < length`, the eq
+#   gate decides whether the element AT that insertion point actually equals
+#   `value` under SameValueZero.
+
+# ----------------------------------------------------------------------------
+# baseSortedIndex(array, value, retHighest)      # retHighest is undefined here -> falsey
+# ----------------------------------------------------------------------------
+#   low  = 0
+#   high = array ? array.length : low            # == length (array is truthy here)
+#
+#   BRANCH A  (NUMERIC FAST PATH) taken iff ALL of:
+#       typeof value == 'number'  AND  value === value (i.e. value is NOT NaN)
+#       AND  high <= HALF_MAX_ARRAY_LENGTH (2147483647)
+#     Loop while (low < high):
+#       mid      = (low + high) >>> 1            # UNSIGNED-shift midpoint
+#       computed = array[mid]
+#       # setLow condition for the retHighest=FALSE path:
+#       if  computed !== null  AND  !isSymbol(computed)  AND  (computed < value):
+#             low  = mid + 1                     # go right
+#       else:
+#             high = mid                         # go left / stay
+#     return high
+#     # CONSEQUENCES of this exact predicate:
+#     #  - A `null` element or a Symbol element at `mid` is NEVER treated as
+#     #    "less than value": it forces `high = mid` (search moves left).
+#     #  - For a non-null, non-Symbol element, the test is JS `<` between
+#     #    `computed` and the numeric `value`. If `computed` is a non-number
+#     #    (e.g. a string, boolean, object) the `<` coerces per JS rules; a
+#     #    NaN-producing comparison yields false -> `high = mid`.
+#     #  - +0 and -0 compare equal under `<` (both "not < value" when equal).
+#
+#   BRANCH B  (GENERIC PATH) taken otherwise (value is NaN, OR typeof value is
+#     not 'number', OR high > HALF_MAX_ARRAY_LENGTH):
+#       return baseSortedIndexBy(array, value, identity, retHighest)
+#       # identity(x) = x, so the iteratee is a no-op; `computed` below == array[mid],
+#       # and the iteratee'd `value` == value.
+
+# ----------------------------------------------------------------------------
+# baseSortedIndexBy(array, value, iteratee=identity, retHighest=falsey)
+# ----------------------------------------------------------------------------
+#   value = iteratee(value)                      # == value (identity)
+#   low  = 0
+#   high = array ? array.length : 0              # == length
+#   valIsNaN       = (value !== value)
+#   valIsNull      = (value === null)
+#   valIsSymbol    = isSymbol(value)
+#   valIsUndefined = (value === undefined)
+#   while (low < high):
+#       mid          = nativeFloor((low + high) / 2)   # Math.floor midpoint (NOT the >>> form)
+#       computed     = iteratee(array[mid])            # == array[mid]
+#       othIsDefined  = (computed !== undefined)
+#       othIsNull     = (computed === null)
+#       othIsReflexive= (computed === computed)        # false iff computed is NaN
+#       othIsSymbol   = isSymbol(computed)
+#       # setLow ladder (retHighest is FALSE for this unit, so the `retHighest ||`
+#       # disjuncts below reduce to their right operand):
+#       if valIsNaN:        setLow = retHighest || othIsReflexive
+#                                   # -> setLow = othIsReflexive (true unless computed is NaN)
+#       elif valIsUndefined:setLow = othIsReflexive && (retHighest || othIsDefined)
+#                                   # -> othIsReflexive && othIsDefined
+#       elif valIsNull:     setLow = othIsReflexive && othIsDefined && (retHighest || !othIsNull)
+#                                   # -> othIsReflexive && othIsDefined && !othIsNull
+#       elif valIsSymbol:   setLow = othIsReflexive && othIsDefined && !othIsNull && (retHighest || !othIsSymbol)
+#                                   # -> othIsReflexive && othIsDefined && !othIsNull && !othIsSymbol
+#       elif (othIsNull || othIsSymbol):
+#                           setLow = false                # null/symbol element while value is "ordinary"
+#       else:               setLow = retHighest ? (computed <= value) : (computed < value)
+#                                   # -> (computed < value)   (plain JS `<`)
+#       if setLow: low = mid + 1   else: high = mid
+#   return nativeMin(high, MAX_ARRAY_INDEX)      # clamp; for in-envelope lengths this == high
+
+# ----------------------------------------------------------------------------
+# eq(value, other)  -- SameValueZero
+# ----------------------------------------------------------------------------
+#   return (value === other) || (value !== value && other !== other)
+#   # Consequences used by stage 2:
+#   #  - NaN eq NaN  -> true   (so a NaN element at the insertion index is found)
+#   #  - +0 eq -0    -> true   (=== collapses the zeros)
+#   #  - objects/arrays compared by reference identity only (=== ); two distinct
+#   #    object literals with same shape are NOT eq.
+
+# ----------------------------------------------------------------------------
+# isSymbol(value)
+# ----------------------------------------------------------------------------
+#   return typeof value == 'symbol'
+#          || (isObjectLike(value) && Object.prototype.toString.call(value) == '[object Symbol]')
+#   isObjectLike(value) = (!!value && typeof value == 'object')
+
+# ============================================================================
+# WORKED / VERIFIED CASES (all run against lodash.sortedindexof@4.1.0; observed)
+# ============================================================================
+#   [1,2,3,4,5], 1   -> 0     (start)
+#   [1,2,3,4,5], 3   -> 2     (middle)
+#   [1,2,3,4,5], 5   -> 4     (end)
+#   [1,2,3,4,5], 6   -> -1    (absent, index==length rejected by index<length)
+#   [1,3,5,7], 4     -> -1    (absent in gap; insertion at 2, array[2]=5 != 4)
+#   [4,5,5,5,6], 5   -> 1     (DUPLICATES -> FIRST occurrence; bisection lands at lowest)
+#   [2,2,2,2], 2     -> 0
+#   [1,2,NaN], NaN   -> 2     (value NaN -> BRANCH B; eq(NaN,NaN) true)
+#   [NaN], NaN       -> 0
+#   [1,2,3], NaN     -> -1
+#   [NaN,1,2], NaN   -> -1    (NaN at front: valIsNaN setLow=othIsReflexive; bisects past it)
+#   [-0,1,2], 0      -> 0     (SameValueZero collapses -0/+0)
+#   [0,1,2], -0      -> 0
+#   [0,0], -0        -> 0     (first index)
+#   [], 5            -> -1    (empty)
+#   null, 5          -> -1    (array nullish)
+#   undefined, 5     -> -1
+#   [7], 7           -> 0     (single match)
+#   [7], 8           -> -1    (single non-match)
+#   [10,20,30], 5    -> -1    (value smaller than all)
+#   [10,20,30], 99   -> -1    (value larger than all)
+#   ["a","b","c","d"], "c" -> 2          (BRANCH B; string `<`)
+#   ["a","b","b","c"], "b" -> 1          (string duplicates -> first)
+#   ["a","c","e"], "d"     -> -1
+#   [false,true], true     -> 1          (booleans -> BRANCH B)
+#   [false,true], false    -> 0
+#   [false,false], true    -> -1
+#   [1,2,undefined], undefined -> 2      (valIsUndefined path)
+#   [undefined], undefined     -> 0
+#   [1,undefined,undefined], undefined -> 1
+#   [1,2,null], null   -> 2              (valIsNull path; bisects to last null run start, eq matches)
+#   [1,null,null], null -> 1
+#   [null], null        -> 0
+#   [null,null], null   -> 0
+#   [null,1,2,3], 2     -> 2             (BRANCH A; null element forces high=mid then continues right)
+#   [-5,-3,-1,0,2], -3  -> 1
+#   [0.1,0.2,0.3], 0.2  -> 1            (floats, BRANCH A)
+#   [1,2,"3"], 2        -> 1            (BRANCH A; "3" non-null/non-symbol, "3"<2 -> false -> high=mid)
+#   [1,2,"3"], 3        -> -1           (insertion at 2; eq("3",3) false)
+#   [1,2,3], 2.0        -> 1
+#   [100,200,300], 200  -> 1
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the entire pipeline above —
+#   the truthy-length guard, the two-stage (bisect then eq) structure, BRANCH A
+#   numeric fast path with its (>>> 1) midpoint and (computed !== null &&
+#   !isSymbol(computed) && computed < value) predicate, BRANCH B
+#   baseSortedIndexBy with the Math.floor midpoint and the full setLow ladder,
+#   the nativeMin(high, MAX_ARRAY_INDEX) clamp, the index<length filter, and the
+#   final SameValueZero eq gate. The HALF_MAX_ARRAY_LENGTH (2147483647) branch
+#   threshold and MAX_ARRAY_INDEX (4294967294) clamp are part of the contract,
+#   though they only bite at array lengths the generator does not emit (see OUT).
+#
+# CARRIED DATA: none. (No large literal table; pure logic. No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs,
+#   reconstructable from this spec):
+#   - Symbol-valued `value` or Symbol elements: Symbols do not survive the
+#     JSON-stringify(encode(args)) oracle codec, so they are excluded from
+#     genInputs. Behavior IS specified above (valIsSymbol ladder /
+#     isSymbol-skip in BRANCH A): e.g. f([sym], sym) -> 0, f([1,2,3], sym) -> -1.
+#   - Boxed primitives (new Number/String/Boolean): excluded by codec (identity
+#     does not round-trip). Behavior follows BRANCH B object-`<` + eq-by-===:
+#     f([1,2,3], Object(2)) -> -1.
+#   - Function elements: excluded by codec; would take BRANCH B with `<`
+#     coercion to NaN -> not specified as in-envelope.
+#   - Arrays of length > HALF_MAX_ARRAY_LENGTH (2147483647): forces BRANCH B even
+#     for numeric value; and length > MAX_ARRAY_INDEX would engage the
+#     nativeMin clamp. Not emitted (impractical to allocate); the constants and
+#     the branch are documented so the threshold is reconstructable.
+#   - `array` that is a non-null/non-array object with a numeric `.length`
+#     (array-like): the truthy guard accepts it and `array[mid]` indexes it;
+#     f({length:3,0:1,1:2,2:3}, 2) -> 1 was verified. Plain objects DO round-trip
+#     the codec, but ordering/"sortedness" of an arbitrary object is undefined;
+#     genInputs sticks to real Arrays to keep inputs well-defined. Behavior is
+#     nonetheless specified by the same pipeline.
+
+# ============================================================================
+# RE-EMITTER DIRECTIVE
+# ============================================================================
+# This is a DEFAULT export. The blind re-emitter MUST expose the function as the
+# module's default export:  `export default sortedIndexOf` (the public entry is
+# the function value itself, not a named export). Call shape: fn(array, value).
+
+PROVENANCE lodash.sortedindexof@4.1.0
+           repo: lodash/lodash (Custom Build: `lodash modularize exports="npm" -o ./`)
+           license: MIT (jQuery Foundation; based on Underscore.js 1.8.3)
+           source file: index.js (module.exports = sortedIndexOf)

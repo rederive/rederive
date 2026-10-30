@@ -1,0 +1,88 @@
+UNIT carried_shape_type
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs carriedShapeType with the type reader of cli/sir/canon.mjs (parseType) — reproduce the code exactly, accidents included
+ORACLE-CLASS deterministic
+SIG carried_shape_type(shape: text) -> json
+ENVELOPE shape is well-formed text (no lone surrogate). Every text is in scope: a shape that the rules below do not turn
+  into a type throws, and a throw is an observation (its message is not graded).
+DEPENDS-ON none
+DESCRIPTION Read the leading type expression of a CARRIED SHAPE declaration and return it as a canon type tree. The shape
+  text is cut at its first semicolon, the arrow spelling map K -> V is rewritten to map[K, V], the fixed-width integer
+  names in type position are widened to the two canonical integer kinds, and the result is parsed by the SIR type grammar
+  (TABLE TREE says the node shapes). The arrow and width rewrites are TEXTUAL: they happen before parsing, on the text,
+  not on the tree. One whitespace set, WS (space, tab, CR, LF), serves the rewrites and the parse alike.
+BEHAVIOR
+R1 CUT: the segment is the text before the first semicolon of shape (all of shape when it has none); the rest is ignored.
+R2 NORMALIZE(s): strip every leading and trailing WS character of s. If the stripped text begins with the three
+  characters map, then one or more WS characters, and somewhere after that run the two characters -> occur at least
+  one character past the end of the run, then K = the text from the end of the run up to the FIRST such ->, V = all text
+  after that ->, and NORMALIZE(s) is the text map[ + NORMALIZE(K) + ", " + NORMALIZE(V) + ]. Otherwise NORMALIZE(s) is
+  the stripped text unchanged. The rewrite recurses into K and V, so a value side map b -> c nests (map a -> map b -> c is
+  map[a, map[b, c]]); a key side can only nest in the bracket spelling, since its first -> always ends K. map is lowercase
+  and the run after it is WS only (a CR or LF there is a separator like a space): map[, mapX, map followed by U+00A0 or
+  U+000B are not the arrow form. When ->
+  directly follows the run, the split still happens (with an empty or arrow-led K) and the result always throws in R5.
+  CITED FIDELITY package — lazy first-arrow split, v05.mjs:399
+R3 The splice is textual: K and V are pasted into the bracket spelling unparsed, so a comma or bracket inside them
+  changes the parse (map text, text -> u8 becomes map[text, text, u64] and throws; map text, text] | map[u8 -> text becomes
+  map[text, text] | map[u64, text], a union of two maps). CITED FIDELITY package
+R4 WIDEN: in the text NORMALIZE(segment), every TYPE-TOKEN equal to u8, u16 or u32 is replaced by u64, and every one equal
+  to i8, i16 or i32 by i64 (lowercase only). A TYPE-TOKEN is an occurrence of one of those six spellings whose left side,
+  after skipping WS, is the start of the text or one of the characters [ , | : and whose right side, after skipping WS,
+  is one of ] , | or the end of the text. Everything else is untouched: a record field name (followed by :) keeps its
+  spelling, so record[u8: u8] has a field named u8 of kind u64; u128, a_u8, u8x and U8 are not widened; a CR or LF in
+  either gap is skipped like a space (list[u8] with an LF before its ] is list[u64]). CITED FIDELITY package — v05.mjs:400 token rule
+R5 PARSE: the widened text must be exactly one TYPE of GRAMMAR (WS allowed before and after any token and at both
+  ends; a word may not run into the next word). Anything else throws: an unknown word (including every name that R4 did
+  not widen), a missing or extra bracket, comma or colon, an empty list of parts, trailing text, and any other
+  whitespace character (U+00A0, U+000B, U+3000 …) anywhere.
+R6 ARITY: list takes exactly one type, map exactly two, tuple one or more, record one or more fields; otherwise throw.
+  Record field names within one record are distinct (exact text) or the parse throws.
+R7 DEPTH: at most 16 composites (tuple, list, map, record) may be open at once; opening the 17th nested composite throws.
+  Unions do not count. An arrow form counts as the map it becomes.
+R8 UNREACHABLE ALTERNATIVE: for a union of alternatives A1 … An (in spelling order, n >= 2), the parse throws when some
+  earlier Ai COVERS a later Aj. This check runs on every union, at any depth (a field type, a list item …). TABLE COVERS
+  defines COVERS(a, b) (any row holding suffices) and TABLE JSONABLE defines JSONABLE(t). SAME(a, b) is structural
+  equality in which a union's alternatives compare as a set (order ignored) and a record's fields compare as a set of
+  (name, type) pairs (order ignored); tuple items keep order. Only earlier-covers-later is refused: text | json parses,
+  json | text throws. CITED FIDELITY package — canon.mjs covers() / inJson()
+R9 RESULT: the parsed type as the TREE node; a single alternative is its own node, two or more make a union node.
+  Record fields and union alternatives keep spelling order.
+TABLE COVERS COVERS(a, b) holds when any row holds
+  | case | condition |
+  | same | SAME(a, b) |
+  | json | a is json and JSONABLE(b) |
+  | list | a = list[x], b = list[y], COVERS(x, y) |
+  | tuple | a and b tuples of equal length, COVERS(a item i, b item i) for every i |
+  | map | a = map[k1, v1], b = map[k2, v2], COVERS(k1, k2) and COVERS(v1, v2) |
+  | record | a and b records, and every field n: f of a has a field n: g in b (same name) with COVERS(f, g); b may have more fields |
+  | a union | a is a union and some alternative of a COVERS b |
+  | b union | b is a union and a COVERS every alternative of b |
+TABLE JSONABLE JSONABLE(t) holds exactly when
+  | t | condition |
+  | none bool f64 text json | always |
+  | list[x] | JSONABLE(x) |
+  | tuple[x1, …] | every item JSONABLE |
+  | map[k, x] | k is exactly text and JSONABLE(x) |
+  | record[n1: x1, …] | every field type JSONABLE |
+  | union | every alternative JSONABLE |
+  | bytes i64 u64 | never |
+TABLE TREE node shapes (a json map per node; key order immaterial)
+  | type | node |
+  | text bytes bool none i64 u64 f64 json | {"k": the word} |
+  | list[T] | {"k": "list", "item": T} |
+  | map[K, V] | {"k": "map", "key": K, "val": V} |
+  | tuple[T1, …] | {"k": "tuple", "items": [T1, …]} |
+  | record[n1: T1, …] | {"k": "record", "fields": [[n1, T1], …]} |
+  | A1 pipe A2 pipe … | {"k": "union", "alts": [A1, A2, …]} |
+PINNED grammar GRAMMAR = TYPE := ALT ( "|" ALT )* ; ALT := WORD-TYPE | "tuple" "[" TYPE ( "," TYPE )* "]" | "list" "[" TYPE "]" | "map" "[" TYPE "," TYPE "]" | "record" "[" IDENT ":" TYPE ( "," IDENT ":" TYPE )* "]" ; WORD-TYPE := "text" | "bytes" | "bool" | "none" | "i64" | "u64" | "f64" | "json" ; IDENT := [A-Za-z_][A-Za-z0-9_]* CITED R5 R6 — canon.mjs reader; a type word is read as a whole IDENT first, then classified
+PINNED charset WS = U+0020 U+0009 U+000D U+000A CITED R2 R4 R5 — the only whitespace of the trim, the arrow split, the width token rule and the reader
+INVARIANT every non-throwing result is a TREE node whose every word is one of text bytes bool none i64 u64 f64 json; no
+  u8, u16, u32, i8, i16 or i32 kind can appear (record field NAMES may still read u8 and the like).
+ORACLE value -> oracles/carried_shape_type.json  CANONICAL-SHA256 abd1a223247808efe7fa77b63227576a39b7fc66438701edd566ee2ae73bacf4
+SCOPE in-contract: R1–R9 on any well-formed text. Out of contract: the callers (rustCarriedTable's map check, the ts
+  driver's own normalization), the error messages, and the non-text inputs the host would also refuse.
+PROVENANCE rederive@6199e2cc8b75 (selfhost authority, round 5b), cli/sir/v05.mjs carriedShapeType (lines 394-402) and
+  cli/sir/canon.mjs parseType / reader / covers / inJson (lines 33-107). Re-cut 2026-10-27, REDERIVE_SELF_PLAN Tier 3,
+  round 5 (FINDINGS #94 #74 #78 #79); round 5b delta (FINDINGS #103: one whitespace set, no > left context).

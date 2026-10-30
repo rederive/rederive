@@ -1,0 +1,206 @@
+UNIT lte
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# ----------------------------------------------------------------------------
+# lodash.lte@3.9.2 — _.lte(value, other) -> boolean ("value <= other")
+# Pure, total-except-throw, no seam (no clock/RNG/io/net). Zero dependencies.
+# Built from lodash's createRelationalOperation(operator) with
+#   operator = function(value, other) { return value <= other; }
+# ----------------------------------------------------------------------------
+
+SIG  lte(value: any, other: any) -> boolean
+# The module's SOLE export is this function. The .mjs re-emission MUST use:
+#     export default <theFunction>
+# i.e. `module.exports = lte` in the original maps to `export default lte`.
+# There is no named export; importKind is 'default'.
+
+DEPENDS-ON none
+# All helpers (createRelationalOperation, toNumber, isObject, isObjectLike,
+# isSymbol) are INLINED private functions in the single source file. The blind
+# re-emitter reconstructs them from BEHAVIOR below; nothing is imported.
+
+# ============================================================================
+# BEHAVIOR  (exact, ordered pipeline)
+# ============================================================================
+#
+# lte(value, other):
+#
+# NODE 1 — STRING-PAIR GUARD (decides raw-vs-coerced compare)
+#   Predicate (EXACT, from source):
+#       if ( !( typeof value === 'string' && typeof other === 'string' ) ) {
+#           value = toNumber(value)
+#           other = toNumber(other)
+#       }
+#   Meaning:
+#     - If BOTH operands are PRIMITIVE strings (typeof === 'string' for each),
+#       SKIP coercion entirely and compare the RAW strings.  -> NODE 3 (raw).
+#     - Otherwise (any operand is not a primitive string — number, boolean,
+#       null, undefined, object, boxed String, boxed Number, Symbol, array,
+#       function, Date, bigint, etc.), coerce BOTH operands through toNumber
+#       (NODE 2), even the one that already IS a primitive string. -> NODE 3.
+#   NOTE: A boxed String (new String('x')) has typeof === 'object', NOT
+#         'string', so the guard is FALSE and it takes the toNumber path.
+#         Confirmed: lte(new String('2'), new String('10')) === true
+#         (numeric 2 <= 10), NOT lexicographic (which would be false).
+#
+# NODE 2 — toNumber(value)  [applied to EACH operand when NODE-1 guard fails]
+#   toNumber is the lodash 3.x/4.x-style numeric coercion. Ordered steps:
+#
+#   (2a) if (typeof value === 'number') return value;
+#        # numbers (incl. NaN, ±Infinity, -0, +0) pass through UNCHANGED.
+#
+#   (2b) if (isSymbol(value)) return NaN;
+#        # isSymbol(v) := typeof v === 'symbol'
+#        #              || (isObjectLike(v) && Object.prototype.toString.call(v)
+#        #                                     === '[object Symbol]')
+#        #   isObjectLike(v) := (!!v) && typeof v === 'object'
+#        # So BOTH a primitive Symbol AND a boxed Symbol(Object(Symbol()))
+#        # map to NaN here — they do NOT throw. (Plain `+symbol` would throw;
+#        # lodash intercepts symbols before the unary-plus.)
+#
+#   (2c) if (isObject(value)) {
+#            var other = (typeof value.valueOf === 'function')
+#                          ? value.valueOf()
+#                          : value;
+#            value = isObject(other) ? (other + '') : other;
+#        }
+#        # isObject(v) := (!!v) && (typeof v === 'object' || typeof v === 'function')
+#        #   -> true for arrays, plain objects, functions, Date, boxed Number/
+#        #      String, RegExp; false for null, primitives.
+#        # Step: call valueOf(); if its result is STILL an object, stringify it
+#        #   via (result + '') [which invokes the result's toString]; otherwise
+#        #   keep the primitive valueOf result.
+#        #   Examples:
+#        #     [5]            -> valueOf()===[5] (object) -> [5]+'' === '5'   -> '5'
+#        #     [1,2]          -> '1,2'
+#        #     []             -> ''
+#        #     {}             -> valueOf()==={} (object) -> '[object Object]'
+#        #     new Date(0)    -> valueOf()===0 (number)  -> 0
+#        #     new Number(5)  -> valueOf()===5 (number)  -> 5
+#        #     new String('2')-> valueOf()==='2' (string)-> '2'
+#        #     {valueOf:()=>5}-> 5 (number)              -> 5
+#        #     function(){}   -> valueOf()===the fn (function/object) ->
+#        #                       fn+'' === its source string (e.g. "function(){}")
+#        #   After this step `value` is a primitive (number or string).
+#
+#   (2d) if (typeof value !== 'string') {
+#            return value === 0 ? value : +value;
+#        }
+#        # Reached when `value` is now a non-string primitive: boolean, null,
+#        # undefined, or a number that fell out of (2c).
+#        #   - `value === 0 ? value : +value` preserves -0/+0 EXACTLY by
+#        #     short-circuiting +value when value is already (==) 0.
+#        #   - +true === 1, +false === 0, +null === 0, +undefined === NaN.
+#        #   - BIGINT: if a bigint primitive reaches here (it is not a string,
+#        #     not a number, not a symbol, not an object), `value === 0` is
+#        #     false for any bigint, so it evaluates `+value` ON A BIGINT,
+#        #     which THROWS  TypeError("Cannot convert a BigInt value to a number").
+#        #     (See THROW BEHAVIOR below.)
+#
+#   (2e) value = value.replace(/^\s+|\s+$/g, '');   # trim leading/trailing \s
+#        isBinary = /^0b[01]+$/i.test(value);       # reIsBinary (case-insensitive)
+#        return (isBinary || /^0o[0-7]+$/i.test(value))   # reIsOctal
+#                 ? parseInt(value.slice(2), isBinary ? 2 : 8)
+#                 : ( /^[-+]0x[0-9a-f]+$/i.test(value)     # reIsBadHex
+#                       ? NaN
+#                       : +value );
+#        # String coercion (reached when `value` is a string primitive):
+#        #   1. Strip leading/trailing whitespace (\s, the JS regex class).
+#        #   2. If it matches binary  /^0b[01]+$/i  -> parseInt(rest, 2).
+#        #   3. else if it matches octal /^0o[0-7]+$/i -> parseInt(rest, 8).
+#        #   4. else if it matches BAD signed hex /^[-+]0x[0-9a-f]+$/i -> NaN.
+#        #      (i.e. '-0x1' / '+0xff' are deliberately rejected to NaN.)
+#        #   5. else -> +value  (standard JS Number() coercion). This makes
+#        #      UNSIGNED hex like '0x1F' === 31 (via +), '' === 0, '  5  '===5,
+#        #      'abc' === NaN, '3.2' === 3.2.
+#        #   Demonstrated string->number map (each value the generator can emit):
+#        #     ''        -> 0          '   '     -> 0 (trim then +'')
+#        #     '5'       -> 5          '  5  '   -> 5
+#        #     '3.2'     -> 3.2        '-0'      -> -0
+#        #     '10'      -> 10         '9'       -> 9
+#        #     '0x1F'    -> 31         '-0x1'    -> NaN     '+0x1' -> NaN
+#        #     '0b101'   -> 5          '0B101'   -> 5
+#        #     '0o17'    -> 15         '0O17'    -> 15
+#        #     'abc'     -> NaN        'a'       -> NaN     'Infinity' -> Infinity
+#        #     'NaN'     -> NaN
+#
+# NODE 3 — RELATIONAL COMPARE
+#   return value <= other;          # the JS abstract relational `<=` operator.
+#   - When NODE-1 guard held (both primitive strings): this is the RAW string
+#     `<=`, i.e. LEXICOGRAPHIC by UTF-16 code unit, NO numeric parsing.
+#         lte('10','9')  === true   ('1' (0x31) < '9' (0x39))
+#         lte('2','10')  === false  ('2' (0x32) > '1' (0x31))
+#         lte('a','b')   === true    lte('b','a') === false
+#         lte('A','a')   === true    ('A' 0x41 < 'a' 0x61)
+#         lte('','a')    === true     lte('a','a') === true (equal)
+#   - Otherwise both operands are numbers (post-toNumber) and this is numeric
+#     `<=` with IEEE-754 semantics:
+#         * Any operand NaN  -> `<=` is FALSE.  (lte(NaN,1)=lte(1,NaN)=
+#                               lte(NaN,NaN)=false)
+#         * +Infinity / -Infinity order normally:
+#               lte(-Infinity, Infinity)=true; lte(Infinity,-Infinity)=false;
+#               lte(Infinity,Infinity)=true; lte(1,Infinity)=true;
+#               lte(-Infinity,1)=true.
+#         * -0 and +0 are EQUAL under `<=`: lte(-0,0)=true; lte(0,-0)=true.
+#   Return is a strict boolean (true/false).
+
+# ============================================================================
+# THROW BEHAVIOR
+# ============================================================================
+#   - A BIGINT operand (typeof === 'bigint') that reaches NODE-1 guard:
+#       guard is FALSE (bigint is not 'string') -> toNumber(bigint) runs:
+#       not number, not symbol, not object, not string -> NODE 2d ->
+#       `value === 0` is false -> `+value` on a bigint THROWS:
+#           TypeError: "Cannot convert a BigInt value to a number"
+#     This throw occurs for ANY bigint operand on EITHER side (the first
+#     bigint operand encountered throws; value is coerced before other).
+#     Confirmed by running the real package:
+#         lte(1n, 2n)  -> THROW TypeError
+#         lte(1n, 1)   -> THROW TypeError
+#         lte(5, 10n)  -> THROW TypeError
+#     The harness records this as a {__throw} expectation; it IS gradable.
+#   - No other input class throws. In particular Symbols DO NOT throw (they
+#     map to NaN -> false). Functions, objects, arrays, null, undefined never
+#     throw (they coerce, possibly to NaN).
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Deterministic value oracle: for each [value, other] tuple, expected is the
+# boolean result, or {__throw: 'TypeError'} for bigint operands. No seam.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — the
+#   string-pair guard predicate, the full toNumber coercion (number passthrough,
+#   symbol->NaN, object valueOf/toString reduction, -0-preserving non-string
+#   coercion, the trim + binary/octal/bad-hex/+value string parse with the EXACT
+#   regexes /^\s+|\s+$/g, /^0b[01]+$/i, /^0o[0-7]+$/i, /^[-+]0x[0-9a-f]+$/i),
+#   and the final `<=` (lexicographic for string-pair, IEEE-754 numeric otherwise).
+#
+# CARRIED DATA: none. The only literals are the four regexes and the tag string
+#   '[object Symbol]', all reproduced inline above. No carried.json.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+#   they are not oracle-codec-faithful — but a blind re-emitter still reproduces
+#   their behavior from the spec above):
+#     - Symbol operands (typeof 'symbol'): -> toNumber returns NaN -> result
+#       false (never throws). Not emitted (Symbols don't survive JSON codec).
+#     - Function operands: isObject true -> valueOf returns the fn -> fn+''
+#       (source string) -> +sourceString -> NaN -> false. Not emitted (functions
+#       don't survive the codec).
+#     - Boxed primitives (new String/new Number/new Boolean) and class instances
+#       whose identity matters: typeof 'object', take toNumber via valueOf. Their
+#       BEHAVIOR is specified (e.g. new String('2') <= new String('10') is the
+#       numeric 2<=10 === true), but they are NOT codec-round-trippable, so
+#       genInputs does not emit them.
+#   No mutation, no side effects, no ambient reads — lte is pure & read-only.
+
+PROVENANCE lodash.lte@3.9.2  (npm)
+#   repo: lodash/lodash  (https://github.com/lodash/lodash)
+#   license: MIT
+#   source file: node_modules/lodash.lte/index.js  (single file, lines 48-209)
+#   export: module.exports = lte  (default export)

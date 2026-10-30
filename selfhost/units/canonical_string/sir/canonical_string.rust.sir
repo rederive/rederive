@@ -1,0 +1,32 @@
+UNIT canonical_string
+LANG rust
+PRIMARY-SHA256 d84d2cbeedc82e13cfbf4fe434f58f7b53d137ea6b6d76e27b14abff858f7633
+SIG pub fn canonical_string(value: &serde_json::Value) -> String
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn canonical_string) whose only dependency is serde_json
+  — no main, no I/O, no binary. The verifier generates its own harness crate (one JSON args line per stdin line, the value
+  parsed by serde_json::from_str, the call canonical_string(&value), the String out). A throw (R5, R8) is a PANIC: the
+  harness runs each call under catch_unwind and records a panic as a throw; the panic message is free.
+ABI type mapping: text = Value::String; bool = Value::Bool; list = Value::Array; map = Value::Object (its iteration order
+  is irrelevant: R4 sorts); f64 = Value::Number and none = Value::Null, both panic when examined (R8).
+ENVELOPE narrowing: serde_json::Value holds no NaN, ±Infinity or -0 (vectors carrying one are narrowed by the verifier) and
+  no unpaired surrogates; the js widening (absent values, holes, big integers, host objects) does not exist here. The
+  harness parses each args line with serde_json::from_str, whose default recursion limit (128) bounds what reaches the
+  artifact; a line it cannot parse is NARROWED (counted apart, never a pass, a miss or a throw). The shared oracle's
+  deepest vector nests 101 levels on the line (100 value levels plus the args list), so nothing here is narrowed for
+  depth; R10's boundary (raw depth 415..417) lives only in the js extension, which rust never receives. R10 is therefore
+  UNGRADED in rust: the artifact must implement it exactly, but no vector reaches it through this transport.
+MECHANISM QUOTE / TABLE ESCAPE: serde_json::to_string(&str) realizes the table exactly for well-formed strings (short
+  escapes \b \f \n \r \t, other controls as \u00xx lower-case, 0x7F, "/", 0x2028, 0x2029 and non-ASCII raw); a
+  hand-written escaper must match it byte for byte.
+MECHANISM KEY ORDER (R4): sort the keys with a comparator over a.encode_utf16() versus b.encode_utf16() (Iterator::cmp) —
+  NOT String's Ord / serde_json's BTreeMap order, which compare UTF-8 bytes (= scalar order) and put "\u{e000}" before "😀".
+MECHANISM projections (R5, R6): on a Value::Object, FIRST look at obj.get("t"): Some(Value::String) equal to "f64" -> require
+  obj.get("bits") to be Some(Value::String(s)) with s.len() == 16 and every byte in b'0'..=b'9' or b'a'..=b'f', else
+  panic; emit {"bits":<to_string(s)>,"t":"f64"}. Equal to "throw" -> emit {"t":"throw"}. In both cases never recurse into
+  the other entries (a Number or Null there must NOT panic).
+MECHANISM R10: pass the node depth down the recursion (the top call at 0) and panic before rendering a node deeper than 416 (the check first),
+  at every visited node (the projected "bits"/"t" strings included), never at keys or dropped entries. 417 recursion frames
+  fit any thread's default stack; no vector exercises it (ENVELOPE).
+DEPENDS-ON serde_json
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs canonicalString (own code). Round 5 language file, 2026-10-27; the ABI
+  follows the lab's rust driver (drivers/rust.mjs: json -> &serde_json::Value, a panic recorded as a throw).

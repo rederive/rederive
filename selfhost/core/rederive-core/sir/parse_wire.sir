@@ -1,0 +1,61 @@
+UNIT parse_wire
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@f68cca701417 cli/lang/rust.mjs parseWire — the rust driver's hand-written reader of one harness output line; the code is the truth
+ORACLE-CLASS deterministic
+SIG parse_wire(line: text) -> json
+ENVELOPE line is well-formed text (no unpaired surrogate in the line itself). Every JSON text is in scope, every malformed
+  line is in scope (a throw), and so is every line R8 refuses for depth. OUT: a line the package ACCEPTS whose result nests
+  more than 100 levels (no verifier transport carries a value that deep). Two result values lie beyond the abstract json
+  and are verified only by the js envelope extension: the exact integer of R6, and text holding an unpaired surrogate (R3).
+DEPENDS-ON none
+DESCRIPTION Read one line the rust verification harness printed — a single JSON text — into the value it carries. It is
+  RFC 8259 reading with three additions: an integer numeral no double equals comes back as that exact integer (so a u64 or
+  i64 the harness printed is never rounded, and a huge integer is never infinite); a non-integer numeral with no finite
+  double throws; and a value nested more than 128 levels down throws.
+BEHAVIOR
+R1 line must be exactly one JSON text (RFC 8259 grammar) and nothing else: blanks — and only the four JSON blanks SPACE,
+  TAB, LF and CR — may surround it and any token inside it. Anything else -> throws: empty or blank-only text, trailing
+  content after the value, a byte order mark, NBSP or any other whitespace character, a trailing comma, a missing colon or
+  comma, an unquoted key, single quotes, a numeral with a leading zero, a leading '+', a bare '.', a lone '-', a missing
+  fraction or exponent digit, NaN or Infinity, an unknown or truncated literal, an unterminated string or container, a raw
+  character U+0000..U+001F inside a string, an unknown escape, a backslash ending the line, a backslash-u escape without
+  four hex digits.
+R2 The JSON literals "true" and "false" -> those bools; the literal "null" -> none. A list -> list, elements in order.
+R3 A string -> text. An escape is a backslash and one more character: one of  "  /  b  f  n  r  t  or a second backslash
+  stands for U+0022, U+002F, U+0008, U+000C, U+000A, U+000D, U+0009 and U+005C respectively; a backslash, u and four hex
+  digits XXXX (either case) is the UTF-16 code unit XXXX — so a high-surrogate escape followed by a low-surrogate escape is
+  one supplementary character, while an unpaired surrogate escape (or a low before a high) leaves those lone code units in
+  the text. Every other character (U+2028, U+2029, DEL, non-ASCII, supplementary) is itself.
+R4 An object -> map. A repeated key keeps its LAST value, yet every earlier value is still read by R1-R8, so one that
+  throws throws the line ('{"a":1e400,"a":1}' throws). Every key is an ordinary key, including __proto__, constructor and
+  __f64bits; keys spelling integers are ordinary keys too. A key is read by R3 exactly as a string value is, and what one
+  line's keys read as never depends on any line read before it.
+R5 A numeral with a fraction or an exponent -> f64: its decimal value rounded to the nearest double (ties to even), sign
+  kept — so "-0.0", "-0e5" and "-1e-400" are negative zero, and an underflowing numeral is a zero of its sign. When that
+  rounding gives no finite double (magnitude at or above 2^1024 - 2^970, e.g. "1e400", "1.7976931348623159e308") -> throws.
+R6 INTEGER SPELLING (an optional '-' then digits; no fraction, no exponent). When some double equals the numeral's exact
+  value, the result is that double (f64) — every integer up to 2^53 in magnitude, and the exactly representable ones beyond
+  (2^53, 2^60, 2^64, 10^20); "-0" is negative zero. Otherwise the result is the numeral's EXACT integer, of unbounded width:
+  2^53 + 1, 2^64 - 1, and an integer past the whole double range alike (never an infinity, never a throw). A fraction or
+  exponent spelling never takes this path ("9007199254740993.0" is the double 9007199254740992) CITED FIDELITY package
+R7 R5 and R6 apply at every depth: a top-level numeral, a list element and a map value alike.
+R8 DEPTH. The top-level value is at depth 0; each element of a list and each value of a map is one deeper than its
+  container. A value at depth above 128 -> throws, whatever it is — so 129 nested lists around a numeral throw, 130 nested
+  empty lists throw, while 129 nested empty lists would be read (that result is outside ENVELOPE) CITED FIDELITY package
+INVARIANT the result never holds a non-finite number; every exact integer of R6 has magnitude above 2^53.
+OUT-OF-DOMAIN the abstract SIG takes text; any other argument -> throws before anything is read, and is never converted to
+  text: none, a number, a bool, a list (even an empty one, or one holding the single text "[1]") and a map (with or without a
+  "length" entry) alike. Verified by the js envelope extension only.
+NOTE rust is in scope: its harness hands the artifact's serde_json::Value back through this very function, so the integer
+  digits the artifact returns arrive exact at any width; the vectors that carry an R6 integer or a lone surrogate are js and
+  ts only in the shared oracle, and rust's R6 integers are held to the js and ts results by cross-verification.
+ORACLE value -> oracles/parse_wire.json  CANONICAL-SHA256 0dce5921a49cbad728d2c82ec5554e14f506b73f68b93ea08dbb81add2939b11
+SCOPE IN: R1-R8 over ENVELOPE, and OUT-OF-DOMAIN (js only). OUT: accepted results deeper than 100 levels; the harness
+  envelope check, reshape and f64 bit-wire decoding that follow this function in the driver.
+PROVENANCE rederive@f68cca701417 (pinned authority, selfhost/.authority/f68cca701417; parseWire byte-identical to 1d1861440f2c and
+  6199e2cc8b75's), cli/lang/rust.mjs: export function
+  parseWire(line), the result reader of batchCaller. Round-5 re-cut 2026-10-27 by the sighted decomposer (FINDINGS #93: the
+  reader is hand-written, no longer the host JSON reader); round-5b delta (FINDINGS #120: a non-text argument throws, the
+  depth limit is 128), REDERIVE_SELF_PLAN Tier 3. HARDEN round 1 (cross 1995/1998, R6 past 64 bits): no rule changed; the rust
+  language file and the frozen slice were hardened.

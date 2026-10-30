@@ -1,0 +1,34 @@
+UNIT any_ban_hits
+LANG ts
+PRIMARY-SHA256 38a09b24bccfa0114557d5ea8f265f266ff76a8348b83562c85dcddb45f2b533
+SIG export default function any_ban_hits(src: string): string[]
+ABI TypeScript compiles to the js runtime. STRICT: the artifact must type-check under strict against this SIG with no
+  `any`, no non-null assertions and no @ts-ignore / @ts-expect-error / @ts-nocheck — judged by THIS lint applied to the
+  artifact, so the artifact must not use the word any as an identifier in code, and a postfix "!" after an operand is
+  refused (prefix "!" after "(", "=", "&&", "return" and "!==" are fine).
+ABI text=string (UTF-16; the envelope is well-formed text, so a scan by code unit and a scan by code point agree);
+  list[text]=Array of string, fresh per call.
+MECHANISM (restated from js; language files are self-contained) one hand-written index loop over src (R1-R9). In
+  ECMAScript without the u flag, \s is exactly the primary's WS charset and \w / \b are ASCII-only (the WORD charset), so
+  the regexes below realize the pins; String.prototype.trim and the u-flag classes are NOT substitutes.
+DEPENDS-ON none
+MECHANISM a pinned pattern that names U+0085, U+200B, U+2028, U+2029, U+FEFF or any other non-ASCII code point (OPERAND_END,
+  KEY_AFTER, WORD_CHAR) is built as new RegExp("...") from a string literal whose source spells each such code point as the
+  six ASCII characters backslash, u and four hex digits (a double backslash in the JS string, exactly as pinned below); it is
+  never a regex literal and never holds the raw character, because U+2028 / U+2029 are JS line terminators and end a regex
+  literal early ("Invalid regular expression: missing /") EARNED grade round 1: all 6 js/ts emissions failed to load
+PINNED regex REGEX_AFTER = /(?:^|[(,=:[!&|?{};+\-*%<>~^])\s*$|(?:^|[^\w$])(?:return|typeof|case|do|else|in|of|void|yield|await|throw|delete|new)\s*$/ CITED R8 REGEX POSITION — tested on CONTEXT
+PINNED regex DIRECTIVE = /@ts-(?:ignore|expect-error)|@ts-nocheck/i CITED R3 R4 DIRECTIVE — the i flag WITHOUT u folds ASCII only (with u, U+212A would match k and U+017F s); it is tested on the text AND on text.toLowerCase() (the LOWERED row, never toLocaleLowerCase); P and Q are String.prototype.search on each
+PINNED regex OPERAND_END = new RegExp("[\\w$)\\]\"\\u0080-\\uffff]$") CITED R9d OPERAND END — tested on CONTEXT with trailing [ \t]+ removed
+PINNED regex KEY_AFTER = new RegExp("^(?:[^\\S\\n\\r\\u2028\\u2029]|[\\u0085\\u200b])*[!?]?:") CITED R9c — tested on the source text after the word
+PINNED regex KEY_BEFORE = /(?:^|[{(,;])\s*$/ CITED R9c — tested on CONTEXT
+PINNED regex MEMBER = /(?<!\.)\.\s*$/ CITED R9c — tested on CONTEXT
+PINNED regex WORD_CHAR = new RegExp("(?![\\s\\u0085\\u200b])[\\w$\\u0080-\\uffff]") CITED R9c WORD CHAR — tested on one UTF-16 code unit (both halves of a surrogate pair are word chars)
+MECHANISM when the closing SOLIDUS is found and (CONTEXT.trim() === '' OR GUESSED_KEYWORD matches CONTEXT), the REST SCAN runs the scanner on src.slice(open + 1)
+  with a memo Map from suffix length to its result, shared by every nested REST SCAN of one call (each suffix scanned once);
+  each entry is re-recorded at line + its line - 1, its label cut at its LAST "@". THEN the BODY is lexed by calling the
+  function itself on src.slice(open + 1, close), each entry recorded at the line of the opening SOLIDUS. The final sort is
+  Array.prototype.sort by line number (stable since ES2019)
+PINNED regex GUESSED_KEYWORD = /(?:^|[^\w$.])(?:return|typeof|case|do|else|in|of|void|yield|await|throw|delete|new)\s*$|\.\s*(?:return|typeof|case|do|else|in|of|void|yield|await|throw|delete|new)\s*$/ CITED R8 REST SCAN — tested on CONTEXT; together with the all-WS test it is exactly the REGEX POSITION "empty" and "keyword" rows
+PINNED regex NOT_REGEX_AFTER = /(?:\+\+|--)\s*$/ CITED R8 — tested on CONTEXT; when it matches, the SOLIDUS is not a regex
+PROVENANCE rederive@aa3b8dce6ef8 cli/lang-ts.mts (REGEX_AFTER, KEYWORDS_BEFORE_PREFIX and anyBanHits, verbatim regexes).

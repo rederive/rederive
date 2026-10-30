@@ -1,0 +1,245 @@
+# SIR — lodash.endswith @ 4.2.1  (default export `endsWith`)
+# Verified-recompose factory, SIGHTED-decomposer artifact.
+# All claims below were verified by running the REAL package with node (see SCOPE notes).
+
+UNIT endsWith
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG endsWith(string, target, position) -> boolean
+DEPENDS-ON none
+# (Self-contained custom lodash build. All helpers below are BUNDLED INLINE in index.js
+#  and are reproduced here in full — they are IN-CONTRACT, not external deps.)
+
+# ============================================================================
+# BEHAVIOR  — exact, ordered pipeline. A blind re-emitter must reproduce this
+#             verbatim, INCLUDING the bundled helper semantics.
+# ============================================================================
+#
+# Numeric constants used by the helpers (exact):
+#   INFINITY    = 1 / 0                    # +Infinity
+#   MAX_INTEGER = 1.7976931348623157e+308  # Number.MAX_VALUE; the finite cap for +-Infinity
+#   NAN         = 0 / 0                     # NaN
+#
+# Regexes (exact, from source):
+#   reTrim     = /^\s+|\s+$/g              # strip leading+trailing JS whitespace
+#   reIsBadHex = /^[-+]0x[0-9a-f]+$/i      # SIGNED hex literal => treated as NaN
+#   reIsBinary = /^0b[01]+$/i
+#   reIsOctal  = /^0o[0-7]+$/i
+#   symbolTag  = '[object Symbol]'
+#
+# ----------------------------------------------------------------------------
+# TOP-LEVEL pipeline (endsWith body), in EXACT order:
+# ----------------------------------------------------------------------------
+#   1. string = toString(string)            # nullish -> ''   (see TOSTRING)
+#   2. target = baseToString(target)        # NOTE: baseToString, NOT toString!
+#                                           #   nullish target is NOT '' — null -> 'null',
+#                                           #   undefined -> 'undefined' (see BASETOSTRING)
+#   3. length = string.length               # UTF-16 code-unit count of the coerced string
+#   4. position = (position === undefined)
+#        ? length                           # DEFAULT position is the string length.
+#                                           #   IMPORTANT: the test is strict `=== undefined`.
+#                                           #   `null` is NOT undefined -> it takes the else branch.
+#        : baseClamp(toInteger(position), 0, length)   # coerce -> int -> clamp to [0, length]
+#   5. end = position
+#   6. position = position - target.length  # start index of the slice (may go negative)
+#   7. RETURN  (position >= 0) && (string.slice(position, end) == target)
+#        # `==` here compares two PRIMITIVE STRINGS, so it is exact string equality.
+#        # If position < 0 the && short-circuits to false WITHOUT slicing.
+#
+# Observations that fall out of the arithmetic (all verified against real pkg):
+#   - Empty target ('' after coercion): target.length === 0, so position === end after step 6,
+#     position === end >= 0 always (clamp floor is 0), and slice(p,p) === '' == '' => TRUE.
+#     => endsWith(anyString, '') is ALWAYS true (incl. empty string, any clamped position).
+#   - Target longer than the available prefix (position - target.length < 0) => FALSE
+#     (short-circuit; no slice).
+#   - position clamped to length means a position argument >= length behaves like length
+#     (a normal "ends with at the very end" check). position 0 means end=0: only '' target
+#     can match (any nonempty target => position = -len < 0 => false).
+#   - A middle check: with end = clamped position < length, the slice ends at `end`, so it
+#     tests whether `target` ends at index `end` (e.g. endsWith('abc','b',2) === true:
+#     end=2, position=2-1=1, slice(1,2)='b' == 'b').
+#
+# ----------------------------------------------------------------------------
+# HELPER: toString(value)            # used for the `string` arg ONLY
+# ----------------------------------------------------------------------------
+#   return (value == null) ? '' : baseToString(value)
+#   # `value == null` is loose: matches BOTH null and undefined. Both -> ''.
+#   # Everything else delegates to baseToString.
+#
+# ----------------------------------------------------------------------------
+# HELPER: baseToString(value)        # used DIRECTLY for the `target` arg, and by toString
+# ----------------------------------------------------------------------------
+#   if typeof value == 'string': return value                       # fast path, identity
+#   if isSymbol(value):                                             # see ISSYMBOL
+#       return symbolToString ? symbolToString.call(value) : ''     # e.g. 'Symbol(desc)'
+#   result = (value + '')                                           # JS ToString via '+'
+#   return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result
+#       # -0 SIGN-PRESERVATION: a numeric -0 stringifies natively to '0'; baseToString
+#       #   rewrites it to '-0'. (Detected via 1/value === -Infinity.)
+#   # NOTE for the `target` path: because target uses baseToString (NOT toString),
+#   #   null    -> '' + null      -> 'null'
+#   #   undefined -> '' + undefined -> 'undefined'
+#   #   true/false -> 'true'/'false'; numbers -> their JS string; -0 -> '-0';
+#   #   arrays -> native Array.toString (join ',', null/undefined ELEMENTS render as '',
+#   #             e.g. [1,null,3] -> '1,,3'); plain objects -> '[object Object]'
+#   #             (unless a custom toString/valueOf); bigint 123n -> '123'.
+#
+# ----------------------------------------------------------------------------
+# HELPER: baseClamp(number, lower, upper)
+# ----------------------------------------------------------------------------
+#   if (number === number) {            # i.e. NOT NaN
+#       if (upper !== undefined) number = (number <= upper) ? number : upper;   # cap high
+#       if (lower !== undefined) number = (number >= lower) ? number : lower;   # floor low
+#   }
+#   return number
+#   # In endsWith it is always called as baseClamp(int, 0, length): caps to length,
+#   # floors to 0. (NaN input would pass through unchanged, but toInteger never yields NaN.)
+#   # -0: -0 >= 0 is true and -0 <= upper is true, so -0 passes both tests unchanged (stays -0);
+#   #     in slice/subtraction -0 behaves as 0.
+#
+# ----------------------------------------------------------------------------
+# HELPER: toInteger(value)           # used for the `position` arg
+# ----------------------------------------------------------------------------
+#   result    = toFinite(value)                 # see TOFINITE (never +-Infinity, never NaN)
+#   remainder = result % 1
+#   return (result === result) ? (remainder ? result - remainder : result) : 0
+#   # TRUNCATION TOWARD ZERO: 3.2 -> 3 ; 2.9 -> 2 ; -2.9 -> -2 ; -0.9 -> -0 (then clamped to 0).
+#   # toFinite already removed NaN/Infinity, so the (result===result) guard is belt-and-braces;
+#   # net effect: NaN-ish -> 0, +Inf-ish -> MAX_INTEGER, -Inf-ish -> -MAX_INTEGER.
+#
+# ----------------------------------------------------------------------------
+# HELPER: toFinite(value)
+# ----------------------------------------------------------------------------
+#   if (!value) return (value === 0) ? value : 0
+#       # Falsy fast path: 0 and -0 return THEMSELVES (preserving -0); '', null, undefined,
+#       #   false, NaN all return 0.
+#   value = toNumber(value)
+#   if (value === INFINITY || value === -INFINITY) {
+#       sign = (value < 0) ? -1 : 1
+#       return sign * MAX_INTEGER          # +-Infinity -> +-1.7976931348623157e+308
+#   }
+#   return (value === value) ? value : 0   # NaN -> 0, else the finite number
+#
+# ----------------------------------------------------------------------------
+# HELPER: toNumber(value)
+# ----------------------------------------------------------------------------
+#   if typeof value == 'number': return value
+#   if isSymbol(value): return NAN                          # Symbol -> NaN
+#   if isObject(value) {                                    # object or function
+#       other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#       value = isObject(other) ? (other + '') : other      # use valueOf, else String it
+#   }
+#   if typeof value != 'string': return (value === 0) ? value : +value
+#       # bigint hits THIS branch: +bigint THROWS `TypeError: Cannot convert a BigInt value
+#       #   to a number` (see OUT-OF-ENVELOPE).
+#   value = value.replace(reTrim, '')                       # trim leading/trailing ws
+#   isBinary = reIsBinary.test(value)
+#   return (isBinary || reIsOctal.test(value))
+#       ? freeParseInt(value.slice(2), isBinary ? 2 : 8)    # '0b101'->5, '0o17'->15
+#       : (reIsBadHex.test(value) ? NAN : +value)           # SIGNED hex ('+0x..','-0x..') -> NaN;
+#                                                           #   else native +str: '0x1f'->31 (UNSIGNED
+#                                                           #   hex parses!), ''->0, '  3 '->3, 'abc'->NaN,
+#                                                           #   'Infinity'->Infinity, '1e3'->1000, '3.2'->3.2
+#
+# ----------------------------------------------------------------------------
+# HELPER: isSymbol(value)
+# ----------------------------------------------------------------------------
+#   return typeof value == 'symbol'
+#       || (isObjectLike(value) && objectToString.call(value) == '[object Symbol]')
+#
+# HELPER: isObject(value)     -> !!value && (typeof value == 'object' || typeof value == 'function')
+# HELPER: isObjectLike(value) -> !!value && typeof value == 'object'
+#
+# ============================================================================
+# WORKED EXAMPLES (all confirmed against the real package):
+# ============================================================================
+#   endsWith('abc','c')            -> true    # default pos=3, end=3, pos=2, slice(2,3)='c'
+#   endsWith('abc','b')            -> false   # slice(2,3)='c' != 'b'
+#   endsWith('abc','b',2)          -> true    # end=2, pos=1, slice(1,2)='b'
+#   endsWith('abc','abc',2)        -> false   # end=2, pos=2-3=-1 < 0 -> false
+#   endsWith('abc','')             -> true    # empty target always true
+#   endsWith('abc','',0)           -> true    # empty target, pos 0
+#   endsWith('abc','c',0)          -> false   # end=0, pos=-1 -> false
+#   endsWith('abc','abcd')         -> false   # pos=3-4=-1 -> false
+#   endsWith('','')                -> true
+#   endsWith('','x')               -> false
+#   endsWith(null,'l')             -> false   # string='' ; pos=0 ; pos=-1 -> false
+#   endsWith(123,'3')              -> true    # string='123'
+#   endsWith(123,'23')             -> true
+#   endsWith('abc',null)           -> false   # target=baseToString(null)='null'; slice(-1..)<0 -> false
+#   endsWith('anull',null)         -> true    # target='null', 'anull' ends with 'null'
+#   endsWith('aundefined',undefined)-> true   # target=baseToString(undefined)='undefined'
+#   endsWith('abc','',null)        -> true    # pos null !== undefined -> toInteger(null)=0; empty target
+#   endsWith('abc','c',null)       -> false   # pos=0, end=0, pos=-1 -> false
+#   endsWith('abc','b',NaN)        -> false   # toInteger(NaN)=0, end=0, pos=-1 -> false
+#   endsWith('abc','',NaN)         -> true    # pos 0, empty target
+#   endsWith('abc','c',Infinity)   -> true    # toFinite(Inf)=MAX_INT -> clamp 3 -> end=3 -> 'c'
+#   endsWith('abc','c',-Infinity)  -> false   # -> clamp 0 -> end=0 -> false
+#   endsWith('abc','c',-5)         -> false   # clamp 0
+#   endsWith('abc','c',2.9)        -> false   # toInteger 2 -> end=2 -> slice(1,2)='b' != 'c'
+#   endsWith('abc','b',2.9)        -> true    # toInteger 2 -> 'b'
+#   endsWith('abc','c',100)        -> true    # clamp to length 3
+#   endsWith('abcde','cd','4')     -> true    # pos '4'->4 -> end4 pos2 'cd'
+#   endsWith('abc','c','+0x1f')    -> false   # signed bad hex -> NaN -> 0 -> end0 -> false
+#   endsWith('abc','c','0x1f')     -> true    # UNSIGNED hex -> 31 -> clamp 3 -> 'c'
+#   endsWith('abcd','cd','0b100')  -> true    # binary 4 -> 'cd'
+#   endsWith('abc','a',true)       -> true    # pos true->toNumber 1 -> end1 pos0 'a'
+#   endsWith('abcde','de',{valueOf:()=>5}) -> true   # valueOf 5
+#   endsWith([1,2,3],'2,3')        -> true    # string='1,2,3'
+#   endsWith([1,null,3],'1,,3')    -> true    # native Array.toString renders null elem as ''
+#   endsWith({toString:()=>'hello'},'lo') -> true
+#   endsWith(true,'rue')           -> true    # string='true'
+#   endsWith(-0,'-0')              -> true    # baseToString(-0)='-0'
+#   endsWith(-0,'0')               -> true    # string='-0' ends with '0'
+#   endsWith(123n,'23')            -> true    # bigint string -> '123'
+#   endsWith('a123',123n)          -> true    # bigint target -> '123'
+#
+# ============================================================================
+# ORACLE value -> oracle.json
+#   Pure deterministic predicate. No seam. The harness records the boolean
+#   return for each generated input tuple. Re-emit as: `export default endsWith`.
+#   Determinism re-verified (same args -> same result across calls).
+# ============================================================================
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly — all bundled, no external table):
+#   - endsWith pipeline (steps 1-7 above).
+#   - All inline helpers: toString, baseToString, baseClamp, toInteger, toFinite,
+#     toNumber, isSymbol, isObject, isObjectLike — reproduced in full above.
+#   - The four regexes + three numeric constants (reproduced verbatim above).
+#   These are NOT carried data (no large literal table); they are small algorithmic
+#   constants/patterns and MUST be reproduced byte-for-behavior.
+#
+# CARRIED DATA: none.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they
+#   do not round-trip the input codec or rely on non-codec identity — a blind re-emitter
+#   still reconstructs the behavior from the spec above):
+#   - Symbol as `string` or `target`: coerced via baseToString's isSymbol branch to
+#     'Symbol(desc)'. Behavior known & specified; Symbols are not codec-faithful -> NOT emitted.
+#   - Function as `string`/`target`: baseToString -> Function.prototype.toString source text.
+#     Specified; functions not codec-faithful -> NOT emitted.
+#   - bigint as `position`: toNumber falls to `+value` which THROWS
+#     `TypeError: Cannot convert a BigInt value to a number`. This IS a real throw path and
+#     bigint IS codec-faithful, but we intentionally keep it OUT of genInputs to avoid coupling
+#     to throw-capture nuances; documented here so a blind engineer reproduces the throw.
+#     (bigint as `string`/`target` is fine -> '123' -> emitted in curated cases.)
+#   - The unit has NO side effects, NO ambient reads (no clock/RNG/env/fs/net) -> NO seam.
+#
+# SELF-CONSISTENCY: every value genInputs can emit (numbers incl. -0/NaN/Inf via the
+#   position arg as JS values, strings, booleans, null, plain arrays/objects with VERIFIED
+#   stringifications, RegExp, Map/Set [-> '[object Map/Set]' -> NaN-position or
+#   '/re/'-style target], Uint8Array/Buffer, bigint as string/target) has its mapping
+#   defined above. genInputs does NOT emit Symbol/function/bigint-position (the only
+#   behaviors deliberately left to the OUT-OF-ENVELOPE prose).
+
+# ============================================================================
+# PROVENANCE
+#   package: lodash.endswith@4.2.1  (license: MIT)
+#   repo:    lodash/lodash  (Custom Build: `lodash modularize exports="npm" -o ./`)
+#   source:  node_modules/lodash.endswith/index.js  (single file, default export)
+# ============================================================================
+PROVENANCE lodash.endswith@4.2.1 ; repo lodash/lodash ; MIT ; source index.js (default export endsWith)

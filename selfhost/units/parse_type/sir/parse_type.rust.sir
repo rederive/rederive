@@ -1,0 +1,21 @@
+UNIT parse_type
+LANG rust
+PRIMARY-SHA256 13ec282f2ac414f28d67d0f388026277b9171b3b207288adedef231a2b912999
+SIG pub fn parse_type(s: &str) -> serde_json::Value
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn parse_type) depending on serde_json only — no main,
+  no I/O, no unsafe. The verifier's harness binds s as a &str and prints the returned Value as one JSON line. Each node is a
+  Value::Object (serde_json::Map; member order is immaterial, the canonical form sorts keys); alts, items and fields are
+  Value::Array; a record field is a two-element Value::Array [Value::String name, node]. A throw (R11) is a panic; the
+  message is not graded.
+ENVELOPE as the primary. The nesting cap (R10) bounds recursion at MAX_DEPTH composites, far inside the default thread
+  stack, provided the depth counter is checked before descending.
+MECHANISM WHITESPACE (R1) is matches!(c, ' ' | '\t' | '\r' | '\n') — NOT char::is_whitespace (Unicode) and NOT
+  u8::is_ascii_whitespace, which also accepts form feed. NAME (R7) is a scan: first byte is_ascii_alphabetic or '_', then
+  is_ascii_alphanumeric or '_'. Every token is ASCII, so a byte cursor over s.as_bytes() is sound; a non-ASCII byte is
+  never whitespace, never IDENT and never a token, so it throws wherever it stands. No regex crate is needed.
+  SAME TYPE (R5) is NOT serde_json::Value's PartialEq (arrays compare in order, so reordered union alts or record fields
+  would differ): compare structurally with alts and fields as sets, or build an identity string with the alts' and the
+  fields' strings sorted. COVERS (R6) is a recursive
+  predicate over two parsed nodes, every clause (a)–(h) tried — it is not a set test on the rendered strings.
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs parseType. Language file re-cut 2026-10-27 with the round-5 primary.

@@ -1,0 +1,159 @@
+UNIT isBuffer
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isBuffer(obj: any) -> any        # declared :boolean in index.d.ts, but the IMPLEMENTATION does NOT coerce — see node-4
+DEPENDS-ON none
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# Determine whether `obj` is a Node.js Buffer WITHOUT requiring the `buffer`
+# module. Detection is purely duck-typed: it asks the object's own constructor
+# whether it considers `obj` a Buffer (Buffer exposes a static `Buffer.isBuffer`).
+# Pure, total over codec-faithful inputs (no ambient seam — no clock/RNG/io/net).
+# Single expression; the entire body is one short-circuiting `&&` chain.
+#
+# EXACT SOURCE (index.js, the whole module body):
+#   module.exports = function isBuffer (obj) {
+#     return obj != null && obj.constructor != null &&
+#       typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+#   }
+
+# ============================================================================
+# BEHAVIOR  — ordered short-circuit pipeline (JS `&&`, left to right)
+# ============================================================================
+# Evaluate the four operands of `&&` in order. `&&` returns the FIRST falsy
+# operand (as-is) OR, if all are truthy, the LAST operand (as-is). There is NO
+# Boolean() wrapping anywhere. This makes the return type and exact value
+# load-bearing — see node-4.
+#
+# node-1  GUARD: `obj != null`
+#   - LOOSE inequality against null. This is true UNLESS obj is `null` OR
+#     `undefined` (the only two values loosely-equal to null).
+#   - Note: 0, "", NaN, false are all `!= null` === true; they pass this guard.
+#   - If FALSE -> the whole `&&` short-circuits and returns the boolean `false`.
+#     (When obj is null:      `null != null`      -> false -> returns false.
+#      When obj is undefined: `undefined != null` -> false -> returns false.)
+#
+# node-2  GUARD: `obj.constructor != null`
+#   - Reads the `constructor` property of obj (own or inherited via prototype
+#     chain). For primitives (number/string/boolean/bigint/symbol) that pass
+#     node-1, the value is auto-boxed for the property read, yielding the
+#     wrapper constructor (Number/String/Boolean/BigInt/Symbol) — non-null,
+#     so node-2 passes for primitives.
+#   - LOOSE inequality: passes unless `obj.constructor` is `null` or `undefined`.
+#     * An object created via `Object.create(null)` has no `constructor` ->
+#       reads `undefined` -> node-2 FALSE -> returns boolean `false`.
+#     * `{ constructor: null }` -> node-2 FALSE -> returns boolean `false`.
+#   - If FALSE -> short-circuits, returns boolean `false`.
+#   - (No try/catch: if reading `.constructor` were to throw via a custom
+#     getter that throws, the throw would propagate — but `.constructor` is a
+#     plain data property in all codec-faithful inputs, so this is N/A here.)
+#
+# node-3  GUARD: `typeof obj.constructor.isBuffer === 'function'`
+#   - Reads `obj.constructor.isBuffer` and checks its typeof is exactly the
+#     string 'function'.
+#   - FALSE (returns boolean `false`) when isBuffer is absent (undefined), or
+#     present but not a function: e.g. `isBuffer: true`, `isBuffer: 1`,
+#     `isBuffer: "x"`, `isBuffer: null`, `isBuffer: {}` all yield typeof !=
+#     'function' -> returns boolean `false`.
+#   - A real Buffer instance: `buf.constructor` is `Buffer`, and
+#     `Buffer.isBuffer` is a function -> node-3 passes.
+#   - A Uint8Array: `u8.constructor` is `Uint8Array`, which has NO static
+#     `isBuffer` -> `undefined` -> typeof 'undefined' -> node-3 FALSE ->
+#     returns boolean `false`. (This is the canonical Uint8Array=false case.)
+#   - If FALSE -> short-circuits, returns boolean `false`.
+#
+# node-4  CALL (final operand): `obj.constructor.isBuffer(obj)`
+#   - Invoke the static `isBuffer` with `obj.constructor` as `this` and `obj`
+#     as the sole argument.
+#   - CRITICAL — NO COERCION: the value returned by isBuffer is returned by the
+#     unit AS-IS. The unit does NOT do `Boolean(...)` / `!!...`. Therefore:
+#       * real Buffer:                       Buffer.isBuffer(buf) -> true (boolean)
+#       * spoof `isBuffer: () => true`:      -> true   (boolean)
+#       * spoof `isBuffer: () => false`:     -> false  (boolean)
+#       * spoof `isBuffer: () => 1`:         -> 1      (number)   <-- not `true`
+#       * spoof `isBuffer: () => 0`:         -> 0      (number)   <-- not `false`
+#       * spoof `isBuffer: () => "yes"`:     -> "yes"  (string)
+#       * spoof `isBuffer: () => 42`:        -> 42     (number)
+#       * spoof `isBuffer: () => null`:      -> null
+#       * spoof `isBuffer: () => undefined`: -> undefined
+#       * spoof `isBuffer: () => []`:        -> []     (array)
+#     The index.d.ts type annotation (`: boolean`) is OPTIMISTIC; the runtime
+#     value is exactly whatever the callee returns. A blind re-emitter MUST
+#     return this value uncoerced.
+#   - THROW PASSTHROUGH: if the callee throws, isBuffer throws the same error
+#     (no try/catch). (Only reachable via a live throwing function -> NOT
+#     codec-faithful -> see SCOPE out-of-envelope; not emitted by genInputs.)
+#
+# RESULT TYPE SUMMARY
+#   - If any of node-1..node-3 is the short-circuit point: return boolean `false`.
+#   - If all guards pass: return the raw result of node-4 (any JS value).
+
+# ============================================================================
+# WORKED IN-SCOPE CASES (self-consistent with genInputs; all codec-faithful)
+# ============================================================================
+#   real Node Buffer (e.g. Buffer.from([1,2,3]))      -> true   (genuine TRUE branch, node-4)
+#   empty Buffer (Buffer.alloc(0))                     -> true
+#   new Uint8Array([...])                              -> false  (node-3: Uint8Array has no static isBuffer)
+#   {} (plain object)                                  -> false  (node-3: Object has no static isBuffer)
+#   "abc" / "" (string)                                -> false  (node-3: String has no static isBuffer)
+#   [1,2,3] / [] (array)                               -> false  (node-3: Array has no static isBuffer)
+#   null                                               -> false  (node-1)
+#   undefined                                          -> false  (node-1)
+#   42 / 0 (number)                                    -> false  (node-3: Number has no static isBuffer)
+#   true / false (boolean)                             -> false  (node-3: Boolean has no static isBuffer)
+#   5n (bigint)                                        -> false  (node-3: BigInt has no static isBuffer)
+#   /x/ (RegExp)                                       -> false  (node-3)
+#   new Set([1]) / new Map()                           -> false  (node-3)
+#   new ArrayBuffer(8) / new DataView(...) / Float64Array -> false (node-3)
+#   Object.create(null)                                -> false  (node-2: no constructor)
+#   { constructor: null }                              -> false  (node-2)
+#   { constructor: {} }                                -> false  (node-3: no isBuffer)
+#   { constructor: { isBuffer: true } }                -> false  (node-3: isBuffer not a function)
+#   { constructor: { isBuffer: 1 } }                   -> false  (node-3: isBuffer not a function)
+#   { constructor: { isBuffer: "x" } }                 -> false  (node-3: isBuffer not a function)
+#   { constructor: { isBuffer: null } }                -> false  (node-3)
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure value oracle: expected = isBuffer(args[0]). For codec-faithful inputs the
+# expected is the raw (possibly non-boolean) return value, captured by the harness
+# from the real package. Throw-paths are not reachable by codec-faithful inputs.
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   The entire 4-node short-circuit `&&` chain above, INCLUDING the no-coercion
+#   passthrough of node-4's return value and the boolean `false` produced by
+#   short-circuiting at node-1/2/3.
+#
+# CARRIED DATA: none. (No literal tables; the unit is a 2-line expression.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for the blind re-emitter, but
+# NOT emitted by genInputs because the values are not codec-round-trippable):
+#   - Adversarial TRUE via a LIVE function: `{ constructor: { isBuffer: () => true } }`.
+#     A live function does not survive the oracle codec (JSON drops it, leaving
+#     `{ constructor: {} }` which then returns false), so it would poison the
+#     held-out. The re-emitter still reconstructs node-4 from this spec: when
+#     `constructor.isBuffer` IS a function, the unit calls it and returns its
+#     value uncoerced. The genuine TRUE branch is exercised instead by a REAL
+#     Node Buffer (codec-faithful), which passes node-4 identically.
+#   - Non-boolean returns from a live spoof (`() => 1`, `() => "yes"`, etc.):
+#     same non-round-trippability; documented in node-4 so the re-emitter's
+#     uncoerced-return behavior is fully specified.
+#   - THROW passthrough (`() => { throw }`): live function, not codec-faithful;
+#     documented in node-4.
+#   - A getter on `.constructor`/`.isBuffer`: not expressible via codec; data
+#     properties only in-envelope.
+#   - Symbol arguments: typeof 'symbol' is not codec-round-trippable as a value
+#     here; behavior (-> false at node-3, BigInt/Symbol wrapper has no isBuffer)
+#     is documented but not emitted.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+PROVENANCE is-buffer@2.0.5, github.com/feross/is-buffer, MIT (Feross Aboukhadijeh), source file: index.js

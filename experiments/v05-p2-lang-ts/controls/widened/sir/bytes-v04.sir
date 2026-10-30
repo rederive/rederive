@@ -1,0 +1,299 @@
+# =============================================================================
+# SIR — unit: bytes (main callable / default export of package `bytes`)
+# =============================================================================
+UNIT bytes
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG bytes(value: any, options?: object) -> string | number | null
+
+# The unit under test is the MAIN CALLABLE's value-mode dispatch (the function
+# assigned to module.exports). It is a pure function: same args -> same result,
+# no clock / RNG / env / fs / net. No seam. ORACLE-CLASS deterministic.
+#
+# RE-EMITTER NOTE (emission target): the live unit is a DEFAULT export.
+# The blind re-emitter MUST `export default <fn>` where <fn> is the callable
+# described here (the dispatch + its two helpers `format` and `parse`, inlined
+# or as locals). The harness loads the .mjs via import() and calls the default
+# export as bytes(value, options).
+
+DEPENDS-ON none
+
+# =============================================================================
+# CONSTANTS (define these EXACTLY — they are in-contract logic, not carried data)
+# =============================================================================
+#
+# map  (unit -> byte multiplier; keys are LOWERCASE):
+#   b  = 1
+#   kb = 1 << 10            = 1024
+#   mb = 1 << 20            = 1048576
+#   gb = 1 << 30            = 1073741824
+#   tb = Math.pow(1024, 4)  = 1099511627776
+#   pb = Math.pow(1024, 5)  = 1125899906842624
+#   (1<<10/20/30 are exact integers; tb/pb use Math.pow == those exact integers.)
+#
+# parseRegExp        = /^((-|\+)?(\d+(?:\.\d+)?)) *(kb|mb|gb|tb|pb)$/i
+#   NOTE: 'b' is NOT in the unit alternation. Anchored ^...$, case-insensitive.
+#   Group 1 = signed number text (e.g. "-1.5"); Group 4 = unit text (kb|mb|gb|tb|pb).
+#   " *" = ZERO-OR-MORE ASCII SPACE (0x20) only, between number and unit
+#         (NOT \s — a TAB between number and unit does NOT match).
+#
+# formatThousandsRegExp = /\B(?=(\d{3})+(?!\d))/g
+#   Global, zero-width; inserts the separator at every position that is a
+#   non-word-boundary (\B) followed by a run of digits that is a multiple of 3
+#   with no digit after it. Applied to the INTEGER part text only (see FORMAT).
+#
+# formatDecimalsRegExp  = /(?:\.0*|(\.[^0]+)0+)$/
+#   Anchored at end. Two alternatives:
+#     (a) \.0*$         — a dot followed by zero-or-more '0' chars to end of
+#                         string (the all-zero / pure-dot fraction). Replaced
+#                         by '' (capture group 1 is empty).
+#     (b) (\.[^0]+)0+$  — dot, then one-or-more NON-'0' chars (captured as $1),
+#                         then one-or-more '0' chars to end. Replaced by $1
+#                         (i.e. trailing zeros after the last non-zero digit are
+#                         dropped; the dot+significant part is kept).
+#   Replacement template is '$1'. NOTE the subtlety: a fraction like ".010"
+#   matches NEITHER alternative — (a) fails (there is a '1' before end), (b)
+#   fails (the char right after '.' is '0', so [^0]+ cannot start). So ".010"
+#   is NOT stripped (stays "1.010"). Only PURE-zero fractions or zeros that
+#   TRAIL a non-zero run are removed.
+
+# =============================================================================
+# BEHAVIOR — top-level dispatch
+# =============================================================================
+# bytes(value, options):
+#   NODE D1: if typeof value === 'string'  -> return PARSE(value)   # options IGNORED in string mode
+#   NODE D2: if typeof value === 'number'  -> return FORMAT(value, options)
+#   NODE D3: otherwise                     -> return null
+#
+#   typeof rules (JS): 'string' for primitive strings only; 'number' for
+#   primitive numbers INCLUDING NaN, Infinity, -Infinity, -0. bigint is
+#   typeof 'bigint' (NOT 'number') -> D3 -> null. boolean/null/undefined/
+#   object/array/function/symbol -> D3 -> null.
+#
+#   IMPORTANT: from the top-level dispatch, PARSE is only ever reached with a
+#   STRING. (parse() also has a number-branch internally, but it is UNREACHABLE
+#   via the unit's dispatch; document it but it never fires in-scope.)
+
+# -----------------------------------------------------------------------------
+# FORMAT(value, options)   # value is a primitive number (typeof 'number')
+# -----------------------------------------------------------------------------
+# NODE F1 (finite guard):
+#   if NOT Number.isFinite(value) -> return null.
+#     -> NaN -> null;  Infinity -> null;  -Infinity -> null.
+#     -> -0 IS finite -> proceeds (formats as "0B").
+#
+# NODE F2 (read options; options may be any truthy/falsy value — access is
+#          guarded by `options && options.<key>`):
+#   mag               = Math.abs(value)
+#   thousandsSeparator = (options && options.thousandsSeparator) || ''   # '' if absent/falsy
+#   unitSeparator      = (options && options.unitSeparator)      || ''
+#   decimalPlaces      = (options && options.decimalPlaces !== undefined)
+#                          ? options.decimalPlaces : 2                   # default 2
+#   fixedDecimals      = Boolean(options && options.fixedDecimals)       # default false
+#   unit               = (options && options.unit) || ''                 # '' if absent/falsy
+#   (If `options` is a non-object truthy value, e.g. a number/string, the
+#    property reads yield undefined -> all defaults apply, no throw.)
+#
+# NODE F3 (auto-select unit ONLY if no usable explicit unit):
+#   if (!unit  OR  !map[unit.toLowerCase()]) :
+#     # explicit unit was empty/falsy, OR not a recognized key after lowercasing
+#     if      mag >= map.pb -> unit = 'PB'
+#     else if mag >= map.tb -> unit = 'TB'
+#     else if mag >= map.gb -> unit = 'GB'
+#     else if mag >= map.mb -> unit = 'MB'
+#     else if mag >= map.kb -> unit = 'KB'
+#     else                  -> unit = 'B'
+#   else:
+#     # explicit unit is a recognized key -> KEEP `unit` VERBATIM (original
+#     # casing preserved for OUTPUT), e.g. unit:'kb' stays 'kb', 'Kb' stays 'Kb'.
+#   Thresholds are `>=` (inclusive at the lower boundary). Comparison uses `mag`
+#   (the absolute value), so negative values pick the same unit as their abs.
+#
+# NODE F4 (compute scaled value text):
+#   val = value / map[unit.toLowerCase()]        # SIGNED value (not mag); divisor by lowercased unit
+#   str = val.toFixed(decimalPlaces)             # platform Number.prototype.toFixed
+#     -> If decimalPlaces is < 0 or > 100 -> toFixed THROWS RangeError
+#        ("toFixed() digits argument must be between 0 and 100").  THIS THROW
+#        PROPAGATES out of the unit (gradable throw path).
+#     -> toFixed produces a fixed-point decimal string with `decimalPlaces`
+#        fraction digits, rounding per ECMAScript Number.prototype.toFixed
+#        (re-emitter MUST use the language's native toFixed — do NOT re-derive
+#        FP rounding). Negative values keep their leading '-'. -0 -> "0..."
+#
+# NODE F5 (strip trailing-zero decimals UNLESS fixedDecimals):
+#   if NOT fixedDecimals:
+#       str = str.replace(formatDecimalsRegExp, '$1')   # see regex notes above
+#   (When fixedDecimals is true, the toFixed output is kept exactly, e.g.
+#    "1.00", "1.50".)
+#
+# NODE F6 (thousands separators on the INTEGER part only):
+#   if thousandsSeparator (truthy):
+#       split str on '.', and for the segment at index 0 (the integer part)
+#       apply: segment.replace(formatThousandsRegExp, thousandsSeparator);
+#       leave the fractional segment (index 1, if any) untouched; re-join with '.'.
+#       (A leading '-' is preserved and gets NO separator immediately after it,
+#        because the position between '-' and the first digit is a word boundary,
+#        so \B does not match there. E.g. "-12345" -> "-12,345".)
+#
+# NODE F7 (assemble):
+#   return str + unitSeparator + unit
+#   (unitSeparator default '' -> e.g. "1KB"; with unitSeparator ' ' -> "1 KB".
+#    `unit` is the verbatim/selected unit string from F3.)
+
+# -----------------------------------------------------------------------------
+# PARSE(val)   # via dispatch, val is always a primitive string
+# -----------------------------------------------------------------------------
+# NODE P0 (number branch — UNREACHABLE from dispatch, documented for completeness):
+#   if typeof val === 'number' && !isNaN(val) -> return val
+#   (Dispatch only calls parse with a string, so this never fires in-scope.)
+#
+# NODE P1 (non-string guard — also unreachable from dispatch since val is string):
+#   if typeof val !== 'string' -> return null
+#
+# NODE P2 (regex test):
+#   results = parseRegExp.exec(val)
+#   if results is NULL (no match):
+#       # FALLBACK — NOT an immediate null:
+#       floatValue = parseInt(val, 10)      # base-10 integer parse
+#       unit = 'b'
+#   else (match):
+#       floatValue = parseFloat(results[1]) # results[1] = signed number text, e.g. "-1.5", "+2"
+#       unit = results[4].toLowerCase()     # one of kb|mb|gb|tb|pb (lowercased)
+#
+# NODE P3 (NaN guard):
+#   if isNaN(floatValue) -> return null
+#
+# NODE P4 (compute):
+#   return Math.floor(map[unit] * floatValue)
+#   (map[unit] is the multiplier for the lowercased unit; for the fallback path
+#    unit='b' -> multiplier 1, so result is Math.floor(parseInt(val,10)).)
+#
+# PARSE behavior consequences (all VERIFIED against the real package):
+#   "1KB"      -> 1024            (regex match, kb)
+#   "1.5mb"    -> 1572864         (parseFloat 1.5 * 1048576, floor)
+#   "+2gb"     -> 2147483648      (parseFloat "+2" = 2 * 1<<30)
+#   "3pb"/"3PB"-> 3377699720527872
+#   "1 kb"     -> 1024            (space allowed by " *", anchored, matches)
+#   "5  kb"    -> 5120            (multiple ASCII spaces allowed)
+#   "1024"     -> 1024            (no unit -> regex NO MATCH -> parseInt("1024",10)=1024)
+#   "5"        -> 5               (regex no match -> parseInt)
+#   "5b"       -> 5               ('b' NOT in regex -> no match -> parseInt("5b",10)=5)
+#   "-5b"      -> -5              (no match -> parseInt("-5b",10)=-5)
+#   "+5"       -> 5               (parseInt("+5",10)=5)
+#   "-5"       -> -5
+#   "5.9"      -> 5               (no match -> parseInt("5.9",10)=5, floor of 5)
+#   "5.9kb"    -> 6041            (regex match, parseFloat 5.9 * 1024 = 6041.6, floor 6041)
+#   "1."       -> 1              (no match -> parseInt("1.",10)=1)
+#   "1e3"      -> 1               (parseInt base-10 stops at 'e' -> 1)
+#   "0x10"     -> 0               (parseInt base-10 stops at 'x' -> 0)
+#   "007"      -> 7               (parseInt -> 7)
+#   ".5kb"     -> null            (regex needs \d+ before '.', no match;
+#                                  parseInt(".5kb",10)=NaN -> P3 -> null)
+#   "  1 kb  " -> 1               (leading/trailing ws fails anchored regex;
+#                                  parseInt("  1 kb  ",10)=1 — parseInt skips
+#                                  leading whitespace, stops at first non-digit)
+#   "  42  "   -> 42
+#   "5\tkb"    -> 5               (TAB between number & unit fails " *"; parseInt -> 5)
+#   "abc"      -> null            (no match -> parseInt NaN -> null)
+#   ""         -> null            (no match -> parseInt("",10)=NaN -> null)
+#   "   "      -> null            (whitespace-only -> parseInt NaN -> null)
+#   "."/"+"/"-"/"\t" -> null      (parseInt NaN -> null)
+#   "-0"       -> 0               (parseInt("-0",10) = -0; Math.floor(1 * -0) = -0;
+#                                  JSON-serializes as 0; result is numerically 0)
+
+# =============================================================================
+# DEMONSTRATED FORMAT VECTORS (VERIFIED — self-consistent with genInputs)
+# =============================================================================
+#   bytes(0)                                  -> "0B"
+#   bytes(-0)                                 -> "0B"
+#   bytes(1023)                               -> "1023B"
+#   bytes(1024)                               -> "1KB"        (1.00 -> strip -> "1")
+#   bytes(1000)                               -> "1000B"
+#   bytes(1536)                               -> "1.5KB"      (1.50 -> strip -> "1.5")
+#   bytes(1610612736)                         -> "1.5GB"
+#   bytes(1048576)                            -> "1MB"
+#   bytes(Math.pow(1024,4))                   -> "1TB"
+#   bytes(Math.pow(1024,5))                   -> "1PB"
+#   bytes(Math.pow(1024,5)-1)                 -> "1024TB"
+#   bytes(Number.MAX_SAFE_INTEGER)            -> "8PB"
+#   bytes(1.5)                                -> "1.5B"
+#   bytes(-1024)                              -> "-1KB"
+#   bytes(-1536)                              -> "-1.5KB"
+#   bytes(1075.2)                             -> "1.05KB"     (".05" not stripped)
+#   bytes(1034.24)                            -> "1.01KB"
+#   bytes(NaN)/bytes(Infinity)/bytes(-Infinity) -> null
+#   bytes(1000,{thousandsSeparator:','})      -> "1,000B"
+#   bytes(1024000,{thousandsSeparator:','})   -> "1,000KB"
+#   bytes(1234567,{thousandsSeparator:',',unit:'B'}) -> "1,234,567B"
+#   bytes(-12345,{thousandsSeparator:',',unit:'B'})  -> "-12,345B"
+#   bytes(1234567,{thousandsSeparator:'_',unit:'B'}) -> "1_234_567B"
+#   bytes(1234.5,{thousandsSeparator:',',unit:'B',decimalPlaces:1}) -> "1,234.5B"
+#   bytes(1264.4*... ,{decimalPlaces:3}) etc. — see toFixed note
+#   bytes(1024,{decimalPlaces:0})             -> "1KB"
+#   bytes(1536,{decimalPlaces:0})             -> "2KB"        (toFixed(0) of 1.5 -> "2")
+#   bytes(0.5,{decimalPlaces:0,unit:'B'})     -> "1B"
+#   bytes(2.5,{decimalPlaces:0,unit:'B'})     -> "3B"
+#   bytes(0.125,{decimalPlaces:2,unit:'B'})   -> "0.13B"
+#   bytes(1536,{fixedDecimals:true})          -> "1.50KB"
+#   bytes(1024,{fixedDecimals:true})          -> "1.00KB"
+#   bytes(12345,{thousandsSeparator:',',unit:'B',fixedDecimals:true}) -> "12,345.00B"
+#   bytes(1024,{unit:'MB'})                   -> "0MB"        (1024/1<<20 -> 0.0009... -> toFixed2 "0.00" -> "0")
+#   bytes(1048576,{unit:'KB'})                -> "1024KB"
+#   bytes(1024,{unit:'kb'})                   -> "1kb"        (verbatim case)
+#   bytes(1024,{unit:'Kb'})                   -> "1Kb"        (verbatim case)
+#   bytes(1024,{unit:'xx'})                   -> "1KB"        (unknown unit -> auto-select)
+#   bytes(1024,{unit:'PB'})                   -> "0PB"
+#   bytes(0,{unit:'KB'})                      -> "0KB"
+#   bytes(1024,{unitSeparator:' '})           -> "1 KB"
+#   bytes(1536,{unitSeparator:' ',unit:'KB'}) -> "1.5 KB"
+#   bytes(1024,{decimalPlaces:undefined})     -> "1KB"        (undefined -> default 2)
+#   bytes(1024,{decimalPlaces:-1})            -> THROW RangeError
+#   bytes(1024,{decimalPlaces:101})           -> THROW RangeError
+#   bytes(1024, 42)/bytes(1024,'x')/bytes(1024,null) -> "1KB" (non-object options -> defaults)
+
+# =============================================================================
+# ORACLE
+# =============================================================================
+ORACLE value -> oracle.json
+# Pure value oracle: record (args) -> result. Throw paths recorded as {__throw}.
+# Results: strings (FORMAT), integers (PARSE), or null. -0 in PARSE serializes
+# as 0 in JSON (the codec does not preserve -0 sign in output); this is fine —
+# the value is numerically 0 and graded as 0.
+
+# =============================================================================
+# SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce EXACTLY): the dispatch (D1/D2/D3), FORMAT
+#   (F1..F7), PARSE (P0..P4), all four regexes verbatim, the `map` multiplier
+#   table (small literal — IN-CONTRACT, not carried data), the >= thresholds,
+#   default decimalPlaces=2, trailing-zero stripping semantics, the parseInt
+#   base-10 fallback in PARSE, Math.floor, verbatim unit casing, and the
+#   RangeError throw from toFixed for out-of-range decimalPlaces.
+#
+# CARRIED DATA: NONE. The `map` table is 6 entries of in-contract logic, fully
+#   transcribed above; there is no large literal table requiring attestation.
+#   (No carried.json is written for this unit.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT exercised by genInputs; documented so a
+#   blind re-emitter still reconstructs them, but they are not graded here):
+#   - The sibling exports module.exports.format and module.exports.parse are
+#     NOT the unit under test (the unit is the main callable's dispatch). The
+#     blind re-emitter exports ONLY the default callable.
+#   - parse()'s internal number-branch (P0/P1) is UNREACHABLE from the dispatch
+#     (dispatch routes numbers to FORMAT), so it is never graded.
+#   - NON-CODEC-FAITHFUL inputs are NOT emitted by genInputs because they cannot
+#     survive JSON.stringify(encode(args)) round-trip and would poison held-out
+#     expecteds. Their documented behavior (for re-emitter completeness):
+#       * Symbol value           -> typeof 'symbol' -> D3 -> null
+#       * function value         -> typeof 'function' -> D3 -> null
+#       * undefined value        -> typeof 'undefined' -> D3 -> null
+#       * boxed Number/String    -> typeof 'object'   -> D3 -> null
+#     (NaN / Infinity / -Infinity ARE emitted as number values: they round-trip
+#     via the extended codec and produce null in FORMAT — gradable. -0 is
+#     emitted and round-trips; formats as "0B".)
+
+# =============================================================================
+PROVENANCE bytes@3.1.2 ; repo visionmedia/bytes.js ; MIT Licensed
+           (Copyright 2012-2014 TJ Holowaychuk, 2015 Jed Watson) ;
+           source file: node_modules/bytes/index.js
+# =============================================================================

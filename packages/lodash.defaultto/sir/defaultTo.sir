@@ -1,0 +1,118 @@
+UNIT defaultTo
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG defaultTo(value: any, defaultValue: any) -> any
+DEPENDS-ON none
+
+# ----------------------------------------------------------------------------
+BEHAVIOR
+# The complete source body is a single expression (verified byte-for-byte):
+#
+#     return (value == null || value !== value) ? defaultValue : value;
+#
+# Evaluate the guard with EXACT JavaScript operator semantics, in this order,
+# with short-circuit OR:
+#
+#   NODE 1 (loose-null guard):  value == null
+#     - Uses JS LOOSE equality (==), NOT strict.
+#     - This is TRUE iff value is `null` OR value is `undefined`. No other
+#       value is loosely-equal to null (per the ECMAScript abstract-equality
+#       rules: null == undefined is true; null/undefined are == nothing else,
+#       including 0, '', false, NaN, objects).
+#     - If TRUE, short-circuits: the whole guard is TRUE (NODE 2 not evaluated).
+#
+#   NODE 2 (NaN self-inequality guard):  value !== value
+#     - Only evaluated when NODE 1 is FALSE (value is neither null nor undefined).
+#     - Uses JS STRICT inequality (!==).
+#     - A value is strictly-unequal to itself IFF it is the primitive number NaN.
+#       (NaN is the unique IEEE-754 value for which x !== x.) Every other
+#       primitive, and every object reference, is strictly-equal to itself, so
+#       this is FALSE for them.
+#     - IMPORTANT NUANCE: a *boxed* NaN, e.g. `new Number(NaN)`, is an OBJECT.
+#       NODE 1 is false (object is not == null) and NODE 2 is false (the same
+#       object reference === itself). So a boxed NaN is NOT replaced -- it is
+#       returned as-is. Only the PRIMITIVE NaN triggers replacement.
+#       (This case is OUT-OF-ENVELOPE for the generator -- see SCOPE -- because
+#       boxed primitives do not survive the oracle codec; it is documented here
+#       so a blind re-emitter reconstructs it correctly.)
+#
+#   RESULT:
+#     - If (NODE 1 is TRUE) OR (NODE 2 is TRUE)  ->  return defaultValue
+#         i.e. value in { null, undefined, primitive-NaN }  ->  return defaultValue
+#     - ELSE                                     ->  return value
+#
+# CRITICAL DETAILS / EDGE SEMANTICS (all verified against the real package):
+#   - defaultValue is returned UNTOUCHED when selected. NO recursion, NO further
+#     guarding. If defaultValue is itself null / undefined / NaN / an object,
+#     that exact thing is returned. E.g. defaultTo(null, NaN) returns NaN;
+#     defaultTo(undefined, undefined) returns undefined; defaultTo(null, null)
+#     returns null.
+#   - value is returned by IDENTITY (the same reference / same value) when kept.
+#     Objects, arrays, Set, Map, Buffer/Uint8Array, RegExp are returned as the
+#     same reference. defaultValue is likewise returned by identity.
+#   - FALSY-BUT-PRESENT values are KEPT (returned as value), because they are
+#     neither == null nor !== themselves:
+#         0          -> kept (returns 0)
+#         -0         -> kept; sign preserved (returns -0; Object.is(out,-0) true)
+#         ''         -> kept (returns '')
+#         false      -> kept (returns false)
+#         0n (bigint)-> kept (returns 0n)
+#         Infinity   -> kept (returns Infinity)
+#         -Infinity  -> kept (returns -Infinity)
+#   - ARITY: defaultTo(value) with NO second argument -> defaultValue is
+#     `undefined`. So defaultTo(null) and defaultTo(undefined) and
+#     defaultTo(NaN) each return `undefined` (the missing default). A present
+#     value with one arg, e.g. defaultTo(0), returns 0.
+#   - No throw paths exist. The function never throws for any argument shape
+#     (it only reads via == / !==, which do not invoke user getters here since
+#     no property access occurs; comparisons against null/self are total).
+#   - PURE / READ-ONLY: no mutation of arguments, no ambient reads (no clock,
+#     RNG, env, fs, net). No seam. Output is a pure function of the two args.
+
+# ----------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# Deterministic value oracle: for each input tuple [value, defaultValue], the
+# expected is whatever the real package returns (computed by the harness from
+# the real package; the blind re-emitter reproduces it from BEHAVIOR above).
+
+# ----------------------------------------------------------------------------
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   The entire single-expression body above: the loose-null guard (== null),
+#   the NaN self-inequality guard (!== self), short-circuit OR, ternary
+#   selection, and return-by-identity of the selected operand.
+#
+# CARRIED DATA: none. No tables, no constants.
+#
+# DEMONSTRATED IN-SCOPE INPUT SUBSET (self-consistent with genInputs; every
+#   value the generator can emit has its behavior defined above):
+#   value-positions exercised: null, undefined, NaN (primitive), 0, -0, '',
+#     false, 0n, Infinity, -Infinity, finite numbers, non-empty strings,
+#     true, plain objects, arrays, RegExp, Set, Map, Uint8Array/Buffer, bigint.
+#   defaultValue-positions exercised: numbers, strings, booleans, null,
+#     undefined, NaN, objects, arrays, the same/other varied types.
+#   Both directions of the codec-faithful matrix:
+#     value in {null, undefined, NaN} -> expect defaultValue (returned as-is).
+#     value otherwise                 -> expect value (returned by identity).
+#
+# OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they do not
+#   round-trip through the oracle codec, but a blind re-emitter still
+#   reconstructs their behavior from BEHAVIOR above):
+#   - Functions and Symbols as value/defaultValue: not codec-faithful.
+#       A function/symbol value is neither == null nor !== itself, so it is
+#       KEPT (returned by identity). A function/symbol defaultValue is returned
+#       as-is when selected.
+#   - Boxed primitives (new Number(NaN), new String, new Boolean): not
+#       codec-faithful (identity matters). As detailed in NODE 2: a boxed NaN
+#       is an OBJECT and is KEPT (NOT replaced); only primitive NaN is replaced.
+#
+# OUT-OF-CONTRACT (stateful mutators / side APIs): none. Pure function.
+
+# ----------------------------------------------------------------------------
+PROVENANCE
+# package: lodash.defaultto@4.14.0  (npm)
+# repo:    lodash/lodash
+# license: MIT (jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+# source:  index.js  (function defaultTo, module.exports = defaultTo)
+# shape:   CommonJS default export (a single function); zero dependencies.
+#          Re-emit as: `export default <fn>` (default export).

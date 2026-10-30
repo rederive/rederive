@@ -1,0 +1,170 @@
+UNIT stripAnsi
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG stripAnsi(input: any) -> any
+DEPENDS-ON none
+# This SIR is SELF-CONTAINED. strip-ansi@6.0.1 delegates the pattern to ansi-regex@5.0.1
+# at runtime, but the entire observable behavior is reproduced by INLINING the exact
+# ansi-regex pattern below. A blind re-emitter MUST NOT require/import anything; it
+# inlines the regex verbatim and reconstructs the one-line function.
+
+# ============================================================================
+# BEHAVIOR  (ordered; this is the complete observable contract)
+# ============================================================================
+# The original source (verbatim):
+#     module.exports = string =>
+#         typeof string === 'string' ? string.replace(ansiRegex(), '') : string;
+#
+# Node-1  TYPE GUARD on the single argument `input`.
+#   IF (typeof input === 'string')  -> Node-2 (strip).
+#   ELSE                            -> Node-3 (passthrough). This version does NOT
+#                                      throw on non-strings (the v4 TypeError guard
+#                                      was removed in v6). Confirmed against the real
+#                                      package.
+#   NOTE: the guard is `typeof x === 'string'`, i.e. ONLY a primitive string. A boxed
+#   `new String("...")` has typeof === 'object' and therefore takes the PASSTHROUGH
+#   branch (returned by identity, NOT stripped). Confirmed against the real package.
+#
+# Node-2  STRIP (string branch).
+#   return input.replace(ANSI_REGEX, '')
+#   where ANSI_REGEX is a fresh RegExp compiled from the EXACT pattern string and the
+#   global flag 'g' (see ANSI-REGEX-PATTERN below). The 'g' flag is LOAD-BEARING:
+#   replace removes ALL non-overlapping matches, not just the first. The replacement
+#   string is the empty string ''.
+#   The return is a NEW primitive string (input with every matched ANSI sequence
+#   excised). If the string contains no match, the returned value equals the input.
+#
+# Node-3  PASSTHROUGH (non-string branch).
+#   return input   # the SAME value/reference, unchanged. Applies to: number
+#   (incl. NaN, +/-Infinity, 0), bigint, boolean, null, undefined, symbol, function,
+#   plain object, array, boxed String/Number/Boolean, Date, RegExp, Map, Set, etc.
+#   No coercion, no copy, no throw. Confirmed against the real package.
+#
+# Implementation note for the re-emitter (must be SELF-CONTAINED, default export):
+#   export default function stripAnsi(input) {
+#     return typeof input === 'string'
+#       ? input.replace(<ANSI_REGEX with 'g'>, '')
+#       : input;
+#   }
+#   The regex MUST be the EXACT pattern below with flag 'g'. It MAY be a module-level
+#   constant or compiled inline; behavior is identical because matching is stateless
+#   between independent .replace calls (lastIndex is reset by String#replace).
+
+# ============================================================================
+# ANSI-REGEX-PATTERN  (verbatim from ansi-regex@5.0.1/index.js, onlyFirst=false)
+# ============================================================================
+# ansi-regex builds the pattern by joining two alternatives with '|' and compiling
+# with the 'g' flag. The two source-literal alternatives are:
+#
+#   ALT-1: [][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?)
+#   ALT-2: (?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~]))
+#
+# Joined with '|' the FINAL compiled pattern source is EXACTLY (RegExp#source):
+#
+#   [][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~]))
+#
+# Flags: 'g'  (RegExp#flags === "g", global === true).
+#
+# In JS source the re-emitter writes it as the .join('|') of the two string literals
+# (this is the most copy-faithful and is what the original ships):
+#   const ANSI_REGEX = new RegExp([
+#     '[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)',
+#     '(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]))'
+#   ].join('|'), 'g');
+# (Equivalently a single literal /.../g whose .source equals the joined string above.)
+#
+# Structural reading of the pattern (so the emitter understands, not just copies):
+#   - Anchor char: [] = ESC (0x1B) OR the C1 CSI byte (0x9B). Either one
+#     opens a sequence; 0x9B behaves like "ESC[" for the CSI branch.
+#   - [[\]()#;?]*  : zero or more of the prefix chars  [ ] ( ) # ; ?
+#   - ALT-1 (OSC-ish, BEL-terminated): an optional body (either zero-or-more
+#     ';'-prefixed runs of [-a-zA-Z\d\/#&.:=?%@~_], OR an alnum run followed by
+#     zero-or-more ';'-prefixed runs of the same class) FOLLOWED BY a literal
+#      (BEL). This branch ONLY terminates on BEL. It does NOT recognize the
+#     ST terminator (ESC backslash); see OSC notes in SCOPE.
+#   - ALT-2 (CSI/SGR, final-byte-terminated): an optional numeric parameter
+#     ( \d{1,4} then zero-or-more ';' + up-to-4 digits ) FOLLOWED BY exactly one
+#     final byte from the class [\dA-PR-TZcf-ntqry=><~]  (note: a single DIGIT is a
+#     valid final byte because \d is inside that class).
+
+# ============================================================================
+# DEMONSTRATED IN-SCOPE CASES  (input -> exact output; all confirmed vs real package)
+#   Notation: ESC =  (0x1B), C1 =  (0x9B), BEL =  (0x07),
+#             ST  = ESC + "\" (0x1B 0x5C).  Outputs are EXACT.
+# ----------------------------------------------------------------------------
+#   STRING branch -> Node-2:
+#     "hello world"                              -> "hello world"   (no match, unchanged)
+#     ""                                         -> ""              (empty, unchanged)
+#     ESC "[31m" "red" ESC "[0m"                 -> "red"
+#     ESC "[4m" "Under" ESC "[24m"               -> "Under"
+#     ESC "[1;32m" "boldgreen" ESC "[0m"         -> "boldgreen"
+#     ESC "[31m" "R" ESC "[32m" "G" ESC "[34m" "B" ESC "[0m" -> "RGB"   (g flag: ALL)
+#     ESC "[2K" "remainder"                      -> "remainder"     (erase line)
+#     ESC "[1G" "abc"                            -> "abc"           (cursor col)
+#     ESC "[3J" "xyz"                            -> "xyz"           (erase display)
+#     ESC "[5A" "move"                           -> "move"          (cursor up)
+#     ESC "[38;5;201m" "pink" ESC "[0m"          -> "pink"          (256-color)
+#     ESC "[38;2;255;100;0m" "orange" ESC "[0m"  -> "orange"        (truecolor)
+#     ESC "[m" "reset"                           -> "reset"         (bare CSI, no params)
+#     C1  "[31m" "foo"                           -> "foo"           (0x9B C1 CSI byte)
+#     ESC "[0m"                                  -> ""              (only ansi)
+#     "a" ESC "[31m" "b" ESC "[0m" "c"           -> "abc"           (mid-string)
+#     ESC "[1m" ESC "[31m" "X"                   -> "X"             (adjacent escapes)
+#     ESC "[?25h"                                -> ""              (DEC private mode)
+#     ESC "[<35;10;20M"                          -> "35;10;20M"     (PARTIAL: '<' is a
+#         final byte in ALT-2's class, so only ESC "[<" matches; digits/';' remain)
+#     ESC "[3~"                                  -> ""              ('~' final byte)
+#     ESC "[12345m"                              -> "m"             (PARTIAL: \d{1,4}
+#         consumes "1234", then "5" is itself a valid \d final byte -> ESC "[12345"
+#         matched; trailing "m" remains)
+#     ESC                                        -> ESC   (, unchanged: no final byte / no BEL)
+#     ESC "["                                    -> ESC "[" (unchanged: needs a final byte)
+#
+#   OSC reality (partial-strip — this is the documented sharp edge of v6.0.1):
+#     ESC "]8;;https://example.com" BEL "link" ESC "]8;;" BEL   -> "link"
+#         (FULLY stripped: BEL terminates ALT-1; ';' ':' '/' are all in the body
+#          char-class, so both the open and close OSC-8 with BEL strip cleanly.)
+#     ESC "]0;Title" BEL "T"                     -> "T"   (OSC title, BEL-terminated, full)
+#     ESC "]8;;https://example.com" ST "link" ESC "]8;;" ST  -> PARTIAL:
+#         output = "ttps://example.com" ST "link;;" ST
+#         WHY: ST (ESC "\") is NOT recognized by ALT-1 (which only ends on BEL).
+#         Instead ALT-2 fires: ESC, then prefix-class consumes "]", then "8" matches
+#         \d{1,4}, ";;" matches (;\d{0,4})*, and "h" is a valid final byte (h is in
+#         f-n). So ESC "]8;;h" is excised, leaving "ttps://...". The closing
+#         ESC "]8;;" ST has no following final byte after the ';' digits, so ALT-2
+#         matches ESC "]8;;" -> wait: re-check below. Net OBSERVED output is exactly
+#         "ttps://example.com" ST "link;;" ST  (confirmed vs real package, hex-exact).
+#
+#   NON-STRING branch -> Node-3 (PASSTHROUGH, returned by identity, unchanged):
+#     42 -> 42 ;  0 -> 0 ;  NaN -> NaN (same value) ;  Infinity -> Infinity
+#     10n (bigint) -> 10n ;  true -> true ;  false -> false
+#     null -> null ;  undefined -> undefined
+#     {a:1} -> {a:1} (same ref) ;  ["x"] -> ["x"] (same ref)
+#     new String("...") -> same boxed String ref (typeof 'object' => NOT stripped)
+#     Symbol(...) -> same symbol ;  (()=>1) -> same function
+#   (All confirmed by reference-identity / Object.is against the real package.)
+
+ORACLE value -> oracle.json
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The typeof === 'string' guard, the string-branch replace with the inlined ANSI
+#     regex (global), and the non-string passthrough. ALL of it is in-contract.
+#   - The ANSI regex pattern is INLINED into the unit as code/spec (see
+#     ANSI-REGEX-PATTERN). It is NOT external carried data and there is NO carried.json:
+#     it is a short literal the emitter writes verbatim, and the published authority is
+#     ansi-regex@5.0.1 itself (PROVENANCE below). The exact pattern string + 'g' flag is
+#     the complete, byte-faithful definition; all OSC/CSI/SGR behaviors above follow
+#     mechanically from it.
+# CARRIED DATA: none.
+# OUT-OF-CONTRACT: none. Pure, read-only function: no side effects, no ambient reads
+#   (no clock/RNG/env/fs/net), so there is NO seam to inject. ORACLE-CLASS deterministic.
+#   Out-of-envelope inputs (NOT emitted by genInputs because they don't survive the
+#   JSON-codec round-trip, but whose behavior the spec still defines via Node-3):
+#   undefined, NaN, +/-Infinity, symbols, functions, boxed primitives — all passthrough.
+
+PROVENANCE strip-ansi@6.0.1 (MIT, https://github.com/chalk/strip-ansi, index.js).
+  Inlined pattern from its sole runtime dep ansi-regex@5.0.1 (MIT,
+  https://github.com/chalk/ansi-regex, index.js, export with onlyFirst=false).

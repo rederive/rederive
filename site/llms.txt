@@ -1,11 +1,23 @@
 # rederive
 
-> A trust-nothing package manager. Every rederive package ships its contract — a structural spec (SIR) and a
-> held-out oracle whose expected values were stamped by executing the original — not bytes you have to trust.
-> Verify the shipped code against the contract (`rdv check`: deterministic, offline, no tokens), or re-derive
-> the implementation locally from the spec and accept it only when independent blind rebuilds agree (quorum).
-> Tampering is caught two ways at once: behavior fails the held-out oracle, and the content hash mismatches.
-> Open source, Apache-2.0, from Semcom / Apilify Inc.
+> Replace npm dependencies with code you own — checked against tests the AI never saw. rederive rebuilds the
+> npm packages you depend on as small, verified, zero-dependency copies in your repo, and checks code — yours or
+> AI-written — against held-back tests. Each part gets a contract: a language-neutral spec (SIR, the spec format)
+> plus held-back tests ("held-out oracle") whose expected answers come from running the original package or a
+> chosen reference, never from whoever writes the replacement. Held back means hidden from the AI builders while
+> they build; afterwards the tests ship with the package, fingerprinted (hashed), so anyone can re-generate them
+> from the original and confirm nothing changed. Each part is built more than once by isolated AI builds; if
+> independent builds disagree, the spec left room for guessing and gets tightened. Agreement is not the test of
+> correctness — the held-back tests are. Since SIR v0.5 one contract serves JavaScript, TypeScript and Rust, all
+> graded against the same held-back tests. `rdv check` (the rdv checker, rederive's command-line tool) re-runs
+> every check offline, free, with no AI; tampering is caught two ways at once: behavior fails the held-back tests,
+> and the content hash mismatches. Best fit today: small, self-contained packages (string, number, date, URL,
+> parsing and formatting helpers, including abandoned ones); network/file-system packages are JavaScript only;
+> native add-ons and large frameworks are not yet supported; anything that can't be verified is reported and
+> left in place. rederive re-derives its own verifier (42/42 parts — JavaScript and TypeScript for all 42, Rust
+> for 38; 67,976 cross-language comparisons, zero disagreements) as the bundle `@rederive/rederive-core`, which
+> lives in the rederive repo at `selfhost/core/rederive-core` (not published to npm) and which its own `rdv`
+> verifies. Open source, Apache-2.0, by Apilify Inc.
 
 If you are an agent setting rederive up or running its loop for a user: fetch and follow
 https://rederive.ai/prompt.md — it is the whole workflow, written for you, including the verification
@@ -14,15 +26,27 @@ toolkit is immutable from your seat).
 
 ## Setup
 
-- [Agent setup prompt](https://rederive.ai/prompt.md): install → choose verify / re-derive / preflight → run → report
-- CLIs (Node ≥ 18): `npm i -g rederive sir-factory`
-- Claude Code plugin: `/plugin marketplace add rederive/sir-toolkit` then `/plugin install sir@sir-toolkit`
+- [Agent setup prompt](https://rederive.ai/prompt.md): install → zero-footprint demo in a temp directory →
+  ask before touching the project → `rdv init . --dry-run` → `--yes` → choose verify / re-derive / preflight /
+  build → run → report
+- CLIs (Node ≥ 18): `npm i -g rederive@^0.5 sir-factory`
+- Toolchains are the user's own: TypeScript variants need `typescript` (tsc) and `@types/node` resolvable from the
+  project; Rust variants need `cargo`. `rdv check` halts with an install hint rather than skip a language.
+- Claude Code plugin: `/plugin marketplace add rederive/rederive` then `/plugin install rederive@rederive`
+  (skills: sir-verify, greenfield-quorum, preflight). The older `sir@sir-toolkit` plugin is legacy (pre-0.5).
+- No global install: run the verifier as `npx -p rederive rdv <command>` (the npm package named `rdv` is unrelated)
+- First run, zero footprint: in a temp directory, `npm i @rederive/colors`, `rdv check node_modules/@rederive/colors`,
+  change one character under its `src/`, and check again — it fails. Nothing in the user's project changes.
+- Set up a project (ask the user first): `rdv init . --dry-run` to see the plan, then `rdv init . --yes` (without
+  a TTY a bare `rdv init` writes nothing)
+- See how many packages npm really installed: `npx -p rederive rdv audit`
 
 ## Specification
 
-- [SIR Schema (normative, v0.4)](https://raw.githubusercontent.com/rederive/sir-spec/main/SIR_SCHEMA.md): the
+- [SIR Schema (normative, v0.5)](https://raw.githubusercontent.com/rederive/sir-spec/main/SIR_SCHEMA.md): the
   language-neutral contract format — kinds, the firewall, oracles, fidelity variants, effect seams, carried data,
-  the concurrency layer
+  the concurrency layer, and v0.5's primary + per-language files, the `sir-canonical-v1` vector encoding, the js
+  envelope extension, and how a verifier calls and judges an artifact (§23c)
 - [sir-spec repo](https://github.com/rederive/sir-spec): canonical home, versioned, evidence-cited
 - [Narrative spec with worked examples](https://rederive.ai/spec.html)
 
@@ -30,7 +54,9 @@ toolkit is immutable from your seat).
 
 - [rederive (the rdv verifier CLI)](https://github.com/rederive/rederive) — npm: `rederive`
 - [sir-factory (the build orchestrator)](https://github.com/rederive/sir-factory) — npm: `sir-factory`
-- [sir-toolkit (the Claude Code plugin: sir-verify + preflight skills, role agents)](https://github.com/rederive/sir-toolkit)
+- The Claude Code plugin `rederive@rederive` (sir-verify, greenfield-quorum and preflight skills, role agents)
+  ships from the [rederive repo](https://github.com/rederive/rederive)
+- [sir-toolkit](https://github.com/rederive/sir-toolkit) — legacy plugin and methodology docs (pre-0.5), kept for reference
 
 ## Commitments
 

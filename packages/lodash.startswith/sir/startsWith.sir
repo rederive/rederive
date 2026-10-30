@@ -1,0 +1,167 @@
+UNIT startsWith
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG startsWith(string, target, position) -> boolean
+    # default export (module.exports = startsWith). The re-emitter MUST `export default <fn>`.
+    # Three positional args; `position` is optional (effectively defaults to 0 via the coercion chain, NOT a null-check).
+DEPENDS-ON none
+    # Self-contained: lodash.startswith@4.2.1 inlines all helper deps (baseClamp, baseToString,
+    # toString, toNumber, toFinite, toInteger, isSymbol, isObject, isObjectLike). No carried-data table.
+
+BEHAVIOR
+# ============================================================================
+# Top-level pipeline (exact, in order). Pseudocode mirrors the original body:
+#
+#   string   = toString(string)                              # node S
+#   position = baseClamp(toInteger(position), 0, string.length)   # node P
+#   target   = baseToString(target)                          # node T  (NB: baseToString, NOT toString)
+#   return string.slice(position, position + target.length) == target   # node R
+#
+# IMPORTANT deviations from a naive reading:
+#   - There is NO `position <= string.length` guard in the body. The clamp at node P already
+#     bounds position to [0, string.length], so such a guard would be a tautology. Do not add it
+#     as observable logic; just clamp.
+#   - `target` is coerced with baseToString (node T), so a NULLISH target does NOT become "".
+#     It becomes the literal string "null" / "undefined". Contrast with node S which uses toString.
+#   - The final comparison uses loose `==`, but at that point both operands are STRINGS, so it is
+#     a plain string equality. (String-vs-string `==` === String-vs-string `===`.)
+# ============================================================================
+
+# ---- node S: string = toString(string) ----
+# toString(value):
+#   if value == null (i.e. value is null OR undefined):  return ""
+#   else: return baseToString(value)
+# baseToString(value):
+#   if typeof value == "string":   return value                       # identity, fast path
+#   if isSymbol(value):            return Symbol.prototype.toString.call(value)   # e.g. "Symbol(x)"
+#   result = (value + "")          # JS string coercion / abstract ToString
+#   if result == "0" and (1 / value) == -Infinity:  return "-0"       # preserve negative-zero sign
+#   return result
+#   # Consequences (all verified against the real package):
+#   #   null      -> ""              undefined -> ""
+#   #   123       -> "123"           0         -> "0"        -0 -> "-0"   (sign preserved)
+#   #   true      -> "true"          false     -> "false"
+#   #   [1,2,3]   -> "1,2,3"         []        -> ""         [3] -> "3"
+#   #   {a:1}     -> "[object Object]"   plain {} -> "[object Object]"
+#   #   /ab/g     -> "/ab/g"
+#   #   new Set([1,2])      -> "[object Set]"   new Map() -> "[object Map]"
+#   #   new Uint8Array([1,2,3]) -> "1,2,3"      Buffer.from([0x41,0x42]) -> "AB" (Buffer#toString = utf8 decode)
+#   #   bigint 10n -> "10"           (string coercion of bigint is fine here; only the position path throws)
+
+# ---- node P: position = baseClamp(toInteger(position), 0, string.length) ----
+# Let LEN = string.length (the length of the ALREADY-coerced string from node S).
+#
+# toInteger(value):
+#   r = toFinite(value)
+#   rem = r % 1
+#   if r === r (i.e. r is not NaN):  return rem ? (r - rem) : r        # truncate TOWARD ZERO
+#   else: return 0
+#   # Truncation is toward zero (drop the fractional part): 3.9->3, 3.99->3, 4.5->4, 2.5->2,
+#   #   -3.9->-3, -3.99->-3, 5.99->5.  (Then clamped, so negatives become 0.)
+#
+# toFinite(value):
+#   if !value:  return value === 0 ? value : 0
+#       # falsy short-circuit BEFORE any arithmetic. Falsy = 0, -0, NaN, "", null, undefined, false, 0n.
+#       # For 0 / -0 returns the value itself; for every OTHER falsy returns 0.
+#       # NOTE this is why bigint 0n does NOT throw: !0n is true, and (0n === 0) is false -> returns 0.
+#   value = toNumber(value)
+#   if value === Infinity or value === -Infinity:  return sign(value) * 1.7976931348623157e+308   # MAX_INTEGER
+#   return value === value ? value : 0    # NaN -> 0
+#
+# toNumber(value):
+#   if typeof value == "number":  return value
+#   if isSymbol(value):           return NaN
+#   if isObject(value):           # arrays, plain objects, functions, boxed, Date, RegExp, Set, Map, typed arrays, ...
+#       other = (typeof value.valueOf == "function") ? value.valueOf() : value
+#       value = isObject(other) ? (other + "") : other
+#       # e.g. [3].valueOf() -> [3] (still object) -> ([3] + "") -> "3"; then fall through to string branch.
+#       #      [].valueOf()  -> []  -> "" ;  [1,2].valueOf() -> [1,2] -> "1,2"
+#   if typeof value != "string":  return value === 0 ? value : +value
+#       # Numeric coercion `+value`. For a BIGINT here `+value` THROWS a TypeError
+#       # "Cannot convert a BigInt value to a number" -> see THROW-PATHS below.
+#   # string branch:
+#   value = value.replace(/^\s+|\s+$/g, "")          # trim leading & trailing whitespace
+#   if /^0b[01]+$/i.test(value):  return parseInt(value.slice(2), 2)    # binary literal
+#   if /^0o[0-7]+$/i.test(value): return parseInt(value.slice(2), 8)    # octal literal
+#   if /^[-+]0x[0-9a-f]+$/i.test(value): return NaN                     # SIGNED hex string -> NaN (bad hex)
+#   return +value                                                       # else standard numeric coercion
+#       # so "0x3" (no sign) -> +"0x3" = 3 (valid);  "-0x3" -> NaN;  "3.9" -> 3.9;  "" -> 0;
+#       #    "  3  " -> "3" -> 3;  "abc" -> NaN;  "  " -> "" -> 0
+#
+# baseClamp(number, lower=0, upper=LEN):
+#   if number === number (not NaN):
+#       if upper !== undefined:  number = number <= upper ? number : upper    # cap at LEN
+#       if lower !== undefined:  number = number >= lower ? number : lower    # floor at 0
+#   return number
+#   # Net: clamp toInteger(position) into [0, LEN]. Negative -> 0. > LEN -> LEN.
+#   # Infinity-derived MAX_INTEGER -> LEN. NaN never reaches here (toInteger already mapped NaN->0).
+#
+# Worked position outcomes (LEN = "foobar".length = 6), all verified:
+#   undefined -> 0 ;  null -> 0 ;  -1 -> 0 ;  -5 -> 0 ;  -Infinity -> 0 ;  0 -> 0 ;  -0 -> 0
+#   3 -> 3 ;  3.9 -> 3 ;  "3" -> 3 ;  "3.9" -> 3 ;  "0b11" -> 3 ;  "0o3" -> 3 ;  "0x3" -> 3 ;  [3] -> 3
+#   "-0x3" -> 0 (NaN->0) ;  "abc" -> 0 ;  "" -> 0 ;  "   " -> 0 ;  NaN -> 0 ;  [] -> 0 ;  [1,2] -> 0
+#   100 -> 6 ;  Infinity -> 6 ;  7 -> 6   (all clamped to LEN)
+
+# ---- node T: target = baseToString(target) ----
+# SAME baseToString as node S, but reached via baseToString DIRECTLY (no nullish->"" wrapper):
+#   null      -> "null"           undefined -> "undefined"        # <-- KEY: nullish becomes literal text
+#   "foo"     -> "foo"            ""        -> ""
+#   12        -> "12"             123       -> "123"              -0 -> "-0"   (sign preserved)
+#   true      -> "true"          [1,2,3]   -> "1,2,3"
+#   new Set([1,2]) -> "[object Set]"   new Uint8Array([1,2,3]) -> "1,2,3"   Buffer.from([0x41,0x42]) -> "AB"
+#   /ab/g     -> "/ab/g"          {}        -> "[object Object]"
+#   bigint 10n -> "10"
+
+# ---- node R: return string.slice(position, position + target.length) == target ----
+# Let TLEN = target.length (length of the coerced target string).
+# Take the substring of the coerced `string` from index `position` (inclusive) up to
+# `position + TLEN` (exclusive), per JS String#slice with already-bounded start.
+# Return true iff that substring exactly equals the coerced `target` string.
+#
+# Edge behaviors (all verified):
+#   - Empty target (TLEN == 0): slice(position, position) == "" -> ALWAYS true, for any position
+#     (including position clamped to LEN, and even when string is ""). E.g. startsWith("abc","") -> true,
+#     startsWith("","") -> true, startsWith("abc","",99) -> true, startsWith("foobar","",6) -> true.
+#   - target longer than the remaining tail: slice yields a shorter string != target -> false.
+#   - position at LEN with nonempty target: slice(LEN, LEN+TLEN) == "" != target -> false
+#     (unless target is "").
+#   - match at position 0: standard prefix test. match at position>0: prefix test of the tail.
+
+# ============================================================================
+# THROW-PATHS (reachable by codec-faithful inputs; recorded as {__throw} by the harness):
+#   - position is a NON-ZERO bigint (e.g. 3n, 5n, -2n, 1n): toFinite calls toNumber, which reaches
+#     `+value` on a bigint and throws TypeError "Cannot convert a BigInt value to a number".
+#     (position 0n does NOT throw: the `!value` short-circuit in toFinite returns 0 first.)
+#   - `string` arg as a non-zero bigint does NOT throw (string coercion path: 10n -> "10").
+#   - `target` as a non-zero bigint does NOT throw (baseToString -> (value + "") -> "10").
+#   Only the POSITION coercion path performs arithmetic on the value, so only it can throw on bigint.
+# ============================================================================
+
+ORACLE value -> oracle.json
+    # Pure deterministic predicate (and reproducible TypeError throw on non-zero-bigint position).
+    # No seam: no clock/RNG/env/io/network. The harness records boolean results and {__throw} for throws.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — toString/baseToString coercion of
+#   `string`; the toInteger->baseClamp position math (toFinite falsy short-circuit, toNumber's
+#   number/symbol/object/string branches incl. trim + binary/octal/bad-hex regexes, truncation toward
+#   zero, clamp to [0, string.length]); baseToString coercion of `target`; the slice + string-equality.
+#   Includes the empty-target-always-true rule, the nullish-target -> "null"/"undefined" rule, the -0
+#   sign-preservation rule (string AND target), and the non-zero-bigint-position TypeError.
+# CARRIED DATA: none. The only literals are small inline constants the spec states verbatim:
+#   INFINITY = 1/0, MAX_INTEGER = 1.7976931348623157e+308, NAN = 0/0, the regexes
+#   reTrim = /^\s+|\s+$/g, reIsBinary = /^0b[01]+$/i, reIsOctal = /^0o[0-7]+$/i,
+#   reIsBadHex = /^[-+]0x[0-9a-f]+$/i, symbolTag = "[object Symbol]". No external authority table.
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; spec defines behavior for completeness):
+#   - Symbol values for `string` or `target`: NOT JSON-codec-round-trippable, so never emitted as oracle
+#     inputs. Documented behavior: a Symbol coerces via Symbol.prototype.toString to "Symbol(desc)".
+#     Verified: startsWith(Symbol("x"), "x") -> false (string arg "Symbol(x)" .slice(0,1)="S" != "x");
+#               startsWith("Symbol(x)", Symbol("x")) -> true.
+#   - undefined / NaN / +-Infinity ARE codec-round-trippable per the factory codec and ARE used as inputs
+#     where their behavior is interesting (undefined target, NaN/Infinity/-Infinity/-0 position).
+#   - No stateful mutators, no side-effect APIs, no ambient reads. Pure.
+
+PROVENANCE lodash.startswith@4.2.1 (Custom Build of lodash) ; repo lodash/lodash ;
+    license MIT ; source file index.js (function startsWith + inlined helpers baseClamp, baseToString,
+    toString, toNumber, toFinite, toInteger, isSymbol, isObject, isObjectLike) ;
+    Copyright jQuery Foundation and other contributors ; based on Underscore.js 1.8.3.

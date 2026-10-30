@@ -1,0 +1,245 @@
+UNIT rangeRight
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG rangeRight(start?, end?, step?) -> Array<number>
+    # default export of lodash.rangeright@4.2.0: module.exports = createRange(true)
+    # All three positional args are optional. There is NO seam (no clock/RNG/io/net).
+    # Pure function of its arguments. fromRight is fixed = true (the "Right" variant).
+
+DEPENDS-ON none
+    # Self-contained single file. Internally uses helpers (baseRange, toFinite, toNumber,
+    # isIterateeCall, isObject, isArrayLike, isIndex, isLength, isFunction, isSymbol,
+    # isObjectLike, eq) but these are inlined in the source and fully specified below.
+    # No carried-data table: all constants are scalar and inlined here.
+
+# ============================================================================
+# CONSTANTS (inlined scalars from the source)
+# ============================================================================
+#   INFINITY        = 1 / 0                     # +Infinity
+#   MAX_SAFE_INTEGER = 9007199254740991         # 2^53 - 1
+#   MAX_INTEGER     = 1.7976931348623157e+308   # Number.MAX_VALUE
+#   NAN             = 0 / 0
+#   reTrim    = /^\s+|\s+$/g                     # strip leading/trailing whitespace
+#   reIsBadHex= /^[-+]0x[0-9a-f]+$/i             # signed-hex strings -> NaN
+#   reIsBinary= /^0b[01]+$/i                     # binary string literal
+#   reIsOctal = /^0o[0-7]+$/i                    # octal string literal
+#   reIsUint  = /^(?:0|[1-9]\d*)$/               # used only inside isIndex (guard path)
+#   funcTag   = '[object Function]'
+#   genTag    = '[object GeneratorFunction]'
+#   symbolTag = '[object Symbol]'
+
+# ============================================================================
+# BEHAVIOR  (ordered pipeline; the public createRange(true) closure)
+# ============================================================================
+# The function is: function(start, end, step) { ...createRange body... }
+#
+# NODE 1 — ITERATEE-CALL GUARD (collapse end & step):
+#   IF ( step is TRUTHY  AND  typeof step != 'number'  AND  isIterateeCall(start, end, step) )
+#   THEN set end = undefined, step = undefined.
+#   # This is the lodash guard that makes rangeRight usable as an iteratee in
+#   # e.g. [a,b,c].map(rangeRight) where map invokes fn(value, index, array):
+#   # the (index, array) pair gets discarded so the call behaves like 1-arg rangeRight(value).
+#   # Short-circuit order matters: a NUMBER step never triggers the guard
+#   # (typeof step == 'number' fails the 2nd clause), and a falsy step
+#   # (0, '', null, undefined, false, NaN) never triggers it (1st clause).
+#
+#   isIterateeCall(value, index, object):    # value=start, index=end, object=step
+#     IF NOT isObject(object) RETURN false   # object must be a JS object or function
+#     type = typeof index
+#     IF type == 'number':
+#        match = isArrayLike(object) AND isIndex(index, object.length)
+#     ELSE IF type == 'string':
+#        match = (index in object)           # 'in' operator (own or inherited key)
+#     ELSE:
+#        match = false
+#     IF match: RETURN eq(object[index], value)   # SameValueZero compare
+#     RETURN false
+#
+#     isObject(v):      v is truthy AND (typeof v == 'object' OR typeof v == 'function')
+#     isObjectLike(v):  v is truthy AND typeof v == 'object'
+#     isArrayLike(v):   v != null AND isLength(v.length) AND NOT isFunction(v)
+#     isLength(v):      typeof v == 'number' AND v > -1 AND v % 1 == 0 AND v <= 9007199254740991
+#     isFunction(v):    isObject(v) AND Object.prototype.toString.call(v) in {funcTag, genTag}
+#     isIndex(v, len):  len = (len == null ? 9007199254740991 : len);
+#                       !!len AND (typeof v == 'number' OR reIsUint.test(v))
+#                              AND (v > -1 AND v % 1 == 0 AND v < len)
+#     eq(a, b):         a === b  OR  (a !== a AND b !== b)   # SameValueZero (NaN==NaN)
+#
+# NODE 2 — COERCE start (sign of -0 preserved):
+#   start = toFinite(start)
+#
+# NODE 3 — RESOLVE end / 1-ARG FORM:
+#   IF end === undefined:
+#       end   = start          # the (already-coerced) start becomes the end
+#       start = 0
+#   ELSE:
+#       end   = toFinite(end)
+#   # This is the "1-arg" form: rangeRight(N) === rangeRight(0, N) (then reversed by fill).
+#   # NOTE the check is `end === undefined` (strict). end === null is NOT undefined, so it
+#   # goes through the ELSE branch -> toFinite(null) = 0.
+#
+# NODE 4 — RESOLVE step (auto-infer sign ONLY when omitted):
+#   step = (step === undefined)
+#            ? (start < end ? 1 : -1)     # auto-infer: +1 ascending, -1 otherwise
+#            : toFinite(step)             # explicit step (including 0) is coerced, NOT inferred
+#   # CRITICAL: only a STRICT-undefined step is auto-inferred. An explicit 0 stays 0
+#   # (it is NOT replaced by a sign). null/'' coerce via toFinite to 0 (also stay 0).
+#
+# NODE 5 — BUILD via baseRange(start, end, step, fromRight=true):
+#   length = max( ceil( (end - start) / (step || 1) ) , 0 )    # nativeMax(nativeCeil(...), 0)
+#       # `step || 1`: when step is 0 the divisor becomes 1 (so length can be > 0,
+#       #  producing repeated copies of start); otherwise divisor is step.
+#   result = Array(length)
+#       # !! THROW PATH: if `length` is not a valid array length (negative-but-nonzero is
+#       #  clamped to 0 by nativeMax, but a HUGE finite length such as MAX_INTEGER, or a
+#       #  fractional length, makes Array(length) throw `RangeError: Invalid array length`).
+#       #  In practice this is hit when end-start coerces to +/-Infinity-magnitude
+#       #  (because toFinite(Infinity) -> MAX_INTEGER = 1.7976931348623157e+308).
+#   FILL: for i = (length-1) down to 0 (loop `while (length--)`):
+#       idx = fromRight ? length : (++index)   # fromRight==true -> idx = decremented length
+#       result[idx] = start
+#       start += step
+#   # Because fromRight is TRUE, the i-th *generated* value (start + i*step) is written into
+#   # position (length-1-i). Net effect: the ascending/range-order sequence
+#   #   [start, start+step, start+2*step, ..., start+(length-1)*step]
+#   # is stored REVERSED. rangeRight == range with the output array reversed.
+#   RETURN result
+#
+# ----------------------------------------------------------------------------
+# toFinite / toNumber coercion (NODE 2/3/4 use toFinite)
+# ----------------------------------------------------------------------------
+#   toFinite(value):
+#     IF !value:                              # falsy: 0, -0, '', null, undefined, false, NaN
+#        RETURN value === 0 ? value : 0       # preserves -0 (since -0 === 0 is true ->
+#                                             #   returns the original -0); everything else -> 0
+#     value = toNumber(value)
+#     IF value === +Infinity OR value === -Infinity:
+#        sign = (value < 0 ? -1 : 1);  RETURN sign * MAX_INTEGER   # +/-1.7976931348623157e+308
+#     RETURN (value === value) ? value : 0    # NaN -> 0
+#
+#   toNumber(value):
+#     IF typeof value == 'number': RETURN value
+#     IF isSymbol(value):          RETURN NaN            # (out-of-envelope: see SCOPE)
+#     IF isObject(value):                                 # objects/arrays/boxed primitives
+#        other = (typeof value.valueOf == 'function') ? value.valueOf() : value
+#        value = isObject(other) ? (other + '') : other  # coerce object-ish to string
+#     IF typeof value != 'string':
+#        RETURN value === 0 ? value : +value             # numeric coercion (e.g. true -> 1)
+#     value = value.replace(reTrim, '')                  # trim whitespace
+#     isBinary = reIsBinary.test(value)
+#     IF isBinary OR reIsOctal.test(value):
+#        RETURN parseInt(value.slice(2), isBinary ? 2 : 8)   # 0b.../0o... parsing
+#     RETURN reIsBadHex.test(value) ? NaN : (+value)     # bad signed-hex -> NaN; else unary +
+#       # NOTE +value handles "0x10" (-> 16), "  5  " was already trimmed -> 5,
+#       #      "abc" -> NaN (then toFinite -> 0), "" -> 0.
+#
+# ============================================================================
+# WORKED EXPECTEDS (verified by executing lodash.rangeright@4.2.0)
+# ============================================================================
+#   rangeRight()              -> []           # start=toFinite(undefined)=0; end undef -> end=0,start=0; step=(0<0?1:-1)=-1; len=max(ceil(0/-1),0)=0
+#   rangeRight(4)             -> [3,2,1,0]     # end=4,start=0,step=1; range [0,1,2,3] reversed
+#   rangeRight(0)             -> []            # end=0,start=0,step=-1; len 0
+#   rangeRight(-4)            -> [-3,-2,-1,0]  # end=-4,start=0,step=(0<-4?1:-1)=-1; range[0,-1,-2,-3] reversed
+#   rangeRight(1,5)           -> [4,3,2,1]     # ascending reversed
+#   rangeRight(5,1)           -> [2,3,4,5]     # start=5>end=1, step=-1; range[5,4,3,2] reversed -> [2,3,4,5]
+#   rangeRight(4,1)           -> [2,3,4]       # start=4>end=1, step=-1; range[4,3,2] reversed
+#   rangeRight(8,2)           -> [3,4,5,6,7,8]
+#   rangeRight(0,20,5)        -> [15,10,5,0]
+#   rangeRight(0,-4,-1)       -> [-3,-2,-1,0]
+#   rangeRight(0,10,2)        -> [8,6,4,2,0]
+#   rangeRight(0,9,3)         -> [6,3,0]
+#   rangeRight(0,7,3)         -> [6,3,0]       # len=ceil(7/3)=3; range[0,3,6] reversed
+#   rangeRight(0,5,10)        -> [0]           # len=ceil(5/10)=1
+#   rangeRight(1.5,5.5)       -> [4.5,3.5,2.5,1.5]
+#   rangeRight(0,3,0.5)       -> [2.5,2,1.5,1,0.5,0]
+#   rangeRight(0,1,0.1)       -> [0.8999999999999999,0.7999999999999999,0.7,0.6,0.5,0.4,0.30000000000000004,0.2,0.1,0]   # IEEE-754 accumulation; identical across engines
+#   rangeRight(0,1000).length -> 1000 ; [999,998,...,1,0]
+#   # --- zero / wrong-direction step (NOT auto-inferred when explicit) ---
+#   rangeRight(1,4,0)         -> [1,1,1]       # step=0, start<end, len=ceil(3/(0||1))=3, start+=0 each -> three copies of start(=1)
+#   rangeRight(0,5,0)         -> [0,0,0,0,0]   # five copies of start(=0)
+#   rangeRight(2,7,0)         -> [2,2,2,2,2]
+#   rangeRight(5,0,0)         -> []            # step=0, start>end, len=max(ceil(-5/1),0)=0
+#   rangeRight(0,0,0)         -> []
+#   rangeRight(0,0,5)         -> []            # start==end -> len 0
+#   rangeRight(3,3)           -> []            # start==end, auto step -1, len 0
+#   rangeRight(3,3,1)         -> []
+#   rangeRight(0,10,-2)       -> []            # start<end but explicit negative step: len=max(ceil(10/-2),0)=max(-5,0)=0
+#   rangeRight(0,5,-1)        -> []
+#   rangeRight(5,0,1)         -> []            # start>end but explicit positive step: len=max(ceil(-5/1),0)=0
+#   # --- coercion (toFinite) ---
+#   rangeRight("4")           -> [3,2,1,0]
+#   rangeRight("1","5")       -> [4,3,2,1]
+#   rangeRight("0","10","5")  -> [5,0]
+#   rangeRight(0,10,"2")      -> [8,6,4,2,0]
+#   rangeRight(null,5)        -> [4,3,2,1,0]   # toFinite(null)=0 -> start=0,end=5
+#   rangeRight(0,null)        -> []            # end !== undefined (null), end=toFinite(null)=0 -> start==end
+#   rangeRight(0,5,null)      -> [0,0,0,0,0]   # step!==undefined (null) -> toFinite(null)=0 -> 5 copies of 0
+#   rangeRight(undefined,5)   -> [4,3,2,1,0]   # toFinite(undefined)=0
+#   rangeRight(NaN)           -> []            # toFinite(NaN)=0 -> end=0,start=0
+#   rangeRight(0,NaN)         -> []            # toFinite(NaN)=0 -> end=0
+#   rangeRight(0,5,NaN)       -> [0,0,0,0,0]   # step=toFinite(NaN)=0 -> 5 copies
+#   rangeRight(true,5)        -> [4,3,2,1]     # toFinite(true)=1 -> start=1,end=5
+#   rangeRight(0,5,true)      -> [4,3,2,1,0]   # step=toFinite(true)=1
+#   rangeRight("0x10")        -> [15,...,0]    # toNumber("0x10")=16 (unary +) -> end=16
+#   rangeRight("0b101")       -> [4,3,2,1,0]   # binary -> 5
+#   rangeRight("0o17")        -> [14,...,0]    # octal -> 15
+#   rangeRight("  5  ")       -> [4,3,2,1,0]   # trimmed -> 5
+#   rangeRight("-0x1")        -> []            # bad signed-hex -> NaN -> toFinite 0 -> end=0
+#   rangeRight("abc")         -> []            # +"abc"=NaN -> 0
+#   rangeRight([])            -> []            # toNumber([])="" -> +""=0 -> 0
+#   rangeRight(new String("4")) -> [3,2,1,0]  # boxed string valueOf -> "4" -> 4 (NOTE: out-of-envelope as a generator value; documented behavior)
+#   # --- iteratee guard ---
+#   rangeRight(20,1,[10,20,30]) -> [19,...,0]  # guard fires (arr[1]===20) -> rangeRight(20)
+#   rangeRight(99,1,[10,20,30]) -> []          # guard does NOT fire (arr[1]=20 !== 99); step=[...] -> toFinite=0; start=99>end=1 -> len 0
+#   rangeRight(5,"a",{a:5})   -> [4,3,2,1,0]   # guard fires (string key 'a' in obj, obj.a===5) -> rangeRight(5)
+#   [10,20,30].map(rangeRight) -> [[9..0],[19..0],[29..0]]   # via guard collapse to 1-arg
+#   # --- THROW PATH ---
+#   rangeRight(Infinity)      -> throws RangeError "Invalid array length"   # end=MAX_INTEGER -> Array(1.79e308)
+#   rangeRight(-Infinity)     -> throws RangeError "Invalid array length"
+#   rangeRight(0,Infinity,1)  -> throws RangeError "Invalid array length"
+
+ORACLE value -> oracle.json
+    # Pure deterministic value oracle. The harness runs the REAL package on each input
+    # tuple and records the returned array (or a recorded {__throw} for the RangeError path).
+    # Outputs are arrays of finite JS numbers; they JSON-round-trip exactly (including the
+    # IEEE-754 float-accumulation artifacts, which are engine-independent for binary doubles).
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full createRange(true) pipeline: iteratee guard, toFinite coercion of
+#     start/end/step, 1-arg form (end===undefined => end=start, start=0), step-sign
+#     auto-inference ONLY for strict-undefined step, and the baseRange descending
+#     (fromRight=true) fill that reverses the range sequence.
+#   - toFinite/toNumber string coercion (decimal, hex via unary +, binary 0b, octal 0o,
+#     bad-signed-hex -> NaN, whitespace trim, empty -> 0), boolean coercion, null/NaN -> 0.
+#   - The `step || 1` divisor quirk producing repeated `start` copies when step coerces to 0
+#     and start<end.
+#   - The RangeError throw when the computed length is not a valid array length
+#     (Infinity-magnitude inputs => MAX_INTEGER length).
+#
+# CARRIED DATA: none. (No large literal table; all constants are inlined scalars/regexes
+#   reproduced above. No carried.json is shipped.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (NOT emitted by genInputs; behavior documented above
+#   for the blind re-emitter to reconstruct, but not graded via generated inputs because the
+#   oracle codec cannot round-trip them deterministically):
+#   - Symbol arguments: toNumber(symbol) === NaN -> toFinite 0. A Symbol cannot survive
+#     JSON.stringify(encode(args)), so it is excluded from genInputs.
+#   - Function arguments / class-instance args whose identity matters (e.g. the guard's
+#     `object` arg is exercised with PLAIN arrays/objects only, which the codec round-trips).
+#   - Boxed primitives (new Number/String/Boolean): documented (new String("4") -> [3,2,1,0])
+#     but excluded from genInputs (codec does not round-trip boxed wrappers).
+#   - NaN / +/-Infinity as a DIRECT numeric argument: not codec-round-trippable
+#     (JSON serializes them to null). Excluded from genInputs. The string "Infinity" is
+#     ALSO excluded because toFinite("Infinity") -> MAX_INTEGER -> RangeError, and while the
+#     throw IS gradable, we keep the throw-path inputs to codec-faithful ones; the documented
+#     throw behavior is captured above for the blind re-emitter.
+#       NOTE: NaN-as-coerced-result IS exercised via the string "abc" / null (codec-faithful).
+#   - Side effects / mutation: NONE. Pure function; inputs are read, a fresh array is returned.
+#
+# PROVENANCE lodash.rangeright@4.2.0 (custom modular build of lodash) ;
+#   repo https://github.com/lodash/lodash ; MIT license ;
+#   source file: node_modules/lodash.rangeright/index.js (module.exports = createRange(true)).

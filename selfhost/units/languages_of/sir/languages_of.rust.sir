@@ -1,0 +1,25 @@
+UNIT languages_of
+LANG rust
+PRIMARY-SHA256 05fd6ddaca2f6220ffa46e63262ccd0a720204c407e786983e062989bb37480e
+SIG pub fn languages_of(input: &serde_json::Value) -> Vec<String>
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn languages_of) depending on serde_json
+  only — no main, no I/O, no unsafe. The verifier generates its own harness crate from the abstract SIG: the json argument is
+  bound as a serde_json::Value and the Vec<String> result is printed as a JSON list. Type mapping: none = Value::Null, bool =
+  Value::Bool, number = Value::Number, text = Value::String, list = Value::Array, map = Value::Object. A throw (R1–R6) is a
+  panic; the message is not graded.
+ENVELOPE narrowing: a Rust String holds only Unicode scalar values, so the js-only lone-surrogate vectors are not graded here.
+MECHANISM R3 is a hand scan, no regex crate. BASE = the substring after the last '/' or '\\'
+  (rsplit(['/', '\\']).next()), then trim_matches(|c| c == ' ' || c == '\t') — NOT str::trim. A SIR-END test: the str is at
+  least 4 bytes, is_char_boundary(len - 4), and its last four bytes eq_ignore_ascii_case(b".sir") (never a Unicode fold).
+  R3(a): trim_end_matches(|c: char| !('!'..='~').contains(&c)); when that removed something and the remainder has a SIR-END,
+  panic. R3(b): BASE without a SIR-END is nothing. R3(c): STEM = &BASE[..len - 4], STEM.split('.') collected: a non-empty
+  first part whose first byte is not ASCII alphanumeric or '_', or with any later byte not ASCII alphanumeric, '_' or '-',
+  panics; more than two parts panics; one is nothing; two with an empty second panics. R6a: Value::get("lang") is
+  Some(non-String) -> panic (Some(Null) included); Value::get("sir") Some(non-String) -> panic; Some(String) -> run R3 on it
+  (it may panic), then panic when its BASE has no SIR-END. R6b: K == "package", or K starts with "lang:" and the rest is
+  non-empty with its first byte in b'a'..=b'z' and every byte in b'a'..=b'z' or b'0'..=b'9'; any other K panics (no Unicode
+  case or whitespace handling). R7: a BTreeSet<String> (byte order equals the required order for ASCII ids), collected into
+  a Vec.
+DEPENDS-ON serde_json (crate, version 1)
+PROVENANCE rederive@bb8ded84fa50 cli/features.mjs. Language file cut 2026-10-27 (round 5) with the primary, before any blind re-emission;
+  the ABI follows the lab's rust driver (json argument as &serde_json::Value).

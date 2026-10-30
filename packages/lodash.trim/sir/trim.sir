@@ -1,0 +1,351 @@
+UNIT trim
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG trim(string = '', chars = <whitespace>, guard?) -> string
+DEPENDS-ON none   # self-contained module; all helpers below are inlined in the source file
+
+# =============================================================================
+# OVERVIEW
+# =============================================================================
+# lodash.trim removes leading and trailing characters from a string.
+# Two modes, selected by a branch:
+#   (A) WHITESPACE mode  -> uses the native /^\s+|\s+$/g regex replace.
+#   (B) CUSTOM-CHARS mode -> UNICODE-SYMBOL-AWARE symbol arrays + membership scan.
+# A 3rd "guard" parameter (documented "@param- {Object} [guard]") forces mode (A)
+# even when `chars` is passed; it exists so `trim` can be used directly as an
+# iteratee (e.g. _.map(arr, _.trim) passes (value, index, collection) and the
+# index `guard` must NOT be mistaken for `chars`).
+#
+# This unit is PURE and DETERMINISTIC. No clock/RNG/io/net seam. It reads the
+# ambient `root.Symbol` once at module load to set up symbol->string coercion,
+# but that is a constant capability of the JS runtime, not an injected seam, and
+# does not affect determinism of the in-envelope inputs.
+#
+# *** HARDEN ROUND 2 — WHY THIS SIR WAS RE-WRITTEN ***
+# Round-1 differential was 373/400. ALL 3 blind emitters CONVERGED with each other
+# but diverged from the real package in EXACTLY one place: the CUSTOM-CHARS path
+# with ASTRAL / surrogate-pair / emoji / flag / ZWJ symbols in `string` and/or
+# `chars`. Real lodash TRIMS such symbols when they are members of the chars set;
+# the emitters did NOT (they returned the input unchanged at the astral ends).
+# ROOT CAUSE: the prior SIR described the unicode symbol-grouping in PROSE only
+# ("groups astral pairs into one symbol...") and never gave the EXACT regex. Blind
+# emitters, lacking the literal, fell back to a UTF-16 CODE-UNIT membership test
+# (String#indexOf / split('')), which CANNOT match a 2-code-unit astral symbol
+# against another 2-code-unit astral symbol — the surrogate pair was split, so the
+# membership compare failed and nothing trimmed. One emitter explicitly flagged
+# uncertainty about `String#match(/g)` + `lastIndex`.
+# THE HARDENING (STEP 4 below, made unambiguous):
+#   (1) reUnicode and reHasUnicode are TRANSCRIBED VERBATIM (exact .source) — they
+#       are short inline regex literals, NOT carried data.
+#   (2) It is made explicit that BOTH `string` AND `chars` are converted to
+#       arrays-of-SYMBOLS by the SAME stringToArray, so an astral symbol is
+#       compared against an astral symbol AS A WHOLE STRING (length-2 vs length-2),
+#       never code-unit by code-unit.
+#   (3) baseIndexOf membership is a strict `===` scan over the chrSymbols ARRAY of
+#       symbol-strings — a re-emitter MUST use an array-of-symbols includes/indexOf,
+#       NEVER String.prototype.indexOf on the raw string.
+#   (4) String#match(/g) semantics are pinned: returns ALL non-overlapping matches
+#       as a fresh array, IGNORES any prior lastIndex (no statefulness), and yields
+#       `null` (-> coalesced to []) when there is no match. reHasUnicode has NO `g`
+#       flag, so its `.test()` is stateless.
+# Verified: the hardened spec predicts every round-1 divergence args AND the new
+# grapheme stress cases (flag pairs, ZWJ family, Fitzpatrick, variation selectors,
+# combining marks, lone surrogates) against the REAL installed lodash.trim@4.5.1.
+
+# =============================================================================
+# BEHAVIOR  (exact ordered pipeline — mirrors source lines 373-387)
+# =============================================================================
+
+# ---- STEP 1: coerce `string` via toString(value) -> baseToString(value) ----
+# toString(value):
+#   if value == null (null OR undefined)        -> return ''
+#   else return baseToString(value):
+#     if typeof value == 'string'               -> return value unchanged
+#     if isSymbol(value)                         -> return symbolToString.call(value)
+#                                                   (e.g. Symbol('x') -> 'Symbol(x)';
+#                                                    if no Symbol in runtime -> '')
+#     else:
+#       result = (value + '')                    # default JS string coercion
+#       if result == '0' AND (1 / value) == -Infinity   # i.e. value is -0
+#                                                  -> return '-0'   # sign preserved
+#       else                                       -> return result
+#   NOTES on the `else` coercion (value + ''):
+#     number  123      -> '123'      |  0 -> '0'      |  -0 -> '-0' (special case above)
+#     NaN              -> 'NaN'      |  Infinity -> 'Infinity'  |  -Infinity -> '-Infinity'
+#     true             -> 'true'     |  false -> 'false'
+#     bigint 123n      -> '123'
+#     array [1,2,3]    -> '1,2,3'    |  ['  a  ','b'] -> '  a  ,b'  (Array.prototype.toString)
+#     plain object {}  -> '[object Object]'
+#     object w/ custom toString -> the string that toString returns
+#   `string` is now a primitive string.
+
+# ---- STEP 2: BRANCH — WHITESPACE mode ----
+#   if (string && (guard || chars === undefined)):
+#       return string.replace(/^\s+|\s+$/g, '')
+#   Condition decode:
+#     - `string` must be a NON-EMPTY string (truthy). Empty '' falls through.
+#     - taken when EITHER `guard` is truthy OR `chars` was not supplied (=== undefined).
+#     - `guard` truthiness is plain JS truthiness:
+#         TRUTHY  guard (forces whitespace mode, IGNORES chars):
+#                 true, any non-empty string ('x'), any number != 0 & != NaN (1, -5),
+#                 ANY object/array INCLUDING {} and []  (objects are always truthy).
+#         FALSY   guard (does NOT force; chars is honored if present):
+#                 undefined, null, false, 0, -0, '' (empty string), NaN.
+#   reTrim = /^\s+|\s+$/g  matches the STANDARD ECMAScript \s class at both ends:
+#     INCLUDES (each removed when leading/trailing):
+#       U+0009 TAB, U+000A LF, U+000B VT, U+000C FF, U+000D CR, U+0020 SPACE,
+#       U+00A0 NBSP, U+1680, U+2000..U+200A (en/em/etc spaces, incl U+2007),
+#       U+2028 LS, U+2029 PS, U+202F NNBSP, U+205F MMSP, U+3000 IDEOGRAPHIC SPACE,
+#       U+FEFF BOM/ZWNBSP.
+#     EXCLUDES (NOT whitespace; never removed):
+#       U+0085 NEL, U+180E MONGOLIAN VOWEL SEPARATOR, U+200B ZERO-WIDTH SPACE.
+#   Whitespace mode removes only a CONTIGUOUS run of \s at the very start and end;
+#   interior whitespace is preserved. Only \s is removed — custom chars are ignored
+#   entirely in this mode. (NOTE: this branch uses String#replace on the RAW string,
+#   NOT symbol arrays. It is a code-unit/regex path; astral chars are irrelevant here
+#   because \s contains no astral code points.)
+
+# ---- STEP 3: BRANCH — early return when no usable chars ----
+#   if (!string || !(chars = baseToString(chars))):
+#       return string
+#   Decode:
+#     - reached only if STEP 2 was NOT taken, i.e. either string==='' OR
+#       (chars !== undefined AND guard falsy).
+#     - if string === ''  -> return ''  (works for trim('', anything)).
+#     - else REASSIGN chars = baseToString(chars)  (same coercion as STEP 1 but
+#       WITHOUT the null->'' shortcut; baseToString(null) = 'null', baseToString(undefined)
+#       = 'undefined'  — but undefined chars already went to STEP 2, so not reached here).
+#       chars coercion examples:
+#         'abc'         -> 'abc'
+#         null          -> 'null'        (set = {n,u,l})
+#         0             -> '0'
+#         true          -> 'true'        |  false -> 'false'
+#         Symbol('x')   -> 'Symbol(x)'
+#         ['-','_']     -> '-,_'         (set = {-, ',', _})
+#         []            -> ''            (empty -> falsy -> EARLY RETURN string unchanged)
+#         {}            -> '[object Object]'  (set = {[,o,b,j,e,c,t, ,O,]})
+#         '' (empty)    -> ''            (falsy -> EARLY RETURN string unchanged)
+#     - if the coerced chars string is EMPTY ('') -> falsy -> return `string` unchanged.
+
+# ---- STEP 4: CUSTOM-CHARS mode (UNICODE-SYMBOL-AWARE) ----  *** HARDENED ***
+#   strSymbols = stringToArray(string)     # the (already coerced) string
+#   chrSymbols = stringToArray(chars)      # the (already coerced) chars string  <-- SAME splitter
+#   start = charsStartIndex(strSymbols, chrSymbols)
+#   end   = charsEndIndex(strSymbols, chrSymbols) + 1
+#   return castSlice(strSymbols, start, end).join('')
+#
+#   ### THE CORE INVARIANT A BLIND RE-EMITTER MUST HONOR ###
+#   The trim is performed on ARRAYS OF SYMBOLS, where a "symbol" is a grapheme-ish
+#   unit produced by reUnicode. The string AND the chars are split into symbol
+#   arrays by the IDENTICAL function stringToArray. Membership is then an
+#   array-element strict-equality compare: chrSymbols.indexOf(strSymbols[i]) > -1,
+#   where each element is the WHOLE symbol string (which may be 1, 2, or more UTF-16
+#   code units long). An astral emoji "😀" is the 2-code-unit string "😀";
+#   it is compared, as a single array element, against "😀" in chrSymbols
+#   and matches. DO NOT implement membership with String.prototype.indexOf /
+#   includes on the RAW chars string, and DO NOT split with split('') — either
+#   breaks astral surrogate pairs into lone code units and FAILS the membership
+#   test (this is exactly the round-1 bug).
+#
+#   stringToArray(s):
+#       return hasUnicode(s) ? unicodeToArray(s) : asciiToArray(s)
+#     asciiToArray(s)   = s.split('')                  # one JS UTF-16 code unit per element
+#     unicodeToArray(s) = s.match(reUnicode) || []     # one grapheme-ish SYMBOL per element
+#
+#   hasUnicode(s) = reHasUnicode.test(s)
+#     reHasUnicode (TRANSCRIBE VERBATIM — exact .source, NO flags):
+#       [‍\ud800-\udfff̀-ͯ︠-︣⃐-⃰︎️]
+#     i.e. true iff s contains ANY code unit that is one of:
+#       ZWJ U+200D; any surrogate code unit U+D800..U+DFFF (i.e. ANY astral char,
+#       AND ALSO any lone surrogate); combining marks U+0300..U+036F or
+#       U+FE20..U+FE23; combining symbols U+20D0..U+20F0; variation selectors
+#       U+FE0E..U+FE0F.
+#     reHasUnicode has NO `g` flag, so `.test()` is STATELESS (lastIndex stays 0);
+#     calling it repeatedly is safe and order-independent.
+#     CONSEQUENCE: if NEITHER `string` NOR `chars` contains any such code unit, BOTH
+#     are split by asciiToArray (split('')), and membership is per code unit — which
+#     is correct for pure-ASCII/BMP-non-combining cases. As soon as `string` OR
+#     `chars` contains an astral/combining/ZWJ/varsel code unit, THAT operand is
+#     split by unicodeToArray. (Each operand is tested INDEPENDENTLY: e.g.
+#     trim("xabcx","x😀") -> string "xabcx" has no unicode -> asciiToArray ->
+#     ["x","a","b","c","x"]; chars "x😀" HAS unicode -> unicodeToArray ->
+#     ["x","😀"]; "x" matches "x" -> leading & trailing "x" trim -> "abc".)
+#
+#   reUnicode (TRANSCRIBE VERBATIM — exact .source, flag `g`):
+#     \ud83c[\udffb-\udfff](?=\ud83c[\udffb-\udfff])|(?:[^\ud800-\udfff][̀-ͯ︠-︣⃐-⃰]?|[̀-ͯ︠-︣⃐-⃰]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff])[︎️]?(?:[̀-ͯ︠-︣⃐-⃰]|\ud83c[\udffb-\udfff])?(?:‍(?:[^\ud800-\udfff]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff])[︎️]?(?:[̀-ͯ︠-︣⃐-⃰]|\ud83c[\udffb-\udfff])?)*
+#     This regex is COMPOSED in the source from named fragments; the composed
+#     fragments (so a re-emitter that prefers to rebuild it can do so identically):
+#       rsAstralRange       = \ud800-\udfff
+#       rsComboMarksRange   = ̀-ͯ︠-︣
+#       rsComboSymbolsRange = ⃐-⃰
+#       rsVarRange          = ︎️
+#       rsAstral   = [\ud800-\udfff]
+#       rsCombo    = [̀-ͯ︠-︣⃐-⃰]
+#       rsFitz     = \ud83c[\udffb-\udfff]                       # Fitzpatrick skin-tone modifiers
+#       rsModifier = (?:[̀-ͯ︠-︣⃐-⃰]|\ud83c[\udffb-\udfff])
+#       rsNonAstral= [^\ud800-\udfff]
+#       rsRegional = (?:\ud83c[\udde6-\uddff]){2}                # a flag = 2 regional-indicator code points
+#       rsSurrPair = [\ud800-\udbff][\udc00-\udfff]              # a well-formed astral surrogate pair
+#       rsZWJ      = ‍
+#       reOptMod   = rsModifier + '?'
+#       rsOptVar   = [︎️]?
+#       rsOptJoin  = (?:‍(?:rsNonAstral|rsRegional|rsSurrPair)rsOptVar reOptMod)*
+#       rsSeq      = rsOptVar + reOptMod + rsOptJoin
+#       rsSymbol   = (?:rsNonAstral rsCombo? | rsCombo | rsRegional | rsSurrPair | rsAstral)
+#       reUnicode  = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+#     GROUPING CONSEQUENCES (each verified against the real package):
+#       - An astral surrogate PAIR (e.g. 😀 = 😀, 👍 = 👍) groups
+#         into ONE 2-code-unit symbol.
+#       - A LONE surrogate (e.g. \ud800 with no following low surrogate) groups into
+#         ONE 1-code-unit symbol via the trailing `[\ud800-\udfff]` alternative.
+#       - A REGIONAL-INDICATOR PAIR (e.g. 🇺🇸 = 🇨... two RI chars) groups into
+#         ONE 4-code-unit flag symbol via rsRegional; a 4-letter pair like 🇺🇸🇫🇷 splits
+#         into TWO flag symbols of 2 RI chars each.
+#       - A base + a following COMBINING mark (rsCombo) groups into ONE symbol
+#         (rsNonAstral rsCombo?). 'é' as e+U+0301 is ONE symbol; a precomposed 'é'
+#         (U+00E9) is also ONE symbol. Plain 'e' (U+0065, 1 unit) is a DIFFERENT
+#         symbol from the combined 'é' — so chars='e' does NOT trim a leading 'é'.
+#       - At STRING START, an isolated combining mark matches the `rsCombo` (2nd)
+#         alternative as a base; a SECOND adjacent combining mark is then absorbed by
+#         rsSeq's reOptMod. So "́́abc" splits ["́́","a","b","c"]:
+#         TWO combining marks become ONE 2-unit symbol — which does NOT equal a
+#         single-mark chars symbol "́" (1 unit) -> not trimmed.
+#       - Fitzpatrick modifiers (rsFitz), variation selectors (rsOptVar), and
+#         ZWJ-joined sequences (rsOptJoin) attach to the preceding base, so a
+#         skin-toned emoji ("👍🏽"), a VS16-qualified emoji ("☺️"), and a ZWJ family
+#         sequence ("👨‍👩‍👧") are EACH ONE symbol, and trim as a whole only against an
+#         identical whole symbol in chars.
+#     `match(reUnicode)` (reUnicode has the `g` flag) returns ALL non-overlapping
+#     matches as a fresh Array and IGNORES any prior `lastIndex` (String#match with a
+#     global regex resets to a full scan — NOT stateful); returns `null` when there
+#     is no match, which unicodeToArray coalesces to `[]`. A re-emitter must rely on
+#     this full-array semantics, NOT on stepping `regex.exec` with `lastIndex`.
+#
+#   charsStartIndex(strSymbols, chrSymbols):
+#       index = -1
+#       while (++index < strSymbols.length AND baseIndexOf(chrSymbols, strSymbols[index], 0) > -1) {}
+#       return index      # first index whose symbol is NOT in chrSymbols (or length if all are)
+#   charsEndIndex(strSymbols, chrSymbols):
+#       index = strSymbols.length
+#       while (index-- AND baseIndexOf(chrSymbols, strSymbols[index], 0) > -1) {}
+#       return index      # last index whose symbol is NOT in chrSymbols (or -1 if all are)
+#     baseIndexOf(array, value, 0): strict `===` linear scan returning first i with
+#       array[i] === value, else -1. Operands are SYMBOL STRINGS; the value !== value
+#       (NaN) special path is unreachable here (symbols are strings). So this is a
+#       plain Array#indexOf over chrSymbols by whole-symbol-string equality.
+#   `end` = charsEndIndex(...) + 1.
+#   castSlice(strSymbols, start, end):
+#       length = strSymbols.length; (end is already a number, never undefined here)
+#       if (!start && end >= length) return strSymbols   # identity fast-path
+#       else baseSlice(strSymbols, start, end)           # [start, end) half-open
+#   .join('') reconstitutes the surviving symbols into the result string.
+#
+#   DEGENERATE: if EVERY symbol is in chrSymbols, charsStartIndex returns length,
+#   charsEndIndex returns -1, end = 0; castSlice -> empty slice -> ''.
+#   (e.g. trim("😀😀😀😀","😀") -> "" ; trim("🇺🇸🇺🇸🇺🇸","🇺🇸") -> "".)
+#   Membership at the ends only: a contiguous LEADING run of in-set symbols and a
+#   contiguous TRAILING run of in-set symbols are removed; interior preserved.
+#   Whitespace is NOT special here — only members of chrSymbols are removed.
+
+# =============================================================================
+# WORKED EXAMPLES (all verified against lodash.trim@4.5.1)
+# =============================================================================
+#   trim('  abc  ')                      -> 'abc'        # whitespace mode
+#   trim('  abc')                        -> 'abc'        # leading-only
+#   trim('abc  ')                        -> 'abc'        # trailing-only
+#   trim('abc')                          -> 'abc'        # no-trim
+#   trim('')                             -> ''           # empty
+#   trim('    ')                         -> ''           # all whitespace
+#   trim('\t\nabc\r\n')                  -> 'abc'        # mixed \s
+#   trim('  abc　')                  -> 'abc'        # unicode whitespace
+#   trim('-_-abc-_-', '_-')              -> 'abc'        # custom chars
+#   trim('___', '_')                     -> ''           # all chars
+#   trim('abc', 'xyz')                   -> 'abc'        # chars not present
+#   trim('  --abc--  ', '-')             -> '  --abc--  '# custom mode: \s NOT trimmed
+#   trim('-_-abc-_-', '_-', {})          -> '-_-abc-_-'  # guard truthy obj -> ws mode, no ws
+#   trim('  abc  ', '_-', 1)             -> 'abc'        # guard truthy -> ws mode
+#   trim('--abc--', '-', 0)              -> 'abc'        # guard falsy -> chars honored
+#   trim('--abc--', '-', [])             -> '--abc--'    # [] truthy -> ws mode, no ws
+#   trim(null)                           -> ''
+#   trim(undefined)                      -> ''
+#   trim(123)                            -> '123'
+#   trim(-0)                             -> '-0'
+#   trim(0)                              -> '0'
+#   trim(true)                           -> 'true'
+#   trim([1,2,3])                        -> '1,2,3'
+#   trim(123n)                           -> '123'
+#   trim('--abc--', null)                -> '--abc--'    # chars 'null', no n/u/l at ends
+#   trim('00abc00', 0)                   -> 'abc'        # chars '0'
+#   trim('--abc--', '')                  -> '--abc--'    # empty chars -> early return
+#   trim('--abc--', [])                  -> '--abc--'    # [] -> '' chars -> early return
+#   trim('-_-abc-_-', ['-','_'])         -> 'abc'        # chars '-,_'
+#   trim('trueabctrue', true)            -> 'abc'        # chars 'true'
+#   trim('][abc][', {})                  -> 'a'          # chars '[object Object]' incl b,c
+#   # --- ASTRAL / SURROGATE / EMOJI / FLAG / ZWJ (the round-1 divergence class) ---
+#   trim('xabcx', 'x\u{1F600}')          -> 'abc'        # ASCII str, astral chars; 'x' matches
+#   trim('\u{1F600}\u{1F600}abc\u{1F600}','\u{1F600}') -> 'abc'   # astral chars trim
+#   trim('--\u{1F600}abc\u{1F600}--','-')-> '\u{1F600}abc\u{1F600}'# astral preserved mid, '-' trims
+#   trim('\u{1F600}\u{1F601}MID\u{1F601}\u{1F600}','\u{1F600}\u{1F601}') -> 'MID'  # 2-emoji set
+#   trim('a\u{1F600}b','a')              -> '\u{1F600}b' # leading 'a' trims, emoji survives
+#   trim('\u{1F600}\u{1F600}\u{1F600}\u{1F600}','\u{1F600}') -> '' # all-astral -> ''
+#   trim('\u{1F44D}\u{1F44D}spd\u{1F44D}','\u{1F44D}')      -> 'spd' # 👍 thumbs
+#   trim('\u{1F1FA}\u{1F1F8}\u{1F1FA}\u{1F1F8}d\u{1F1FA}\u{1F1F8}','\u{1F1FA}\u{1F1F8}') -> 'd' # 🇺🇸 flag pair symbol
+#   trim('\u{1F1FA}\u{1F1F8}7l\u{1F1FA}\u{1F1F8}','\u{1F1FA}\u{1F1F8}')                  -> '7l'
+#   trim('\u{1F44D}\u{1F3FB}\u{1F44D}\u{1F3FB}hi\u{1F44D}\u{1F3FB}','\u{1F44D}\u{1F3FB}') -> 'hi' # 👍🏽 Fitzpatrick symbol
+#   trim('\u{1F468}‍\u{1F469}‍\u{1F467}hi\u{1F468}‍\u{1F469}‍\u{1F467}','\u{1F468}‍\u{1F469}‍\u{1F467}') -> 'hi' # 👨‍👩‍👧 ZWJ family
+#   trim('☺️☺️hi☺️','☺️') -> 'hi' # ☺️ VS16-qualified symbol
+#   trim('éébase','é')    -> 'base'       # precomposed 'é' symbol
+#   trim('éébase','é') -> 'base'       # e+combining 'é' symbol; chars same symbol
+#   trim('éébase','e')       -> 'éébas' # chars plain 'e' != combined 'é' symbol; leading NOT trimmed, trailing 'e' of 'base'? -> 'base' has no trailing 'e'; result keeps leading 'é's, trims nothing at ends -> 'é é bas'... see note
+#   # (precise: strSymbols=['é','é','b','a','s','e']; chars symbol ['e']; 'e' is interior-final not end; start=0 (é not in chars), end=6 (final 'e' IS in chars) -> trims trailing 'e' -> 'éébas')
+#   trim('́́abc','́')     -> '́́abc' # two combining marks group to ONE 2-unit symbol != single-mark chars -> unchanged
+#   trim('\uD800\uD800abc','\uD800')     -> 'abc'        # lone high surrogates each ONE symbol, match chars symbol -> trimmed
+#   trim('\uD800\uD800abc','x')          -> '\uD800\uD800abc' # chars 'x' not present -> unchanged
+
+# =============================================================================
+ORACLE value -> oracle.json
+# =============================================================================
+
+# =============================================================================
+SCOPE
+# =============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - The full pipeline above: string coercion (toString/baseToString incl -0,
+#     Symbol, bigint, array, object), the whitespace-vs-custom-chars branch, the
+#     guard truthiness forcing rule, the early-return-on-empty-chars rule, and the
+#     UNICODE-SYMBOL-AWARE custom trim (stringToArray / charsStartIndex /
+#     charsEndIndex / castSlice / join).
+#   - The exact regex reTrim = /^\s+|\s+$/g and the standard ES \s membership set
+#     (demonstrated inclusions/exclusions listed in STEP 2).
+#   - The exact regexes reUnicode (g-flagged, .source transcribed VERBATIM in STEP 4)
+#     and reHasUnicode (no-flag, .source transcribed VERBATIM in STEP 4), and the
+#     critical invariant that BOTH `string` and `chars` are split into symbol arrays
+#     by the SAME stringToArray and that membership is an ARRAY-element strict-`===`
+#     compare over whole symbol-strings (NEVER String#indexOf on the raw string,
+#     NEVER split('')).
+#   These are SMALL fixed regex constants, not carried data — a blind engineer
+#   reconstructs them from the regex .source strings reproduced verbatim above.
+#
+# CARRIED DATA: NONE. The unicode ranges are short inline regex literals fully
+#   transcribed (both as a single .source string AND as named composing fragments)
+#   in STEP 4; there is no large literal table. No carried.json.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs because
+#   the persistence codec cannot round-trip them or behavior depends on host identity):
+#   - `chars` or `guard` or `string` as a JS Symbol PRIMITIVE: not codec-faithful.
+#     (Behavior is specified above — Symbol string arg -> symbolToString.call; a
+#     symbol `guard` is truthy -> whitespace mode — but Symbols are excluded from
+#     genInputs.)
+#   - Functions as any arg: not codec-faithful; excluded.
+#   - Objects with a CUSTOM toString whose identity matters: excluded (plain objects
+#     {} and arrays, which ARE codec-faithful, are in scope and exercised).
+#   - NaN / +-Infinity AS THE `string` arg: codec-faithful per the addendum and
+#     specified (-> 'NaN'/'Infinity'/'-Infinity'); included in coverage.
+#   - There is NO error/throw path: trim never throws for any in-envelope input.
+
+PROVENANCE lodash.trim@4.5.1 (npm), repo lodash/lodash (custom modularized build),
+  license MIT, source file index.js (function `trim`, lines 373-387, with inlined
+  helpers toString/baseToString/isSymbol/stringToArray/hasUnicode/unicodeToArray/
+  asciiToArray/charsStartIndex/charsEndIndex/baseIndexOf/baseFindIndex/baseIsNaN/
+  castSlice/baseSlice and constants reTrim/reUnicode (line 43)/reHasUnicode (line 46)
+  composed from rsAstralRange..rsSymbol on lines 20-40).

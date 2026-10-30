@@ -1,0 +1,26 @@
+UNIT carried_canonical
+LANG rust
+PRIMARY-SHA256 f0f8bfd7fcf65ee10da915c5044801760095bf39afc82f9b18fe04a03e3cf1a3
+SIG pub fn carried_canonical(table: &serde_json::Value) -> String
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn carried_canonical) depending on
+  serde_json only — no main, no I/O, no unsafe. The verifier's generated harness parses one JSON args line per stdin line,
+  binds `table` as a serde_json::Value::Object, calls carried_canonical(&table), and prints the String; a panic is a throw.
+ABI type mapping: map = Value::Object (serde_json::Map<String, Value>); json = Value; none = Value::Null; bool =
+  Value::Bool; text = Value::String; list = Value::Array; f64 = Value::Number, read with as_f64 (an integer Number from
+  the harness is an exact double, since every number the oracle holds is one).
+ENVELOPE narrowing: serde_json::Value holds no NaN, infinity or negative zero, so R6 is unreachable here: the harness
+  narrows every vector carrying one (R6 is graded in js and ts only). Lone surrogates have no String form (already OUT in
+  the primary). With R6 unreachable the function never fails on a Value it can receive; it returns String, no Result.
+MECHANISM key order (R2): NEVER rely on serde_json::Map iteration order at ANY depth — without preserve_order it is a
+  BTreeMap in byte / code-point order, with it the arrival order. Collect each map's keys (top level AND nested) and sort
+  them by `a.encode_utf16().cmp(b.encode_utf16())` — str's own Ord is code-point order and misplaces astral keys against
+  the top of the basic plane. Digit-only keys get no special treatment.
+MECHANISM numbers (R5): a zero (integer 0 or 0.0) is "0". Do NOT use serde_json's number writer or `{}`/`{:?}` (they print 1e21 as "1e21" or
+  "1000000000000000000000" and 255.0 as "255.0"). Take the shortest round-trip digits from `format!("{:e}", x.abs())`
+  (mantissa digits with the point removed = d, exponent + 1 = n) and lay them out by the primary's R5 cases, prefixing
+  "-" when x < 0.
+MECHANISM text (R4): escape by hand per R4 (or serde_json::to_string on the &str, whose escape set and lowercase hex
+  match R4); keys are sorted on the raw String, never on the escaped form.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/sir/v05.mjs `canonical`. Language file re-cut 2026-10-26 with the primary;
+  the ABI follows the lab's rust driver (drivers/rust.mjs: map/json arrive as serde_json::Value, NaN/Inf/-0 narrowed).

@@ -1,0 +1,55 @@
+UNIT carried_canonical
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b15b56613f9d cli/sir/v05.mjs canonical — the form every CARRIED CANONICAL-SHA256 is computed over and every
+  language's bound table must reproduce; reproduce the code exactly
+ORACLE-CLASS deterministic
+SIG carried_canonical(table: map[text, json]) -> text
+ENVELOPE table is a map from text to json, at any depth. Every key and every text value is well-formed (no unpaired
+  surrogate). Every key spelling is an ordinary key, including __proto__, the index-like spellings and the codec-marker
+  spellings __t and __throw. Numbers that are NaN, infinite or negative zero are IN as throw observations (R6). A non-map
+  table and host-only values are OUT; the js file widens to them (OUT-OF-DOMAIN).
+DEPENDS-ON none
+DESCRIPTION Render a carried constant table as one compact JSON text with the keys of every map, at every depth, in
+  KEY ORDER, so the same table hashes alike however it was written down, and refuse any number JSON cannot tell apart.
+  The text is what a CARRIED CANONICAL-SHA256 is the SHA-256 of (over its bytes); hashing is not part of this unit.
+BEHAVIOR
+R1 The result is compact JSON: no whitespace anywhere outside text values. A map is an opening brace, its entries as
+  key-text, a colon and the rendered value, separated by commas, and a closing brace; an empty map is the two braces
+  alone. A list is its elements rendered in their own order between square brackets, separated by commas. true, false and
+  none render as "true", "false" and "null".
+R2 KEY ORDER, applied to the entries of EVERY map, the table itself and every map nested at any depth (directly or
+  inside a list): ascending order of each key's sequence of 16-bit code units, compared unit by unit, a proper prefix
+  first. A character beyond the basic multilingual plane counts as its surrogate pair, so it sorts before the private-use
+  and compatibility characters at the top of the basic plane. No key is special: digit-only keys sort as text ("10"
+  precedes "9"). The order the entries arrive in never matters.
+R3 A list keeps its elements in their own order; only map entries are reordered.
+R4 A text, key or value, renders between double quotes with exactly these escapes: quotation mark and backslash are
+  preceded by a backslash; backspace, form feed, line feed, carriage return and tab become backslash-b, -f, -n, -r, -t;
+  every other control character (code 0 through 31) becomes backslash-u and four LOWERCASE hex digits. Everything else is
+  written raw: solidus, delete, the line and paragraph separators, and every non-ASCII character. Keys sort (R2) on their
+  raw text, never on the escaped form.
+R5 Positive zero renders "0". Any other finite number renders by the ECMAScript Number-to-String algorithm. Take the
+  shortest decimal digit string d (k digits, no leading or trailing zero) and the integer n such that the magnitude is d times ten to the power n - k
+  and that round-trips to the same double (the closest to the exact value when several are shortest). Then: when
+  k <= n <= 21, write d followed by n - k zeros; when 0 < n <= 21, write the first n digits, a point, and the rest; when
+  -6 < n <= 0, write "0.", then -n zeros, then d; otherwise write the first digit, a point and the remaining digits when
+  k > 1, then "e", the sign of n - 1 ("+" or "-") and its magnitude. A negative number carries a leading "-". So 255 is
+  "255", 1e20 is "100000000000000000000", 1e21 is "1e+21", 0.000001 is "0.000001" and 1e-7 is "1e-7".
+R6 A number that is NaN, +Infinity, -Infinity or negative zero, anywhere in the table, makes the whole call throw;
+  nothing is rendered CITED FIDELITY package — JSON has no form that tells these apart from zero or none
+INVARIANT the result depends only on the table's content, never on the order entries arrive in, at any depth.
+INVARIANT on success the result parses as JSON and denotes the same table; distinct tables give distinct results.
+OUT-OF-DOMAIN (the js file states these as its widening) a table that is not a map (none, text, a number, a bool, a list,
+  a host mapping object) throws. Anywhere inside, a valueless entry or element, a list hole, an arbitrary-precision
+  integer, a boxed scalar, a pattern object, a set, a byte array, or any other object that is not a plain map or list
+  throws. An unpaired surrogate in a key or text does not throw: it renders as backslash-u and four lowercase hex digits.
+ORACLE value -> oracles/carried_canonical.json  CANONICAL-SHA256 ce67efdc6101b1a2c73e1180fec6ecd759e9cbc63bdc92eed32bc68985e2a87b
+SCOPE IN: R1–R6 over map[text, json] tables: key order at every depth, index-like and reserved-looking keys, every
+  escape class, the number layout boundaries (1e21, 1e-7, 0.000001, subnormals, the largest double), and the NaN,
+  infinity and negative-zero throws. OUT: host-only values (js widening); hashing (checkCarried) and table reading
+  (carriedTable, rustCarriedTable) are other units.
+PROVENANCE rederive@b15b56613f9d (MIT), cli/sir/v05.mjs `canonical` (with `plainMap`); reached through
+  selfhost/seams/carried_canonical.mjs. Cut 2026-10-26; round 2 re-cut against the fixed kernel (round 1 was b329a40412df,
+  which sorted only the top level, hoisted index keys and rendered NaN, infinity and negative zero); every rule probed
+  against the real function.

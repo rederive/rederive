@@ -1,0 +1,344 @@
+# SIR — Semantic Intermediate Representation
+# Language-neutral. Comments use '#' only.
+
+UNIT sortedLastIndex
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG sortedLastIndex(array, value) -> number   # default export: module.exports = sortedLastIndex
+DEPENDS-ON none   # zero runtime deps; all helpers (baseSortedIndex, baseSortedIndexBy, identity, isSymbol, isObjectLike) are inlined below
+
+# ---------------------------------------------------------------------------
+# PURPOSE
+# ---------------------------------------------------------------------------
+# Binary search of a SORTED `array` returning the HIGHEST (rightmost) index at
+# which `value` could be inserted to keep `array` sorted. It is the mirror of
+# sortedIndex (which returns the LOWEST index); sortedLastIndex calls the shared
+# base implementation with retHighest = TRUE. Result range: 0 .. array.length
+# (clamped at MAX_ARRAY_INDEX = 4294967294).
+#
+# "Rightmost" means: if `value` already appears in `array`, the returned index is
+# the position AFTER the last equal element (the dup-block's right boundary), not
+# before the first. e.g. sortedLastIndex([4,5,5,5,6],5) === 4.
+
+# ---------------------------------------------------------------------------
+# CONSTANTS (exact, from source)
+# ---------------------------------------------------------------------------
+CONST MAX_ARRAY_LENGTH       = 4294967295            # 2^32 - 1
+CONST MAX_ARRAY_INDEX        = 4294967294            # MAX_ARRAY_LENGTH - 1
+CONST HALF_MAX_ARRAY_LENGTH  = 2147483647            # MAX_ARRAY_LENGTH >>> 1 == 2^31 - 1
+CONST symbolTag              = '[object Symbol]'
+
+# ---------------------------------------------------------------------------
+# HELPER: isSymbol(v)   (exact)
+# ---------------------------------------------------------------------------
+# isObjectLike(v) := (v is truthy) AND (typeof v === 'object')
+# isSymbol(v)     := (typeof v === 'symbol')
+#                    OR ( isObjectLike(v) AND Object.prototype.toString.call(v) === '[object Symbol]' )
+# NOTE: the second disjunct catches boxed/host Symbol-wrappers (rare). For all
+# values genInputs can emit, isSymbol(v) is effectively (typeof v === 'symbol').
+# (Symbols are NOT codec-round-trippable, so genInputs never emits them — see SCOPE.)
+
+# HELPER: identity(v) := v        (the iteratee used; pure pass-through)
+
+# ===========================================================================
+# CRITICAL INVARIANT — NULLISH-ARRAY HANDLING (read this FIRST)
+# ===========================================================================
+# *** This is the #1 source of re-emitter divergence. Get it exactly right. ***
+#
+# `high` is the SINGLE source of truth for the array's length. It is computed
+# ONCE, as the VERY FIRST statement of NODE A (and re-computed identically as the
+# very first statement of NODE C), using the nullish-coalescing guard:
+#
+#       high := array ? array.length : 0
+#
+# In the source this is written `high = array ? array.length : low` where `low`
+# is already 0 — identical to `array ? array.length : 0`. The test is a TRUTHY
+# test (`array ?`): for array === null, array === undefined, and any falsy array
+# the FALSE branch is taken and `high` becomes 0 WITHOUT ever evaluating
+# `array.length`. (`0`, `NaN`, `''`, `false` would also be falsy, but the
+# in-envelope first arg is always an Array or null/undefined.)
+#
+# HARD RULES the re-emitter MUST follow — violating ANY of these reproduces the
+# divergence (a thrown "Cannot read properties of null/undefined (reading
+# 'length')"):
+#
+#   (R1) `high` is read from the array's `.length` EXACTLY ONCE, guarded by the
+#        truthy/nullish test, and ONLY inside that guard's true-branch. After that
+#        first statement, the array's `.length` is NEVER read again anywhere.
+#
+#   (R2) The numeric ROUTING GUARD (NODE A) tests `high <= HALF_MAX_ARRAY_LENGTH`
+#        using the VARIABLE `high`. It MUST NOT re-read `array.length`, and MUST
+#        NOT dereference `array` in any way. For a nullish array high=0, so
+#        `0 <= HALF_MAX_ARRAY_LENGTH` is TRUE: a numeric value routes to NODE B.
+#
+#   (R3) Both loops (`while low < high`) and the midpoint and the comparator read
+#        ONLY the variables low/high/mid and `array[mid]`. For a nullish array
+#        high=0, so the loop condition `low(0) < high(0)` is FALSE on entry: the
+#        loop body NEVER executes and `array[mid]` is NEVER evaluated. There is NO
+#        dereference of the nullish `array`.
+#
+#   (R4) Therefore EVERY nullish-array input returns 0, for ANY `value`
+#        whatsoever (number, NaN, 0, -0, string, null, undefined, bigint,
+#        boolean, Infinity):
+#          - numeric value  -> NODE B, returns high == 0
+#          - any other value (incl. NaN) -> NODE C, returns min(high, MAX_ARRAY_INDEX)
+#                                                         == min(0, 4294967294) == 0
+#        No nullish-array input EVER throws.
+#
+# A re-emitter that writes the routing guard as
+#       `typeof value=='number' && value===value && array.length <= HALF...`
+# (re-reading `array.length`) — OR that computes high but then dereferences the
+# array before the loop — will THROW on a nullish array and DIVERGE. Do not.
+
+# ===========================================================================
+# BEHAVIOR  (ordered pipeline)
+# ===========================================================================
+# sortedLastIndex(array, value):
+#   return baseSortedIndex(array, value, retHighest = TRUE)
+#
+# Throughout, retHighest is ALWAYS true for this unit. Branches that only matter
+# when retHighest=false are documented for completeness but they collapse.
+
+# ---------------------------------------------------------------------------
+# NODE A — baseSortedIndex(array, value, retHighest=TRUE)
+# ---------------------------------------------------------------------------
+#   # STEP 1 (FIRST, before everything): establish low and high.
+#   low  := 0
+#   high := array ? array.length : 0     # nullish/falsy array -> high=0 (NO deref). See INVARIANT.
+#
+#   # STEP 2 — ROUTING DECISION: numeric fast path vs general path.
+#   # The guard reads the VARIABLE `high` (NOT array.length, NO array deref).
+#   IF ( typeof value === 'number'  AND  value === value  AND  high <= HALF_MAX_ARRAY_LENGTH ):
+#         # value is a JS number AND NOT NaN (value===value excludes NaN)
+#         # AND the array is not larger than HALF_MAX_ARRAY_LENGTH (2147483647).
+#         GOTO NODE B (numeric fast path)
+#   ELSE:
+#         GOTO NODE C (baseSortedIndexBy general path)
+#
+#   # Implications of the routing guard:
+#   #  - array nullish (high=0) AND value numeric -> NODE B; loop skipped; returns 0
+#   #  - array nullish (high=0) AND value NaN/other -> NODE C; loop skipped; returns 0
+#   #  - value === NaN              -> NOT fast path (value===value is false)   -> NODE C
+#   #  - value is null/undefined/string/boolean/bigint/object/symbol -> NODE C  (typeof != 'number')
+#   #  - value is a finite or +/-Infinity number with high<=HALF_MAX -> NODE B
+#   #  - value is a number but high > HALF_MAX_ARRAY_LENGTH          -> NODE C
+#   #  - -0 is typeof 'number' and -0 === -0, so -0 -> NODE B
+
+# ---------------------------------------------------------------------------
+# NODE B — NUMERIC FAST PATH  (retHighest=TRUE specialization)
+# ---------------------------------------------------------------------------
+#   # `value` is a non-NaN number. Bisect with mid = (low + high) >>> 1.
+#   # If high==0 (nullish/empty array) this loop NEVER runs -> RETURN 0.
+#   WHILE low < high:
+#       mid      := (low + high) >>> 1          # unsigned-shift floor of midpoint
+#       computed := array[mid]                   # NO iteratee here (raw element)
+#       # rightmost predicate: advance low when computed is an ORDINARY value <= value
+#       IF ( computed !== null  AND  NOT isSymbol(computed)  AND  computed <= value ):
+#             low := mid + 1
+#       ELSE:
+#             high := mid
+#   RETURN high
+#
+#   # KEY DETAIL (retHighest=true): the comparison is  computed <= value  (LESS-OR-EQUAL).
+#   #   This is what produces the RIGHTMOST index: when computed == value we still
+#   #   move low past it, so equal elements end up to the LEFT of the returned index.
+#   #   (sortedIndex / retHighest=false uses  computed < value  instead.)
+#   # null elements and symbol elements fail the guard -> treated as ">= value"
+#   #   (they drive high = mid, i.e. sort to the high side). This matches lodash's
+#   #   convention that null/symbol sort after numbers in a numeric search.
+#   # The fast path is NOT clamped to MAX_ARRAY_INDEX (high <= HALF_MAX < MAX_ARRAY_INDEX
+#   #   already, so the clamp is unreachable here).
+#   # NaN elements in `array`: NaN <= value is always false -> high = mid (high side).
+#   # +/-Infinity behave as ordinary numbers under <=.
+
+# ---------------------------------------------------------------------------
+# NODE C — baseSortedIndexBy(array, value, iteratee=identity, retHighest=TRUE)
+# ---------------------------------------------------------------------------
+#   value := identity(value)                     # == value  (no-op)
+#
+#   # STEP 1 (FIRST): establish low and high, SAME nullish guard as NODE A.
+#   low  := 0
+#   high := array ? array.length : 0             # nullish array -> high=0 (NO deref). See INVARIANT.
+#
+#   # Precompute classification flags for the SEARCH value:
+#   valIsNaN       := (value !== value)          # true iff value is NaN
+#   valIsNull      := (value === null)
+#   valIsSymbol    := isSymbol(value)
+#   valIsUndefined := (value === undefined)
+#   # NOTE: these are checked in the dispatch order below; valIsNaN wins over the
+#   # others, then valIsUndefined, then valIsNull, then valIsSymbol, then the
+#   # ordinary branch. They are mutually exclusive in practice for emit-able values.
+#
+#   # If high==0 (nullish/empty array) this loop NEVER runs -> RETURN min(0, MAX_ARRAY_INDEX) == 0.
+#   WHILE low < high:
+#       mid      := floor((low + high) / 2)      # Math.floor, NOT >>> (matters only past 2^31 sizes; identical for in-scope sizes)
+#       computed := identity(array[mid])          # == array[mid]
+#       othIsDefined   := (computed !== undefined)
+#       othIsNull      := (computed === null)
+#       othIsReflexive := (computed === computed) # false iff computed is NaN
+#       othIsSymbol    := isSymbol(computed)
+#
+#       # --- setLow decision matrix (retHighest=TRUE throughout) ---
+#       IF valIsNaN:
+#             setLow := retHighest OR othIsReflexive
+#             #  retHighest=true  =>  setLow = TRUE always.
+#             #  => for a NaN search value, EVERY element advances low -> returns high == array.length.
+#       ELSE IF valIsUndefined:
+#             setLow := othIsReflexive AND (retHighest OR othIsDefined)
+#             #  retHighest=true => setLow = othIsReflexive
+#             #  => advance low for any non-NaN element (defined OR undefined, both reflexive);
+#             #     stop only at a NaN element. For a clean array -> returns array.length.
+#       ELSE IF valIsNull:
+#             setLow := othIsReflexive AND othIsDefined AND (retHighest OR (NOT othIsNull))
+#             #  retHighest=true => setLow = othIsReflexive AND othIsDefined
+#             #  => advance low for any defined non-NaN element (INCLUDING null elements, since
+#             #     null is defined and reflexive); stop at undefined or NaN. Clean -> array.length.
+#       ELSE IF valIsSymbol:
+#             setLow := othIsReflexive AND othIsDefined AND (NOT othIsNull) AND (retHighest OR (NOT othIsSymbol))
+#             #  retHighest=true => setLow = othIsReflexive AND othIsDefined AND (NOT othIsNull)
+#             #  => advance low for any defined, non-null, non-NaN element (INCLUDING symbol elements);
+#             #     stop at null/undefined/NaN. Clean -> array.length.
+#       ELSE IF (othIsNull OR othIsSymbol):
+#             setLow := FALSE
+#             #  value is an ORDINARY value (number/string/bool/bigint/object), but the ELEMENT
+#             #  is null or symbol -> never advance low (element sorts to the high side).
+#       ELSE:
+#             setLow := retHighest ? (computed <= value) : (computed < value)
+#             #  retHighest=true => setLow = (computed <= value)   [LESS-OR-EQUAL => rightmost]
+#             #  ordinary comparison; uses JS `<=` semantics (numeric coercion for mixed types,
+#             #  lexicographic for string<=string, bigint<=bigint, etc.). NaN element: othIsReflexive
+#             #  is false so this branch is NOT reached for NaN elements (the valIsNaN/other branches
+#             #  handle ordinary value vs NaN element: othIsReflexive=false ... actually for an ordinary
+#             #  value and a NaN element, none of the value-flag branches fire, othIsNull/othIsSymbol
+#             #  are false, so we reach ELSE: computed <= value with computed=NaN -> NaN<=x is false
+#             #  -> setLow=false -> high=mid. NaN element sorts to the high side.)
+#
+#       IF setLow:  low  := mid + 1
+#       ELSE:       high := mid
+#
+#   RETURN min(high, MAX_ARRAY_INDEX)             # nativeMin clamp
+#
+#   # KEY DETAILS:
+#   #  - retHighest=true => the ordinary comparison is `computed <= value` (rightmost).
+#   #  - mid uses Math.floor((low+high)/2). For all in-scope array sizes this equals
+#   #    (low+high)>>>1, so NODE B and NODE C agree on midpoint selection.
+#   #  - Final result is clamped to MAX_ARRAY_INDEX (4294967294); unreachable for
+#   #    in-scope arrays but part of the contract. For a nullish array min(0,...)==0.
+
+# ===========================================================================
+# WORKED EXPECTATIONS (verified by running lodash.sortedlastindex@4.1.0)
+# ===========================================================================
+# NULLISH ARRAY (high=0; loop skipped; NO deref; ALWAYS 0 — see INVARIANT):
+#   sortedLastIndex(null, 5)               == 0    # numeric value -> NODE B routing reads high=0
+#   sortedLastIndex(null, 0)               == 0    # value 0 is a number -> NODE B, high=0
+#   sortedLastIndex(undefined, 5)          == 0
+#   sortedLastIndex(undefined, 0)          == 0
+#   sortedLastIndex(null, NaN)             == 0    # NaN -> NODE C (value!==value), high=0 -> min(0,...)=0
+#   sortedLastIndex(undefined, NaN)        == 0
+#   sortedLastIndex(null, 'x')             == 0    # string -> NODE C, high=0 -> 0
+#   sortedLastIndex(undefined, null)       == 0    # null value -> NODE C, high=0 -> 0
+#   sortedLastIndex(null, undefined)       == 0    # undefined value -> NODE C, high=0 -> 0
+#   sortedLastIndex(undefined, undefined)  == 0
+#   sortedLastIndex(null, Infinity)        == 0    # Infinity is a number -> NODE B, high=0
+#   # (ALL of the above were CONFIRMED by running the real package; NONE throw.)
+#
+# NUMERIC FAST PATH (NODE B):
+#   sortedLastIndex([4,5,5,5,6], 5)        == 4    # rightmost after the 5-block
+#   sortedLastIndex([1,2,3], 2)            == 2    # after the 2
+#   sortedLastIndex([], 5)                 == 0    # empty (high=0, loop skipped)
+#   sortedLastIndex([10,20,30], 5)         == 0    # smaller than all
+#   sortedLastIndex([10,20,30], 99)        == 3    # larger than all
+#   sortedLastIndex([5], 5)                == 1    # single elem, equal -> after
+#   sortedLastIndex([5], 4)                == 0
+#   sortedLastIndex([5], 6)                == 1
+#   sortedLastIndex([1,1,1], 1)            == 3    # all equal -> length
+#   sortedLastIndex([2,2,2], 1)            == 0
+#   sortedLastIndex([2,2,2], 3)            == 3
+#   sortedLastIndex([-0,0,0], 0)           == 3    # -0/0 compare equal under <=
+#   sortedLastIndex([0,0], -0)             == 2
+#   sortedLastIndex([1,2,Infinity], Infinity) == 3
+#   sortedLastIndex([-Infinity,1], -Infinity)  == 1
+#   sortedLastIndex([null,1,2,3], 2)       == 3    # null element fails guard (high side); rightmost after 2
+#
+# GENERAL PATH (NODE C):
+#   value is NaN:
+#     sortedLastIndex([1,2,NaN], NaN)      == 3    # valIsNaN+retHighest => returns length
+#     sortedLastIndex([NaN,NaN], NaN)      == 2
+#     sortedLastIndex([1,2,3], NaN)        == 3
+#     sortedLastIndex([], NaN)             == 0    # empty (high=0)
+#   value is null:
+#     sortedLastIndex([null,null,1], null) == 3    # all defined non-NaN -> length
+#     sortedLastIndex([1,2,3], null)       == 3
+#     sortedLastIndex([1,2,null,null], null) == 4
+#   value is undefined:
+#     sortedLastIndex([undefined,undefined], undefined) == 2
+#     sortedLastIndex([1,2,undefined], undefined)       == 3
+#     sortedLastIndex([1,2,3], undefined)               == 3
+#     sortedLastIndex([1,2,3,undefined], undefined)     == 4
+#   value is string (typeof != number -> general path):
+#     sortedLastIndex(['a','b','b','c'], 'b') == 3    # lexicographic <=
+#     sortedLastIndex(['a','b','c'], 'b')     == 2
+#     sortedLastIndex([1,2,3], '2')           == 2    # '2' coerces: 1<='2'(T) 2<='2'(T) 3<='2'(F)
+#   value is bigint:
+#     sortedLastIndex([1n,2n,3n], 2n)        == 2
+#   value is boolean:
+#     sortedLastIndex([false,true,true], true) == 3   # true coerces to 1; false=0
+#     sortedLastIndex([false,false], true)      == 2
+
+# ===========================================================================
+# ORACLE
+# ===========================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function. The harness records the exact return value
+# (a non-negative integer) for each generated [array, value] tuple.
+
+# ===========================================================================
+# SCOPE
+# ===========================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the full two-path bisect above —
+#   the nullish-guard-FIRST `high` computation (CRITICAL INVARIANT), the routing
+#   guard reading the `high` variable, NODE B (retHighest <= comparison,
+#   null/symbol guard), and NODE C (the valIsNaN/valIsUndefined/valIsNull/
+#   valIsSymbol/ordinary matrix with retHighest=true), plus the nullish-array -> 0
+#   behavior (NO throw, NO deref), the Math.floor midpoint, and the
+#   min(high, MAX_ARRAY_INDEX) clamp.
+#
+# CARRIED DATA: none (no large literal tables). Constants are the 4 numeric/string
+#   CONSTs listed above, transcribed inline (tiny, not a carried table).
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, not emitted by genInputs):
+#   - Symbol values/elements: behavior IS specified by the isSymbol branches
+#     above, but Symbols are not JSON/codec-round-trippable, so genInputs does
+#     not emit them. A blind re-emitter still reconstructs the branch from the SIR.
+#   - Function elements / class instances whose identity matters: not round-trippable; excluded.
+#   - String / arguments-like array-likes (e.g. sortedLastIndex("abc","b")):
+#     lodash uses array.length and indexing, so a string IS handled via the
+#     general path; out of envelope for genInputs (arrays only) but spec-covered.
+#   - Arrays larger than HALF_MAX_ARRAY_LENGTH (2147483647) that flip a numeric
+#     value into NODE C, and the MAX_ARRAY_INDEX clamp: documented, not emittable
+#     at scale (out of envelope by memory).
+#   - undefined / NaN / +-Infinity / -0 AS THE `value` arg ARE in-envelope and are
+#     emitted (the value position survives the codec when passed top-level).
+#   - null / undefined AS THE `array` arg ARE in-envelope and emitted (the nullish
+#     guard handles them -> 0). NaN/0/false/'' as the array arg are out of envelope
+#     (genInputs emits only Array | null | undefined as the first arg), but the
+#     CRITICAL INVARIANT documents that any falsy array would also yield high=0.
+#   - undefined / NaN as ARRAY ELEMENTS: undefined array elements do NOT survive
+#     JSON round-trip (become null), and NaN does not survive JSON either. The
+#     factory codec round-trips undefined/NaN/+-Infinity/-0, so these ARE emitted
+#     as array elements (the codec is the authority, not bare JSON.stringify).
+
+# ===========================================================================
+# RE-EMITTER DIRECTIVE
+# ===========================================================================
+# This is a DEFAULT export. The re-emitted module MUST do:  export default <fn>;
+# Signature: <fn>(array, value) -> number. No options. Pure; no seam.
+#
+# CHECKLIST before you finish (these reproduce the prior divergence if ignored):
+#   [ ] `high` derived ONCE as `array ? array.length : 0` as the FIRST statement.
+#   [ ] Routing guard tests `high <= HALF_MAX_ARRAY_LENGTH` (the VARIABLE high),
+#       NOT `array.length`, and does NOT dereference `array`.
+#   [ ] Loop condition is `low < high`; `array[mid]` is read ONLY inside the loop.
+#   [ ] fn(null, anything) and fn(undefined, anything) return 0 and NEVER throw.
+
+PROVENANCE lodash.sortedlastindex@4.1.0  (repo: lodash/lodash, MIT license, file: index.js)

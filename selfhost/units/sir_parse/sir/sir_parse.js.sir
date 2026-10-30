@@ -1,0 +1,36 @@
+UNIT sir_parse
+LANG js
+PRIMARY-SHA256 84cce153d90c22c8ab2ce2e108be678d196ba9592c6a6b48ddc16b17532cacb3
+SIG sir_parse(text: string): { ast: object[], errors: object[], warnings: object[] }
+NOTE default export
+ABI text = string (the host's 16-bit code units; a "character" of the primary is one code POINT — two code units for
+  a character beyond the Basic Multilingual Plane). json result = a fresh plain object with exactly the keys ast, errors, warnings; a node
+  or diagnostic is a plain object (key order is immaterial, the canonical form sorts); "line" is a number; register none =
+  null; attrList is an array of two-element arrays [keyword, value]; a diagnostic of a no-msg code (TABLE DIAGNOSTICS) has
+  NO msg key at all, never msg: undefined. The artifact is an ES module default-exporting the function; it imports nothing.
+MECHANISM SPACE is [ \t] and nothing else: every trim is a replace of /^[ \t]+|[ \t]+$/g (or a loop), NEVER String.prototype.trim
+  / trimEnd (those use the full host whitespace set). The blank test of R2 is the empty string after R1. The NAME of R7 ends
+  at the first [ \t]; REST keeps that character. The 40-character msg cut is Array.from(code).slice(0, 40).join('') — by
+  code point; slice(0, 40) on the string would split a surrogate pair. ATTRS (R11) = every match of the pinned ATTR pattern
+  (global, left to right); a continuation passes ' ' + code, a directive passes REST as is. R12: keep attrList; attrs[k] =
+  the non-empty attrList values for k joined by '; ' (filter on non-empty, not on presence). The registry lookup is an
+  own-key lookup or a Map. W_NAME_SEPARATOR's hex is codePointAt(...).toString(16).toUpperCase() padded to 4 with '0' — the
+  code point right after G (after G's ':' when GLUED matched one), or CODE.codePointAt(0) for the invisible lead.
+  R1's BOM removal is NOT /^([ \t]*)\uFEFF+/ (that drops one run only and leaves SPACE BOM SPACE BOM with a BOM).
+MECHANISM R5 is a code-unit scan, not a regex (a regex dot refuses U+2028/U+2029; a non-unicode one splits an astral pair):
+  an opener is '"' at index 0, right after a code unit of the pinned OPENER-PREV set, or at the index right after the last
+  span's closing quote (keep that index: a quote there opens even though its predecessor is '"'); from it, at index j a '\\' steps
+  over itself and one code POINT (j += 3 when codePointAt(j + 1) > 0xffff, else j += 2), any other code unit steps 1, and
+  the first '"' reached closes; reaching the end -> unclosed, no span. An index i is inside when open < i < close. R6
+  scans CONTENT; R11 scans the very string ATTRS matches (' ' + code, or REST) and drops an ATTR match whose keyword index
+  (match index + match length - keyword length) is inside.
+DEPENDS-ON none
+PINNED regex LINE-SPLIT = /\r\n|\r|\n/ CITED R1 — then replace the match of /^[ \t\uFEFF]+/ by itself with every \uFEFF removed (a replacer function; the inner replace has the g flag) and strip /[ \t]+$/ from each piece
+PINNED charset OPENER-PREV = ' \t([{,=:;|<>!&-~' CITED R5 — the code unit right before an opening quote (one string; a membership test on one code unit)
+PINNED regex COLON-NAME = /^[A-Z][A-Z0-9-]*:$/ CITED R7 — applied only when the name without its ':' is not CITED
+PINNED regex DIRECTIVE-NAME = /^(?:[A-Z][A-Z0-9-]*|R\d+)$/ CITED R7 — the R\d+ alternative is subsumed by the first; its registry row is TABLE REGISTRY
+PINNED regex GLUED = /^(?:[A-Z][A-Z0-9-]*|R\d+):?(?=[\u000A-\u000D\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\u{110BD}\u{110CD}\u{13430}-\u{1343F}\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0001}\u{E0020}-\u{E007F}])/u CITED R8 (a) — applied to NAME; G = the match minus a final ':'; never \p{White_Space} or \p{Cf} (the host's tables move with its Unicode version)
+PINNED regex INVISIBLE-LEAD = /^[\u000A-\u000D\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\u{110BD}\u{110CD}\u{13430}-\u{1343F}\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0001}\u{E0020}-\u{E007F}]+(?=(?:[A-Z][A-Z0-9-]*|R\d+)(?:[ \t:\u000A-\u000D\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\u{110BD}\u{110CD}\u{13430}-\u{1343F}\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0001}\u{E0020}-\u{E007F}]|$)|#)/u CITED R8 (b) — applied to CODE, only when GLUED found nothing; the hex is CODE.codePointAt(0); the text after the match decides the message tail: startsWith('#'), else its /^[A-Z0-9-]+/ word compared with 'CITED'
+PINNED regex ATTR = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R11 — a GROUP is one match; its value runs from the match end to the next kept match index
+PINNED regex COMMENT-STRIP = /^#+[ \t]?/ CITED R4
+PROVENANCE rederive@6199e2cc8b75 cli/sir/sir-parse.mjs (MIT), the shipped js itself. Cut cold 2026-10-26; round 3 re-cut; round 4 re-cut (quotedSpans, glued over White_Space and Cf); round 5 re-cut (OPENER-PREV, adjacent spans, BOM after the indent, the pinned GLUE class, glued NAME:, the invisible lead).

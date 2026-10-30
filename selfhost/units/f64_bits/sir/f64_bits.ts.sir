@@ -1,0 +1,15 @@
+UNIT f64_bits
+LANG ts
+PRIMARY-SHA256 c6667a66d269b295c9a9e05d023b1f91bd541e5e65c8971a537aed79fb8e90f1
+SIG export function f64_bits(x: number): string
+ABI TypeScript compiles to the js runtime: f64=number (IEEE-754 binary64, NaN payloads included); text=string. STRICT: the
+  artifact must type-check under strict: true against this SIG, with no any, no non-null assertions (!), and no
+  @ts-ignore / @ts-expect-error. getBigUint64 returns bigint: target ES2020 or later.
+MECHANISM (restated from js — language files are self-contained) raw bits (R1) = a DataView over an 8-byte ArrayBuffer:
+  setFloat64(0, x) then getBigUint64(0), both big-endian (no littleEndian flag); render with toString(16), lowercase, then
+  padStart(16, "0").
+MECHANISM NaN rule (R2) = test Number.isNaN(x) FIRST and return the canonical pattern: setFloat64 preserves a NaN's sign
+  and payload, so the test is load-bearing even though the oracle's single NaN vector cannot show it.
+MECHANISM -0 (R3): never compare x numerically (-0 === 0); the DataView path keeps the sign bit.
+DEPENDS-ON none
+PROVENANCE rederive@b329a40412df cli/sir/canon.mjs f64bits + hex16.

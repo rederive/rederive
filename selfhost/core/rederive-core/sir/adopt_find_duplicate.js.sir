@@ -1,0 +1,21 @@
+UNIT adopt_find_duplicate
+LANG js
+PRIMARY-SHA256 d92ba17c1f41c9434c07dff6d66f23e4ea1a2fbe39dde677bc2319c24017bc41
+SIG adopt_find_duplicate(existing: string, section: string): { heading: string, startLine: number, endLine: number } | null
+ABI text = string (UTF-16; lengths are .length); i64 = number (a non-negative integer far below 2^53); record = a plain
+  object with exactly the own keys heading, startLine, endLine; none = null. The real function is driven as
+  findUnmanagedDuplicate(existing, section); the reconstruction exports a plain function.
+MECHANISM WHITESPACE = the ECMAScript \s class, which is exactly the pinned set; trimming = String.prototype.trim (same
+  set). BREAK-CHAR = the characters "." does not match (besides LF, which never occurs inside a line). LINES (R1) =
+  split("\n") then drop one trailing "\r" per piece. Lowercase (R4) = String.prototype.toLowerCase. WORD-CHAR = the
+  non-unicode \w, so the boundary after "begin" is \b.
+PINNED regex HEADING = /^(#{1,6})\s+(.+)$/ CITED R3 — no m and no s flag: "." refuses CR/U+2028/U+2029 and "$" is end of the line string
+PINNED regex FENCE = /^\s*(?:```|~~~)/ CITED R2 — a fence line when it matches AND ONE-LINE-FENCE does not hold
+PINNED regex ONE-LINE-FENCE = /^\s*```.*```\s*$/ CITED R2 — tested on the line, AND String.prototype.trim of the line has .length > 6; "." refuses CR/U+2028/U+2029
+PINNED regex FENCE-RUN = /^\s*(`{3,}|~{3,})/ CITED R2 — group 1 is the RUN (greedy); a line closes the fence when its RUN is non-empty, RUN[0] equals the opener RUN[0], RUN.length >= the opener RUN.length, and line.trim().slice(RUN.length).trim() is empty
+PINNED regex TRAILING-PAREN = /\s*\([^)]*\)\s*$/ CITED R4 (1) — String.prototype.replace, first (leftmost) match only
+PINNED regex BEGIN-MENTION = /<!--\s*rederive:begin\b/ CITED R6 — tested on the raw existing text
+PINNED regex BEGIN-MARKER = /<!--\s*rederive:begin\b(?:(?!<!--)[\s\S])*?-->/ CITED R7 — no g flag: the first match only; lazy, may cross LF, never past a "<!--"
+PINNED regex END-MARKER = /<!--\s*rederive:end\s*-->/ CITED R7 — the first occurrence only
+DEPENDS-ON none
+PROVENANCE rederive@7b348e351c9f cli/lib/adopt.mts (the real code is this language); round-5c delta re-cut 2026-10-27.

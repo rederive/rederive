@@ -1,0 +1,52 @@
+#!/bin/sh
+# The verifier is sir-factory (npm `sir-factory` >= 0.4.0, whose judge is rederive's own), run on this repo's units/<unit>/.
+# Deterministic commands only: prepare | grade | void | checkpoint | validate | status. The observer feed lives HERE.
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# sir-factory is resolved, never guessed: $SIR_FACTORY (a checkout dir, or its factory.mjs), else this repo's
+# node_modules/.bin/sir-factory (`npm i -D sir-factory@^0.4.0`), else the `sir-factory` on PATH.
+SF_JS=""; SF=""
+if [ -n "${SIR_FACTORY:-}" ]; then
+  if [ -f "$SIR_FACTORY/factory.mjs" ]; then SF_JS="$SIR_FACTORY/factory.mjs"; elif [ -f "$SIR_FACTORY" ]; then SF_JS="$SIR_FACTORY"; fi
+  SF="$SF_JS"
+elif [ -x "$REPO/node_modules/.bin/sir-factory" ]; then SF="$REPO/node_modules/.bin/sir-factory"
+elif command -v sir-factory >/dev/null 2>&1; then SF="$(command -v sir-factory)"
+fi
+sf() { if [ -n "$SF_JS" ]; then node "$SF_JS" "$@"; else "$SF" "$@"; fi; }
+NO_SF="sir-factory was not found — npm i -D sir-factory@^0.4.0 (or -g), or set SIR_FACTORY to a sir-factory checkout"
+need_sf() { [ -n "$SF" ] || { echo "tools/lab: $NO_SF" >&2; exit 3; }; }
+export SIR_FACTORY_EVENTS_FILE="$REPO/observer/events.jsonl"
+cmd="$1"; shift 2>/dev/null || true
+case "$cmd" in
+  status) need_sf; cd "$REPO" && sf status-v05 "$@" "$REPO/units" ;;
+  prepare|grade|void|checkpoint) need_sf; u="$1"; shift; case "$u" in /*) ;; *) u="$REPO/units/$u" ;; esac; cd "$REPO" && sf "$cmd" "$u" "$@" ;;
+  validate) need_sf; u="$1"; case "$u" in /*) ;; *) u="$REPO/units/$u" ;; esac; cd "$REPO" && sf validate "$u" ;;
+  version|--version) need_sf; sf --version ;;
+  doctor)
+    # The roles CLAUDE.md names must be SPAWNABLE from a session started in this repo. Two ways that can be
+    # true: (a) a local file at <repo>/.claude/agents/<role>.md or ~/.claude/agents/<role>.md (scar 2026-09-25:
+    # the roles lived only in ANOTHER repo's .claude/agents -> "Agent type 'sir-decomposer' not found" from this
+    # repo), or (b) the `rederive` plugin is enabled for this project (`claude plugin list --json` has an
+    # entry id "rederive@rederive", enabled:true, whose scope is "user" or whose projectPath is this repo) —
+    # its roles then load as rederive:<role>. Either satisfies the check.
+    plugin_ok=0
+    if command -v claude >/dev/null 2>&1; then
+      plugin_ok="$(claude plugin list --json 2>/dev/null | node -e '
+        let d = ""; process.stdin.on("data", (c) => (d += c)).on("end", () => {
+          let arr = []; try { arr = JSON.parse(d || "[]"); } catch {}
+          const repo = process.argv[1];
+          const hit = arr.some((p) => p.id === "rederive@rederive" && p.enabled &&
+            (p.scope === "user" || p.projectPath === repo));
+          process.stdout.write(hit ? "1" : "0");
+        });
+      ' "$REPO" 2>/dev/null)"
+    fi
+    rc=0; for a in sir-decomposer sir-unit-runner sir-reemitter-cr; do
+      f="$REPO/.claude/agents/$a.md"; [ -r "$HOME/.claude/agents/$a.md" ] && f="$HOME/.claude/agents/$a.md"
+      if [ -r "$f" ] && grep -q "^name: $a\$" "$f"; then echo "ok    role $a -> $(readlink "$f" || echo "$f") (local file)"
+      elif [ "$plugin_ok" = "1" ]; then echo "ok    role $a -> rederive:$a (plugin rederive@rederive enabled)"
+      else echo "FAIL  role $a not registered: no $REPO/.claude/agents/$a.md or ~/.claude/agents/$a.md, and plugin rederive@rederive is not enabled for this project"; rc=1; fi
+    done
+    if [ -n "$SF" ]; then echo "ok    $(sf --version 2>/dev/null || echo 'sir-factory (version unknown)') -> $SF"; else echo "FAIL  $NO_SF"; rc=1; fi
+    exit $rc ;;
+  *) echo "usage: tools/lab doctor | prepare <unit> [--n 3] | grade <unit> --round N [--cap 3] | void <unit> --lang L --round N --reason '…' | checkpoint <unit> --step S … | validate <unit> | status [--watch N] [--json] | version"; exit 2 ;;
+esac

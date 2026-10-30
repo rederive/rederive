@@ -1,0 +1,22 @@
+UNIT canonical_string
+LANG ts
+PRIMARY-SHA256 d84d2cbeedc82e13cfbf4fe434f58f7b53d137ea6b6d76e27b14abff858f7633
+SIG export default function canonical_string(value: unknown): string
+ABI TypeScript compiles to the js runtime: json = any JS value typed unknown: text=string (UTF-16 code units); bool=boolean;
+  list=Array; map=a plain object (prototype Object.prototype or null) with own enumerable string keys; f64=number and
+  none=null throw (R8). Result text=string; a throw is an Error thrown out of the call, message free. STRICT: the
+  artifact must type-check under strict: true against this SIG with no any, no non-null assertions (!), and no
+  @ts-ignore / @ts-expect-error. Narrow from unknown by typeof, Array.isArray and Object.getPrototypeOf, and read map
+  members through Record<string, unknown>.
+ENVELOPE widens exactly as js does (the same runtime): undefined, holes, bigint, symbols, functions and non-plain objects
+  throw; strings with unpaired surrogates render escaped; Object.create(null) is a map. "__proto__" keys are OUT. The R10
+  probes (raw depth up to 417) are graded through the js extension, as for js; the default stack carries them.
+MECHANISM (restated from js — language files are self-contained) text and every key = JSON.stringify(string) (TABLE ESCAPE,
+  unpaired surrogates as lower-case \uXXXX, U+2028/2029 raw); never JSON.stringify anything else. list = Array.isArray,
+  throw on any index failing "i in x" before mapping. map = plain object (prototype Object.prototype or null); Object.keys(o).sort() (code-unit order, R4).
+  Projections (R5, R6) test t first, validate bits with HEX16, render a fresh { t: 'f64', bits } or { t: 'throw' } so
+  dropped entries are never visited. Everything else throws. R10: carry the node depth (top call 0) as a parameter and throw
+  before rendering a node deeper than 416 (the check first), at every visited node (projected "bits"/"t" included), never at keys.
+DEPENDS-ON none
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R5 — the bits accept-set
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs canonicalString (own code). Round 5 language file, 2026-10-27.

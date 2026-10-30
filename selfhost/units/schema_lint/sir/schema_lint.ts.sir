@@ -1,0 +1,17 @@
+UNIT schema_lint
+LANG ts
+PRIMARY-SHA256 8e74cb3dded267ffa91c77fece9986ab50d20be3ad85c2b5ee718a04d26d04bb
+SIG export default function schema_lint(text: string, carried_name: string | null): { hits: { line: number; what: string; text: string }[] }
+ABI TypeScript compiles to the js runtime: text = string (UTF-16 code units, well-formed); none = null; u64 = number (a
+  positive integer); record = an object literal type with exactly the named properties; list = Array. STRICT: the artifact
+  must type-check under strict: true against this SIG, with no any, no non-null assertions (!), and no @ts-ignore /
+  @ts-expect-error. Nothing throws inside the envelope.
+MECHANISM (restated from js — language files are self-contained) R1 is text.split(/\r\n|\r|\n/). SP is space and tab only:
+  never \s or the String trim family; every trim is a [ \t] pattern. R10's word is the CARRIED-WORD pin; the name is read
+  literally — an indexOf scan with the WORD check on both neighbours, or a fully escaped RegExp between the NAME-EDGES
+  lookarounds, never \b. R11 cuts code points: Array.from(line).slice(0, 96). R8's backslash escape skips one whole code point.
+  A null carried_name, "" and exactly "none" skip the name test.
+DEPENDS-ON none
+PINNED regex CARRIED-WORD = /(?<![A-Za-z])carried(?![A-Za-z])/i CITED R10 — no u flag (the i flag folds ASCII letters only)
+PINNED regex NAME-EDGES = /(?<![A-Za-z0-9_])NAME(?![A-Za-z0-9_])/ CITED R10 — NAME is the escaped carried_name
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs schemaLint — this file states the typed SIG and the dialect only; no behavior.

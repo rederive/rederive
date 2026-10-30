@@ -1,0 +1,195 @@
+UNIT multiply
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG multiply(multiplier?, multiplicand?) -> product
+    # default/main export: `module.exports = multiply`. Emitter MUST `export default <fn>`.
+    # Both params optional (arity 2). Any JS value accepted for each.
+DEPENDS-ON none   # zero runtime dependencies; self-contained (bundled custom lodash build)
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# `multiply` is `createMathOperation(operator=(a,b)=>a*b, defaultValue=1)`.
+# It is a PURE function: no side effects, no ambient reads, no carried data,
+# no seam. ORACLE-CLASS deterministic.
+#
+# It is built on three private helpers reproduced below (baseToNumber,
+# baseToString, isSymbol). These are NOT a custom radix-parsing toNumber:
+# this 4.9.0 modular build uses `baseToNumber` (essentially unary `+`, with a
+# symbol short-circuit) and `baseToString` (essentially `String(value)`, with a
+# symbol short-circuit and a `-0` special case). All binary/octal/hex/whitespace
+# string parsing is therefore performed by the HOST JS engine's native ToNumber
+# (invoked by the `*` operator on strings, or by unary `+`), NOT by lodash.
+
+# ============================================================================
+# PRIVATE HELPERS (in-contract logic — reproduce exactly)
+# ============================================================================
+
+# isSymbol(value):
+#   returns true iff:  typeof value === 'symbol'
+#                   OR (value is object-like (truthy && typeof==='object')
+#                       AND Object.prototype.toString.call(value) === '[object Symbol]')
+#   (the second clause catches boxed Symbol objects)
+
+# baseToNumber(value):   # "coerce to number"
+#   1. if typeof value === 'number'  -> return value           # identity, incl. NaN/±Infinity/-0
+#   2. if isSymbol(value)            -> return NaN
+#   3. otherwise                     -> return +value          # native unary plus / ToNumber
+#      NOTE: +bigint THROWS TypeError ("Cannot convert a BigInt value to a number").
+#            This throw is therefore propagated by multiply (see BRANCH N3 below).
+#      Native +value rules that matter here:
+#        +'  5  ' = 5 ; +'' = 0 ; +'  ' = 0 ; +'0x10' = 16 ; +'0b11' = 3 ;
+#        +'0o17' = 15 ; +'1e3' = 1000 ; +'abc' = NaN ; +'Infinity' = Infinity ;
+#        +true = 1 ; +false = 0 ; +null = 0 ; +undefined = NaN ;
+#        +[] = 0 ; +[5] = 5 ; +[1,2] = NaN ; +{} = NaN ;
+#        +object -> ToPrimitive(value,'number') -> valueOf() then toString().
+
+# baseToString(value):   # "coerce to string"
+#   1. if typeof value === 'string'  -> return value
+#   2. if isSymbol(value)            -> return value.toString() (e.g. 'Symbol()');
+#                                       if the runtime has no Symbol, return ''
+#   3. otherwise:
+#        result = (value + '')                                  # ToPrimitive default hint (valueOf-first)
+#        if result === '0' AND (1 / value) === -Infinity        # i.e. value is the number -0
+#             -> return '-0'
+#        else -> return result
+#      NOTE: `(value + '')` uses the DEFAULT ToPrimitive hint, so for plain
+#            objects it invokes valueOf() BEFORE toString() (same primitive
+#            source as baseToNumber's `+`). Demonstrated equivalence:
+#            {valueOf:()=>7, toString:()=>'99'} stringifies to '7', not '99'.
+#      Examples: null -> 'null' ; undefined -> 'undefined' ; true -> 'true' ;
+#                123 -> '123' ; -0 -> '-0' ; [5] -> '5' ; [1,2] -> '1,2' ;
+#                {} -> '[object Object]' ; Infinity -> 'Infinity' ; NaN -> 'NaN'.
+
+# ============================================================================
+# BEHAVIOR — multiply(value, other)   (param names in source: value, other;
+#                                       public doc names: multiplier, multiplicand)
+# ============================================================================
+# Evaluate the branches IN ORDER. `===` / `!==` against `undefined` is strict
+# (only the literal `undefined` value triggers default handling; `null` does NOT).
+#
+# BRANCH D0  (both undefined):
+#   if value === undefined AND other === undefined:
+#       return defaultValue   # == 1  (NOT 0). multiply()=1, multiply(undefined,undefined)=1.
+#
+# Set result := value if value !== undefined, else result stays undefined.
+#
+# BRANCH P1  (other undefined, value defined)  -- i.e. one-arg / second-undefined:
+#   Reached when other === undefined but value !== undefined (D0 already excluded
+#   both-undefined). The `if (other !== undefined)` block below is skipped, so:
+#       return result   # == value, RETURNED AS-IS, NO COERCION.
+#   This is identity passthrough preserving type & reference:
+#       multiply(7)        -> 7            multiply(7, undefined)        -> 7
+#       multiply('abc')    -> 'abc' (string, not NaN)
+#       multiply(null)     -> null  (typeof object)   multiply(NaN)     -> NaN
+#       multiply(-0)       -> -0           multiply(Infinity)           -> Infinity
+#       multiply(3n)       -> 3n (bigint, NO throw — coercion never runs)
+#       multiply(obj)      -> the SAME object reference (identity preserved)
+#       multiply(fn)       -> the SAME function reference
+#
+# BRANCH P2  (value undefined, other defined):
+#   Reached when value === undefined but other !== undefined. Then result is
+#   still undefined when we enter the `if (other !== undefined)` block, and the
+#   first sub-check `if (result === undefined) return other;` fires:
+#       return other   # RETURNED AS-IS, NO COERCION (mirror of P1).
+#       multiply(undefined, 7)     -> 7        multiply(undefined, 0)    -> 0
+#       multiply(undefined, 'abc') -> 'abc'    multiply(undefined, null) -> null
+#       multiply(undefined, NaN)   -> NaN      multiply(undefined, obj)  -> SAME ref
+#       multiply(undefined, 3n)    -> 3n (no throw)
+#
+# --- Below here: BOTH value and other are defined (!== undefined). The product
+#     is computed. The coercion path depends on whether EITHER is a string. ---
+#
+# BRANCH S  (string path):  if typeof value === 'string' OR typeof other === 'string':
+#       a = baseToString(value)
+#       b = baseToString(other)
+#       return operator(a, b)   # == a * b  (native `*` on two STRINGS; JS coerces
+#                                 each via native ToNumber, then multiplies)
+#   Consequences (native string-* ToNumber):
+#       multiply('6','4') -> 24      multiply('6',4) -> 24    multiply(6,'4') -> 24
+#       multiply('abc',4) -> NaN     multiply('',4)  -> 0     multiply('  ',2) -> 0
+#       multiply('  5  ',2) -> 10    multiply('0x10',2) -> 32 multiply('0b11',2) -> 6
+#       multiply('0o17',2) -> 30     multiply('1e3',2) -> 2000 multiply('3.14',2) -> 6.28
+#       multiply('Infinity',2) -> Infinity
+#       multiply(Infinity,'2') -> Infinity   # baseToString(Infinity)='Infinity'
+#       multiply(-0,'5') -> -0       # baseToString(-0)='-0'; '-0' * '5' = -0
+#       multiply('5',-0) -> -0       multiply('-0','5') -> -0
+#       multiply(null,'2') -> NaN    # baseToString(null)='null'; 'null'*'2'=NaN
+#       multiply(true,'2') -> NaN    # 'true'*'2'=NaN
+#       multiply([5],'2') -> 10      multiply([1,2],'2') -> NaN  # '1,2'*'2'=NaN
+#       multiply(Symbol(),'4') -> NaN # baseToString(Symbol())='Symbol()'; *'4'=NaN (NO throw)
+#       multiply(3n,'4') -> 12       # baseToString(3n)='3'; '3'*'4'=12 (NO throw — string path)
+#       multiply(obj,'3') with valueOf->7 -> 21  # baseToString(obj)='7' via (obj+'')
+#
+# BRANCH N  (number path):  else (NEITHER value nor other is a string):
+#       a = baseToNumber(value)
+#       b = baseToNumber(other)
+#       return operator(a, b)   # == a * b
+#   Sub-cases of baseToNumber feeding `*`:
+#     N1  plain numbers: ordinary IEEE-754 multiply with full propagation:
+#         multiply(6,4)=24  multiply(3,-2)=-6  multiply(2.5,2)=5
+#         multiply(NaN,4)=NaN  multiply(Infinity,4)=Infinity  multiply(-Infinity,4)=-Infinity
+#         multiply(Infinity,0)=NaN
+#         signed-zero: multiply(-0,5)=-0  multiply(-0,-5)=0  multiply(0,-5)=-0  multiply(-1,0)=-0
+#     N2  non-number, non-string, non-symbol, non-bigint -> +value:
+#         multiply(true,4)=4  multiply(false,4)=0  multiply(true,true)=1
+#         multiply(null,4)=0  multiply(4,null)=0
+#         multiply({},4)=NaN  multiply([],4)=0  multiply([5],4)=20  multiply([1,2],4)=NaN
+#         multiply({valueOf:()=>10},4)=40   multiply(new Date(1000),2)=2000
+#         multiply(fn,4)=NaN  (where fn is a function; +fn=NaN)
+#     N3  symbol -> baseToNumber returns NaN (NO throw on number path):
+#         multiply(Symbol(),4)=NaN  multiply(4,Symbol())=NaN  multiply(Symbol(),Symbol())=NaN
+#     N4  bigint -> baseToNumber does `+bigint` which THROWS TypeError:
+#         multiply(3n,4n)  THROWS TypeError  multiply(3n,4) THROWS  multiply(2,3n) THROWS
+#         (A bigint reaches the number path only when the OTHER arg is not a
+#          string and not undefined. multiply(3n) and multiply(3n,'4') do NOT throw.)
+#
+# RETURN TYPE: number for all coercion paths (S, N); EXCEPT the identity
+#   passthroughs P1/P2 and the default D0, which return the original value /
+#   defaultValue with its original type (e.g. multiply('abc')->'abc' is a string,
+#   multiply(3n)->3n is a bigint, multiply()->1 is a number).
+
+# ============================================================================
+ORACLE value -> oracle.json
+#   Harness calls multiply(...args), records the return (or {__throw} for the
+#   bigint TypeError path). Deterministic, value-mode. No seam, no carried data.
+#   NOTE for the verifier: -0 vs 0, NaN, ±Infinity, and bigint passthrough must
+#   be compared with Object.is / type-aware equality (not ===), since the codec
+#   round-trips -0, NaN, ±Infinity and bigint.
+
+# ============================================================================
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire branch tree above
+#     (D0, P1, P2, S, N1-N4) plus helpers isSymbol, baseToNumber, baseToString.
+#   CARRIED DATA: none.
+#   OUT-OF-CONTRACT (stateful/side APIs): none — pure function.
+#
+#   OUT-OF-ENVELOPE (behavior IS specified above, but NOT emitted by genInputs
+#   because the input codec cannot faithfully round-trip the value, so the blind
+#   re-emitter reconstructs these from the spec, not from a stored input):
+#     - Symbol args: typeof 'symbol' does not survive JSON codec. SPEC: on number
+#       path -> NaN (N3); on string path (other is string) -> baseToString gives
+#       'Symbol()' -> NaN. Never throws.
+#     - Function args: not codec-round-trippable. SPEC: P1/P2 passthrough returns
+#       the same fn reference; on number path +fn = NaN.
+#     - Boxed primitives (new Number(5), new String('5')): object identity does
+#       not survive codec. SPEC: typeof is 'object' (NOT 'string'/'number'), so
+#       they take the NUMBER path -> +boxed via valueOf: new Number(5)*2=10,
+#       new String('5')*2=10, new String('abc')*2=NaN; passthrough preserves ref.
+#     - Plain objects/arrays with custom valueOf/toString: a {} or [] DOES round-
+#       trip structurally, but a custom valueOf/toString method does NOT survive
+#       JSON. genInputs emits only plain {} / [] / numeric-array literals whose
+#       valueOf/toString are the defaults; the custom-method behavior is specified
+#       (S/N branches via (v+'') default hint) for the blind re-emitter.
+#     - bigint args DO round-trip the codec; genInputs MAY emit them. The throwing
+#       combos (N4) are gradable via the {__throw} record; the non-throwing combos
+#       (3n alone -> 3n; 3n with a string -> coerced) are gradable as values.
+
+# ============================================================================
+PROVENANCE
+#   package: lodash.multiply@4.9.0  (MIT)
+#   repo: lodash/lodash  (modularized custom build: `lodash modularize exports="npm"`)
+#   source file: node_modules/lodash.multiply/index.js
+#     createMathOperation @ lines 89-113; baseToNumber @ 51-59;
+#     baseToString @ 69-79; isSymbol @ 160-163; multiply (=createMathOperation
+#     of `(a,b)=>a*b` with defaultValue 1) @ 180-184; module.exports @ 184.

@@ -1,0 +1,441 @@
+UNIT padEnd
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG padEnd(string='', length=0, chars=' ') -> string
+DEPENDS-ON none   # self-contained custom lodash build; all helpers inlined in the single source file; zero npm deps
+
+# ============================================================================
+# OVERVIEW
+# ============================================================================
+# Right-pads `string` with `chars` until its (unicode-aware) symbol count
+# reaches `length`. Exact mirror of lodash.padStart, but the padding is
+# APPENDED to the end instead of prepended to the start.
+#
+# If the string's symbol-size is already >= length, the string is returned
+# unchanged. Padding repeats `chars` and truncates it (by VISIBLE symbol
+# count when chars contains unicode, else by code-unit) so the final result
+# is exactly `length` symbols wide.
+#
+# The re-emitted module is a DEFAULT export: the file MUST end with
+#   export default padEnd
+# (the module's default export is the function under test).
+#
+# This SIR captures OBSERVED behavior verified by running lodash.padend@4.6.1
+# under node v24 — not a cleaned-up ideal.
+
+# ============================================================================
+# !!! HARDEN-CRITICAL — NEGATIVE-ZERO STRING COERCION (read before re-emitting) !!!
+# ============================================================================
+# lodash's string-coercion helper baseToString HAS A NEGATIVE-ZERO SPECIAL CASE
+# that DIVERGES FROM THE JS ENGINE. A blind re-emitter that uses native
+# String(x) / (x + '') WILL BE WRONG here. You MUST reproduce this exactly.
+#
+# THE ENGINE DEFAULT (what you must NOT emit):
+#     String(-0)   === "0"      # the engine collapses negative zero to "0"
+#     (-0) + ''    === "0"
+#
+# THE LODASH RULE (the EXACT predicate from index.js line 264):
+#     result = (value + '')                                 # native coercion first
+#     return (result == '0' && (1 / value) === -Infinity) ? '-0' : result
+#   i.e. AFTER native coercion to `result`, IF `result` is the string "0"
+#   AND `1 / value` is -Infinity, return the LITERAL "-0" instead of "0".
+#   1 / (-0) === -Infinity is true ONLY for the number negative zero, so this
+#   promotes negative zero (and only negative zero) from "0" to "-0".
+#
+# CONSEQUENCES (ALL execution-verified against lodash.padend@4.6.1):
+#   padEnd(-0, 6)        === "-0    "    # number -0 as `string` arg -> "-0", then 4 spaces
+#   padEnd( 0, 6)        === "0     "    # positive zero is normal -> "0", then 5 spaces
+#   padEnd("0", 6)       === "0     "    # the STRING "0" hits the typeof=='string' early
+#                                        #   return; the -0 guard never runs -> "0"
+#   padEnd("-0", 6)      === "-0    "    # already the string "-0" -> returned as-is
+#   padEnd("a", 6, -0)   === "a-0-0-"    # -0 as `chars` -> baseToString(-0)="-0"
+#                                        #   (charsLength 2 -> BRANCH B ascii, slice(0,5))
+#   padEnd("a", 5, -0)   === "a-0-0"     # -0 chars, pad width 4 -> "-0-0"
+#   padEnd("", 4, -0)    === "-0-0"      # -0 chars, pad width 4
+#
+# THE GUARD KEYS ON THE STRING `result == '0'`, NOT ON `value === 0`. This matters
+# for the two NON-trivial sub-cases below — DO NOT shortcut the predicate to
+# `value === 0 && 1/value === -Infinity`; that happens to give the same answer
+# at top level for numbers, but the source literally tests `(value+'') == '0'`,
+# and the recursion / bigint behavior falls out of the LITERAL form:
+#
+#   (a) NEGATIVE ZERO NESTED IN AN ARRAY DOES *NOT* FIRE THE RULE.
+#       baseToString in THIS build is the public-_.toString flavor: it does NOT
+#       recurse element-wise (no arrayMap). An Array value is coerced by NATIVE
+#       Array#toString (join ','), which itself already collapses -0 -> "0"
+#       BEFORE baseToString inspects `result`. So although `([-0] + '') == '0'`
+#       is TRUE, `1 / [-0]` is `1 / NaN` = NaN (NOT -Infinity), so the guard's
+#       second clause is FALSE and the literal "0" is kept. VERIFIED:
+#         padEnd([-0], 8)     === "0       "    # NOT "-0      "
+#         padEnd([0],  8)     === "0       "
+#         padEnd([-0, 1], 8)  === "0,1     "    # native join collapses -0
+#         padEnd([1, -0], 10) === "1,0       "
+#       => The -0 -> "-0" promotion fires ONLY when `value` is itself the NUMBER
+#          negative zero passed directly (as `string` or as `chars`), never when
+#          a -0 is an element inside an array/object being stringified.
+#
+#   (b) BIGINT ZERO (0n / -0n) THROWS — a THROW PATH that comes OUT of this guard.
+#       For a bigint value, `result = (value + '')` is its decimal string. When
+#       that string is exactly "0" (i.e. value is 0n; note -0n === 0n, there is no
+#       negative bigint zero, and (-0n)+'' === "0"), the predicate's FIRST clause
+#       `result == '0'` is TRUE, which FORCES evaluation of `1 / value` === `1 / 0n`
+#       -> TypeError: "Cannot mix BigInt and other types, use explicit conversions".
+#       VERIFIED:
+#         padEnd(0n, 6)        -> THROW TypeError   # 0n as `string` arg
+#         padEnd(-0n, 6)       -> THROW TypeError   # -0n === 0n
+#         padEnd("a", 6, 0n)   -> THROW TypeError   # 0n as `chars` arg
+#         padEnd("a", 6, -0n)  -> THROW TypeError
+#       Any OTHER bigint stringifies to something != "0", short-circuits before
+#       `1 / value`, and is SAFE:
+#         padEnd(42n, 6)       === "42    "
+#         padEnd(-5n, 6)       === "-5    "
+#         padEnd(10n, 6)       === "10    "
+#         padEnd("a", 6, 42n)  === "a42424"
+#         padEnd("a", 6, 9n)   === "a99999"
+#       This 0n/-0n throw is documented under THROW PATHS and is NOT emitted by
+#       the generator; a blind re-emitter reconstructs it from THIS rule.
+#       (Distinct from the bigint-as-LENGTH throw, which comes from `+bigint` in
+#        toNumber — see THROW PATHS.)
+
+# ============================================================================
+# CONSTANTS (exact, from source)
+# ============================================================================
+# INFINITY        = 1 / 0                       # +Infinity
+# MAX_SAFE_INTEGER= 9007199254740991            # 2^53 - 1
+# MAX_INTEGER     = 1.7976931348623157e+308     # Number.MAX_VALUE
+# NAN             = 0 / 0
+# symbolTag       = '[object Symbol]'
+# reTrim          = /^\s+|\s+$/g                # leading/trailing whitespace
+# reIsBadHex      = /^[-+]0x[0-9a-f]+$/i        # NOTE: requires a leading + or - SIGN
+# reIsBinary      = /^0b[01]+$/i
+# reIsOctal       = /^0o[0-7]+$/i
+#
+# --- unicode character-class building blocks (exact source strings) ---
+# rsAstralRange        = '\ud800-\udfff'
+# rsComboMarksRange    = '̀-ͯ︠-︣'
+# rsComboSymbolsRange  = '⃐-⃰'
+# rsVarRange           = '︎️'         # variation selectors VS15/VS16
+# rsAstral    = '[\ud800-\udfff]'
+# rsCombo     = '[̀-ͯ︠-︣⃐-⃰]'
+# rsFitz      = '\ud83c[\udffb-\udfff]'         # emoji skin-tone modifiers
+# rsModifier  = '(?:' + rsCombo + '|' + rsFitz + ')'
+# rsNonAstral = '[^\ud800-\udfff]'
+# rsRegional  = '(?:\ud83c[\udde6-\uddff]){2}'  # a regional-indicator pair (flag)
+# rsSurrPair  = '[\ud800-\udbff][\udc00-\udfff]'# a surrogate pair (astral cp)
+# rsZWJ       = '‍'                         # zero-width joiner
+# reOptMod    = rsModifier + '?'
+# rsOptVar    = '[︎️]?'
+# rsOptJoin   = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*'
+# rsSeq       = rsOptVar + reOptMod + rsOptJoin
+# rsSymbol    = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')'
+#
+# reUnicode    = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g')
+# reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange + rsComboMarksRange + rsComboSymbolsRange + rsVarRange + ']')
+#   i.e. reHasUnicode = /[‍\ud800-\udfff̀-ͯ︠-︣⃐-⃰︎️]/
+#
+# A blind re-emitter MUST reproduce reUnicode and reHasUnicode EXACTLY (these
+# regexes ARE the unicode-symbol definition; do not substitute Array.from /
+# [...str] / Intl.Segmenter — they segment differently).
+
+# ============================================================================
+# HELPER SEMANTICS (inlined; reproduce exactly)
+# ============================================================================
+#
+# hasUnicode(string):
+#   return reHasUnicode.test(string)
+#   # true iff string contains a ZWJ, an astral/surrogate code unit, a combining
+#   # mark, a combining symbol, or a variation selector. NOTE: reHasUnicode has
+#   # NO /g flag, so it is stateless and safe to reuse. Plain BMP non-combining
+#   # chars (incl. e.g. precomposed 'é' U+00E9, '⭐' U+2B50, '☆' U+2606) are NOT
+#   # "unicode" by this test and take the ASCII path.
+#
+# asciiSize(string)  = string.length                     # code-unit count
+# asciiToArray(string)= string.split('')                 # per code unit
+#
+# unicodeSize(string):
+#   reUnicode.lastIndex = 0
+#   result = 0
+#   while (reUnicode.test(string)) result++              # count symbol matches
+#   return result
+#   # IMPORTANT: reUnicode HAS the /g flag and is module-global with persistent
+#   # lastIndex. Source resets lastIndex=0 at entry but does NOT reset on return.
+#   # unicodeToArray below relies on a fresh match. A faithful re-emitter that
+#   # uses one persistent /g regex must mirror this; the simplest faithful
+#   # implementation resets lastIndex=0 before EACH of test-loop / match.
+#
+# unicodeToArray(string):
+#   return string.match(reUnicode) || []                 # array of symbol strings
+#
+# stringSize(string)  = hasUnicode(string) ? unicodeSize(string)  : asciiSize(string)
+# stringToArray(string)= hasUnicode(string)? unicodeToArray(string): asciiToArray(string)
+#
+# baseRepeat(string, n):           # repeat `string` exactly n times (n is integer)
+#   result = ''
+#   if (!string || n < 1 || n > MAX_SAFE_INTEGER) return ''
+#   # exponentiation-by-squaring; behaviorally == string.repeat(n) for in-range n
+#   loop:
+#     if (n % 2) result += string
+#     n = floor(n / 2)
+#     if (n) string += string
+#   while (n)
+#   return result
+#   # EDGE (throw path): if string is non-empty and n is a large integer such
+#   # that n <= MAX_SAFE_INTEGER but n*string.length exceeds the engine's max
+#   # string length, `result += string` raises RangeError: Invalid string length.
+#   # (Reachable only via absurd `length`; see THROW PATHS. Not exercised by gen.)
+#
+# baseSlice(array, start, end):    # _.slice on a real Array (no iteratee guard)
+#   length = array.length
+#   if (start < 0) start = (-start > length) ? 0 : (length + start)
+#   end = (end > length) ? length : end
+#   if (end < 0) end += length
+#   length = (start > end) ? 0 : ((end - start) >>> 0)
+#   start >>>= 0
+#   result = new Array(length)
+#   for index in 0..length-1: result[index] = array[index + start]
+#   return result
+#
+# castSlice(array, start, end):
+#   length = array.length
+#   if (end === undefined) end = length
+#   return (!start && end >= length) ? array : baseSlice(array, start, end)
+#   # In createPadding it is always called as castSlice(arr, 0, length):
+#   # start=0 (falsy) so if length>=arr.length returns arr unchanged, else slices
+#   # the first `length` symbols.
+#
+# baseToString(value):             # _.toString on a NON-nullish value
+#   # >>> SEE THE HARDEN-CRITICAL NEGATIVE-ZERO SECTION AT THE TOP OF THIS FILE. <<<
+#   # This is the public-_.toString flavor: it does NOT recurse into arrays/objects
+#   # element-wise. Arrays/objects are coerced by their NATIVE toString only.
+#   if (typeof value == 'string') return value            # strings returned as-is (incl. "0", "-0")
+#   if (isSymbol(value)) return symbolToString ? symbolToString.call(value) : ''
+#   result = (value + '')                                 # native JS string coercion
+#   return (result == '0' && (1 / value) === -INFINITY) ? '-0' : result
+#   # THE -0 GUARD (LITERAL form — reproduce byte-for-byte semantics):
+#   #   - result must be the STRING "0" (so this can only re-promote when native
+#   #     coercion already produced "0"), AND
+#   #   - 1 / value must be -Infinity (true ONLY for the NUMBER negative zero).
+#   #   Effects (see top section):
+#   #     number  -0   -> "-0"   (1/-0 === -Infinity)
+#   #     number   0   -> "0"    (1/0  === +Infinity, clause 2 false)
+#   #     [-0] (array) -> "0"    (native join already -> "0"; 1/NaN false)
+#   #     bigint  0n   -> THROWS (clause 1 true forces 1/0n -> TypeError)
+#   #     bigint  42n  -> "42"   (clause 1 false, short-circuits, safe)
+#
+# isObject(value)     = !!value && (typeof value=='object' || typeof value=='function')
+# isObjectLike(value) = !!value && typeof value=='object'
+# isSymbol(value)     = typeof value=='symbol' || (isObjectLike(value) && objectToString.call(value)=='[object Symbol]')
+#
+# toNumber(value):
+#   if (typeof value=='number') return value
+#   if (isSymbol(value)) return NAN
+#   if (isObject(value)):
+#     other = (typeof value.valueOf=='function') ? value.valueOf() : value
+#     value = isObject(other) ? (other + '') : other
+#   if (typeof value != 'string') return value===0 ? value : +value
+#       # NOTE: bigint reaches here -> +bigint THROWS TypeError (see THROW PATHS)
+#   value = value.replace(reTrim, '')                    # trim ws
+#   isBinary = reIsBinary.test(value)
+#   return (isBinary || reIsOctal.test(value))
+#     ? freeParseInt(value.slice(2), isBinary ? 2 : 8)   # '0b..' base2, '0o..' base8
+#     : (reIsBadHex.test(value) ? NAN : +value)          # SIGNED bad hex -> NaN, else +value
+#
+# toFinite(value):
+#   if (!value) return value===0 ? value : 0             # 0->0, -0->-0, ''->0, false->0, null->0, NaN->0, 0n->0
+#   value = toNumber(value)
+#   if (value===INFINITY || value===-INFINITY): return (value<0?-1:1) * MAX_INTEGER
+#   return value===value ? value : 0                     # NaN -> 0
+#
+# toInteger(value):
+#   result = toFinite(value)
+#   remainder = result % 1
+#   return result===result ? (remainder ? result - remainder : result) : 0
+#   # truncates toward zero (floor of magnitude); NaN -> 0.
+#
+# toString(value):                 # the PUBLIC nullish-safe coercion
+#   return value == null ? '' : baseToString(value)      # null AND undefined -> ''
+
+# ============================================================================
+# BEHAVIOR  (the pipeline of padEnd — ordered, exact)
+# ============================================================================
+# padEnd(string, length, chars):
+#   1. string = toString(string)
+#        # null/undefined -> '' ; symbol -> 'Symbol(...)' ; number -> String(n)
+#        #   with -0 -> '-0' (the NEGATIVE-ZERO RULE; positive 0 -> '0') ;
+#        #   bigint -> its decimal string EXCEPT 0n/-0n which THROW (see HARDEN
+#        #   section + THROW PATHS) ; object/array -> String via its NATIVE toString
+#        #   ([1,2,3]->'1,2,3', [-0]->'0' (native, no -0 promotion), {}->'[object
+#        #   Object]', true->'true').
+#   2. length = toInteger(length)
+#        # numbers truncated toward 0 ; '5' -> 5 ; '+5' -> 5 ; '-3' -> -3 ;
+#        #   '  3  ' -> 3 (whitespace trimmed) ; '0b110' -> 6 ; '0o10' -> 8 ;
+#        #   UNSIGNED hex '0x6' -> 6, '0xff' -> 255 (valid via +value, reIsBadHex
+#        #     does NOT match — it requires a leading +/-) ; SIGNED bad hex
+#        #     '+0x1f'/'-0x1f' -> NaN -> 0 ; Infinity/1e308 -> MAX_INTEGER
+#        #     (1.79e308) ; NaN/null/undefined/''/0n -> 0 ; negative kept.
+#        # BRANCH(throw): bigint length (except 0n) -> TypeError (see THROW PATHS).
+#   3. strLength = length ? stringSize(string) : 0
+#        # SHORT-CIRCUIT: if coerced length is falsy (0 or NaN-as-0), strLength
+#        #   is forced to 0 WITHOUT measuring the string (saves the unicode scan).
+#   4. return (length && strLength < length)
+#        ? string + createPadding(length - strLength, chars)
+#        : string
+#        # PAD only when length is truthy AND the string is strictly shorter
+#        #   than length (in symbols). Padding amount = length - strLength.
+#        # Else return the coerced string unchanged.
+#        # Because length>=2^53 yields empty padding from baseRepeat, very large
+#        #   finite/Infinite length returns the (coerced) string unchanged.
+#
+# createPadding(length, chars):    # length here is the PAD WIDTH (>=1 symbols)
+#   1. chars = (chars === undefined) ? ' ' : baseToString(chars)
+#        # DEFAULT ' ' applies ONLY when the chars argument is literally
+#        #   undefined (omitted, or explicitly undefined). Explicit null ->
+#        #   baseToString(null)... wait: createPadding receives the raw `chars`
+#        #   from padEnd untouched, so null is NOT undefined -> baseToString(null)
+#        #   = String(null) = 'null'. (See CHARS COERCION below.)
+#        # NOTE: chars goes through baseToString too, so chars -0 -> '-0' and
+#        #   chars 0n/-0n -> THROW, by the SAME negative-zero rule (HARDEN section).
+#   2. charsLength = chars.length                        # CODE-UNIT length
+#   3. BRANCH A  (charsLength < 2):
+#        return charsLength ? baseRepeat(chars, length) : chars
+#        # charsLength==1: repeat the single char `length` times.
+#        # charsLength==0 (chars===''): return '' -> NO padding -> string
+#        #   returned unchanged by padEnd.
+#   4. BRANCH B  (charsLength >= 2):
+#        result = baseRepeat(chars, ceil(length / stringSize(chars)))
+#        return hasUnicode(chars)
+#          ? castSlice(stringToArray(result), 0, length).join('')   # unicode: truncate by SYMBOL
+#          : result.slice(0, length)                                # ascii: truncate by CODE-UNIT
+#        # `stringSize(chars)` is the SYMBOL count of one chars unit; `ceil`
+#        #   guarantees >= length symbols of raw repeat; then truncate to exactly
+#        #   `length` symbols (unicode) or `length` code units (ascii).
+#        # Note: in BRANCH B the ascii vs unicode choice keys on hasUnicode(chars),
+#        #   so a charsLength>=2 string of BMP non-combining chars (e.g. '_-',
+#        #   'ab', '12345', precomposed-'é', '⭐☆', and the coerced '-0') takes the
+#        #   ASCII code-unit-slice path. ('-0' is 2 ascii code units -> BRANCH B ascii.)
+
+# ============================================================================
+# CHARS COERCION (createPadding step 1) — exhaustive, self-consistent w/ gen
+# ============================================================================
+#   chars === undefined  (omitted OR explicit undefined) -> ' '  (space)
+#   chars === null       -> baseToString(null) = 'null'  -> pads with 'null'
+#   chars === ''         -> charsLength 0 -> '' -> NO padding (string unchanged)
+#   chars number (e.g. 7)-> '7'      ; -0 -> '-0' (NEGATIVE-ZERO RULE; 0 -> '0')
+#   chars true/false     -> 'true' / 'false'
+#   chars bigint (9n)    -> '9'      ; 0n/-0n -> THROW TypeError (HARDEN section)
+#   chars [1,2]          -> '1,2'    ; [[1],[2]] -> '1,2' ; [-0] -> '0' (native)
+#   chars {}             -> '[object Object]'
+#   chars '_-'           -> '_-'     (ascii path, code-unit slice)
+#   chars single BMP '.' -> '.'      (BRANCH A, repeat)
+#   chars single astral '<emoji>' (2 code units, 1 symbol) -> BRANCH B unicode
+#   chars decomposed 'e'+U+0301 (2 code units, 1 symbol)   -> BRANCH B unicode
+#   chars regional-pair flag (4 code units, 1 symbol)      -> BRANCH B unicode
+#   chars Symbol -> 'Symbol(desc)'  [OUT — Symbols do not round-trip the codec]
+
+# ============================================================================
+# WORKED UNICODE EXAMPLES (verified against the real package)
+# ============================================================================
+#   padEnd('<smiley>', 10)            -> '<smiley>'+9 spaces  (str=1 symbol, 11 code units)
+#   padEnd('<smiley>', 5, '<pile>')   -> '<smiley><pile><pile><pile><pile>'  (5 symbols)
+#   padEnd('e'+U+0301, 5)             -> base is 1 symbol -> 4 trailing spaces ('e'+acute+'    ')
+#   padEnd('x', 10, 'abc')            -> 'xabcabcabc'                 (ascii: 9-wide -> slice(0,9))
+#   padEnd('a', 10, 'abcd')           -> 'aabcdabcda'                (ascii: ceil(9/4)=3 reps, slice(0,9))
+#   padEnd('a', 11, 'abc')            -> 'aabcabcabca'               (ascii: ceil(10/3)=4 reps, slice(0,10))
+#   padEnd('ab', 7, '<smiley><star>') -> 'ab'+<smiley><star><smiley><star><smiley>  (pad=5 symbols, pair=2 symbols)
+#                                        (NOTE: '<smiley><star>' has the astral smiley -> hasUnicode true -> unicode path)
+#   padEnd('a', 5, '<US-flag>')       -> 'a'+4 flags                 (flag=1 symbol, BRANCH B unicode)
+#   padEnd('a', 4, '<thumb><fitz>')   -> 'a'+3 (thumb+skin)          (modifier seq=1 symbol)
+#   padEnd('a', 4, '<heart><VS16>')   -> 'a'+3 (heart+vs16)          (VS16 seq=1 symbol)
+#   padEnd('a', 6, '<man>ZWJ<woman>ZWJ<girl>') -> 'a'+5 families     (ZWJ family=1 symbol, 8 code units)
+#   padEnd('a', 3, '<smiley><star>')  -> 'a<smiley><star>'           (width 2 -> first 2 symbols)
+#   padEnd('a', 2, '<smiley><star>')  -> 'a<smiley>'                 (width 1 -> first 1 symbol)
+#   padEnd('a', 6, -0)                -> 'a-0-0-'                     (chars -0 -> '-0', BRANCH B ascii slice(0,5))
+
+# ============================================================================
+# DEGENERATE / EDGE CASES (verified)
+# ============================================================================
+#   string already >= length (in symbols)   -> returned unchanged
+#   length 0 / negative / NaN-coercible      -> string unchanged (length falsy/<=strLen)
+#   length 0 with long string                -> unchanged WITHOUT measuring string
+#   length float 6.9                         -> truncated to 6
+#   length '5' (numeric string)              -> 5
+#   chars '' (empty)                         -> string unchanged
+#   chars null                               -> pads with 'null' (NOT space)
+#   chars omitted / undefined                -> pads with ' '
+#   string '' + length 5                     -> 5 chars of padding (e.g. '     ')
+#   string null/undefined + length 5         -> '' padded -> 5 chars
+#   Infinity / 1e308 length                  -> MAX_INTEGER -> padding width >= 2^53
+#                                               -> baseRepeat returns '' -> unchanged
+#   number -0 as string arg                  -> '-0' (NEGATIVE-ZERO RULE) ; padEnd(-0,6)='-0    '
+#   number  0 as string arg                  -> '0'  (positive zero normal) ; padEnd(0,6)='0     '
+#   number -0 as chars arg                   -> pads with '-0' ; padEnd('a',6,-0)='a-0-0-'
+#   -0 nested in array (string OR chars)     -> native coercion -> '0' (rule does NOT fire)
+#   -0 as length                             -> toInteger -> 0 -> string unchanged
+#   bigint 0n/-0n as string OR chars arg     -> THROW TypeError (see THROW PATHS)
+#   bigint other (42n, -5n) as string/chars  -> decimal string ('42','-5'); safe
+
+# ============================================================================
+# THROW PATHS (deterministic; codec-faithful inputs that throw -> graded {__throw})
+# ============================================================================
+#   - length is a bigint other than 0n (e.g. 5n, -3n): toInteger -> toFinite ->
+#       toNumber -> `+bigint` -> TypeError 'Cannot convert a BigInt value to a number'.
+#       (0n is falsy in toFinite's `!value` guard -> returns 0, NO throw.)
+#   - string OR chars is bigint 0n or -0n: baseToString computes result=(0n+'')="0",
+#       so `result == '0'` is TRUE, which forces evaluation of `1 / 0n` ->
+#       TypeError 'Cannot mix BigInt and other types, use explicit conversions'.
+#       (-0n === 0n; there is no distinct negative bigint zero.) Any bigint whose
+#       decimal string != "0" (42n, -5n, 10n, 9n) short-circuits and is SAFE.
+#       This is DISTINCT from the bigint-length throw above (different message,
+#       different helper). VERIFIED both throw; both are graded as {__throw}.
+#     The generator does NOT emit bigint lengths NOR 0n/-0n as string/chars (kept
+#       as documented OUT-OF-ENVELOPE paths so curated/random inputs never throw
+#       spuriously); a blind re-emitter reconstructs both throws from this spec.
+#       SAFE bigints (42n, -5n, 9n) as string/chars ARE emitted and ARE gradable.
+#   - Absurd in-range `length` (e.g. length-strLength <= 2^53 but * chars.length
+#       overflows max string length) -> RangeError 'Invalid string length' from
+#       baseRepeat. Not exercised by the generator (length capped small; max curated
+#       coercible length yields '0xff' -> 255, comfortably safe).
+
+# ============================================================================
+# ORACLE
+# ============================================================================
+ORACLE value -> oracle.json
+# Pure deterministic function of (string, length, chars). No clock/RNG/IO/env
+# seam. The oracle records the returned string (or {__throw} for throw paths).
+
+# ============================================================================
+# SCOPE
+# ============================================================================
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - the padEnd pipeline (toString coercion INCLUDING the NEGATIVE-ZERO RULE in
+#     baseToString — number -0 -> '-0', positive 0 -> '0', array-nested -0 -> '0',
+#     bigint 0n/-0n -> throw — toInteger/toFinite/toNumber length coercion incl.
+#     binary/octal/SIGNED-bad-hex/whitespace/Infinity handling, the
+#     `length ? stringSize : 0` short-circuit, the `length && strLength < length`
+#     pad guard, append-on-end).
+#   - createPadding: chars coercion (undefined->' '; else baseToString incl. the
+#     same -0 rule), BRANCH A (charsLength<2) vs BRANCH B (>=2), baseRepeat
+#     exponentiation, ceil-then-truncate, and the hasUnicode(chars)
+#     ascii-code-unit-slice vs unicode-symbol-slice split.
+#   - the EXACT reUnicode / reHasUnicode regexes and stringSize/stringToArray
+#     symbol semantics (astral, combining marks, regional pairs, fitz modifiers,
+#     variation selectors, ZWJ sequences each = 1 symbol).
+# CARRIED DATA: none (no embedded literal tables; the regexes are small literals
+#   transcribed inline above, not a carried table).
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT emitted by genInputs):
+#   - Symbol-typed `string` or `chars` (coerces via Symbol.prototype.toString,
+#     but Symbols do not survive the JSON codec).
+#   - Function-typed args (do not round-trip).
+#   - bigint `length` != 0n (deterministic TypeError; documented in THROW PATHS).
+#   - bigint 0n/-0n as `string` or `chars` (deterministic TypeError; THROW PATHS).
+#   - astronomically large `length` (RangeError; documented).
+#   - boxed primitives (new Number/String/Boolean) — identity not codec-stable.
+
+# ============================================================================
+# PROVENANCE
+# ============================================================================
+# lodash.padend@4.6.1  (custom modularized lodash build)
+# repo: lodash/lodash   license: MIT
+# source file: node_modules/lodash.padend/index.js (single file, deps inlined)
+#   baseToString: index.js line 255-265 (the -0 guard is line 264)
+# author: John-David Dalton et al.; unicode notes: Mathias Bynens

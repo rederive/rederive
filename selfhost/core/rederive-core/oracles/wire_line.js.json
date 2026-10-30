@@ -1,0 +1,1476 @@
+{
+ "unit": "wire_line",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v4",
+   "args": [
+    [
+     {
+      "t": true,
+      "k": [
+       1,
+       {
+        "z": 2.5,
+        "y": "é😀"
+       }
+      ],
+      "n": null,
+      "b": {
+       "__t": "bigint",
+       "v": "9007199254740993"
+      }
+     }
+    ],
+    {
+     "name": "f",
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"t\":true,\"k\":[1,{\"z\":2.5,\"y\":\"é😀\"}],\"n\":null,\"b\":9007199254740993}]",
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v5",
+   "args": [
+    [
+     {
+      "2": 4,
+      "10": 2,
+      "z": 1,
+      "a": {
+       "__t": "bigint",
+       "v": "3"
+      },
+      "-1": 5
+     },
+     {
+      "b": 1.5,
+      "a": "x"
+     }
+    ],
+    {
+     "name": "f",
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      },
+      {
+       "name": "n",
+       "type": {
+        "k": "map",
+        "key": {
+         "k": "text"
+        },
+        "val": {
+         "k": "f64"
+        }
+       }
+      }
+     ],
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[{\"2\":4,\"10\":2,\"z\":1,\"a\":3,\"-1\":5},{\"b\":1.5,\"a\":\"x\"}]",
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v6",
+   "args": [
+    [
+     {
+      "b": {
+       "__t": "num",
+       "v": "NaN"
+      },
+      "a": "x\ud800"
+     }
+    ],
+    {
+     "name": "f",
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "json holds no NaN/Inf/-0 in serde_json::Value"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v11",
+   "args": [
+    [
+     null,
+     {
+      "__t": "undef"
+     },
+     2.5
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "f64"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "alts": [
+         {
+          "k": "none"
+         },
+         {
+          "k": "f64"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[null,null,\"4004000000000000\"]",
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v12",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "9007199254740993"
+     },
+     {
+      "__t": "bigint",
+      "v": "18446744073709551615"
+     },
+     {
+      "__t": "bigint",
+      "v": "-9223372036854775808"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "u64"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[9007199254740993,18446744073709551615,-9223372036854775808]",
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "a": 1
+    },
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the args are not a list"
+   },
+   "outsideEnvelope": "not list"
+  },
+  {
+   "name": "v16",
+   "args": [
+    [
+     {
+      "__t": "u8",
+      "bytes": [
+       1,
+       2,
+       255
+      ],
+      "buf": false
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "b",
+       "type": {
+        "k": "bytes"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the rust harness has no route for bytes"
+   },
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v18",
+   "args": [
+    [
+     "\ud800"
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a lone surrogate has no UTF-8 form"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v19",
+   "args": [
+    [
+     [
+      1,
+      {
+       "a\udc00": 1
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a lone surrogate has no UTF-8 form"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v20",
+   "args": [
+    [
+     {
+      "__t": "sparse",
+      "length": 3,
+      "entries": [
+       [
+        0,
+        1
+       ],
+       [
+        2,
+        3
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "k": "i64"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'sparse' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v21",
+   "args": [
+    [
+     {
+      "__t": "map",
+      "entries": [
+       [
+        "a",
+        1
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a Map has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'map' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v25",
+   "args": [
+    [
+     [
+      1,
+      2,
+      3
+     ],
+     [
+      "a",
+      "b",
+      "c"
+     ],
+     [
+      {
+       "__t": "undef"
+      },
+      "q"
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      },
+      {
+       "name": "u",
+       "type": {
+        "items": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "text"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "tuple"
+       }
+      },
+      {
+       "name": "w",
+       "type": {
+        "items": [
+         {
+          "alts": [
+           {
+            "k": "f64"
+           },
+           {
+            "k": "none"
+           }
+          ],
+          "k": "union"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a 1-tuple"
+   },
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v26",
+   "args": [
+    [
+     {
+      "__t": "sparse",
+      "length": 3,
+      "entries": [
+       [
+        0,
+        1
+       ],
+       [
+        2,
+        3
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         },
+         {
+          "alts": [
+           {
+            "k": "i64"
+           },
+           {
+            "k": "none"
+           }
+          ],
+          "k": "union"
+         },
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'sparse' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "__t": "sparse",
+     "length": 2,
+     "entries": [
+      [
+       1,
+       2
+      ]
+     ]
+    },
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'sparse' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v30",
+   "args": [
+    [
+     {
+      "__t": "map",
+      "entries": [
+       [
+        "a",
+        1
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "r",
+       "type": {
+        "fields": [
+         [
+          "a",
+          {
+           "k": "i64"
+          }
+         ]
+        ],
+        "k": "record"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a record value"
+   },
+   "outsideEnvelope": "legacy codec tag 'map' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v34",
+   "args": [
+    [
+     {
+      "__t": "u8",
+      "bytes": [
+       7,
+       9
+      ],
+      "buf": false
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "type": {
+        "item": {
+         "k": "i64"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a list value"
+   },
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v36",
+   "args": [
+    [
+     [
+      1,
+      {
+       "__t": "sparse",
+       "length": 3,
+       "entries": [
+        [
+         1,
+         2
+        ],
+        [
+         2,
+         3
+        ]
+       ]
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'sparse' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v37",
+   "args": [
+    [
+     {
+      "__t": "u8",
+      "bytes": [
+       1,
+       2
+      ],
+      "buf": true
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a Uint8Array has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v38",
+   "args": [
+    [
+     {
+      "__t": "regex",
+      "source": "ab+",
+      "flags": "g"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a RegExp has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'regex' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v39",
+   "args": [
+    [
+     {
+      "__t": "boxed",
+      "k": "Number",
+      "v": 3
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "a Number has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v40",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "-9223372036854775809"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an integer past i64/u64 has no serde_json form"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v41",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     },
+     [
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      },
+      {
+       "name": "n",
+       "type": {
+        "item": {
+         "k": "json"
+        },
+        "k": "list"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   },
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v42",
+   "args": [
+    [
+     [
+      1,
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "m",
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   },
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v43",
+   "args": [
+    [
+     9007199254740992,
+     -9007199254740992,
+     4503599627370495.5,
+     0.1,
+     1e-7,
+     123.456,
+     [
+      {
+       "__t": "bigint",
+       "v": "18446744073709551615"
+      },
+      {
+       "__t": "bigint",
+       "v": "-9223372036854775808"
+      },
+      {
+       "__t": "bigint",
+       "v": "3"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "xs",
+       "rest": true,
+       "type": {
+        "k": "json"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[9007199254740992,-9007199254740992,4503599627370495.5,0.1,1e-7,123.456,[18446744073709551615,-9223372036854775808,3]]",
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v45",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "9007199254740993"
+     },
+     {
+      "__t": "bigint",
+      "v": "3"
+     },
+     9223372036854776000,
+     4611686018427388000,
+     {
+      "__t": "bigint",
+      "v": "4611686018427387904"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "f64"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "f64"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "u64"
+       }
+      },
+      {
+       "name": "d",
+       "type": {
+        "k": "i64"
+       }
+      },
+      {
+       "name": "e",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not an f64 value"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v46",
+   "args": [
+    [
+     {
+      "__t": "boxed",
+      "k": "String",
+      "v": "x"
+     },
+     1,
+     "true"
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "k": "text"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "k": "bool"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "not a text value"
+   },
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v49",
+   "args": [
+    [
+     {
+      "__t": "bigint",
+      "v": "5"
+     },
+     [
+      1,
+      "a"
+     ],
+     1.5,
+     {
+      "a": null,
+      "b": [
+       true
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "item": {
+           "k": "i64"
+          },
+          "k": "list"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "alts": [
+         {
+          "k": "f64"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "d",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "json"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[5,[1,\"a\"],1.5,{\"a\":null,\"b\":[true]}]",
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v50",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     },
+     null
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "alts": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "f64"
+         }
+        ],
+        "k": "union"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "alts": [
+         {
+          "k": "bool"
+         },
+         {
+          "k": "f64"
+         },
+         {
+          "k": "none"
+         }
+        ],
+        "k": "union"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   },
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v52",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     },
+     [
+      {
+       "__t": "undef"
+      }
+     ],
+     [
+      {
+       "__t": "undef"
+      },
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "none"
+       }
+      },
+      {
+       "name": "b",
+       "type": {
+        "item": {
+         "k": "none"
+        },
+        "k": "list"
+       }
+      },
+      {
+       "name": "c",
+       "type": {
+        "items": [
+         {
+          "k": "none"
+         },
+         {
+          "alts": [
+           {
+            "k": "f64"
+           },
+           {
+            "k": "none"
+           }
+          ],
+          "k": "union"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": "[null,[null],[null,null]]",
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v53",
+   "args": [
+    [
+     [
+      "x",
+      {
+       "__t": "undef"
+      }
+     ]
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "text"
+         },
+         {
+          "k": "text"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the absent value has no serde_json form"
+   },
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v54",
+   "args": [
+    [
+     {
+      "__t": "sparse",
+      "length": 3,
+      "entries": [
+       [
+        0,
+        1
+       ],
+       [
+        2,
+        3
+       ]
+      ]
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "t",
+       "type": {
+        "items": [
+         {
+          "k": "i64"
+         },
+         {
+          "k": "i64"
+         }
+        ],
+        "k": "tuple"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "an array hole has no serde_json form"
+   },
+   "outsideEnvelope": "legacy codec tag 'sparse' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "__t": "sparse",
+     "length": 4,
+     "entries": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ]
+     ]
+    },
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "4 args for a 1-parameter SIG"
+   },
+   "outsideEnvelope": "legacy codec tag 'sparse' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v58",
+   "args": [
+    null,
+    {
+     "args": [
+      {
+       "name": "a",
+       "type": {
+        "k": "i64"
+       }
+      }
+     ],
+     "name": "f",
+     "result": {
+      "k": "text"
+     }
+    }
+   ],
+   "expected": {
+    "__narrowed": "the args are not a list"
+   },
+   "outsideEnvelope": "not list"
+  },
+  {
+   "name": "v71",
+   "args": [
+    [
+     {
+      "__t": "undef"
+     }
+    ],
+    {
+     "args": [
+      {
+       "name": "a"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "__narrowed": "wire: Cannot read properties of undefined (reading 'k')"
+   },
+   "outsideEnvelope": "json: undefined has no language-neutral meaning — an envelope fact"
+  }
+ ]
+}

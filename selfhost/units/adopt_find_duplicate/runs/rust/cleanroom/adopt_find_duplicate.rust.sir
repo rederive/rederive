@@ -1,0 +1,22 @@
+UNIT adopt_find_duplicate
+LANG rust
+PRIMARY-SHA256 d92ba17c1f41c9434c07dff6d66f23e4ea1a2fbe39dde677bc2319c24017bc41
+SIG pub fn adopt_find_duplicate(existing: &str, section: &str) -> Option<(String, i64, i64)>
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn adopt_find_duplicate) with NO dependencies — no
+  main, no I/O, no unsafe. The verifier's harness binds both texts as &str, calls the function and reshapes the tuple
+  into the record in DECLARED field order: (heading, startLine, endLine); None = none. Lone surrogates have no &str form
+  and are outside the primary's envelope.
+MECHANISM WHITESPACE is NOT char::is_whitespace, str::trim or split_whitespace: those use Unicode White_Space, which
+  includes U+0085 and excludes U+FEFF — the opposite of the pin on both. Write one predicate over the pinned set and use
+  it for every trim, collapse (R5), blank test (R8), fence indent (R2) and heading test (R3). LINES (R1) =
+  str::split('\n') then strip_suffix('\r') once (never lines(), which also drops a final empty line).
+MECHANISM lengths (R5 "exceeds 15") count UTF-16 units = s.encode_utf16().count() (or sum of char::len_utf16), never
+  str::len (bytes) or chars().count(). Byte-slicing is safe only at offsets of ASCII matches ("#", "(", ")", "-->",
+  "<!--", the backticks, the tildes). The markers (R6 R7) are scans: for each "<!--" in order, skip pinned WHITESPACE, test
+  the keyword, then test the WORD-CHAR boundary — that is the whole guard (R6); for the begin marker (R7) also str::find the next
+  "-->" and the next "<!--" after the keyword, and accept only when the "-->" exists and comes first. The one-line-fence test
+  (R2) trims with the pinned predicate and measures UTF-16 units; the fence state (R2) keeps the opener's run (char, length).
+MECHANISM HEADING-KEY (R4): lowercase per char with char::to_lowercase (the full mapping: U+0130 -> "i" + U+0307,
+  U+212A -> "k"), then keep ASCII a-z/0-9 and treat everything else as a separator. No regex crate is needed.
+DEPENDS-ON none
+PROVENANCE round-5c delta re-cut 2026-10-27 from the primary (rederive@7b348e351c9f); no blind emission yet.

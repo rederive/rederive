@@ -1,0 +1,249 @@
+UNIT at
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG at(object, ...paths) -> Array
+  # CJS default export of lodash.at@4.0.0: `module.exports = at`.
+  # Blind re-emitters: emit a standalone ES module with `export default at` (NO require).
+  # `object` is the value to read from. `...paths` are zero or more path arguments,
+  # each a string | number | boolean | null | undefined | array-of-path-segments.
+  # Returns a NEW dense Array of the resolved values (one element per FLATTENED path).
+  # READ-ONLY: `at` never mutates `object` or any path argument.
+
+DEPENDS-ON none
+  # This unit INLINES the full behavior of lodash.rest (baseRest variadic collection),
+  # lodash._baseflatten (baseFlatten), and lodash.get (baseGet/castPath/stringToPath/
+  # isKey/toKey/baseToString). The re-emitted module must be self-contained.
+
+BEHAVIOR
+  # ============================================================================
+  # TOP-LEVEL PIPELINE
+  # ============================================================================
+  # The real source is:
+  #     var at = rest(function(object, paths) {
+  #       return baseAt(object, baseFlatten(paths));
+  #     });
+  # NOTE the call is baseFlatten(paths) with NO depth argument (depth === undefined).
+  # This is VERSION-SPECIFIC and counterintuitive: it does NOT flatten one level.
+  # (A later lodash uses baseFlatten(paths, 1); this 4.0.0 build does NOT. Verified
+  #  by execution — see node-3 below.)
+  #
+  # NODE-0  rest-collection (inlined lodash.rest baseRest, start = func.length-1 = 1):
+  #   Collect arguments. The wrapped fn has arity 2 (object, paths), so start = 1.
+  #     object  := arguments[0]            # undefined if at() called with no args
+  #     paths   := Array of arguments[1..] # all args after the first, as a real Array
+  #   i.e. paths = [ arguments[1], arguments[2], ... ] (length = max(nargs-1, 0)).
+  #   Then call baseAt(object, baseFlatten(paths)).
+  #
+  # NODE-1  baseFlatten(paths)  [depth = undefined, predicate/isStrict/result all undefined]:
+  #   result := []
+  #   for each value in paths (index 0..paths.length-1):
+  #     # depth > 0  is  (undefined > 0)  ===  false  -> the "flatten" branch NEVER taken
+  #     # isStrict is undefined (falsy) -> the else-branch ALWAYS taken
+  #     result[result.length] := value          # push value AS-IS (no flattening)
+  #   return result
+  #   NET EFFECT: baseFlatten(paths) === a shallow COPY of paths. NO flattening of any
+  #   array/arguments element occurs. So an array path-arg stays a single element and is
+  #   later interpreted by get as ONE deep path (see node-3 array-path rule).
+  #
+  # NODE-2  baseAt(object, flatPaths):
+  #   isNil  := (object == null)              # true for null AND undefined only
+  #   length := flatPaths.length
+  #   result := new Array(length)             # dense; every index will be assigned
+  #   for index in 0..length-1:
+  #     result[index] := isNil ? undefined : get(object, flatPaths[index])
+  #   return result
+  #   - Result length === number of path args (after the as-is copy).
+  #   - at() with no path args -> length 0 -> [].
+  #   - The result is DENSE: index i is explicitly assigned for every i (even when the
+  #     assigned value is undefined). (Verified: `0 in at({}, "x")` is true.)
+  #
+  # ============================================================================
+  # get(object, path)  (inlined lodash.get; defaultValue is always undefined here)
+  # ============================================================================
+  # NODE-3  get(object, path):
+  #   if object == null: return undefined            # null or undefined object
+  #   result := baseGet(object, path)
+  #   return result === undefined ? undefined : result   # (no defaultValue from `at`)
+  #
+  #   baseGet(object, path):
+  #     if isKey(path, object): path := [path]       # wrap single key
+  #     else:                   path := castPath(path)
+  #     index := 0; length := path.length
+  #     while object != null AND index < length:
+  #       object := object[ toKey(path[index]) ]; index := index + 1
+  #     return (index !== 0 AND index === length) ? object : undefined
+  #     # i.e. returns undefined if the path was empty (length 0 -> index stays 0),
+  #     # OR if a null/undefined was hit before consuming the whole path.
+  #     # Property access uses bracket indexing object[key]; JS auto-boxes primitive
+  #     # objects (string/number/boolean), and DOES read inherited/prototype props
+  #     # (there is NO hasOwnProperty filter). Verified: at("abc","length")->[3];
+  #     # at(obj-with-proto-prop,"p") reads the prototype value.
+  #
+  # ----------------------------------------------------------------------------
+  # isKey(value, object) -> boolean  (is `value` a single property name, not a deep path?)
+  # ----------------------------------------------------------------------------
+  #   reIsPlainProp = /^\w*$/
+  #   reIsDeepProp  = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/
+  #   if isArray(value): return false                       # arrays are NEVER single keys
+  #   type := typeof value
+  #   if type == "number" || type == "symbol" || type == "boolean"
+  #        || value == null || isSymbol(value): return true # primitives/null -> single key
+  #   # else value is a string (or string-coercible non-array object):
+  #   return reIsPlainProp.test(value)            # purely \w* (incl. "") -> true
+  #          || !reIsDeepProp.test(value)         # no "." and no "[...]" -> true
+  #          || (object != null && value in Object(object))  # literal key exists -> true
+  #   CONSEQUENCES (string paths):
+  #     - "" (empty)        -> reIsPlainProp matches -> isKey true -> path [""].
+  #     - "hello", "_a1"    -> \w* -> single key.
+  #     - "a-b" (no . or []) -> reIsDeepProp false -> single key ALWAYS (even if absent).
+  #     - "a.b"             -> has "." -> reIsDeepProp true, reIsPlainProp false; single key
+  #                            ONLY IF the literal key "a.b" exists in object, else DEEP.
+  #     - "a[0]"            -> has "[" -> DEEP unless literal "a[0]" exists in object.
+  #   CONSEQUENCES (number paths): numbers are ALWAYS single keys (never split on ".").
+  #     - path 0.1 (number) -> single key "0.1"; but string "0.1" -> deep ["0","1"].
+  #
+  # ----------------------------------------------------------------------------
+  # castPath(value): isArray(value) ? value : stringToPath(value)
+  #   - Array path arg is used VERBATIM as the segment list (each element a segment).
+  #   - Non-array (string/number/etc.) is converted via stringToPath(toString(value)).
+  #
+  # ----------------------------------------------------------------------------
+  # stringToPath(string): convert a string path into an Array of string segments.
+  #   string := toString(string)   # see toString below; null/undefined -> ""
+  #   reLeadingDot = /^\./
+  #   rePropName   = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g
+  #   reEscapeChar = /\\(\\)?/g
+  #   result := []
+  #   if reLeadingDot.test(string): result.push("")     # leading "." yields a leading "" segment
+  #   string.replace(rePropName, function(match, number, quote, str){
+  #     # `number`: capture group 1 = numeric bracket content like [0] or [-1] or [1.5]
+  #     # `quote` : capture group 2 = the quote char of a quoted bracket ["x"] / ['x']
+  #     # `str`   : capture group 3 = the quoted content (with \-escapes)
+  #     result.push( quote ? str.replace(reEscapeChar, "$1") : (number || match) )
+  #   })
+  #   return result
+  #   The memoization wrapper around stringToPath in the original is a perf-only cache
+  #   keyed on the input string; it does NOT change the output. Re-emitters MAY omit it.
+  #   VERIFIED segmentations (canonical, must match exactly):
+  #     "a.b.c"      -> ["a","b","c"]
+  #     "a[0].b"     -> ["a","0","b"]            # numeric bracket -> the digits as string
+  #     ".a"         -> ["","a"]                 # leading dot -> leading "" segment
+  #     "a[\"x.y\"]" -> ["a","x.y"]              # quoted bracket keeps inner dot literally
+  #     "a['x.y']"   -> ["a","x.y"]              # single-quote form identical
+  #     "[-1]"       -> ["-1"]                   # negative numeric bracket
+  #     "[1.5]"      -> ["1.5"]                  # decimal numeric bracket
+  #     ""           -> []                       # empty string -> NO segments (empty path)
+  #     "a..b"       -> ["a","","b"]             # consecutive dots -> empty segment
+  #     "a[]"        -> ["a",""]                 # empty bracket -> "" segment
+  #     "a\\.b"      -> ["a\\","b"]              # JS string a<backslash>.b: backslash is
+  #         NOT an escape outside quoted brackets; "a\" matched by [^.[\]]+, then "." splits,
+  #         then "b". So obj["a\\"] is looked up, NOT obj["a.b"]. (To target a literal
+  #         "a.b" key via a string you must use a QUOTED bracket: "['a.b']".)
+  #
+  # ----------------------------------------------------------------------------
+  # toKey(value): final per-segment coercion before object[key] indexing.
+  #   if typeof value == "string" || isSymbol(value): return value
+  #   result := (value + "")                                  # coerce to string
+  #   return (result == "0" && (1/value) == -Infinity) ? "-0" : result
+  #   - Number segment 0   -> "0";   -0 -> "-0".
+  #   - NaN -> "NaN"; Infinity -> "Infinity"; -Infinity -> "-Infinity"; true -> "true";
+  #     null -> "null"; undefined -> "undefined".
+  #   - String segments (incl. those produced by stringToPath) pass through unchanged.
+  #
+  # ----------------------------------------------------------------------------
+  # toString(value): value == null ? "" : baseToString(value)
+  #   baseToString(value):
+  #     if typeof value == "string": return value
+  #     if isSymbol(value): return symbolToString.call(value) (or "")    # OUT-OF-ENVELOPE
+  #     result := (value + "")
+  #     return (result == "0" && (1/value) == -Infinity) ? "-0" : result   # -0 -> "-0"
+  #   Used only when castPath receives a NON-array, non-already-string path (e.g. a number,
+  #   boolean, null). Examples (path then resolved key):
+  #     number 1.5  -> "1.5";  boolean true -> "true";  null -> "" (object==null guard in
+  #     get short-circuits before this only when OBJECT is null, not when PATH is null;
+  #     a null PATH: isKey(null)->true so path:=[null], toKey(null)->"null", look up "null").
+  #
+  # ============================================================================
+  # SUPPORTING PREDICATES (inlined, exact)
+  # ============================================================================
+  #   isArray(v)      := Array.isArray(v)
+  #   isObjectLike(v) := (!!v) && typeof v == "object"
+  #   isSymbol(v)     := typeof v == "symbol" || (isObjectLike(v) &&
+  #                       Object.prototype.toString.call(v) == "[object Symbol]")
+  #   (eq/isObject/isLength/isArguments/Map/Hash/ListCache/memoize machinery from the
+  #    original is perf/cache-only and NOT observable in `at`'s output; re-emitters may
+  #    omit it. The only memoize use is stringToPath caching — output-equivalent.)
+  #
+  # ============================================================================
+  # WORKED EXAMPLES (all VERIFIED against lodash.at@4.0.0 by execution)
+  # ============================================================================
+  #   at({a:{b:2}}, "a.b")                 -> [2]            # deep string path
+  #   at({a:1,b:2,c:3}, "a","b","c")       -> [1,2,3]        # variadic
+  #   at({a:1,b:2}, ["a","b"])             -> [undefined]    # !!! array NOT flattened;
+  #                                           ["a","b"] is ONE deep path a.b -> undefined
+  #   at({a:{b:42}}, ["a","b"])            -> [42]           # same array as deep path a.b
+  #   at({a:[10,20]}, "a[0]")              -> [10]           # bracket index
+  #   at({a:[10,20]}, "a.0")               -> [10]           # dot index, equivalent
+  #   at(["a","b","c"], 0, 2)              -> ["a","c"]      # numeric paths on array
+  #   at({a:1}, "x.y")                     -> [undefined]    # missing deep path
+  #   at({a:1}, "a","b","c")               -> [1,undefined,undefined]
+  #   at({a:1})                            -> []             # no path args
+  #   at()                                 -> []             # no args at all
+  #   at(null, "a")                        -> [undefined]    # nil object
+  #   at(undefined, "a","b")               -> [undefined,undefined]
+  #   at({"a.b":99,a:{b:5}}, "a.b")        -> [99]           # literal key wins (in-operator)
+  #   at("abc", "length")                  -> [3]            # primitive object property
+  #   at("abc", 0, 2)                      -> ["a","c"]      # primitive index access
+  #   at({"":{a:1}}, ".a")                 -> [1]            # leading-dot -> [""],"a"
+  #   at({a:{"-1":"neg"}}, "a[-1]")        -> ["neg"]        # negative bracket index
+  #   at({"-0":"nz","0":"z"}, -0)          -> ["nz"]         # toKey(-0) -> "-0"
+  #   at({"-0":"nz","0":"z"}, 0)           -> ["z"]          # toKey(0)  -> "0"
+  #   at({a:{b:9}}, ["a","b"], "a")        -> [9,{"b":9}]    # array-path then string-path
+  #   at({a:1}, [])                        -> [undefined]    # empty-array path (length 0)
+  #   at({a:1}, undefined)                 -> [undefined]    # undefined path -> key "undefined"
+
+ORACLE value -> oracle.json
+  # Deterministic pure function. Oracle records the args tuple and the JSON-encoded
+  # return Array (dense; undefined elements encode as null under JSON — see SCOPE).
+
+SCOPE
+  IN-CONTRACT (reproduce exactly): the entire rest-collection + baseFlatten(no-depth copy)
+    + baseAt + get (baseGet/castPath/stringToPath/isKey/toKey/toString/baseToString)
+    pipeline described in BEHAVIOR, including ALL regexes verbatim (reIsPlainProp,
+    reIsDeepProp, reLeadingDot, rePropName, reEscapeChar) and the -0/NaN/Infinity toKey
+    rules. The generator (at.inputs.mjs) emits ONLY values in this in-contract envelope:
+      - objects (plain, nested, arrays, primitive string/number/boolean as object),
+        and null/undefined object;
+      - path args that are: strings (plain, dotted, bracket-index, quoted-bracket,
+        leading-dot, empty, escaped-backslash, missing), numbers (incl. -0, negative,
+        decimal), booleans, null, undefined, and arrays-of-segments.
+    Every char-class / path-shape the BEHAVIOR demonstrates is exercised by genInputs
+    (self-consistency cross-check: see at.inputs.mjs curated prefix).
+
+  CARRIED-DATA: none.
+
+  OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they are
+   not oracle-codec-faithful or are environment/identity dependent):
+    - Symbol path args or Symbol object keys (isSymbol / symbolToString branch): codec
+      cannot round-trip Symbols. Behavior is defined above (toKey returns the symbol as-is;
+      stringToPath would stringify it) but excluded from generated inputs.
+    - Function values as `object` or as resolved values, and getter properties that throw:
+      functions don't round-trip through JSON; a throwing getter is an ambient effect.
+    - NaN / +/-Infinity as RESOLVED VALUES in the object, and `undefined`/NaN as object
+      property VALUES, do not survive JSON round-trip of the input object -> excluded as
+      stored object values (they MAY appear as PATH numbers, which round-trip and whose
+      toKey mapping is pinned above).
+    - Native Map/Hash/coreJs/host-object machinery from lodash.get's getNative path is
+      perf/cache plumbing with no observable effect on `at`'s output; not reproduced.
+    - JSON-encoding note for the oracle: a resolved `undefined` element encodes as null
+      in JSON; the result Array length and density are what the differential grades.
+
+PROVENANCE lodash.at@4.0.0 (MIT). Inlines lodash.get@4.x, lodash.rest@4.x,
+  lodash._baseflatten@4.x. Repo: lodash/lodash (https://lodash.com/, MIT license).
+  Source files read:
+    node_modules/lodash.at/index.js          (at, baseAt)
+    node_modules/lodash.get/index.js          (get, baseGet, castPath, stringToPath,
+                                                isKey, toKey, toString, baseToString)
+    node_modules/lodash.rest/index.js         (rest, baseRest, toInteger/toNumber)
+    node_modules/lodash._baseflatten/index.js (baseFlatten, isFlattenable)

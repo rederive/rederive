@@ -1,0 +1,81 @@
+# Installed by `rdv init --lang rust --type game` — the harness-agnostic seal for a v0.5 rust-game repo.
+# Re-proves every installed unit crate deterministically (no tokens, no AI) and re-validates every unit's
+# contract family offline. Pinned to this repo's rederive.lock when one exists, so CI verifies under the
+# SAME judge version a local `tools/lab grade` ran under — an unpinned `npm i -g sir-factory` here could
+# silently re-grade everything under a newer judge and call it the same verdict.
+name: rederive verify (rust-game)
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: read rederive.lock (sir-factory version, typikon commit — absent is fine, defaults apply)
+        id: lock
+        run: |
+          if [ -f rederive.lock ]; then
+            node -e "
+              const l = JSON.parse(require('fs').readFileSync('rederive.lock', 'utf8'));
+              const out = process.env.GITHUB_OUTPUT;
+              // a lock from before sir-factory (a legacy \`lab\` key, @rederive/lab) pins nothing here: that package is retired
+              const v = l.factory && l.factory.version || '';
+              require('fs').appendFileSync(out, 'factory_version=' + (/^\d+\.\d+\.\d+/.test(v) ? v : '') + '\n');
+              require('fs').appendFileSync(out, 'typikon_commit=' + (l.typikon && l.typikon.commit || '') + '\n');
+            "
+          else
+            echo "no rederive.lock — verifying against sir-factory@^0.4.0 (run \`rdv init --lang rust --type game\` to pin one)"
+          fi
+
+      - name: install the verifier (sir-factory, pinned by rederive.lock when present, else ^0.4.0)
+        run: |
+          # fails CLOSED with a plain reason: until sir-factory 0.4.0 is on npm this seal cannot install its judge in CI
+          # — never skip the verification and report green
+          spec="sir-factory@${{ steps.lock.outputs.factory_version || '^0.4.0' }}"
+          npm i -g "$spec" || { echo "::error::could not install $spec from npm — the seal cannot run in CI until it is published; verify locally with tools/lab validate"; exit 1; }
+
+      - name: cargo check (the sim crate + every installed unit crate)
+        run: cargo check
+
+      - name: tools/install --check (every installed crate is byte-exact and current)
+        run: node tools/install.mjs --check
+
+      - name: sir-factory validate (every unit's family — schema, self-consistency, binding)
+        run: |
+          set -e
+          shopt -s nullglob 2>/dev/null || true
+          for d in units/*/; do
+            u=$(basename "$d")
+            echo "== sir-factory validate $u"
+            sir-factory validate "units/$u"
+          done
+
+      # typikon is not (yet) a published package — this step is BEST-EFFORT and ADVISORY: it never fails the
+      # job. Set the TYPIKON_GIT repo variable (owner/repo or a full git URL) to enable it; without one, or if
+      # `uv` is unavailable, or the contract check itself fails, this step reports and moves on.
+      - name: tools/typikon contract (advisory, best-effort)
+        continue-on-error: true
+        run: |
+          if [ ! -x tools/typikon ]; then
+            echo "no tools/typikon in this repo — skipping (advisory)"
+            exit 0
+          fi
+          if ! command -v uv >/dev/null 2>&1; then
+            echo "uv not available on this runner — skipping typikon install (advisory, best-effort only)"
+            exit 0
+          fi
+          ref="${{ steps.lock.outputs.typikon_commit }}"
+          src="${TYPIKON_GIT:-}"
+          if [ -z "$src" ]; then
+            echo "no TYPIKON_GIT repo variable set — skipping typikon install (advisory, best-effort only)"
+            exit 0
+          fi
+          uv tool install "git+https://github.com/${src}@${ref:-main}" || { echo "typikon install failed (advisory) — skipping"; exit 0; }
+          tools/typikon contract --spec typikon.yaml --contract contracts/game.contract.yaml \
+            || echo "typikon contract check failed (advisory) — not blocking the build"

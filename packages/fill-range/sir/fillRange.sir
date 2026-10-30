@@ -1,0 +1,523 @@
+# SIR for the default export of npm `fill-range@7.1.1` (CJS module.exports = fill).
+# The dependency chain (require('to-regex-range@5.0.1') -> require('is-number@7.0.0'))
+# is FULLY INLINED below. A blind re-emitter reading ONLY this SIR must produce a
+# SINGLE self-contained ES module:  `export default function fillRange(...) { ... }`
+# with NO require/import of to-regex-range or is-number. Everything those packages do
+# that fillRange can reach is folded into the BEHAVIOR section.
+
+UNIT fillRange
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG fillRange(start, end, step?, options?) -> Array<number|string> | string
+    # Returns an Array of values across [start..end] in the normal case.
+    # Returns a STRING (a regex source fragment) when options.toRegex === true.
+    # No seam: pure function of its arguments. The to-regex-range internal `cache`
+    # is pure memoization keyed on the inputs; it never changes the returned value
+    # (verified: two identical calls return the same string). Re-emitter need NOT
+    # implement the cache (it is an optimization, not an observable behavior).
+DEPENDS-ON none   # to-regex-range + is-number are INLINED below, not imported.
+
+# =============================================================================
+# VOCABULARY / HELPERS (all inlined; names are local to the reconstruction)
+# =============================================================================
+#
+# isObject(val)        := val !== null && typeof val === 'object' && !Array.isArray(val)
+#
+# transform(toNumber)  := returns a function `value => (toNumber === true ? Number(value) : String(value))`
+#                         (this is the DEFAULT value-formatter for numeric ranges; see node N4)
+#
+# isValidValue(value)  := typeof value === 'number' || (typeof value === 'string' && value !== '')
+#                         # NOTE: '' (empty string) is NOT a valid value. Numbers (incl 0, -0, NaN,
+#                         #       1.5, Infinity) ARE typeof 'number' so pass this guard.
+#
+# isNumberLOCAL(num)   := Number.isInteger(+num)
+#                         # fill-range's OWN integer test. Governs the numeric-vs-letter dispatch
+#                         # AND the step validity test. `+num` is JS unary-plus numeric coercion:
+#                         #   +"5"=5, +"01"=1, +"1e1"=10, +"0x10"=16, +" 2 "=2, +"2.5"=2.5,
+#                         #   +"abc"=NaN, +true=1, +"5e1"=50, +""=0, +"1.5"=1.5.
+#                         # Number.isInteger(NaN)=false, Number.isInteger(1.5)=false.
+#                         # DISTINCT from is-number (below); fill-range uses THIS one everywhere
+#                         # it calls `isNumber(...)`.
+#
+# isNumberPKG(num)     := # the inlined is-number@7.0.0 algorithm, used ONLY inside the inlined
+#                         # to-regex-range (node N6.toRegexRange). Reproduce exactly:
+#                         #   if (typeof num === 'number') return num - num === 0;   # true unless NaN/Inf
+#                         #   if (typeof num === 'string' && num.trim() !== '') return Number.isFinite(+num);
+#                         #   return false;
+#                         # In every code path fillRange reaches, the args handed to to-regex-range
+#                         # are finite integers, so isNumberPKG returns true; it never throws in scope.
+#                         # (It is included for completeness so the re-emitter can reproduce the
+#                         #  to-regex-range guards faithfully.)
+#
+# zeros(input)         := # leading-zero / padding DETECTOR. Reproduce exactly:
+#                         #   let value = `${input}`; let index = -1;
+#                         #   if (value[0] === '-') value = value.slice(1);
+#                         #   if (value === '0') return false;
+#                         #   while (value[++index] === '0');   # advance past leading zeros
+#                         #   return index > 0;
+#                         # Examples (VERIFIED): zeros("0")=false, zeros("00")=true, zeros("01")=true,
+#                         #   zeros("-01")=true (dash stripped first), zeros("5")=false,
+#                         #   zeros("0x10")=true (one leading '0' then 'x'), zeros("10")=false,
+#                         #   zeros("007")=true.
+#
+# stringify(start,end,options) := # decide string-vs-number OUTPUT for numeric ranges.
+#                         #   if (typeof start === 'string' || typeof end === 'string') return true;
+#                         #   return options.stringify === true;
+#
+# pad(input, maxLength, toNumber) := # left-pad a single formatted value with '0' to maxLength.
+#                         #   if (maxLength > 0) {
+#                         #     let dash = input[0] === '-' ? '-' : '';
+#                         #     if (dash) input = input.slice(1);
+#                         #     input = dash + input.padStart(dash ? maxLength - 1 : maxLength, '0');
+#                         #   }
+#                         #   if (toNumber === false) return String(input);
+#                         #   return input;
+#                         # `input` arriving here is already the output of `format(a,index)` which is
+#                         # a string when toNumber===false (String(a)) or a number when toNumber===true
+#                         # (Number(a)). When toNumber===true and maxLength===0, pad returns the NUMBER
+#                         # unchanged (so the array holds raw numbers, e.g. [1,2,3]).
+#                         # JS String.prototype.padStart(targetLen, '0').
+#
+# toMaxLen(input, maxLength) := # left-pad a STRING to maxLength accounting for a leading '-'.
+#                         #   let negative = input[0] === '-' ? '-' : '';
+#                         #   if (negative) { input = input.slice(1); maxLength--; }
+#                         #   while (input.length < maxLength) input = '0' + input;
+#                         #   return negative ? ('-' + input) : input;
+#                         # Used ONLY on the numeric toRegex step===1 path (node N4a) and inside
+#                         # toSequence (node N6). When `input` is a NUMBER (e.g. 5), input[0] is
+#                         # undefined so negative='' and input.length is undefined -> the while
+#                         # never runs -> the NUMBER passes through unchanged.
+#
+# String.fromCharCode / String.prototype.charCodeAt are standard JS.
+
+# =============================================================================
+# BEHAVIOR — top-level `fill(start, end, step, options = {})`  (ordered)
+# =============================================================================
+# Defaults: options defaults to {} (4th arg). step has NO default at this layer
+# (it is `undefined` if omitted); it is normalized at node N3b.
+#
+# --- N0: single-value short-circuit ---
+#   if (end == null && isValidValue(start)) return [start];
+#     # `== null` matches BOTH null and undefined. So fill(5) -> [5]; fill(-5) -> [-5];
+#     # fill('a') -> ['a']. The returned element is `start` UNCHANGED (number stays number,
+#     # string stays string). VERIFIED: fill(5)->[5], fill(5,null)->[5], fill(5,null,1)->[5]
+#     # (a 3rd arg does not matter once end==null), fill('')-> start '' NOT valid -> N1.
+#
+# --- N1: invalid-range guard ---
+#   if (!isValidValue(start) || !isValidValue(end)) return invalidRange(start, end, options);
+#     where invalidRange(start,end,options):
+#       if (options.strictRanges === true) throw RangeError('Invalid range arguments: ' + util.inspect([start, end]));
+#       return [];
+#     # !!! ARG-SLOT SUBTLETY: N1 runs BEFORE the N3 object-step redirect. `options` here is
+#     #     the literal 4TH argument (default {}). So strictRanges only triggers the throw when
+#     #     it is passed in the 4th (options) slot WITH a 3rd (step) arg present. If strictRanges
+#     #     is passed as the 3RD arg (the object-step position), N1 still sees options={} -> returns [].
+#     #   VERIFIED:
+#     #     fill('ab','ef',{strictRanges:true})       -> []        (strictRanges in step slot, NOT seen)
+#     #     fill(null,5,{strictRanges:true})          -> []        (ditto)
+#     #     fill('ab','ef',1,{strictRanges:true})     -> THROW RangeError "Invalid range arguments: [ 'ab', 'ef' ]"
+#     #     fill(null,5,1,{strictRanges:true})        -> THROW RangeError "Invalid range arguments: [ null, 5 ]"
+#     #     fill('',5,1,{strictRanges:true})          -> THROW RangeError "Invalid range arguments: [ '', 5 ]"
+#     # util.inspect on a 2-element array of the args. The re-emitter must format the message as
+#     # Node's util.inspect would: strings single-quoted, ', ' separator, spaces inside brackets:
+#     #   ['ab','ef'] -> "[ 'ab', 'ef' ]"; [null,5] -> "[ null, 5 ]"; ['',5] -> "[ '', 5 ]";
+#     #   numbers -> "[ 1.5, 5 ]".
+#     # Non-throwing invalid cases: fill('',5)->[], fill(5,'')->[], fill('')->[], fill(null,5)->[],
+#     #   fill(true,5)->[] (true is typeof boolean, not valid), fill()->[], fill(undefined,undefined)->[].
+#     # The {__throw} (strictRanges) message format is in-envelope; see SCOPE.
+#
+# --- N2: function step -> transform redirect (OUT OF ENVELOPE, see SCOPE) ---
+#   if (typeof step === 'function') return fill(start, end, 1, { transform: step });
+#     # functions do not round-trip the oracle codec; genInputs never emits them.
+#
+# --- N3: object step -> options redirect ---
+#   if (isObject(step)) return fill(start, end, 0, step);
+#     # When the 3rd arg is a plain object it is RE-INTERPRETED as `options`, with step
+#     # forced to 0 (which N3b below turns into 1 unless opts.step provides one).
+#     # VERIFIED: fill(1,10,{step:2}) -> [1,3,5,7,9]; fill(1,10,{}) -> [1..10];
+#     #           fill('a','e',{step:2}) -> ["a","c","e"]; fill(1,10,0,{step:3}) -> [1,4,7,10].
+#
+#   # N3b: normalize options + step (reached when step is NOT a function and NOT an object):
+#   let opts = { ...options };
+#   if (opts.capture === true) opts.wrap = true;        # capture implies wrap
+#   step = step || opts.step || 1;                       # 0/undefined/''/false -> opts.step -> 1
+#     # VERIFIED: fill(1,5,0)->[1..5] (step 0 -> 1); fill(1,10,0,{step:3})->[1,4,7,10];
+#     #           fill(1,5,true) -> true is truthy so step=true, then N3c.
+#
+#   # N3c: step validity:
+#   if (!isNumberLOCAL(step)) {                          # Number.isInteger(+step) === false
+#     if (step != null && !isObject(step)) return invalidStep(step, opts);
+#     return fill(start, end, 1, step);                  # step is an object here (already handled by N3, defensive)
+#   }
+#     where invalidStep(step,opts):
+#       if (opts.strictRanges === true) throw new TypeError(`Expected step "${step}" to be a number`);
+#       return [];
+#     # VERIFIED: step=true -> +true=1 isInteger true -> passes (fill(1,5,true)->[1..5]);
+#     #   step="2" -> +"2"=2 passes (fill(1,5,"2")->[1,3,5]);
+#     #   step=" 2 " -> +" 2 "=2 passes -> [1,3,5];
+#     #   step="2.5" -> +"2.5"=2.5 NOT integer -> invalidStep -> [] (or TypeError if strictRanges);
+#     #   step="abc" -> NaN -> invalidStep -> [] (or TypeError);
+#     #   step=1.5 / -1.5 -> NOT integer -> invalidStep -> [].
+#     # TypeError message EXACTLY: `Expected step "${step}" to be a number` where ${step} is the
+#     #   original step VALUE coerced by template literal (e.g. "2.5", "abc", "x").
+#     #   VERIFIED: fill(1,9,'2.5',{strictRanges:true}) -> TypeError 'Expected step "2.5" to be a number'.
+#
+#   # N3d: numeric-vs-letter dispatch:
+#   if (isNumberLOCAL(start) && isNumberLOCAL(end)) return fillNumbers(start, end, step, opts);   # node N4
+#   return fillLetters(start, end, Math.max(Math.abs(step), 1), opts);                             # node N5
+#     # isNumberLOCAL(x) = Number.isInteger(+x). BOTH ends must be integer-coercible to go numeric.
+#     # VERIFIED dispatch examples:
+#     #   fill(1.5,5)   -> 1.5 NOT integer -> LETTERS (see N5 quirk below) -> ["1","2","3","4","5"]
+#     #   fill("1.5","5") -> "1.5" not integer -> LETTERS, but "1.5".length>1 & not number -> invalidRange -> []
+#     #   fill("1","5") -> both integer-coercible -> NUMBERS
+#     #   fill("0x10","0x14") -> +"0x10"=16 integer -> NUMBERS (with padding quirk, see N4)
+#     #   fill("1e1","5e1") -> +"1e1"=10 integer -> NUMBERS, range 10..50
+#     #   fill("5","a") -> "a" not integer -> LETTERS
+#     #   fill("10","z") -> "z" not integer -> LETTERS (start "10".charCodeAt(0) = '1' = 49!)
+
+# =============================================================================
+# N4: fillNumbers(start, end, step = 1, options = {})
+# =============================================================================
+#   a = Number(start); b = Number(end);
+#   if (!Number.isInteger(a) || !Number.isInteger(b)) {           # defensive; rarely reached given N3d
+#     if (options.strictRanges === true) throw RangeError('Invalid range arguments: ' + util.inspect([start,end]));
+#     return [];
+#   }
+#   if (a === 0) a = 0;   # normalize -0 to 0
+#   if (b === 0) b = 0;
+#   descending = a > b;
+#   startString = String(start); endString = String(end); stepString = String(step);
+#     # IMPORTANT: these use the ORIGINAL start/end (so "0x10" stays "0x10" for padding!).
+#   step = Math.max(Math.abs(step), 1);                          # step always >= 1 here
+#   padded = zeros(startString) || zeros(endString) || zeros(stepString);
+#   maxLen = padded ? Math.max(startString.length, endString.length, stepString.length) : 0;
+#   toNumber = (padded === false) && (stringify(start, end, options) === false);
+#   format = options.transform || transform(toNumber);           # options.transform = OUT OF ENVELOPE
+#
+#   # --- N4a: numeric toRegex FAST path (step === 1) ---
+#   if (options.toRegex && step === 1) {
+#     return toRange( toMaxLen(start, maxLen), toMaxLen(end, maxLen), true, options );   # node N6.toRange
+#   }
+#     # toMaxLen receives the ORIGINAL start/end. For NUMBER args it passes the number through
+#     # (see toMaxLen note); for padded STRING args ("01") it pads them.
+#     # VERIFIED: fill(1,5,{toRegex:true}) -> "[1-5]";
+#     #   fill("01","05",{toRegex:true}) -> "0?[1-5]"; fill("-05","05",{toRegex:true}) -> "-0{0,2}[1-5]|0{0,2}[0-5]".
+#
+#   # --- N4b: build the value list (and/or regex parts) ---
+#   parts = { negatives: [], positives: [] };
+#   push = num => parts[num < 0 ? 'negatives' : 'positives'].push(Math.abs(num));
+#   range = [];  index = 0;
+#   while (descending ? a >= b : a <= b) {
+#     if (options.toRegex === true && step > 1) {
+#       push(a);                                    # collect magnitudes for toSequence
+#     } else {
+#       range.push( pad( format(a, index), maxLen, toNumber ) );   # default fmt ignores index
+#     }
+#     a = descending ? a - step : a + step;
+#     index++;
+#   }
+#     # format(a,index) default = transform(toNumber): toNumber true -> Number(a); false -> String(a).
+#     # When NOT padded and NOT stringify -> toNumber true -> array holds NUMBERS (e.g. [1,2,3]).
+#     # When start/end is a string OR stringify:true OR padded -> array holds STRINGS.
+#     # VERIFIED: fill(1,3)->[1,2,3]; fill("1","3")->["1","2","3"]; fill(1,3,{stringify:true})->["1","2","3"];
+#     #   fill("01","03")->["01","02","03"]; fill(1,5,100)->[1] (single iter, a jumps past b);
+#     #   fill("0x10","0x14")->["0016","0017","0018","0019","0020"] (padding via "0x10" maxLen 4).
+#
+#   # --- N4c: toRegex assembly for numbers ---
+#   if (options.toRegex === true) {
+#     return step > 1
+#       ? toSequence(parts, options, maxLen)                       # node N6.toSequence
+#       : toRegex(range, null, { wrap: false, ...options });       # node N6.toRegex (array branch)
+#   }
+#   return range;
+#     # step>1 toRegex example VERIFIED: fill(1,10,2,{toRegex:true}) -> "1|3|5|7|9";
+#     #   fill(8,5,2,{toRegex:true}) -> "6|8" (toSequence SORTS positives ascending);
+#     #   fill("01","05",2,{toRegex:true}) -> "01|03|05" (padded via toMaxLen inside toSequence);
+#     #   fill("01","05",3,{toRegex:true}) -> "01|04";
+#     #   fill("-05","05",2,{toRegex:true}) -> "001|003|005|-(?:001|003|005)";
+#     #   fill(1,5,2,{toRegex:true,capture:true}) -> "(1|3|5)";
+#     #   fill(1,5,2,{toRegex:true,wrap:true}) -> "(?:1|3|5)".
+
+# =============================================================================
+# N5: fillLetters(start, end, step = 1, options = {})
+#     (step here is ALREADY Math.max(Math.abs(step),1) from N3d, so >= 1)
+# =============================================================================
+#   if ((!isNumberLOCAL(start) && start.length > 1) || (!isNumberLOCAL(end) && end.length > 1))
+#     return invalidRange(start, end, options);    # multi-char non-numeric end -> [] (or RangeError if strict)
+#     # `start.length` is read on whatever start is. If start is a NUMBER, .length is undefined,
+#     #  `undefined > 1` is false -> guard passes -> proceeds to charCodeAt. THIS is why fill(1.5,5)
+#     #  reaches letters and works: a number whose isNumberLOCAL is false (1.5) but .length undefined.
+#     # NOTE: `options` here = the normalized opts from N3b (strictRanges only present if it was in
+#     #   the proper 4th slot). VERIFIED: fill("ab","ef")->[]; fill("a","ef")->[];
+#     #   fill("ab","ef",1,{strictRanges:true}) THROWS RangeError; fill("ab","ef",{strictRanges:true})->[].
+#
+#   format = options.transform || (val => String.fromCharCode(val));   # options.transform = OUT OF ENVELOPE
+#   a = `${start}`.charCodeAt(0);    # FIRST char of String(start)
+#   b = `${end}`.charCodeAt(0);      # FIRST char of String(end)
+#     # CRITICAL: start/end are String-coerced then char-0 taken. So:
+#     #   start=1.5 -> "1.5" -> charCodeAt(0)=49 ('1'); end=5 -> "5" -> 53 ('5') -> codes 49..53 -> ["1".."5"].
+#     #   start="10" (in fill("10","z")) -> "10" -> charCodeAt(0)=49 ('1').
+#   descending = a > b;
+#   min = Math.min(a, b);  max = Math.max(a, b);
+#
+#   # --- N5a: letters toRegex FAST path (step === 1) ---
+#   if (options.toRegex && step === 1) return toRange(min, max, false, options);   # node N6.toRange (char branch)
+#     # VERIFIED: fill("a","e",{toRegex:true}) -> "[a-e]"; fill("z","a",{toRegex:true}) -> "[a-z]"
+#     #   (uses min/max so ALWAYS ascending class); fill("a","a",{toRegex:true}) -> "a" (a===b -> single char);
+#     #   fill("Z","a",{toRegex:true}) -> "[Z-a]". capture/wrap options are IGNORED on this fast path
+#     #   (toRange char branch never reads them) -> fill("a","e",{toRegex:true,capture:true}) -> "[a-e]",
+#     #   fill("a","e",{toRegex:true,wrap:true}) -> "[a-e]".
+#
+#   # --- N5b: build the char list ---
+#   range = []; index = 0;
+#   while (descending ? a >= b : a <= b) {
+#     range.push( format(a, index) );        # default: String.fromCharCode(a). NO padding for letters.
+#     a = descending ? a - step : a + step;
+#     index++;
+#   }
+#     # VERIFIED: fill("a","e")->["a","b","c","d","e"]; fill("e","a")->["e","d","c","b","a"];
+#     #   fill("a","z",5)->["a","f","k","p","u","z"]; fill("a","e",2)->["a","c","e"];
+#     #   fill("a","e",-2)->["a","c","e"] (abs); fill("a","e",0)->["a".."e"] (->1);
+#     #   fill("A","Z")->["A".."Z"]; fill("a","5")-> descending char walk a(97)..'5'(53).
+#
+#   # --- N5c: letters toRegex assembly (step > 1) ---
+#   if (options.toRegex === true) return toRegex(range, null, { wrap: false, options });
+#     # !!! REPRODUCE THE BUG EXACTLY: the 4th arg is `{ wrap: false, options }` -- `options` is a
+#     #     NESTED KEY, NOT SPREAD. So toRegex's `options` param = { wrap:false, options:<orig> }.
+#     #     Inside toRegex (array branch): wrap = (options.wrap === true) = false ALWAYS;
+#     #     prefix = options.capture ? '' : '?:' = '?:' ALWAYS (options.capture is undefined here).
+#     #     Therefore capture AND wrap on letter step>1 toRegex are EFFECTIVELY DEAD: the result is
+#     #     just range.join('|'), in WALK ORDER (NOT sorted, unlike numeric toSequence).
+#     # VERIFIED: fill("a","e",2,{toRegex:true}) -> "a|c|e";
+#     #   fill("a","e",2,{toRegex:true,capture:true}) -> "a|c|e" (capture ignored);
+#     #   fill("a","e",2,{toRegex:true,wrap:true})    -> "a|c|e" (wrap ignored);
+#     #   fill("e","a",2,{toRegex:true}) -> "e|c|a" (descending order preserved).
+#   return range;
+
+# =============================================================================
+# N6: INLINED to-regex-range@5.0.1 + its tiny callers (toRange, toSequence, toRegex)
+# =============================================================================
+#
+# --- N6.toRange(a, b, isNumbers, options) ---  (fill-range's local helper)
+#   if (isNumbers) return toRegexRange(a, b, { wrap: false, ...options });   # numeric: delegate, wrap:false default
+#   # char branch:
+#   let start = String.fromCharCode(a);
+#   if (a === b) return start;                 # single char
+#   let stop = String.fromCharCode(b);
+#   return `[${start}-${stop}]`;               # character class
+#
+# --- N6.toSequence(parts, options, maxLen) ---  (fill-range's local helper; numeric step>1 toRegex)
+#   parts.negatives.sort((x,y)=> x<y?-1:x>y?1:0);   # ASCENDING numeric magnitudes
+#   parts.positives.sort((x,y)=> x<y?-1:x>y?1:0);
+#   let prefix = options.capture ? '' : '?:';
+#   let positives = parts.positives.length ? parts.positives.map(v => toMaxLen(String(v), maxLen)).join('|') : '';
+#   let negatives = parts.negatives.length ? `-(${prefix}${parts.negatives.map(v=>toMaxLen(String(v),maxLen)).join('|')})` : '';
+#   let result = (positives && negatives) ? `${positives}|${negatives}` : (positives || negatives);
+#   if (options.wrap) return `(${prefix}${result})`;
+#   return result;
+#     # VERIFIED: fill(1,10,2,{toRegex:true})->"1|3|5|7|9";
+#     #   fill(1,5,2,{toRegex:true,capture:true}) -> "(1|3|5)" (capture->wrap set in N3b; prefix='' -> "(1|3|5)");
+#     #   fill(1,5,2,{toRegex:true,wrap:true})    -> "(?:1|3|5)" (prefix='?:' -> "(?:1|3|5)");
+#     #   fill("-05","05",2,{toRegex:true})       -> "001|003|005|-(?:001|003|005)".
+#
+# --- N6.toRegex(start, end, options) ---  (fill-range's local helper)
+#   if (Array.isArray(start)) {                # array branch (used by N4c step1 numeric & N5c letters)
+#     let wrap = options.wrap === true;
+#     let prefix = options.capture ? '' : '?:';
+#     return wrap ? `(${prefix}${start.join('|')})` : start.join('|');
+#   }
+#   return toRegexRange(start, end, options);
+#     # N4c step===1 numeric path calls toRegex(range, null, {wrap:false, ...options}). With wrap:false
+#     # this returns range.join('|'). (Numbers step1 toRegex usually takes the N4a fast path; the
+#     # array branch here is functionally `range.join('|')` of the formatted values.)
+#
+# --- N6.toRegexRange(min, max, options) ---  (THE INLINED to-regex-range CORE)
+#   # min,max are finite integers when reached from fill-range; reproduce the full algorithm:
+#   if (isNumberPKG(min) === false) throw new TypeError('toRegexRange: expected the first argument to be a number');
+#   if (max === void 0 || min === max) return String(min);
+#   if (isNumberPKG(max) === false) throw new TypeError('toRegexRange: expected the second argument to be a number.');
+#   let opts = { relaxZeros: true, ...options };
+#   if (typeof opts.strictZeros === 'boolean') opts.relaxZeros = (opts.strictZeros === false);
+#   # (a `cache` keyed on min:max=relaxZeros+shorthand+capture+wrap exists; PURE memoization, OMIT IT.)
+#   let a = Math.min(min, max);  let b = Math.max(min, max);
+#   if (Math.abs(a - b) === 1) {                       # adjacent integers special-case
+#     let result = min + '|' + max;                    # NOTE: uses ORIGINAL min,max order (not a,b)
+#     if (opts.capture) return `(${result})`;
+#     if (opts.wrap === false) return result;
+#     return `(?:${result})`;
+#   }
+#   let isPadded = hasPadding(min) || hasPadding(max);   # hasPadding(str) := /^-?(0+)\d/.test(str)
+#   let state = { min, max, a, b };
+#   let positives = [], negatives = [];
+#   if (isPadded) { state.isPadded = isPadded; state.maxLen = String(state.max).length; }
+#   if (a < 0) {
+#     let newMin = b < 0 ? Math.abs(b) : 1;
+#     negatives = splitToPatterns(newMin, Math.abs(a), state, opts);
+#     a = state.a = 0;
+#   }
+#   if (b >= 0) positives = splitToPatterns(a, b, state, opts);
+#   state.negatives = negatives; state.positives = positives;
+#   state.result = collatePatterns(negatives, positives, opts);
+#   if (opts.capture === true) state.result = `(${state.result})`;
+#   else if (opts.wrap !== false && (positives.length + negatives.length) > 1) state.result = `(?:${state.result})`;
+#   return state.result;
+#
+#   # Supporting functions (reproduce verbatim; all pure):
+#   collatePatterns(neg,pos,options):
+#     let onlyNegative = filterPatterns(neg,pos,'-',false,options) || [];
+#     let onlyPositive = filterPatterns(pos,neg,'',false,options) || [];
+#     let intersected  = filterPatterns(neg,pos,'-?',true,options) || [];
+#     return onlyNegative.concat(intersected).concat(onlyPositive).join('|');
+#
+#   filterPatterns(arr,comparison,prefix,intersection,options):
+#     let result = [];
+#     for (let ele of arr) { let { string } = ele;
+#       if (!intersection && !contains(comparison,'string',string)) result.push(prefix + string);
+#       if ( intersection &&  contains(comparison,'string',string)) result.push(prefix + string);
+#     }
+#     return result;
+#   contains(arr,key,val) := arr.some(ele => ele[key] === val);
+#
+#   splitToRanges(min,max):
+#     let nines = 1, zeros = 1;
+#     let stop = countNines(min, nines);
+#     let stops = new Set([max]);
+#     while (min <= stop && stop <= max) { stops.add(stop); nines += 1; stop = countNines(min, nines); }
+#     stop = countZeros(max + 1, zeros) - 1;
+#     while (min < stop && stop <= max) { stops.add(stop); zeros += 1; stop = countZeros(max + 1, zeros) - 1; }
+#     stops = [...stops]; stops.sort(compare); return stops;
+#   countNines(min,len) := Number(String(min).slice(0, -len) + '9'.repeat(len));
+#   countZeros(integer,zeros) := integer - (integer % Math.pow(10, zeros));
+#   compare(a,b) := a > b ? 1 : b > a ? -1 : 0;
+#
+#   rangeToPattern(start, stop, options):   # start,stop are STRINGS of equal length
+#     if (start === stop) return { pattern: start, count: [], digits: 0 };
+#     let zipped = zip(start, stop); let digits = zipped.length;
+#     let pattern = ''; let count = 0;
+#     for (let i = 0; i < digits; i++) {
+#       let [startDigit, stopDigit] = zipped[i];
+#       if (startDigit === stopDigit) pattern += startDigit;
+#       else if (startDigit !== '0' || stopDigit !== '9') pattern += toCharacterClass(startDigit, stopDigit, options);
+#       else count++;
+#     }
+#     if (count) pattern += (options.shorthand === true ? '\\d' : '[0-9]');
+#     return { pattern, count: [count], digits };
+#   zip(a,b): let arr=[]; for (i=0;i<a.length;i++) arr.push([a[i], b[i]]); return arr;
+#   toCharacterClass(a,b,options) := `[${a}${(b - a === 1) ? '' : '-'}${b}]`;   # b-a is numeric coercion of single digit chars
+#
+#   splitToPatterns(min,max,tok,options):
+#     let ranges = splitToRanges(min,max);
+#     let tokens = []; let start = min; let prev;
+#     for (let i = 0; i < ranges.length; i++) {
+#       let max = ranges[i];
+#       let obj = rangeToPattern(String(start), String(max), options);
+#       let zeros = '';
+#       if (!tok.isPadded && prev && prev.pattern === obj.pattern) {
+#         if (prev.count.length > 1) prev.count.pop();
+#         prev.count.push(obj.count[0]);
+#         prev.string = prev.pattern + toQuantifier(prev.count);
+#         start = max + 1; continue;
+#       }
+#       if (tok.isPadded) zeros = padZeros(max, tok, options);
+#       obj.string = zeros + obj.pattern + toQuantifier(obj.count);
+#       tokens.push(obj); start = max + 1; prev = obj;
+#     }
+#     return tokens;
+#   toQuantifier(digits): let [start=0, stop=''] = digits;
+#     if (stop || start > 1) return `{${start + (stop ? ',' + stop : '')}}`;
+#     return '';
+#   hasPadding(str) := /^-?(0+)\d/.test(str);
+#   padZeros(value, tok, options):
+#     if (!tok.isPadded) return value;
+#     let diff = Math.abs(tok.maxLen - String(value).length);
+#     let relax = options.relaxZeros !== false;
+#     switch (diff) {
+#       case 0: return '';
+#       case 1: return relax ? '0?'     : '0';
+#       case 2: return relax ? '0{0,2}' : '00';
+#       default: return relax ? `0{0,${diff}}` : `0{${diff}}`;
+#     }
+#
+#   # VERIFIED to-regex-range outputs through fillRange (these are the GRADED expecteds):
+#   #   fill(1,100,{toRegex:true})       -> "[1-9]|[1-9][0-9]|100"
+#   #   fill(0,100,{toRegex:true})       -> "[0-9]|[1-9][0-9]|100"
+#   #   fill(1,999,{toRegex:true})       -> "[1-9]|[1-9][0-9]{1,2}"
+#   #   fill(0,1000,{toRegex:true})      -> "[0-9]|[1-9][0-9]{1,2}|1000"
+#   #   fill(0,99,{toRegex:true})        -> "[0-9]|[1-9][0-9]"
+#   #   fill(2,9,{toRegex:true})         -> "[2-9]"
+#   #   fill(10,19,{toRegex:true})       -> "1[0-9]"
+#   #   fill(12,34,{toRegex:true})       -> "1[2-9]|2[0-9]|3[0-4]"
+#   #   fill(111,555,{toRegex:true})     -> "11[1-9]|1[2-9][0-9]|[2-4][0-9]{2}|5[0-4][0-9]|55[0-5]"
+#   #   fill(-5,5,{toRegex:true})        -> "-[1-5]|[0-5]"
+#   #   fill(-3,3,{toRegex:true})        -> "-[1-3]|[0-3]"
+#   #   fill(-9,9,{toRegex:true})        -> "-[1-9]|[0-9]"
+#   #   fill(-100,-1,{toRegex:true})     -> "-[1-9]|-[1-9][0-9]|-100"
+#   #   fill(-50,-40,{toRegex:true})     -> "-4[0-9]|-50"
+#   #   fill(-5,-1,{toRegex:true})       -> "-[1-5]"
+#   #   fill(99,100,{toRegex:true})      -> "99|100"
+#   #   fill(1,2,{toRegex:true})         -> "1|2"      (adjacent, wrap:false from toRange default)
+#   #   fill(2,1,{toRegex:true})         -> "2|1"      (adjacent uses ORIGINAL min,max order: "2|1")
+#   #   fill(1,2,{toRegex:true,capture:true}) -> "(1|2)"
+#   #   fill(1,2,{toRegex:true,wrap:true})    -> "(?:1|2)"
+#   #   fill(5,5,{toRegex:true})         -> "5"        (min===max)
+#   #   fill(5,1,{toRegex:true})         -> "[1-5]"    (descending step1 -> a/b min/max)
+#   #   fill(1,255,{toRegex:true,shorthand:true}) -> "[1-9]|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5]"
+#   #   fill("01","05",{toRegex:true})   -> "0?[1-5]"
+#   #   fill("05","01",{toRegex:true})   -> "0?[1-5]"
+#   #   fill("001","012",{toRegex:true}) -> "0{0,2}[1-9]|0?1[0-2]"
+#   #   fill("001","100",{toRegex:true}) -> "0{0,2}[1-9]|0?[1-9][0-9]|100"
+#   #   fill("001","100",{toRegex:true,strictZeros:true}) -> "00[1-9]|0[1-9][0-9]|100"
+#   #   fill("001","100",{toRegex:true,shorthand:true})   -> "0{0,2}[1-9]|0?[1-9]\\d|100"
+#   #   fill("-05","05",{toRegex:true})  -> "-0{0,2}[1-5]|0{0,2}[0-5]"
+#   #   fill("-5","5",{toRegex:true})    -> "-[1-5]|[0-5]"
+#   #   fill(1,10,{toRegex:true,relaxZeros:false}) -> "[1-9]|10"
+#   #   fill("01","05",{toRegex:true,relaxZeros:false}) -> "0[1-5]"
+#   #   fill(1,5,{toRegex:true,capture:true}) -> "([1-5])"  (capture wraps the single char class)
+#   #   fill(-3,3,{toRegex:true,capture:true}) -> "(-[1-3]|[0-3])"
+#   #   fill(-3,3,{toRegex:true,wrap:true})    -> "(?:-[1-3]|[0-3])"
+
+# =============================================================================
+ORACLE value -> oracle.json
+#   Differential/quorum on the RETURN value. Most calls return an Array (of numbers and/or
+#   strings); toRegex calls return a STRING. strictRanges paths throw -> recorded as {__throw}
+#   with constructor name + message (message format is in-envelope, see N1/N3c). Pure function;
+#   identical args -> identical output (cache is invisible).
+
+# =============================================================================
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce EXACTLY, all inlined above):
+#     - The top-level dispatch (N0..N3d), fillNumbers (N4), fillLetters (N5), and the FULL
+#       inlined to-regex-range core + is-number (N6). No external state; deterministic.
+#     - The strictRanges RangeError message (util.inspect of [start,end]) and the invalidStep
+#       TypeError message are IN-ENVELOPE for codec-faithful (string/number) args:
+#         RangeError: "Invalid range arguments: " + util.inspect([start,end])
+#           (Node format: ['ab','ef'] -> "[ 'ab', 'ef' ]"; numbers -> "[ 1.5, 5 ]"; null -> "[ null, 5 ]").
+#         TypeError:  `Expected step "${step}" to be a number`.
+#       (RangeError only triggers when strictRanges is in the 4th/options slot WITH a 3rd/step arg; see N1.)
+#   CARRIED DATA: NONE. This is a pure algorithm; no large literal tables.
+#   OUT-OF-CONTRACT / OUT-OF-ENVELOPE (genInputs MUST NOT emit these):
+#     - options.transform : a FUNCTION value-formatter (replaces the default format in N4/N5).
+#       Functions do NOT round-trip the oracle codec, so this path is documented OUT.
+#       (Behavior for reference, NOT graded: format(value,index) is called per value; numeric path
+#        wraps the result through pad(); letter path uses it raw. e.g. transform=v=>"x"+v on fill(1,5)
+#        yields ["x1","x2","x3","x4","x5"].)
+#     - step passed as a FUNCTION (3rd arg, node N2) -> re-routed to {transform: step}; same reason, OUT.
+#     - Any Symbol-valued or class-instance-valued arg (non-round-trippable) -> OUT.
+#     - NaN / +-Infinity numeric args, and `undefined` as an explicit value inside arrays/objects,
+#       do not round-trip -> NOT emitted (their reachable behavior is otherwise covered by the
+#       finite cases above).
+
+PROVENANCE
+#   fill-range@7.1.1 (default export `fill`) — repo github.com/jonschlinkert/fill-range — MIT.
+#     source: node_modules/fill-range/index.js
+#   INLINED deps:
+#     to-regex-range@5.0.1 — repo github.com/micromatch/to-regex-range — MIT —
+#       source: node_modules/to-regex-range/index.js
+#     is-number@7.0.0 — repo github.com/jonschlinkert/is-number — MIT —
+#       source: node_modules/is-number/index.js
+#   Verified by EXECUTION of the real fill-range@7.1.1 against every BEHAVIOR claim and every
+#   VERIFIED example above (node -e require of the absolute install path).
+#
+# RECONSTRUCTION TARGET: a SINGLE self-contained ES module:
+#     export default function fillRange(start, end, step, options = {}) { ... }
+#   with NO require/import. to-regex-range and is-number are folded in as local helpers.

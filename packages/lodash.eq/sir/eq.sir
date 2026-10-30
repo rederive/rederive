@@ -1,0 +1,154 @@
+UNIT eq
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# A pure, total, binary comparison predicate. No clock / RNG / env / fs / net — NO SEAM.
+# Nothing to inject. Same-process value-mode oracle: feed the two args, capture the strict
+# boolean return. The real package computes the expecteds; the blind re-emitter reproduces
+# the one-expression body below.
+
+SIG eq(value: any, other: any) -> boolean
+  # Two positional arguments. Called as the DEFAULT export.
+  #   CJS source: `module.exports = eq;`
+  #   CANONICAL EMISSION SHAPE for the blind re-emitter: `export default function eq(value, other) { ... }`
+  #   (or `const eq = ...; export default eq;`). The oracle harness imports the DEFAULT export and
+  #   calls it as `fn(value, other)`.
+  # ARITY: both parameters are optional at the JS call boundary. A missing argument is `undefined`
+  # (JS fills absent params with undefined). The generator always emits 2-tuples, but the body's
+  # behavior on a missing arg is fully specified (it equals passing `undefined` for that slot):
+  #   eq()            -> true   (undefined === undefined)
+  #   eq(undefined)   -> true   (value=undefined, other=undefined)
+  #   eq(1)           -> false  (1 === undefined is false; 1 is not NaN)
+  #   eq(NaN)         -> false  (NaN!==undefined; the NaN branch needs BOTH to be NaN — other is undefined)
+
+DEPENDS-ON none
+  # Zero runtime dependencies. Uses only the JS strict-equality operator `===` and strict
+  # inequality `!==`. No imports, no helper modules, no carried data.
+
+BEHAVIOR
+  # The ENTIRE body is ONE boolean expression. Exact source (lodash.eq v4.0.0, index.js):
+  #
+  #     function eq(value, other) {
+  #       return value === other || (value !== value && other !== other);
+  #     }
+  #
+  # This is the ECMAScript SameValueZero algorithm
+  # (http://ecma-international.org/ecma-262/6.0/#sec-samevaluezero).
+  # Evaluate the two top-level disjuncts left-to-right with short-circuit OR (||). The result
+  # is ALWAYS a strict boolean (both `===` and the `&&` of two `!==` yield booleans). Returned
+  # directly. NEVER throws for ANY input (no property access, no coercion that can throw — even
+  # on null/undefined, since === / !== never invoke valueOf/toString).
+
+  BRANCH-1  STRICT-EQUAL DISJUNCT  (value === other)
+    # JS STRICT equality (===). NO type coercion of any kind. Key consequences:
+    #   - Different primitive TYPES are never equal: 1 === '1' -> false, true === 1 -> false,
+    #     null === undefined -> false, 0 === false -> false, '' === false -> false,
+    #     5n === 5 -> false (bigint vs number, no cross-type coercion).
+    #   - Same primitive value of same type -> true: 7===7, 'a'==='a', true===true,
+    #     null===null, undefined===undefined, 5n===5n.
+    #   - SIGNED ZERO: `+0 === -0` is TRUE in JS (=== treats +0 and -0 as equal). Therefore
+    #     eq(+0,-0) -> true and eq(-0,+0) -> true and eq(-0,0) -> true.
+    #   - NaN: `NaN === NaN` is FALSE (the IEEE-754 self-inequality). So this disjunct does NOT
+    #     catch the NaN/NaN case — BRANCH-2 does.
+    #   - REFERENCE IDENTITY for all non-primitives (objects, arrays, functions, Date, RegExp,
+    #     Set, Map, typed arrays/Buffer, boxed primitives new Number/String/Boolean, class
+    #     instances): `a === b` is true IFF a and b are THE SAME object reference. Two structurally
+    #     identical but distinct objects are NOT equal: {a:1} === {a:1} -> false, [1] === [1] -> false,
+    #     new Number(1) === new Number(1) -> false, /x/ === /x/ -> false, new Set() === new Set() -> false.
+    #     A boxed primitive is never === its unboxed primitive: 1 === new Number(1) -> false,
+    #     'a' === new String('a') -> false.
+    # If value === other: short-circuit, RETURN true (do not evaluate BRANCH-2).
+    # Otherwise: evaluate BRANCH-2.
+
+  BRANCH-2  NaN-EQUALS-NaN DISJUNCT  (value !== value && other !== other)
+    # The SameValueZero rule that makes NaN equal to itself. `x !== x` is TRUE for EXACTLY ONE
+    # JS value: NaN (no other value is unequal to itself — not for objects, not for -0, not for
+    # any primitive). So this conjunction is true IFF BOTH value AND other are NaN.
+    #   - eq(NaN, NaN)            -> BRANCH-1 false, BRANCH-2 (NaN!==NaN && NaN!==NaN) = true -> true
+    #   - eq(NaN, 1) / eq(1, NaN)-> BRANCH-2 false (the non-NaN side is === itself) -> false
+    #   - eq(NaN)  (other=undef) -> BRANCH-2 false (undefined===undefined) -> false
+    # Note: `0/0`, `Number('x')`, `Infinity - Infinity`, `Math.sqrt(-1)` all produce the SAME
+    # NaN value; there is no distinct NaN. Any NaN paired with any NaN -> true.
+    # RETURN the boolean value of this conjunction (true only for the NaN/NaN case, else false).
+
+  # FULL DECISION SUMMARY:
+  #   eq(a,b) === true   iff   (a === b)  OR  (both a and b are NaN)
+  #   else false.
+  # RETURN TYPE: ALWAYS a strict boolean (true | false). Never truthy/falsy, never an operand.
+  # TOTAL: never throws.
+
+ORACLE value -> oracle.json
+  # Pure same-process binary predicate. The oracle records, per input tuple [value, other]:
+  #   { result: <strict boolean> }.
+  # No seam, no injected collaborator, no trace. The blind re-emitter implements the
+  # two-disjunct expression above; the oracle's expecteds are computed by the REAL package.
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    The full two-disjunct boolean expression with left-to-right short-circuit OR:
+      (1) value === other        [strict, no coercion; +0===-0 true; NaN===NaN false; ref-identity for objects]
+      (2) value !== value && other !== other   [true iff BOTH are NaN]
+    Strict-boolean return on every path. Totality (never throws). Optional-arity behavior
+    (missing arg == undefined) as enumerated under SIG.
+
+  CARRIED DATA: none. No literal tables, no maps, no constants. (carried.json is N/A — do NOT
+    emit one for this unit.)
+
+  OUT-OF-CONTRACT: none in the BEHAVIORAL sense. No side effects, no mutation, no external API,
+    no statefulness, no I/O. eq is strictly READ-ONLY.
+
+  # ---------------------------------------------------------------------------------------------
+  # CODEC / ORACLE-ENVELOPE NOTES  (lockstep with the factory codec: encoder `enc` in
+  # cli/verdict.mts and decoder `reviveArg` in cli/rdv.mts). Inputs are persisted as
+  # JSON.stringify(encode(args)) and revived before grading. Behavior CONFIRMED consistent
+  # (live-call result === post-codec-call result) for EVERY emitted class below.
+  #
+  #   ROUND-TRIPS FAITHFULLY (generator emits these; both args independently revived):
+  #     - JSON primitives: number (finite), string, boolean, null, plain objects, arrays.
+  #     - bigint            (tag __t:'bigint')   e.g. 5n,5n -> true ; 5n,5 -> false (no coercion)
+  #     - NaN, +Infinity, -Infinity, -0  (tag __t:'num', value Number(String)) — these are
+  #       the ONLY way these float values survive (raw JSON would corrupt NaN/Inf->null, -0->0).
+  #     - RegExp (tag __t:'regex'), Set (__t:'set'), Map (__t:'map'),
+  #       Uint8Array/Buffer (__t:'u8'), boxed Number/String/Boolean (__t:'boxed'),
+  #       undefined as a top-level arg (tag __t:'undef').
+  #
+  #   *** REFERENCE-IDENTITY SEAM (critical, defines the object-comparison envelope) ***
+  #     The codec's reviver is STRUCTURAL and RECURSIVE with NO shared-reference support: there
+  #     is no `__t:'ref'` tag. A tuple in which both slots are the SAME live object is persisted
+  #     and revived as TWO DISTINCT objects. Therefore, OVER THE WIRE, two non-primitive args are
+  #     ALWAYS distinct references, so `value === other` is ALWAYS false for them and
+  #     eq(obj,obj') -> false for every object/array/Set/Map/Uint8Array/RegExp/boxed pair the
+  #     generator can emit. This is the COMPLETE, CONSISTENT, REPRODUCIBLE object envelope:
+  #       eq over the wire on two non-primitives -> false  (unless they coincide as primitives).
+  #     The blind re-emitter reproduces this correctly with a plain `===` (two distinct revived
+  #     objects compare false). The "same-reference -> TRUE" outcome of BRANCH-1 (e.g. the lodash
+  #     doc example `eq(object, object) -> true`) is an IN-PROCESS-ONLY truth and is NOT, and need
+  #     not be, exercised through the oracle; it is fully specified by BRANCH-1's reference-identity
+  #     rule so a re-emitter implements it correctly regardless. The generator therefore emits
+  #     object/array/collection pairs ONLY to assert the FALSE (distinct-reference) outcome.
+  #
+  #   DOCUMENT-as-OUT (NOT emitted by genInputs; do not draw for the differential — would poison
+  #   the held-out, but BEHAVIOR above still specifies them so a blind re-emitter handles them):
+  #     - Symbols: not codec-round-trippable; `Symbol() === Symbol()` is false, a symbol === itself
+  #       is true, but no symbol survives JSON.stringify(encode(...)). OUT-OF-ENVELOPE.
+  #     - Functions / live class instances whose identity matters: not reconstructable across the
+  #       boundary as the SAME reference. Two emitted functions are distinct -> false; not exercised.
+  #     - Genuinely shared object identity returning TRUE: unreachable through the codec (see seam
+  #       above). DOCUMENT-as-OUT.
+  #
+  #   SELF-CONSISTENCY with eq.inputs.mjs — every value the generator emits is pinned by BEHAVIOR:
+  #     7,7 -> true ; 7,8 -> false ; NaN,NaN -> true ; NaN,1 -> false ; +0,-0 -> true ; -0,0 -> true ;
+  #     Inf,Inf -> true ; Inf,-Inf -> false ; 1,'1' -> false ; 'a','a' -> true ; 'a','b' -> false ;
+  #     true,true -> true ; true,1 -> false ; false,0 -> false ; '',false -> false ; null,null -> true ;
+  #     undefined,undefined -> true ; null,undefined -> false ; 5n,5n -> true ; 5n,6n -> false ;
+  #     5n,5 -> false ; new Number(1),1 -> false ; new Number(1),new Number(1) -> false ;
+  #     {a:1},{a:1} -> false ; [1,2],[1,2] -> false ; Set,Set -> false ; Map,Map -> false ;
+  #     Uint8Array,Uint8Array -> false ; /x/g,/x/g -> false.
+
+PROVENANCE
+  lodash.eq@4.0.0 — John-David Dalton et al. (modularized lodash _.eq). repo: lodash/lodash.
+  License: MIT. Source file: index.js (single function `eq`, exported via `module.exports = eq`).
+  Verified against the installed real package at
+  /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-lodash_eq-BVO6As/node_modules/lodash.eq
+  (39/39 SameValueZero edge cases + 28/28 codec round-trip consistency cases + arity edges,
+  all confirmed live with `node`).

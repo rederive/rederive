@@ -1,0 +1,227 @@
+UNIT sortedLastIndexOf
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# PURITY / SEAM
+# This unit is READ-ONLY and PURE: it reads only its two arguments and returns a number.
+# It does NOT mutate `array`, does NOT read any ambient source (no clock / RNG / env / fs / net),
+# and has NO side effects. There is therefore NO seam to inject. N/A for injection points.
+# A blind re-emitter implements it as a pure function of (array, value).
+
+SIG sortedLastIndexOf(array, value) -> number
+# array : the SORTED array to search (may be null/undefined or any non-array value).
+# value : the value to search for (any JS value).
+# Returns: the index of the LAST occurrence of `value` in `array` (using SameValueZero
+#          equality), or -1 if not present / array empty / array null-or-falsy.
+
+DEPENDS-ON none
+# All helpers (baseSortedIndex, baseSortedIndexBy, eq, isSymbol, isObjectLike, identity)
+# are INLINED in the source module. They are reproduced below as part of in-contract logic;
+# there are no external dependencies and no carried data.
+
+# ---------------------------------------------------------------------------
+# CONSTANTS (exact, from source)
+# ---------------------------------------------------------------------------
+#   MAX_ARRAY_LENGTH       = 4294967295            # 2^32 - 1
+#   MAX_ARRAY_INDEX        = 4294967294            # MAX_ARRAY_LENGTH - 1
+#   HALF_MAX_ARRAY_LENGTH  = 2147483647            # MAX_ARRAY_LENGTH >>> 1  (= 0x7fffffff)
+#   symbolTag              = '[object Symbol]'
+# These bounds are essentially unreachable with ordinary test arrays (they only matter for
+# arrays whose length exceeds ~2.1 billion). They are documented for completeness; in-scope
+# inputs never reach the clamp. See SCOPE.
+
+BEHAVIOR
+# ====== ORDERED PIPELINE ======
+#
+# NODE 0  (entry: sortedLastIndexOf(array, value))
+#   length := (array ? array.length : 0)
+#     NOTE: the guard is TRUTHINESS of `array`, not `array == null`. So if `array` is any
+#     falsy value (null, undefined, 0, '', false, NaN) `length` is 0. For a real array,
+#     `array` is truthy and length = array.length (an empty array [] is truthy -> length 0).
+#     (genInputs only emits real arrays or null/undefined for `array`; other falsy values are
+#      out-of-envelope but would also yield -1 by this rule.)
+#   IF length is 0 (falsy)  -> return -1.                               # BRANCH A (absent/empty)
+#   ELSE:
+#     index := baseSortedIndex(array, value, retHighest=true) - 1       # NODE 1; note the -1 step-back
+#     IF eq(array[index], value) is true  -> return index.              # BRANCH B (found)
+#     ELSE                                -> return -1.                 # BRANCH C (not found)
+#   (When index = -1, array[-1] is undefined; eq(undefined, value) is true ONLY when value is
+#    also undefined — which cannot occur here because if value were undefined and absent the
+#    bisect would not land at index -1 for a non-empty array unless value < everything; in
+#    practice array[-1] = undefined and eq(undefined, value) is false for the common cases.)
+#
+# ---------------------------------------------------------------------------
+# NODE 1  baseSortedIndex(array, value, retHighest)   [retHighest is ALWAYS true here]
+#   Returns the INSERTION INDEX for `value` such that, with retHighest=true, it is the index
+#   one PAST the last element that is <= value (i.e. the right/upper bisection bound).
+#   low  := 0
+#   high := array ? array.length : 0
+#
+#   # ---- FAST PATH (numeric value) ----
+#   IF (typeof value === 'number')  AND (value === value  i.e. value is NOT NaN)
+#      AND (high <= HALF_MAX_ARRAY_LENGTH):
+#        WHILE low < high:
+#          mid      := (low + high) >>> 1            # unsigned-right-shift halving (floor)
+#          computed := array[mid]
+#          # retHighest=true comparison test:
+#          IF (computed !== null) AND (NOT isSymbol(computed)) AND (computed <= value):
+#                low  := mid + 1
+#          ELSE:
+#                high := mid
+#        return high
+#     # Semantics of the test: a null element or a Symbol element is treated as "NOT <= value"
+#     #   (forces high := mid). For all other element types, the JS relational `computed <= value`
+#     #   is used (numeric/coercive comparison). E.g. bigint <= number, boolean<=number (false<=0),
+#     #   string<=number coerces, undefined<=number is false (NaN comparison), etc. — standard JS `<=`.
+#
+#   # ---- SLOW PATH (everything else) ----
+#   ELSE:
+#        return baseSortedIndexBy(array, value, identity, retHighest=true)
+#   # The slow path is taken when value is NOT a number, OR value IS NaN, OR high is enormous.
+#   # identity(x) = x, so the iteratee is a no-op: it compares raw elements to raw value.
+#
+# ---------------------------------------------------------------------------
+# NODE 1b  baseSortedIndexBy(array, value, iteratee=identity, retHighest=true)
+#   value := identity(value) = value
+#   low  := 0
+#   high := array ? array.length : 0
+#   valIsNaN       := (value !== value)
+#   valIsNull      := (value === null)
+#   valIsSymbol    := isSymbol(value)
+#   valIsUndefined := (value === undefined)
+#   WHILE low < high:
+#     mid          := floor((low + high) / 2)        # Math.floor; equivalent halving to fast path
+#     computed     := identity(array[mid]) = array[mid]
+#     othIsDefined := (computed !== undefined)
+#     othIsNull    := (computed === null)
+#     othIsReflexive := (computed === computed)      # false iff computed is NaN
+#     othIsSymbol  := isSymbol(computed)
+#     # Decide setLow (whether to move low up). Mutually-exclusive cascade on the VALUE's kind:
+#     IF valIsNaN:
+#         setLow := retHighest OR othIsReflexive            # retHighest=true => setLow = true ALWAYS
+#     ELSE IF valIsUndefined:
+#         setLow := othIsReflexive AND (retHighest OR othIsDefined)   # => othIsReflexive (retHighest true)
+#     ELSE IF valIsNull:
+#         setLow := othIsReflexive AND othIsDefined AND (retHighest OR !othIsNull)  # => reflexive&&defined
+#     ELSE IF valIsSymbol:
+#         setLow := othIsReflexive AND othIsDefined AND !othIsNull AND (retHighest OR !othIsSymbol)
+#                 # => reflexive && defined && !null   (retHighest true makes last clause true)
+#     ELSE IF (othIsNull OR othIsSymbol):
+#         setLow := false
+#     ELSE:
+#         setLow := retHighest ? (computed <= value) : (computed < value)   # => computed <= value
+#     IF setLow: low := mid + 1
+#     ELSE:      high := mid
+#   return MIN(high, MAX_ARRAY_INDEX)                 # nativeMin clamp; unreachable for in-scope sizes
+#
+#   # Reading of the cascade with retHighest=true (the only mode this unit uses):
+#   #   * value is NaN        -> setLow always true  => bisect walks low to high; baseSortedIndex
+#   #                            returns array.length; index = length-1 = LAST element index.
+#   #                            Then eq(array[length-1], NaN) is true iff that last element is NaN
+#   #                            (eq treats NaN===NaN as equal). So sortedLastIndexOf finds the
+#   #                            LAST element only if the array's LAST element is NaN (NaN sorts last
+#   #                            by convention); otherwise -1.
+#   #   * value is undefined  -> setLow = (computed===computed) i.e. true unless element is NaN.
+#   #   * value is null       -> setLow = element is reflexive (not NaN) AND defined (not undefined).
+#   #   * value is a Symbol   -> setLow = reflexive AND defined AND not-null.
+#   #   * value is "ordinary" (object/string/bool/bigint/number-via-slow-path-only-if-NaN... but NaN
+#   #       is handled above): a null or Symbol ELEMENT yields setLow=false; otherwise computed<=value
+#   #       using JS `<=` (objects coerce via valueOf/toString; strings lexicographic; bigint/number numeric).
+#
+# ---------------------------------------------------------------------------
+# NODE 2  eq(a, b)   [SameValueZero]
+#   return (a === b) OR (a !== a AND b !== b)
+#   # i.e. strict-equal, OR both are NaN. Consequences:
+#   #   eq(NaN, NaN)  = true
+#   #   eq(+0, -0)    = true  (because +0 === -0 in JS)   <-- +0 and -0 are EQUIVALENT
+#   #   eq(0, -0)     = true ;  eq(-0, 0) = true
+#   #   eq(2, 2n)     = false (Number 2 !== BigInt 2n, and neither is NaN)
+#   #   eq('a','a')   = true ; eq({},{}) = false (distinct refs) ; eq(o,o)=true (same ref)
+#
+# ---------------------------------------------------------------------------
+# NODE 3  isSymbol(value)
+#   return (typeof value === 'symbol') OR (isObjectLike(value) AND Object.prototype.toString.call(value) === '[object Symbol]')
+# NODE 4  isObjectLike(value)
+#   return (!!value) AND (typeof value === 'object')
+# NODE 5  identity(value)
+#   return value
+#
+# ====== OBSERVED-BEHAVIOR ANCHORS (verified by running the real package@4.1.0) ======
+#   sortedLastIndexOf([4,5,5,5,6], 5)        => 3      # LAST occurrence among duplicates
+#   sortedLastIndexOf([1,1,1,1], 1)          => 3
+#   sortedLastIndexOf([1,2,3,3,3], 3)        => 4
+#   sortedLastIndexOf([5,5,5,6,7], 5)        => 2      # run at start
+#   sortedLastIndexOf([1,2,7,7,7], 7)        => 4      # run at end
+#   sortedLastIndexOf([1,2,3], 4)            => -1     # value > all
+#   sortedLastIndexOf([2,3,4], 1)            => -1     # value < all (bisect -> 0, index -1)
+#   sortedLastIndexOf([1,3,5], 4)            => -1     # value between elements
+#   sortedLastIndexOf([1,2,3], 2.5)          => -1
+#   sortedLastIndexOf([], 1)                 => -1     # empty array
+#   sortedLastIndexOf(null, 1)               => -1     # null array
+#   sortedLastIndexOf(undefined, 1)          => -1     # undefined array
+#   sortedLastIndexOf([1], 1)                => 0      # single element, present
+#   sortedLastIndexOf([1], 2)                => -1     # single element, absent
+#   sortedLastIndexOf([1,2,NaN], NaN)        => 2      # NaN value matches LAST NaN element
+#   sortedLastIndexOf([NaN,NaN], NaN)        => 1
+#   sortedLastIndexOf([1,2,3], NaN)          => -1     # no NaN element
+#   sortedLastIndexOf([NaN], 1)              => -1
+#   sortedLastIndexOf([-0], 0)               => 0      # +0/-0 equivalent (SameValueZero)
+#   sortedLastIndexOf([0], -0)               => 0
+#   sortedLastIndexOf([-0,0,1], 0)           => 1      # last zero (either sign) wins
+#   sortedLastIndexOf(["a","b","b","c"],"b") => 2      # strings, slow path, last "b"
+#   sortedLastIndexOf(["a","b","c"], "d")    => -1
+#   sortedLastIndexOf(["a","b","c"], "a")    => 0
+#   sortedLastIndexOf([false,true,true],true)=> 2      # booleans, slow path
+#   sortedLastIndexOf([false,false],false)   => 1
+#   sortedLastIndexOf([null,null], null)     => 1      # null value, null elements
+#   sortedLastIndexOf([1,2,null], null)      => 2
+#   sortedLastIndexOf([1,undefined], undefined) => 1   # undefined value, undefined element
+#   sortedLastIndexOf([1,2,3], undefined)    => -1
+#   sortedLastIndexOf([1n,2n,2n,3n], 2n)     => 2      # bigint value & elements, slow path, last 2n
+#   sortedLastIndexOf([1n,2n,3n], 4n)        => -1
+#   sortedLastIndexOf([1,2,3], 2n)           => -1     # eq(2,2n) is false
+#   sortedLastIndexOf([1n,2n,2n,3n], 2)      => -1     # fast path bisects, but eq(2n,2) false
+#   sortedLastIndexOf([1,1.5,2,2,3], 2)      => 3      # mixed ints/floats, last 2
+#   sortedLastIndexOf([null,1,2,2], 2)       => 3      # leading null tolerated, last 2
+#   sortedLastIndexOf([1,2,2,null], 2)       => 2      # trailing null: bisect treats null as not<=2
+#   sortedLastIndexOf([1,2,Infinity], Infinity) => 2
+#   sortedLastIndexOf([-Infinity,0], -Infinity) => 0
+#   sortedLastIndexOf([1,2,3,0], 0)          => -1     # unsorted-but-numeric: bisect lands wrong -> -1
+
+ORACLE value -> oracle.json
+# value mode. For each input tuple [array, value] the oracle records the returned number
+# (or {__throw} if it throws — but this pure function does not throw for codec-faithful inputs).
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly): the entire pipeline above — the truthiness length guard,
+#   baseSortedIndex dual-path (numeric fast path with the null/Symbol element guard + `computed <= value`,
+#   vs baseSortedIndexBy cascade), the retHighest=true bisection (right/upper bound), the `- 1` step-back,
+#   and the SameValueZero `eq` membership check including NaN===NaN and +0/-0 equivalence. The constants
+#   above are part of the contract but their clamps are not exercised by in-scope inputs.
+#
+# CARRIED DATA: NONE. No large literal tables; no separate data module. No carried.json.
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented, NOT generated by genInputs):
+#   * The MAX_ARRAY_INDEX / HALF_MAX_ARRAY_LENGTH clamps (require multi-billion-length arrays) — never hit.
+#   * Array ELEMENTS that are Symbols, or `value` being a Symbol: behavior IS defined above (isSymbol /
+#     baseSortedIndexBy cascade), but Symbols are NOT codec-round-trippable, so genInputs MUST NOT emit them.
+#   * Array elements that are functions: not codec-round-trippable; not emitted. (Functions would coerce in
+#     `computed <= value` via toString in the slow path; behavior defined but not graded.)
+#   * `value` of undefined as an ARRAY ELEMENT or `value` itself being undefined: `value === undefined` IS
+#     handled by the cascade; HOWEVER `undefined` does not survive the JSON codec as an array element or as a
+#     standalone arg in some encoders. genInputs emits `undefined` for `value` and includes `undefined`
+#     array elements ONLY where the addendum confirms the codec round-trips undefined; if the harness codec
+#     drops it, treat that tuple as out-of-envelope. (See ORACLE-CODEC note in genInputs comments.)
+#   * Non-array, non-null falsy `array` (0, '', false, NaN): defined (-> -1 by the truthiness guard) but not
+#     the documented contract surface; genInputs emits only real arrays or null/undefined for `array`.
+
+PROVENANCE
+# package: lodash.sortedlastindexof@4.1.0  (npm)
+# repo:    lodash/lodash  (https://github.com/lodash/lodash)
+# license: MIT  (Copyright jQuery Foundation and other contributors; based on Underscore.js 1.8.3)
+# source:  node_modules/lodash.sortedlastindexof/index.js  (single-file modularized build)
+# export:  module.exports = sortedLastIndexOf  (DEFAULT export)
+#
+# RE-EMITTER DIRECTIVE: emit a single function taking (array, value) and `export default` it.
+#   (ESM: `export default function sortedLastIndexOf(array, value) { ... }`.) The harness loads the
+#   emission via dynamic import() and calls the DEFAULT export.

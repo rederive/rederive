@@ -1,0 +1,160 @@
+# SIR — Semantic Intermediate Representation (language-neutral). Comments use '#'.
+
+UNIT unescape
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG unescape(string: any) -> string
+DEPENDS-ON none   # zero runtime deps; all helpers inlined in the single source file
+
+# ============================================================================
+# IMPORTANT CORRECTION TO THE TASK HINT
+# ============================================================================
+# The hint claims the entity map has FIVE entries. The ACTUAL source decodes
+# SIX entities. The sixth is  &#96;  ->  `  (U+0060 GRAVE ACCENT / BACKTICK).
+# This SIR follows the SOURCE, not the hint. The regex and map BOTH include
+# &#96;. A blind re-emitter MUST include the backtick mapping to converge.
+# (Verified by running the real package: unescape("&#96;") === "`".)
+# ============================================================================
+
+BEHAVIOR
+  # ---- Constants (exact, from source) -------------------------------------
+  # reEscapedHtml    = /&(?:amp|lt|gt|quot|#39|#96);/g           (GLOBAL flag)
+  # reHasEscapedHtml = RegExp(reEscapedHtml.source)             (NO flags; = /&(?:amp|lt|gt|quot|#39|#96);/ )
+  #   NOTE: reHasEscapedHtml is built ONLY from .source, so it has NO 'g' flag
+  #         and is therefore STATELESS across calls (its .test() does not carry
+  #         lastIndex). Re-emitters must NOT reuse a global regex for the test.
+  #
+  # htmlUnescapes (the COMPLETE map — exactly these 6 keys, case-sensitive):
+  #     "&amp;"  -> "&"   (U+0026 AMPERSAND)
+  #     "&lt;"   -> "<"   (U+003C LESS-THAN SIGN)
+  #     "&gt;"   -> ">"   (U+003E GREATER-THAN SIGN)
+  #     "&quot;" -> "\""  (U+0022 QUOTATION MARK)
+  #     "&#39;"  -> "'"   (U+0027 APOSTROPHE)
+  #     "&#96;"  -> "`"   (U+0060 GRAVE ACCENT / BACKTICK)
+  #   Replacement is performed via basePropertyOf(htmlUnescapes): for each
+  #   regex match `chr`, the replacement is htmlUnescapes[chr]. Because the
+  #   regex matches ONLY the 6 keys above, every match is always present in the
+  #   map, so the replacement is always a defined 1-char string (never undefined).
+
+  # ---- Pipeline (ordered) -------------------------------------------------
+  NODE 1  COERCE: string = toString(string)     # lodash _.toString semantics, see TOSTRING below
+  NODE 2  SHORT-CIRCUIT GUARD:
+            IF (string is truthy) AND (reHasEscapedHtml.test(string) is true):
+                GOTO NODE 3 (replace)
+            ELSE:
+                RETURN string unchanged
+          # "string is truthy" is JS truthiness of the COERCED string:
+          #   the ONLY falsy coerced value is the empty string "".  Note "0",
+          #   "false", "NaN" are non-empty strings => truthy.  So the guard
+          #   skips replacement ONLY when the coerced string is "".
+          # Both branches that skip return the SAME (already-coerced) string,
+          #   so the observable result of the guard's two skip-paths is identical;
+          #   the guard is purely an optimization. A re-emitter that always runs
+          #   the replace on a coerced string produces byte-identical output.
+  NODE 3  REPLACE: return string.replace(reEscapedHtml, chr => htmlUnescapes[chr])
+          # Single left-to-right global replace, NON-RECURSIVE / single pass.
+          # Each matched entity is consumed once; the substituted character is
+          # NOT re-scanned for further entities. (Confirmed: "&amp;amp;" -> "&amp;".)
+
+# ----------------------------------------------------------------------------
+# TOSTRING — lodash _.toString coercion semantics (NODE 1), exact
+# ----------------------------------------------------------------------------
+# toString(value):
+#   IF value == null  (i.e. value is null OR undefined, loose ==)  -> return ""
+#   ELSE return baseToString(value)
+#
+# baseToString(value):
+#   IF typeof value === "string"            -> return value                 (identity)
+#   IF isSymbol(value)                      -> return Symbol.prototype.toString.call(value)
+#                                              (e.g. Symbol("x") -> "Symbol(x)")
+#                                              # OUT-OF-ENVELOPE: Symbol is not codec-round-trippable.
+#   ELSE:
+#     result = (value + "")                 # JS String() coercion via "+ ''"
+#     IF result === "0" AND (1 / value) === -Infinity:  return "-0"         # negative-zero sign preserved
+#     ELSE return result
+#
+# isSymbol(value):  typeof value === "symbol"  OR  (objectLike(value) AND
+#                   Object.prototype.toString.call(value) === "[object Symbol]")
+#
+# Concrete coercion table (all VERIFIED against the real package):
+#     null            -> ""            undefined        -> ""        (also: no-arg unescape() -> "")
+#     ""              -> ""            "abc"            -> "abc"      (string identity)
+#     0               -> "0"          -0               -> "-0"       (sign preserved)
+#     123             -> "123"        -123             -> "-123"
+#     NaN             -> "NaN"        Infinity         -> "Infinity"  -Infinity -> "-Infinity"
+#     true            -> "true"       false            -> "false"
+#     10n  (bigint)   -> "10"
+#     [1,2,3]         -> "1,2,3"      (Array#toString = join(","))
+#     ["&amp;","&lt;"]-> "&,<"        (joins to "&amp;,&lt;" THEN unescaped -> "&,<")
+#     [["&amp;"],["&lt;"]] -> "&,<"   (nested arrays flatten via join -> "&amp;,&lt;")
+#     {a:1}           -> "[object Object]"
+#     new String("&amp;") -> "&"      (boxed String coerces to its primitive "&amp;" then unescaped)
+#     new Number(5)   -> "5"          (boxed Number)
+#     new Date(0)     -> the Date's toString() (locale/timezone-dependent; out of scope for genInputs)
+#
+# RESULT NOTE: because coercion happens FIRST, non-string inputs are turned into
+# strings and THEN scanned for the 6 entities. So array/boxed inputs whose joined
+# form contains an entity WILL be unescaped (e.g. ["&amp;"] -> "&amp;" -> "&").
+
+# ----------------------------------------------------------------------------
+# WHAT IS EXPLICITLY *NOT* DECODED (left literal) — self-consistent with genInputs
+# ----------------------------------------------------------------------------
+#   - Any named entity outside the 6:  &copy; &apos; &nbsp; &reg; ... -> unchanged
+#   - Numeric decimal entities other than &#39; / &#96;:  &#38; &#40; &#34; ... -> unchanged
+#       (note: &#38; is numeric '&' but is NOT in the regex => stays "&#38;")
+#   - Hex numeric entities:  &#x27;  &#x26;  &#x3C; ... -> unchanged (regex matches no #x form)
+#   - Case variants: &AMP; &Amp; &LT; ... -> unchanged (regex is case-SENSITIVE)
+#   - Malformed / partial: "&amp" (no semicolon), "amp;" (no &), bare "&" -> unchanged
+#   - Plain text, whitespace, unicode (café, 日本, emoji) -> passed through unchanged
+#   - Double-escaped collapses ONE level only: "&amp;amp;" -> "&amp;"
+#   - Adjacency: "&amp;lt;" -> "&lt;" (consumes "&amp;" then literal "lt;");
+#                "&lt;amp;" -> "<amp;"
+#   - Repeated entities each decode: "&amp;&amp;&amp;" -> "&&&"; "&amp; &amp;" -> "& &"
+
+# ----------------------------------------------------------------------------
+# DOCUMENTED-AS-OUT (NOT emitted by genInputs; behavior still specified above)
+# ----------------------------------------------------------------------------
+#   - Symbol values: not codec-round-trippable (JSON cannot persist them).
+#       Behavior IS defined: baseToString => Symbol.prototype.toString.call(sym)
+#       then unescaped; e.g. unescape(Symbol("x&amp;")) === "Symbol(x&)". Do NOT
+#       emit from the generator (the stored arg would be corrupted).
+#   - Function values: not codec-round-trippable. Behavior: (fn + "") = its source
+#       text, then unescaped; e.g. function f(){} -> "function f(){}". Not emitted.
+#   - Date / RegExp / other class instances whose toString is locale- or
+#       engine-dependent (e.g. Date) -> coercion is non-deterministic across
+#       environments; NOT emitted by the generator.
+#   NOTE: codec DOES round-trip -0, NaN, ±Infinity, bigint, boxed primitives,
+#         Set/Map/Uint8Array/Buffer — but BOXED primitives and typed arrays
+#         coerce to strings that the generator can include where deterministic.
+#         genInputs emits only values whose coerced string is environment-stable.
+
+# ----------------------------------------------------------------------------
+PURITY  pure / referentially transparent. No I/O, no mutation of inputs, no
+        ambient reads (no clock/RNG/env/fs/net). NO SEAM. Same input -> same output.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - the 6-entry htmlUnescapes map (amp/lt/gt/quot/#39/#96), case-sensitive
+    - the two regexes (reEscapedHtml global; reHasEscapedHtml stateless)
+    - the toString/baseToString/isSymbol coercion chain incl. -0 preservation
+    - the `string && reHasEscapedHtml.test(string)` short-circuit guard
+    - single non-recursive global replace
+    The demonstrated in-scope subset (chars/values) is exactly what genInputs emits
+    and every one of them maps per the tables above (self-consistent).
+  CARRIED DATA: none. (Map is 6 entries, inlined in BEHAVIOR; no large literal table.)
+  OUT-OF-CONTRACT: none (pure function, no side APIs, no stateful mutators).
+
+# ----------------------------------------------------------------------------
+# RE-EMITTER DIRECTIVE
+# ----------------------------------------------------------------------------
+# This is the DEFAULT export of a CommonJS module (module.exports = unescape).
+# The emission is loaded as an ES module via dynamic import(). Therefore the
+# blind re-emitter MUST expose the function as:   export default <fn>
+# Signature: a single positional argument `string` (any type); returns a string.
+
+PROVENANCE  lodash.unescape@4.0.1 (npm)
+            repo: lodash/lodash (Custom Build, modularize exports="npm")
+            license: MIT (jQuery Foundation; based on Underscore.js 1.8.3)
+            source file: node_modules/lodash.unescape/index.js  (single file, 199 lines)

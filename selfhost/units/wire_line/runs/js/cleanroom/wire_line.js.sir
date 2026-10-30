@@ -1,0 +1,37 @@
+UNIT wire_line
+LANG js
+PRIMARY-SHA256 dceecb49554e9bcc4cdf9017a3bf90c2cbfc2d054f6a9690ad621a1daa7cf4f9
+SIG wireLine(args: unknown, sig: object): string | { __narrowed: string }
+NOTE default export
+ABI json = any JS value. args = an Array of decoded-native values (or, out of shape, any value); sig = the plain object
+  parseSig returns (DESCRIPTION's shape: args is an Array of { name, type, rest? } objects, a type node is { k, ... }).
+  none = null, the absent value = undefined, a big integer = bigint, a byte array = Uint8Array, a host byte buffer = a
+  Node Buffer, f64 = number, text = string (UTF-16), list = Array (holes allowed), map = plain object; keyed collection =
+  Map, set = Set, regexp = RegExp, boxed = new Number/String/Boolean. Result: text = a string; NARROWED = a fresh plain
+  object { __narrowed: REASON }. A throw is whatever the host raises (a TypeError); its message is not graded — but a
+  fault caught by R5 IS graded, through its message. The artifact is an ES module default-exporting the function and
+  imports nothing.
+ENVELOPE js WIDENS the primary's json envelope to every value the ENVELOPE names: bigint, Uint8Array, Buffer, undefined,
+  sparse Arrays, strings with lone surrogates, Map, Set, RegExp, boxed primitives, hand-built sig trees.
+MECHANISM R1/R2 = nFixed from sig.args.filter(a => !a.rest).length, then REST from sig.args.find(a => a.rest)?.type ?? null,
+  both BEFORE args is examined (these two reads are the only uncaught throws). Lone surrogate = !s.isWellFormed(). Plain
+  map = a non-null non-Array object whose Object.getPrototypeOf is Object.prototype or null. Own field = Object.hasOwn.
+  Hole = !(i in v) (args, a list or a tuple value: scanned before any element is wired). i64/u64 accept (typeof v === 'number' && Number.isSafeInteger(v)) || typeof v === 'bigint', compared
+  as BigInt(v) against the bounds.
+MECHANISM R5 = a try/catch around the wiring of each top-level argument; the reason is 'wire: ' + e.message. TABLE MALFORMED's
+  messages are V8's for these exact reads, in this order: FIRST, for an undefined value only, t.k and (for a union)
+  t.alts.filter(...) in the absent test `v === undefined && !(t.k === 'none' || optionOf(t))`; then null/undefined -> 'null'
+  with no read; then t.k; for a union, t.alts.filter(...) inside the option test; for a tuple, the hole scan, then
+  t.items.length in both the length test and the 'not a <n>-tuple' reason (a non-Array value reads it too); for a record,
+  t.fields.map(...) only once the value is a plain map; a list's item is read as t.item and wired element by element.
+  Wire every element/item/field with .map before picking the first non-string wire, so a throw anywhere wins (R5).
+MECHANISM f64 bits (R8) = a DataView over an 8-byte ArrayBuffer: setFloat64(0, v) big-endian, getBigUint64(0),
+  toString(16).padStart(16, '0'), NaN replaced by 0x7ff8000000000000n; quoted with JSON.stringify.
+MECHANISM CARRY TAG (R15) = Object.prototype.toString.call(v).slice(8, -1) (a Buffer gives Uint8Array). PLAIN (R17) =
+  typeof bigint -> v.toString(); Array -> '[' + map(PLAIN).join(',') + ']'; a plain map -> '{' + Object.keys(v).map(k =>
+  JSON.stringify(k) + ':' + PLAIN(v[k])).join(',') + '}'; else JSON.stringify(v). TEXT-ESCAPE and NUMBER-TEXT are exactly
+  JSON.stringify of a well-formed string and of a finite number; HOST KEY ORDER is exactly Object.keys' order.
+DEPENDS-ON none
+PROVENANCE rederive@f68cca701417 cli/lang/rust.mjs wireLine (lines 279-289), driven as the default export through the
+  selfhost seam seams/wire_line.mjs; vectors outside the abstract envelope are graded from oracles/wire_line.js.json in
+  js and ts.

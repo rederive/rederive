@@ -1,0 +1,3966 @@
+{
+ "unit": "adopt_replace_block",
+ "sig": "adopt_replace_block(existing: text, block: record[heading: text, startLine: i64, endLine: i64], managed: text, kept: list[text]) -> text",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "- kept project rule",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "Cite §11 of the GDD.",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n- kept project rule\n\nCite §11 of the GDD.\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\n\n  <!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->  \n\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": " \t",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": " ",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "　﻿",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "  padded kept  ",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "multi\nline\n\nkept",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "ends with lf\n",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "crlf\r\nkept\rlone cr",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n  padded kept  \n\nmulti\nline\n\nkept\n\nends with lf\n\ncrlf\nkept\nlone cr\n\n\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "# Project",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Other",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "11"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Other",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "10"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "x",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "11"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "x",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "11"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\n## Hard rules\nbody\n## Other\ntail",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\n## Hard rules\nbody\n## Other\ntail",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "6"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\n## Hard rules\nbody\n## Other\ntail",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Other",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "5"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\n## Hard rules\nbody\n\nM\n\ntail",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [4, 4) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "6"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [6, 3) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "12"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [4, 12) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [0, 0) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "-1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [-1, 3) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "-9007199254740991"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "9007199254740991"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [-9007199254740991, 9007199254740991) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "9007199254740990"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "9007199254740991"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [9007199254740990, 9007199254740991) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": " \t\r\n 　﻿ ",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "​",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\n\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "only one line",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "5"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "kept\nrule",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\r\n\r\n<!-- rederive:begin profile -->\r\n## Hard rules\r\n- managed rule\r\n<!-- rederive:end -->\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nkept\r\nrule\r\n\r\n## Other\r\ntail\r\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\r\nM\r\n\nN\r\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\r\n\r\nM\r\n\r\nN\r\n\r\n## Other\r\ntail\r\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Other",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "5"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\nM\r\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\r\r\n## B\r\nb\r\n\r\ny\r",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x\r\r\n\r\nM\r\n\r\ny\r",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Top\nlf line\r\n\r\n## B\nbody\r\n\n## C\nend",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "6"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Top\nlf line\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nk\r\n\r\n## C\nend",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "A\n\n## B\r\nx\r\n\n## C\nD\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "5"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M\nN",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "A\n\nM\nN\n\n## C\nD\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Top  \t\n \t\r\n\t\n## Block\nx\n \n\n    indented code after\n  - nested item\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Block",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "5"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Top  \t\r\n\r\nM\r\n\r\n    indented code after\n  - nested item\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Top  \t\n \t\r\n\t\n## Block\nx\n \n\n    indented code after\n  - nested item\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Block",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Top  \t\r\n\r\nM\r\n\r\nx\n \n\n    indented code after\n  - nested item\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n \n## B\nx\n\f\nb",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a\n \n\nM\n\n\f\nb",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n　\t\n## B\nx\n\n \t \nb   \n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a\n　\t\n\nM\n\n\n \t \nb   \n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "  lead\n## B\nx\n\t\ttail  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "  M  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "  lead\n\nM\n\n\t\ttail  ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\nb\r\n## B\r\nx\r\n\ny\nz",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a\nb\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nk\r\n\r\ny\nz",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n## B\r\nx\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a\n\nM\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\r\n## B\nb",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x\r\n\r\nM\r\n\r\nb",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\r\n\r\n## B\nb",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x\r\n\r\nM\r\n\r\nb",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\r\n## B\nb\ny\r",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x\r\n\r\nM\r\n\r\ny\r",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\r\n## B\nb\ny\r\nz",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x\r\n\r\nM\r\n\r\ny\r\nz",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "## B\r\nb\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M\nN",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\nN\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": " ­⁠﻿󠀁󠁁 \n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "​M​",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "​",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "­ 󠀠",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "᠎؜",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "​k​",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n​M​\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n​k​\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "𑂽x",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "𝅳",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "𓐰y",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n𑂽x\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n𓐰y\n\n\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "a\rb\r\r\nc\n\rd",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k1\r\n",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "k2\n\n\r",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "k3\r",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "k4 \n",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "k5\n ",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "k6\n\t\r\n",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "in\rner\r\nx\n\ny",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\na\nb\n\nc\n\nd\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk1\n\nk2\n\nk3\n\nk4 \n\nk5\n \n\nk6\n\t\n\nin\nner\nx\n\ny\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "5"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "a\rb\nc\r\nd",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "k1\r",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "r\rs\nt\r\nu\r\n",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\r\n\r\na\r\nb\r\nc\r\nd\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nk1\r\n\r\nr\r\ns\r\nt\r\nu\r\n\r\n## Other\r\ntail\r\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## Hard rules",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "\r\n\n\r",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\n",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail text\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "# Prøject — 日本語 🎮\n## B\nx\n## C\n🎮 tail",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## B",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "Managé 🎮",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "règle ✓",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "# Prøject — 日本語 🎮\n\nManagé 🎮\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nrègle ✓\n\n## C\n🎮 tail",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n §11​\n ``` ```\n\t- item\n\n﻿gamma rule §11  \n\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## X",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "11"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "## Managed\nbody\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "\r- item ",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [1, 11) are not a range of this 8-line file"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "​``` §11\r\n\n\n🎮\r\n🎮\n\n\r\n\n\t\n§11  \n󠀠gamma rule - item\n\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "7"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "9"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\rM",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "\ré  ",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "​``` §11\r\n\n\n🎮\r\n🎮\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n\r\né  \r\n\r\n§11  \n󠀠gamma rule - item\n\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n🎮 Beta \n### 🎮\n### é\n \n  gamma rule\n\f§11 - item\n### \n# alpha",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "a\rb  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": " - item  ",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "­two\r\nlines ",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\r\n🎮 Beta \r\n\r\na\r\nb\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n - item  \r\n\r\n­two\r\nlines \r\n\r\n  gamma rule\n\f§11 - item\n### \n# alpha",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "## 🎮\r\n §11   \r\n\ralpha\r\r\n## gamma rule\r\n\tBeta §11 \r\n﻿gamma rule \r\n\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## X",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "7"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": " ## M\r\nbody\r\n\r\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "  alpha\r",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "## 🎮\r\n §11   \r\n\ralpha\r\r\n\r\n## M\r\nbody\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n  alpha\r\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "\falpha alpha　\n﻿§11\r\n\n\nalpha  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": " M  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "󠀠é­",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\tcmd --flag­",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n󠀠é­\r\n\r\n\tcmd --flag­\r\n\r\n﻿§11\r\n\n\nalpha  ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\r\n\r\n- item󠀠\r\n``` Beta\n\r\n\r\n\rBeta\r\n \r\n é\r\ncmd --flag §11",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "9"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "M\n\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "\f§11\r",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\r\r\n\r\n- item󠀠\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n\f§11\r\n\r\ncmd --flag §11",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n- item \r\n\r\n```\r\r\n\f``` ```\n\r\n\r\n§11 §11\f",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": " ## Managed\nbody\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "﻿```﻿",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [3, 3) are not a range of this 8-line file"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "  - item\f\n ``` cmd --flag \n## gamma rule\n# gamma rule",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "﻿## Managed\nbody",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "## Managed\nbody\n\n## gamma rule\n# gamma rule",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "cmd --flag - item\t\r\r\n  alpha alpha\f\r é alpha\r\r",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## X",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\fM\t\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "  §11",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "M\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n  §11\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "  - item  \r\n﻿cmd --flag\r\n­Beta - item​\r\n - item​\r\n\r\n# - item\r\n  - item\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "  M\t\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "  - item  \r\n﻿cmd --flag\r\n\r\nM\r\n\r\n# - item\r\n  - item\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "   \n\falpha \n󠀠- item\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "a\rb­\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "\ftwo\r\nlines ",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "\f🎮 ",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "   \n\falpha \n󠀠- item\n\na\nb­\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n\ftwo\nlines \n\n\f🎮 \n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "- item §11​",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "-1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\f<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end --> ",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "throw",
+    "msg": "adopt: block lines [-1, 0) are not a range of this 1-line file"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n🎮 é\t\n\ralpha ```\nalpha gamma rule \n\r\n é  \n\talpha - item﻿\n## ```\n é​\n　```​\n​  \n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "0"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "8"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\r<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end --> \r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n é​\n　```​\n​  \n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": " \t\r\r\ncmd --flag - item\f",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "\fa\rb­",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": " \t\r\r\n\na\nb­\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n 🎮 \r\n\r\ncmd --flag  \r\n  §11 é﻿\r\n\n§11 §11 \r\n\fBeta\r\n# - item\r\n\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## X",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "󠀠## Managed\nbody\r\n\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "cmd --flag",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "󠀠## Managed\r\nbody\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\ncmd --flag\r\n\r\n  §11 é﻿\r\n\n§11 §11 \r\n\fBeta\r\n# - item\r\n\r\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "## alpha\n\r\n\n\nBeta",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "## X",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "4"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "­<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": " - item\r\n",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "## alpha\r\n\r\n­<!-- rederive:begin profile -->\r\n## Hard rules\r\n- managed rule\r\n<!-- rederive:end -->\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n - item\r\n\r\nBeta",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "### \r\r\n\r\r\n## - item",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "1"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": "　a\rb\r\n\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": []
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "### \r\r\n\na\nb\n",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r§11 alpha \n­cmd --flag\r\n\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "record",
+     "v": [
+      [
+       "heading",
+       {
+        "t": "text",
+        "v": "h",
+        "cu": "utf8"
+       }
+      ],
+      [
+       "startLine",
+       {
+        "t": "i64",
+        "v": "2"
+       }
+      ],
+      [
+       "endLine",
+       {
+        "t": "i64",
+        "v": "3"
+       }
+      ]
+     ]
+    },
+    {
+     "t": "text",
+     "v": " ## M\r\nbody\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "list",
+     "v": [
+      {
+       "t": "text",
+       "v": "cmd --flag",
+       "cu": "utf8"
+      },
+      {
+       "t": "text",
+       "v": "­ ",
+       "cu": "utf8"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\r§11 alpha \n­cmd --flag\r\n\r\n## M\r\nbody\r\n\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\ncmd --flag\r\n",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "canonicalSha256": "dcb5ed208d8bc88026556b78450dde42727b02494fb3e4877a84fab2d4361fd0"
+}

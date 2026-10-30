@@ -1,0 +1,116 @@
+UNIT isString
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isString(value: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; uses only JS built-ins Array.isArray and Object.prototype.toString
+
+# ---------------------------------------------------------------------------
+# PURPOSE
+# Checks whether `value` is classified as a String — i.e. a string PRIMITIVE
+# OR a boxed String object (new String('x')). Returns a strict boolean.
+# This is lodash 4.0.1's `_.isString`, exported as a standalone module.
+# Pure function: no seams (no clock / RNG / env / io / net). Fully deterministic.
+# ---------------------------------------------------------------------------
+
+CONSTANTS
+  stringTag      = '[object String]'            # exact literal; the Object#toString tag for String objects
+  objectProto    = Object.prototype             # built-in reference
+  objectToString = Object.prototype.toString    # the BORROWED toString (NOT the value's own toString)
+  isArray        = Array.isArray                # built-in reference
+
+BEHAVIOR   # exact pipeline — short-circuit OR; order matters
+  # The function body is exactly:
+  #   return typeof value == 'string' ||
+  #     (!isArray(value) && isObjectLike(value) && objectToString.call(value) == stringTag);
+  #
+  # where  isObjectLike(value) := (!!value && typeof value == 'object')
+
+  NODE 1  PRIMITIVE-STRING short-circuit
+    IF typeof value === 'string'  -> RETURN true     # covers '', '  ', any literal/template string, unicode, '123', etc.
+    # NOTE: typeof returns 'string' ONLY for primitive strings. Boxed String objects have typeof === 'object',
+    #       so they FALL THROUGH to NODE 2. bigint -> 'bigint', number -> 'number', boolean -> 'boolean',
+    #       symbol -> 'symbol', function -> 'function', undefined -> 'undefined' all fall through here and,
+    #       failing NODE 2, return false.
+
+  NODE 2  BOXED-STRING / object-tag path  (a 3-way AND; evaluated left-to-right, short-circuits on first false)
+    # 2a  !isArray(value)
+    #     IF Array.isArray(value) is true  -> the whole AND is false -> (NODE 1 already false) RETURN false.
+    #     Arrays are explicitly excluded here so [] / [1,2,3] never reach the tag check.
+    # 2b  isObjectLike(value)  ==  ( !!value && typeof value == 'object' )
+    #     - !!value is false for null (typeof null is 'object' but null is falsy) -> RETURN false for null.
+    #     - typeof value == 'object' is false for number/boolean/bigint/symbol/function/undefined -> RETURN false.
+    #     - true ONLY for non-null objects: plain objects, boxed primitives (String/Number/Boolean objects),
+    #       Date, RegExp, Map, Set, Error, typed arrays, Buffer, arrays (but arrays already excluded at 2a).
+    # 2c  objectToString.call(value) == '[object String]'
+    #     Uses the BORROWED Object.prototype.toString applied to `value` (objectToString.call(value)).
+    #     This is the brand/tag check. It yields '[object String]' for:
+    #       - boxed String objects:  new String('x') / new String('')   -> '[object String]'  -> RETURN true
+    #       - any object whose effective Symbol.toStringTag resolves to 'String'
+    #         (e.g. a plain object with value[Symbol.toStringTag] === 'String') -> '[object String]' -> RETURN true
+    #     It yields a DIFFERENT tag (RETURN false) for everything else:
+    #       - plain object {}                       -> '[object Object]'
+    #       - boxed Number new Number(5)            -> '[object Number]'
+    #       - boxed Boolean new Boolean(true)       -> '[object Boolean]'
+    #       - Date                                  -> '[object Date]'
+    #       - RegExp                                -> '[object RegExp]'
+    #       - Map / Set                             -> '[object Map]' / '[object Set]'
+    #       - Uint8Array / typed array              -> '[object Uint8Array]'
+    #       - Buffer (a Uint8Array subclass)        -> '[object Uint8Array]'
+    #       - Error                                 -> '[object Error]'
+    #     CRITICAL: this uses Object.prototype.toString, NOT value.toString(). A plain object that overrides
+    #     its OWN toString to return the literal string '[object String]'  STILL returns FALSE, because the
+    #     borrowed Object.prototype.toString brands it as '[object Object]'. (Verified against the real package.)
+    #
+    #   If all of 2a && 2b && 2c are true -> RETURN true.  Otherwise -> RETURN false.
+
+  RESULT  The function ALWAYS returns a strict boolean (true | false). It never throws for any input,
+          including calling with no arguments (value === undefined -> false). It does not read or mutate
+          any external state and is referentially transparent.
+
+# ---------------------------------------------------------------------------
+# TRUTH TABLE (demonstrated, self-consistent with the input generator)
+#   true:
+#     'abc' , '' , '   ' , '123' , multiline/template strings , unicode 'café 🎉'
+#     new String('x') , new String('')
+#     plain object with Symbol.toStringTag === 'String'   # documented OUT of generator (see SCOPE) but a real true-branch
+#   false:
+#     0 , 1 , 3.14 , -0 , NaN , Infinity , -Infinity , new Number(5)
+#     true , false , new Boolean(true)
+#     null , undefined , (no argument)
+#     42n (bigint) , Symbol('s')
+#     [] , [1,2,3] , ['a','b']
+#     {} , {a:1} , Object.create(null) , object with own toString returning '[object String]'
+#     /re/ , new Date() , new Map() , new Set() , new Uint8Array(3) , Buffer.from('hi')
+#     function(){} , ()=>{}
+# ---------------------------------------------------------------------------
+
+ORACLE value -> oracle.json
+  # Pure deterministic value oracle: for each generated [value], record isString(value) (a boolean).
+  # No seam injection required. Throw-paths: none exist (the function cannot throw on any codec-faithful input).
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The full short-circuit pipeline of NODE 1 and NODE 2 above, in order.
+    - The exact tag literal '[object String]'.
+    - The use of the BORROWED Object.prototype.toString (not value's own toString).
+    - The explicit array exclusion via Array.isArray BEFORE the tag check.
+    - The isObjectLike null/typeof guard.
+    - Strict boolean return; never throws.
+  CARRIED DATA: none. There is no large literal table; the only literal is the 15-char tag string
+    '[object String]', which is reproduced inline in the BEHAVIOR (it is a JS-engine brand, not a carried table).
+    No carried.json is emitted.
+  OUT-OF-ENVELOPE (documented; NOT emitted by genInputs because they cannot survive the JSON.stringify(encode(args))
+                   codec round-trip, but a blind re-emitter reconstructs their behavior from the BEHAVIOR spec):
+    - A plain object carrying Symbol.toStringTag === 'String'  -> would return TRUE (NODE 2c). It is a real
+      true-branch, but it is a symbol-keyed object property that does not round-trip through JSON, so it is
+      specified here rather than generated. (The new String('x') case below covers the same true-branch with a
+      codec-faithful value.)
+    - Live functions, Symbols, and identity-bearing class instances whose own toString is overridden: their
+      isString result is fully determined by the spec (all false except via the toStringTag brand), but they are
+      not JSON-codec-faithful, so they are documented here and not generated.
+
+PROVENANCE
+  package: lodash.isstring@4.0.1  (MIT)
+  repo:    lodash/lodash  (modularized build: `lodash modularize exports="npm" -o ./`)
+  source:  node_modules/lodash.isstring/index.js  (function isString, lines 90-93; module.exports line 95)
+  upstream-copyright: 2012-2016 The Dojo Foundation; based on Underscore.js 1.8.3

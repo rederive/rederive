@@ -1,0 +1,128 @@
+{
+ "status": "ok",
+ "unit": "parse_type",
+ "primary": "selfhost/units/parse_type/sir/parse_type.sir",
+ "primarySha256": "13ec282f2ac414f28d67d0f388026277b9171b3b207288adedef231a2b912999",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "WHITESPACE is the WS set only. Any run of it may stand before or after any token — between a composite's name and its \"[\" too (\"list [text]\" and \"list\\n[text]\" parse) — and at either end of the text, and is ignored there. It may not stand inside a name. Every other character outside a name or a token — a no-break space, a form feed, a vertical tab, any non-ASCII character — is not whitespace and makes the text throw.",
+   "ambiguity": 0.55
+  },
+  {
+   "id": "R2",
+   "text": "The text is one TYPE (R3) and nothing after it but whitespace; leftover text throws (\"text none\", \"list[text] x\").",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R3",
+   "text": "TYPE = an ALT, then zero or more of: \"|\" followed by an ALT. Two or more alts make a union whose alts are the nodes in written order, nothing reordered. A single alt is its own node. Every \"|\" must be followed by an alt (\"text |\", \"text || none\" and \"| text\" throw). An alt is never itself a union node: a union inside a union exists only as a part of a composite.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R4",
+   "text": "UNREACHABLE ALTERNATIVE: a union throws when some alt is COVERED (R6) by an alt written EARLIER in the same union, adjacent or not. Order matters: \"text | json\" and \"none | json\" parse; \"json | text\", \"json | none\" and \"json | json\" throw. The rule holds at every level (\"list[i64 | i64]\" and \"list[json | f64]\" throw), and is checked once all of that union's alts are read.",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R5",
+   "text": "SAME TYPE: two nodes are the same type when their k is equal and — tuple: the same count of items, pairwise the same type in written order; list: the items the same type; map: keys the same type and vals the same type; record: the same set of field names, each name's two types the same, field ORDER ignored; union: the same set of alts up to the same type, alt ORDER ignored; a scalar: nothing more. Whitespace never matters. So \"list[text | none] | list[none | text]\" and \"record[a: text, b: i64] | record[b: i64, a: text]\" throw, while \"tuple[text, i64] | tuple[i64, text]\", \"record[a: text] | record[b: text]\" and \"record[a: text, b: i64] | record[b: text, a: i64]\" parse.",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "R6",
+   "text": "COVERS: an earlier alt E covers a later alt L exactly when one of these holds, applied recursively to the parts: (a) E and L are the same type (R5); (b) E is json and L is JSON-SHAPED: none, bool, f64, text or json; a list whose item is JSON-SHAPED; a tuple every item of which is; a map whose key is exactly the scalar text and whose val is; a record every field type of which is; a union every alt of which is; (c) both are lists and E's item covers L's item; (d) both are tuples of the same item count and each item of E covers L's item at the same position; (e) both are maps, E's key covers L's key and E's val covers L's val; (f) both are records and every field of E has a field of the same name in L that E's field type covers — L may have MORE fields than E, never fewer (\"record[a: text] | record[a: text, b: none]\" throws, the reverse order parses); (g) E is a union and some alt of E covers L; (h) L is a union and E covers every alt of L. (g) and (h) arise only on parts, since an alt is never a union. Nothing else covers: bytes, i64 and u64 are never JSON-SHAPED; a map keyed by anything but the bare scalar text is not (\"json | map[text | none, json]\" parses); no form covers another form (\"list[text] | tuple[text]\", \"map[text, text] | record[a: text]\" and \"f64 | i64\" parse); and coverage is by ONE earlier alt, never by several jointly (\"tuple[text] | tuple[none] | tuple[text | none]\" parses).",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "R7",
+   "text": "ALT begins with a NAME, the longest run of IDENT characters there (the IDENT pin). A NAME equal to a scalar of TABLE NODE -> that scalar node. A NAME equal to tuple, list, map or record must be followed (after optional whitespace) by \"[\" and continues as R8 or R9. Every other NAME throws (case-sensitive: \"Text\", \"text2\", \"textnone\", \"option\" throw).",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R8",
+   "text": "COMPOSITE: inside the brackets, one or more TYPEs (R3, so a part may be a union) separated by \",\", then \"]\". No empty part and no trailing comma. tuple takes any count of one or more as its items; list takes exactly one as its item; map takes exactly two, key then val. Any other count throws (\"tuple[]\", \"list[text, i64]\", \"map[text]\").",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R9",
+   "text": "RECORD: inside the brackets, one or more FIELDs separated by \",\", then \"]\". FIELD = a name matching the IDENT pin, \":\", a TYPE (R3). Field names are unique within one record, compared exactly (case-sensitive: \"A\" and \"a\" differ); a repeated name throws. A field name may equal a type name (\"record[text: text]\"). Fields keep written order.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R10",
+   "text": "NESTING CAP: composites (tuple, list, map, record) nest at most MAX_DEPTH deep. The depth of a composite is the count of composites enclosing it plus one; siblings do not add up (\"tuple[list[i64], list[i64]]\" is depth 2). A text whose composites reach depth MAX_DEPTH parses; one that reaches MAX_DEPTH + 1 throws — however deep it goes, it throws and never exhausts the host. Scalars and unions add no type depth, but they do add RESULT depth: counting the root node as level 0 and each member value, list element and field pair one deeper, a record-of-union chain costs 5 levels per composite, the most of any form, so the deepest legal result is 5 × MAX_DEPTH + 3 levels — inside MAX_VALUE_DEPTH.",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R11",
+   "text": "Brackets therefore always balance: a missing \"]\", an extra \"]\" or a stray \"[\" leaves R2–R9 unsatisfied and throws. Every violation of R1–R10 throws, wherever it sits in the nesting; the message is not graded.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE NODE row 1",
+   "text": "scalar | k = one of text, bytes, bool, none, i64, u64, f64, json",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE NODE row 2",
+   "text": "union  | k = \"union\"; alts = list of nodes, at least two, no alt covered by an earlier one (R4), never a union node",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "TABLE NODE row 3",
+   "text": "tuple  | k = \"tuple\"; items = list of nodes, at least one",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE NODE row 4",
+   "text": "list   | k = \"list\"; item = a node",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE NODE row 5",
+   "text": "map    | k = \"map\"; key = a node; val = a node",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "TABLE NODE row 6",
+   "text": "record | k = \"record\"; fields = list of two-element lists [name text, node], at least one, in written order",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "TABLE DIALS row 1",
+   "text": "MAX_DEPTH       | 16",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "TABLE DIALS row 2",
+   "text": "MAX_VALUE_DEPTH | 100 (the value codec's nesting cap; above 5 × MAX_DEPTH + 3, so it never bounds the oracle)",
+   "ambiguity": 0.36
+  }
+ ],
+ "ranked": [
+  "R1",
+  "R6",
+  "R10",
+  "R11",
+  "TABLE NODE row 5",
+  "R4",
+  "TABLE DIALS row 2",
+  "TABLE NODE row 6",
+  "R5",
+  "TABLE NODE row 2",
+  "R3",
+  "R9",
+  "R8",
+  "TABLE DIALS row 1",
+  "TABLE NODE row 1",
+  "TABLE NODE row 3",
+  "R7",
+  "R2",
+  "TABLE NODE row 4"
+ ],
+ "at": "2026-10-28T02:10:12Z"
+}

@@ -1,0 +1,235 @@
+UNIT textTable
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+# Pure, total-up-to-documented-throws string utility. No seam (no clock/RNG/env/io/net).
+# The default-stringLength path is fully deterministic; the only ambient inputs are the two
+# explicit arguments. ORACLE value -> oracle.json.
+
+SIG  table(rows, opts?) -> string
+#   rows : Array< Array<cell> >        # 2D array; each inner array is a row of cells.
+#   opts : optional object, may be absent / undefined / null-ish-falsey (see DEFAULTS).
+#          opts = {
+#            align        : Array<'l'|'r'|'c'|'.'>   # per-COLUMN alignment code; default [] (=> all left)
+#            hsep         : string                   # column separator; default '  ' (two spaces)
+#            stringLength : (s)=>number              # OUT-OF-ENVELOPE (see SCOPE); default String(s).length
+#          }
+#   cell : any value; coerced via String(cell) in the render phase.
+#          NOTE the FIRST phase (dotsizes) touches the RAW cell BEFORE coercion -> see THROW-1/THROW-3.
+
+DEPENDS-ON  none   # zero runtime dependencies. Internal helpers dotindex/reduce/forEach/map are
+                   # inlined re-implementations of Array.prototype.reduce/forEach/map; on a modern
+                   # JS runtime every input here is a real Array so the native methods are used and
+                   # the fallbacks never execute. A blind re-emitter may simply use the native
+                   # Array methods (.reduce/.forEach/.map) — observationally identical for all
+                   # in-envelope inputs.
+
+# ----------------------------------------------------------------------------------------------
+# CALLING CONVENTION FOR THE EMITTED MODULE (mandatory)
+# ----------------------------------------------------------------------------------------------
+# textTable is the DEFAULT export of the package (module.exports = function (rows_, opts) {...}).
+# The emitted ES module MUST be:   export default <the function>;
+# i.e. the module's default export is a SINGLE FUNCTION VALUE, invoked by the harness as
+#   table(rows, opts)
+# Do NOT wrap it in a named-export object; do NOT add a second positional arg. opts is the 2nd arg.
+
+# ==============================================================================================
+# BEHAVIOR  (exact ordered pipeline — 4 phases. Reproduce EXACTLY.)
+# ==============================================================================================
+#
+# Let rows_ be the input rows array, opts the (possibly absent) options.
+#
+# DEFAULTS (phase 0):
+#   if opts is falsey (undefined/null/0/'' etc.)        -> opts = {}
+#   hsep         = (opts.hsep === undefined) ? '  ' : opts.hsep     # NOTE: tested with ===undefined,
+#                                                                   #   so hsep:'' is honored (empty sep),
+#                                                                   #   hsep:undefined falls back to '  '.
+#   align        = opts.align || []                                 # any falsey align -> [] (all left)
+#   stringLength = opts.stringLength || ((s)=>String(s).length)     # default path only (see SCOPE)
+#
+# Helper dotindex(c):
+#   m = /\.[^.]*$/.exec(c)        # matches a '.' followed by zero+ non-dot chars at END of string,
+#                                 #   i.e. the LAST dot and everything after it. .exec coerces c to
+#                                 #   string for the regex test, so a NUMBER c is matched as String(c).
+#   return m ? (m.index + 1) : c.length
+#   # => If c (as a string) CONTAINS a dot: returns the 0-based offset of the FIRST char AFTER the
+#   #    last dot (== number of chars up to and including that last dot). This branch reads m.index
+#   #    (a number) and is SAFE for strings AND numbers (e.g. dotindex(1.1)===2).
+#   # => If c (as a string) has NO dot: returns c.length — the RAW value's own .length property:
+#   #      * for a STRING c: its character length (e.g. "5"->1, "10"->2, "999"->3, ""->0).
+#   #      * for a NUMBER c with no dot in its string form (integer-valued): (number).length is
+#   #        UNDEFINED -> dotindex returns undefined. THIS IS THE KEY NUANCE (see THROW-3).
+#   #      * for null/undefined c: reading .length THROWS TypeError (see THROW-1).
+#   #    Examples (string args): "1.1"->2, "100.25"->4, "1.2.3"->4 (last dot), "5."->2, "5.5"->2.
+#   #    Examples (number args): 1.1->2, 22.22->3, 333.333->4 (dotted -> defined); 498->undefined,
+#   #      10->undefined, 0->undefined (no dot -> .length undefined).
+#
+
+# ---- PHASE 1: dotsizes  (per-column max dotindex over RAW cells) ----
+#   dotsizes = []  (array indexed by column)
+#   for each row in rows_:
+#       for each (c, ix) in row:                       # c is the RAW cell, NOT coerced
+#           n = dotindex(c)
+#           if (!dotsizes[ix] || n > dotsizes[ix]) dotsizes[ix] = n
+#   # Because of `!dotsizes[ix]`, a column whose running max is 0 is treated as unset and can be
+#   # overwritten by a later 0 — immaterial since dotindex>=0 and only '.'-aligned columns consume
+#   # dotsizes. (A cell coercing to "" gives dotindex 0.)
+#   #
+#   # IMPORTANT — what dotsizes[ix] can end up being for a column:
+#   #   * If at least one cell in the column yields a DEFINED dotindex (any string, or a number
+#   #     whose string form has a dot), dotsizes[ix] = the running MAX of those defined values.
+#   #     A cell that yields `undefined` is skipped by the `n > dotsizes[ix]` compare (undefined >
+#   #     k is false) and by `!dotsizes[ix]` only when dotsizes is still falsey.
+#   #   * If EVERY cell in the column yields `undefined` (i.e. every cell is an integer-valued
+#   #     NUMBER with no dot), dotsizes[ix] stays UNDEFINED. This poisons phase-2 sizing for a
+#   #     '.'-aligned column -> THROW-3.
+#   #
+#   # THROW-1: if any RAW cell in ANY row is null or undefined, dotindex throws a TypeError
+#   #   ("Cannot read properties of null/undefined (reading 'length')"). This happens
+#   #   UNCONDITIONALLY here — even when NO column is '.'-aligned, because dotsizes is always
+#   #   computed over every cell. (Verified by execution.)
+#   #   Note: a RAGGED row that is simply SHORTER does NOT trigger this — there is no cell at that
+#   #   index, so the inner loop just produces fewer iterations. THROW-1 requires an EXPLICIT
+#   #   null/undefined ELEMENT present in the row array.
+#
+# ---- PHASE 2: rows  (coerce + decimal-pad) ----
+#   rows = map over rows_, row -> map over (c_, ix):
+#       c = String(c_)                                 # cell coercion happens HERE.
+#       if (align[ix] === '.'):
+#           index = dotindex(c)                        # dotindex on the COERCED STRING now (always
+#                                                      #   defined: c is a string, .length defined).
+#           size  = dotsizes[ix] + (/\./.test(c) ? 1 : 2) - (stringLength(c) - index)
+#                 # = dotsizes[ix]                       # <-- the RAW-cell-derived per-column max
+#                 #   + (1 if c contains a '.', else 2)
+#                 #   - (number of chars AFTER the dot-index, i.e. length-of-fractional-part-region)
+#           return c + Array(size).join(' ')           # appends (size-1) trailing spaces.
+#                 # Array(k).join(' ') yields max(k-1,0) spaces for integer k>=0; k===0 or 1 -> ''.
+#                 #
+#                 # THROW-2: if size < 0, Array(size) throws RangeError("Invalid array length").
+#                 #   REACHABLE with ordinary string/number cells: e.g. a column mixing
+#                 #   ["1.123456789"] and ["999"] under align '.': dotsizes=3,
+#                 #   for "1.123456789": index=2, size = 3 + 1 - (11-2) = -5 -> RangeError.
+#                 #   Occurs when one cell's fractional part is long enough that the column's
+#                 #   integer-part max cannot absorb it. (Verified by execution.)
+#                 #
+#                 # THROW-3: if dotsizes[ix] is UNDEFINED (i.e. EVERY raw cell in this '.'-column
+#                 #   was an integer-valued NUMBER with no dot in its string form), then
+#                 #   size = undefined + (1|2) - (...) = NaN, and Array(NaN) throws
+#                 #   RangeError("Invalid array length"). Examples:
+#                 #     table([[498]], {align:['.']})            -> THROW-3 (single int number cell)
+#                 #     table([[10],[20]], {align:['.']})        -> THROW-3 (all int numbers, no dot)
+#                 #   CONTRAST (does NOT throw): table([[1.1],[22.22]], {align:['.']}) works, because
+#                 #     1.1/22.22 have dots -> dotindex defined -> dotsizes defined. And mixing a
+#                 #     dotted number with an int number is fine as long as >=1 cell sets dotsizes:
+#                 #     table([[1.1],[22]], {align:['.']}) works (1.1 sets dotsizes=2; 22 uses it).
+#                 #   CONTRAST (does NOT throw): integer STRINGS in a '.'-column are FINE —
+#                 #     table([['10'],['20']], {align:['.']}) works, because String "10".length=2 is
+#                 #     a defined dotindex. So the throw is specific to integer-valued NUMBER cells
+#                 #     (no string anywhere in the column to seed dotsizes). (Verified by execution.)
+#       else:
+#           return c                                   # non-'.' columns: just the coerced string,
+#                                                      # NO padding yet (padding is phase 4).
+#   # IMPORTANT ORDERING: the trailing spaces added to '.'-aligned cells in phase 2 become part of
+#   # the cell string that phase 3 measures and phase 4 pads. This is why a '.'-aligned column's
+#   # final width accounts for the right-of-dot alignment.
+#
+# ---- PHASE 3: sizes  (per-column max stringLength over the phase-2 rows) ----
+#   sizes = []
+#   for each row in rows (the phase-2 result):
+#       for each (c, ix):
+#           n = stringLength(c)                        # default: String(c).length == c.length
+#           if (!sizes[ix] || n > sizes[ix]) sizes[ix] = n
+#   # Column width = the max coerced-(and decimal-padded)-cell length in that column.
+#   # Ragged rows: columns that only appear in some rows take their max over the rows that have them.
+#
+# ---- PHASE 4: render  ----
+#   result = map over rows (phase-2), row -> ( map over (c, ix): ... ).join(hsep).replace(/\s+$/, '')
+#            then join all those line-strings with '\n'.
+#
+#   For each cell (c, ix) in a row:
+#       n = (sizes[ix] - stringLength(c)) || 0         # pad amount; `|| 0` guards NaN/undefined
+#                                                      #   (e.g. when sizes[ix] is undefined for an
+#                                                      #    index only this row reaches). n can be 0.
+#       s = Array(Math.max(n + 1, 1)).join(' ')        # = n spaces when n>=0 (Math.max guards so the
+#                                                      #   Array length is >=1, never throwing here).
+#       if (align[ix] === 'r' OR align[ix] === '.'):   # RIGHT and DECIMAL both right-justify:
+#           cellOut = s + c                            #   pad-left with n spaces, then the cell.
+#       else if (align[ix] === 'c'):                   # CENTER:
+#           cellOut = Array(Math.ceil(n/2 + 1)).join(' ')   # CEIL(n/2) spaces on the LEFT
+#                   + c
+#                   + Array(Math.floor(n/2 + 1)).join(' ')  # FLOOR(n/2) spaces on the RIGHT
+#                   # For odd n: ceil>=floor, so the EXTRA space goes on the LEFT.
+#                   #   e.g. n=3 -> 2 left, 1 right. n=1 -> 1 left, 0 right.
+#       else:                                          # LEFT (align 'l', absent, or any UNKNOWN code):
+#           cellOut = c + s                            #   the cell, then n trailing spaces.
+#                   # Any align code that is not exactly 'r','.','c' falls through to LEFT.
+#                   # Missing align entry (align array shorter than #cols) => undefined => LEFT.
+#
+#   The per-cell strings of a row are joined with hsep, THEN that whole line string has
+#   /\s+$/ stripped:  .replace(/\s+$/, '')   # removes ALL trailing whitespace from the END of the
+#                                            # rendered line (the right-padding of the LAST column,
+#                                            # and for a center/left last col its trailing spaces,
+#                                            # and trailing hsep-derived spaces, all collapse away).
+#   => Consequence: NO line ever has trailing whitespace. A row of only-empty cells renders as ''
+#      (an empty line). An EMPTY row array ([]) renders as '' (map over [] is [], join -> '',
+#      replace -> ''). These empty lines ARE preserved as blank lines in the '\n'-join.
+#
+#   Lines are joined with '\n'.
+#
+# ---- DEGENERATE / EDGE OUTPUTS (all verified by execution) ----
+#   table([])                      -> ''      (no rows -> map over [] -> [] -> join '\n' -> '')
+#   table([[]])                    -> ''      (one empty row -> '')
+#   table([[ '', '' ],[ '', '' ]]) -> '\n'    (two empty-line rows)
+#   table([['a','b'],[],['c','d']])-> 'a  b\n\nc  d'   (blank middle line preserved)
+#   Single row / single column / single cell: behave as the general rule with one row/col.
+#   Ragged rows: shorter rows simply omit higher-index cells (no padding added for absent cells;
+#     the line ends earlier and trailing-trim applies). Longer rows define wider columns; shorter
+#     rows just don't reach those columns.
+#
+# ---- CELL COERCION (String semantics; verified) ----
+#   String(number): standard JS number->string. NOTE 2.0 -> "2" (no dot!), 1e21 -> "1e+21",
+#                   0.0000001 -> "1e-7". So a float that is integer-valued has NO dot and under
+#                   '.'-align (a) uses the +2 branch in the size formula AND (b) as a RAW number cell
+#                   yields dotindex undefined in phase 1 (THROW-3 risk).
+#   String(true)->"true", String(false)->"false", String(0)->"0".
+#   String(null)/String(undefined) would give "null"/"undefined" — BUT for null/undefined ELEMENTS
+#     the function throws in PHASE 1 (THROW-1) before reaching coercion, so those never render.
+#   String(10n) -> "10" (bigint coerces to its decimal digits; codec-faithful).
+
+ORACLE value -> oracle.json
+
+# ==============================================================================================
+# SCOPE
+# ==============================================================================================
+# IN-CONTRACT LOGIC (reproduce exactly): the entire 4-phase pipeline above — dotindex (incl. its
+#   number-vs-string .length nuance), dotsizes, decimal-pad formula, sizes, the l/r/c/. padding math
+#   (ceil-left/floor-right center, right-justify for r and ., left default+fallthrough), hsep
+#   handling (===undefined default to '  '), per-line trailing-whitespace strip, '\n' row-join,
+#   String() cell coercion, and the THREE throw paths (THROW-1 null/undefined cell;
+#   THROW-2 negative decimal size; THROW-3 all-integer-NUMBER '.'-column -> NaN size). Deterministic.
+#
+# CARRIED DATA: NONE. text-table has no large literal tables / no carried.json. (N/A.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented for the blind engineer; NOT emitted by genInputs
+#   because they are not oracle-codec-faithful or are explicitly excluded):
+#   - opts.stringLength FUNCTION option: a custom width function (used by callers passing
+#     ANSI-aware width like cli-color). A FUNCTION arg does not survive JSON-encode of inputs, so
+#     it is OUT-OF-ENVELOPE. Only the DEFAULT stringLength = String(s).length path is in scope and
+#     verified. A blind re-emitter implements ONLY the default path.
+#   - Symbol cells: String(Symbol) throws TypeError, and Symbols are not codec-faithful — OUT.
+#   - null / undefined CELL ELEMENTS: trigger THROW-1 (TypeError). Documented as a throw path, but
+#     undefined/null array ELEMENTS are NOT codec-round-trippable, so genInputs does NOT emit them.
+#     A blind re-emitter still reconstructs THROW-1 from this spec (it is in-contract behavior).
+#   - NaN / ±Infinity numeric cells: not codec-round-trippable -> NOT emitted. (For completeness:
+#     String(NaN)="NaN", String(Infinity)="Infinity" — ordinary left/right behavior, no dot; and as
+#     raw number cells in a '.'-column they'd yield dotindex undefined -> THROW-3 just like ints.)
+#   - bigint cells: String(1n)="1" — codec-faithful and behaves like an integer string; allowed.
+#     NOTE a bigint in a '.'-column: dotindex(10n) -> (10n).length is undefined (bigint has no
+#     .length) -> contributes undefined to dotsizes exactly like an integer number -> THROW-3 if it
+#     is the only kind in the column. genInputs keeps bigints OUT of '.'-columns (left/right only).
+
+PROVENANCE  text-table@0.2.0  (npm, substack)
+            repo git://github.com/substack/text-table.git
+            license MIT
+            source file: index.js (module.exports default function)
+            installed at /var/folders/80/s6fhxkt93jbbg38sktcnr5w80000gn/T/rdv-orig-text_table-yru9GV/node_modules/text-table

@@ -1,0 +1,362 @@
+UNIT clone
+KIND FUNCTIONAL
+FIDELITY package
+ORACLE-CLASS deterministic
+SIG clone(parent, circular?, depth?, prototype?, includeNonEnumerable?) -> deepClone
+    # circular?: boolean | options-object. depth?: number. prototype?: object | null.
+    # includeNonEnumerable?: boolean.
+    # OPTIONS-OBJECT FORM: if typeof circular === 'object', it is treated as an options bag and
+    #   destructured: depth=circular.depth, prototype=circular.prototype,
+    #   includeNonEnumerable=circular.includeNonEnumerable, circular=circular.circular.
+    #   (This re-assignment happens FIRST, before any defaulting. A property absent from the bag
+    #    becomes `undefined` and is then subject to the default rules below.)
+    # NOTE prototype may be `null` — that is a VALID, in-envelope value with defined semantics
+    #   (null-prototype clone; see N12/N14 and the NORMATIVE EXAMPLES). Do not treat null as
+    #   "unset": only `undefined` means unset.
+DEPENDS-ON none   # zero runtime deps; pure self-contained IIFE
+ORACLE value -> oracle.json
+
+# =====================================================================================
+# PROVENANCE
+#   clone@2.1.2  (npm)  —  repo git://github.com/pvorb/node-clone.git  —  MIT license
+#   source file: clone.js  (module.exports = the `clone` function returned by the IIFE)
+#   The UNIT is the DEFAULT export only (module.exports === clone). Verified by execution
+#   against the real installed package (node v24.16.0).
+# =====================================================================================
+
+# =====================================================================================
+# EMITTER DIRECTIVE
+#   This unit is a DEFAULT export. The blind re-emitter MUST `export default <fn>` where
+#   <fn> is the clone function with the signature above. There are NO named exports in scope.
+# =====================================================================================
+
+BEHAVIOR
+
+# -------------------------------------------------------------------------------------
+# PHASE 0 — ARGUMENT NORMALIZATION (runs once, in the outer `clone`)
+# -------------------------------------------------------------------------------------
+# N0  OPTIONS-OBJECT detection (FIRST thing):
+#       if typeof circular === 'object':
+#           depth                := circular.depth
+#           prototype            := circular.prototype
+#           includeNonEnumerable := circular.includeNonEnumerable
+#           circular             := circular.circular
+#     NOTE the order: `circular` is read into the four locals BEFORE it is overwritten.
+#     `typeof null === 'object'` is TRUE in JS — so clone(x, null) ALSO enters this branch
+#     and sets all four (depth/prototype/includeNonEnumerable/circular) by reading props of
+#     null, which THROWS a TypeError. (Out-of-envelope; the generator never emits `null` as
+#     the 2nd arg.)
+#
+# N1  Allocate the two circular-tracking registers, shared across the whole recursion:
+#       allParents  := []      # objects already seen (input side)
+#       allChildren := []      # their corresponding clones (output side), index-aligned
+#
+# N2  useBuffer := (typeof Buffer != 'undefined')      # true in Node; false in bare browsers
+#
+# N3  DEFAULTING (only after N0), and ONLY via typeof-undefined checks:
+#       if typeof circular == 'undefined':  circular := true      # circular tracking ON by default
+#       if typeof depth    == 'undefined':  depth    := Infinity  # unlimited depth by default
+#     (prototype and includeNonEnumerable are NOT defaulted here; they keep whatever value
+#      arrived — including `null` for prototype. Their exact value drives branches in the
+#      recursion, see N7/N12/N14. `prototype: null` survives to N12 AS null; it is NEVER
+#      coerced to undefined or replaced with a default.)
+#
+# N4  Return _clone(parent, depth).   # _clone is the inner recursion below; it closes over
+#                                     # circular, prototype, includeNonEnumerable, allParents,
+#                                     # allChildren, useBuffer.
+
+# -------------------------------------------------------------------------------------
+# PHASE 1 — _clone(parent, depth)  — the recursive core
+# -------------------------------------------------------------------------------------
+# Evaluated TOP TO BOTTOM. The first matching guard wins. `depth` decreases by 1 at every
+# recursive descent into a child value.
+
+# N5  BASE: if parent === null  -> return null.            (cloning null always yields null)
+#
+# N6  BASE: if depth === 0      -> return parent  (THE SAME REFERENCE, no clone).
+#     This guard is checked BEFORE the type ladder, so e.g. clone(date, true, 0) returns the
+#     original Date object itself. depth counts DOWN: top call uses `depth`; its direct
+#     children are cloned with depth-1; grandchildren depth-2; ... until 0 short-circuits.
+#     With default depth=Infinity this guard never fires (Infinity-1 === Infinity).
+#
+# N7  BASE: if typeof parent != 'object'  -> return parent  (the value as-is).
+#     This returns ALL primitives unchanged: number (incl. NaN, +/-Infinity, +/-0), string,
+#     boolean, undefined, bigint, symbol, AND functions (typeof function === 'function', which
+#     is != 'object', so functions pass through UNCLONED — they are returned by reference).
+#     (Functions/symbols are out of the codec envelope; documented in SCOPE, not emitted.)
+#
+#     -- From here, parent is a non-null object. Build `child` via the TYPE LADDER. --
+#     -- `proto` starts undefined; ONLY the plain-object branch (N12) assigns it, and it
+#        may assign it the value null (when prototype === null). --
+#
+#     TYPE LADDER (exact order; first instanceof / predicate match wins):
+#
+# N8  if parent instanceof Map:                                    # native Map
+#         child := new Map()
+#     (Map detection uses `instanceof Map` guarded so it is a no-op if Map is undefined.)
+#
+# N9  else if parent instanceof Set:                               # native Set
+#         child := new Set()
+#
+# N10 else if parent instanceof Promise:                           # native Promise — NOT a
+#         child := new Promise((resolve, reject) =>                #   passthrough by reference
+#                     parent.then(
+#                       value => resolve(_clone(value, depth-1)),
+#                       err   => reject (_clone(err,   depth-1))))
+#     i.e. the clone is a NEW Promise that, when the original settles, settles with a
+#     RECURSIVELY-CLONED copy of the resolution value (or rejection reason), cloned at depth-1.
+#     The new Promise is then ALSO subjected to the for-in own-prop copy loop (N14) and
+#     returned. (Promises are out of the codec envelope; documented, not emitted.)
+#
+# N11 else if isArray(parent):                                     # [object Array] via
+#         child := []                                              #   Object.prototype.toString
+#     Array detection is Object.prototype.toString.call(p) === '[object Array]'.
+#
+# N11a else if isRegExp(parent):                                   # [object RegExp]
+#         flags := '' ; if p.global then +='g'; if p.ignoreCase then +='i'; if p.multiline then +='m'
+#         child := new RegExp(parent.source, flags)
+#         if parent.lastIndex (truthy, i.e. != 0):  child.lastIndex := parent.lastIndex
+#     IMPORTANT: ONLY the g, i, m flags are reconstructed (in that fixed order g,i,m). Flags
+#     s (dotAll), u (unicode), y (sticky) are NOT preserved by this version. lastIndex is
+#     copied only when it is truthy (nonzero); a 0 lastIndex stays 0 on the fresh RegExp.
+#
+# N11b else if isDate(parent):                                     # [object Date]
+#         child := new Date(parent.getTime())
+#
+# N11c else if useBuffer AND Buffer.isBuffer(parent):              # Node Buffer (special-cased)
+#         child := Buffer.allocUnsafe(parent.length)   # (or `new Buffer(len)` on old Node)
+#         parent.copy(child)
+#         return child                                  # <-- EARLY RETURN: no circular
+#                                                       #     tracking, no for-in copy.
+#     The cloned Buffer is a REAL, independent Buffer with the same bytes.
+#
+# N11d else if parent instanceof Error:                            # Error (and subclasses)
+#         child := Object.create(parent)
+#     NOTE: the clone's PROTOTYPE is the ORIGINAL error object itself. So `message`, `stack`,
+#     and any inherited props are read through the prototype chain, not copied as own props.
+#     Own ENUMERABLE props set on the error (e.g. err.code = 'E1') ARE then copied by N14.
+#
+# N12 else (PLAIN OBJECT / everything not matched above — INCLUDING typed arrays, ArrayBuffer
+#           views, plain {}, class instances, objects with custom prototypes):
+#         if typeof prototype == 'undefined':          # <-- typeof check, EXACTLY this. null is
+#             proto := Object.getPrototypeOf(parent)   #     an object, NOT undefined, so
+#             child := Object.create(proto)            #     prototype:null takes the ELSE arm.
+#         else:
+#             child := Object.create(prototype)        # caller-forced prototype — works for an
+#             proto := prototype                       #   object OR for null (null-proto clone)
+#     The forced `prototype` is CLOSED OVER by the recursion: it applies at EVERY plain-object
+#     node at EVERY depth, not just the root (verified: clone({a:{b:1}},{prototype:null}) gives
+#     a null-proto outer object whose .a is ALSO a null-proto object).
+#     PROTOTYPE = NULL IS LEGAL AND IN-ENVELOPE: Object.create(null) yields a clone with NO
+#     prototype (Object.getPrototypeOf(child) === null; no toString/hasOwnProperty inherited),
+#     and proto := null flows into N14 where the TRUTHY guard makes the descriptor lookup a
+#     no-op (see N14 — this MUST NOT throw). Non-null, non-object, non-undefined prototype
+#     values (e.g. false, 0, 'x') make Object.create THROW TypeError (out-of-envelope).
+#     CRITICAL — TYPED ARRAYS ARE NOT SPECIAL-CASED. A Uint8Array / Int32Array / Float64Array /
+#     etc. reaches THIS branch. child becomes Object.create(<TypedArray>.prototype), and the
+#     N14 for-in loop copies the enumerable INDEX keys ('0','1',...) as plain own data
+#     properties. The result has the typed-array prototype (so `child instanceof Uint8Array`
+#     is true) but is NOT a functional typed array — it has no backing ArrayBuffer, and
+#     calling .length / .subarray / TypedArray methods on it THROWS "incompatible receiver".
+#     A blind re-emitter reproduces this EXACTLY by treating typed arrays through the generic
+#     plain-object path: Object.create(getPrototypeOf(parent)) + copy own enumerable index keys.
+#
+# -------------------------------------------------------------------------------------
+# PHASE 2 — CIRCULAR / SHARED-REFERENCE TRACKING  (skipped for Buffer, which returned at N11c)
+# -------------------------------------------------------------------------------------
+# N13 if circular (default true):
+#         index := allParents.indexOf(parent)        # has this exact object been cloned already?
+#         if index != -1:  return allChildren[index] # YES -> return the SAME clone (preserves
+#                                                     #   cycles AND shared subgraphs as shared)
+#         allParents.push(parent); allChildren.push(child)   # register before recursing in
+#     Consequence with circular=true: every time the SAME object reference appears in the
+#     input graph (a cycle, or a node referenced from two places), the output reuses the one
+#     clone -> the output graph is ISOMORPHIC to the input graph (same sharing, same cycles).
+#     With circular=false: this whole block is skipped -> a node referenced twice is cloned
+#     TWICE into two separate copies, and a genuine cycle causes INFINITE RECURSION (stack
+#     overflow). The generator NEVER pairs circular=false with a cyclic input.
+
+# -------------------------------------------------------------------------------------
+# PHASE 3 — ENTRY COPYING for Map / Set  (runs in addition to N14, after tracking)
+# -------------------------------------------------------------------------------------
+# N13a if parent instanceof Map:
+#          for each (value, key) in parent (insertion order):
+#              child.set(_clone(key, depth-1), _clone(value, depth-1))
+#       Both keys AND values are recursively cloned (at depth-1). Insertion order preserved.
+#
+# N13b if parent instanceof Set:
+#          for each value in parent (insertion order):
+#              child.add(_clone(value, depth-1))
+
+# -------------------------------------------------------------------------------------
+# PHASE 4 — OWN ENUMERABLE STRING-KEY COPY  (the `for (var i in parent)` loop)
+# -------------------------------------------------------------------------------------
+# N14 for each string key `i` enumerated by `for-in` over parent
+#     (for-in yields OWN enumerable string keys AND INHERITED enumerable string keys, in the
+#      usual for-in order; integer-index keys first in ascending numeric order, then string
+#      keys in insertion order, walking the prototype chain):
+#
+#         attrs := undefined
+#         if proto:                                     # <<< TRUTHINESS GUARD — EXACTLY `if (proto)`.
+#             attrs := Object.getOwnPropertyDescriptor(proto, i)
+#         if attrs exists AND attrs.set == null:        # proto has an OWN descriptor for `i`
+#             continue                                  #   that is a data prop OR getter-only
+#                                                       #   -> SKIP; leave it inherited via proto
+#         child[i] := _clone(parent[i], depth-1)
+#
+#     !!! GUARD PINNED (this was the divergence point) !!!
+#       The guard on the descriptor lookup is the JS TRUTHY test `if (proto)`, NOT
+#       `proto !== undefined` and NOT `'proto' is set`. `proto` can be exactly one of:
+#         - undefined  (non-plain-object ladder branches: Map/Set/Promise/Array/RegExp/Date/
+#                       Error — N8..N11d never assign proto)      -> falsy -> lookup skipped
+#         - null       (plain-object branch with forced prototype === null, N12 else-arm)
+#                                                                  -> falsy -> lookup skipped
+#         - an object  (parent's own prototype, or a forced non-null prototype)
+#                                                                  -> truthy -> lookup runs
+#       A re-emitter that writes `proto !== undefined` (or any variant that lets proto === null
+#       reach Object.getOwnPropertyDescriptor(null, i)) THROWS TypeError on prototype:null —
+#       that is WRONG. The original NEVER throws here: with proto === null the descriptor
+#       lookup is silently bypassed, attrs stays undefined, the skip test fails, and EVERY
+#       for-in key is copied onto the null-proto child as an own data property.
+#       Consequence: under prototype:null the Object.prototype skip-key set below is FULLY
+#       DISABLED — even keys named `constructor`, `toString`, `hasOwnProperty`, `__proto__`
+#       are copied as ordinary own properties (a null-proto object has no magic __proto__
+#       setter, so `child['__proto__'] = v` creates a plain own key named '__proto__').
+#
+#     ACCESSOR/PROTO-COLLISION SKIP (applies ONLY when proto is TRUTHY, i.e. a real object):
+#       Because plain objects (without a forced prototype) use child = Object.create(proto)
+#       where proto = Object.prototype, any input key that NAMES an Object.prototype own
+#       data-property is SKIPPED (its descriptor.set is null). The skipped keys are exactly:
+#         constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toString,
+#         toLocaleString, valueOf, __defineGetter__, __defineSetter__,
+#         __lookupGetter__, __lookupSetter__
+#       For such a key the clone does NOT get an own property; it inherits the
+#       Object.prototype version instead. (e.g. clone({constructor:5,a:1}) -> own keys ['a']
+#       only; clone.constructor === Object.) A blind re-emitter MUST reproduce this skip set.
+#       The key `__proto__` is the EXCEPTION: Object.prototype's `__proto__` descriptor HAS a
+#       setter (set != null), so `__proto__` is NOT skipped — `child.__proto__ = clonedValue`
+#       fires the magic setter and REASSIGNS the clone's prototype to the cloned value (it
+#       becomes no own key). (Out-of-envelope footgun; generator never emits a `__proto__` key.)
+#       When a NON-NULL prototype object is FORCED, the same skip rule runs against THAT
+#       object's own descriptors instead of the parent's real prototype.
+#       For ARRAYS proto is undefined (N11 never sets it) -> the lookup is skipped for every
+#       key -> array elements + extra string props copy unconditionally.
+#       NOTE: inherited enumerable keys (from a custom parent prototype) ARE visited by for-in;
+#       since the clone's proto is the SAME proto, those keys are typically skipped by the
+#       proto-collision rule when the proto holds them as data props.
+#
+#     NORMATIVE EXAMPLES (verified by executing clone@2.1.2 — a reconstruction MUST match):
+#       E1  clone({a:1,b:2}, {prototype:null})
+#             -> returns c with Object.getPrototypeOf(c) === null,
+#                Object.keys(c) = ['a','b'], c.a === 1, c.b === 2.  NO THROW.
+#       E2  clone({x:1}, true, 2, null)          # positional form: circular=true, depth=2,
+#             -> returns c with Object.getPrototypeOf(c) === null,  # prototype=null
+#                Object.keys(c) = ['x'], c.x === 1.  NO THROW.
+#       E3  clone({constructor:5, a:1}, {prototype:null})
+#             -> own keys ['constructor','a'] and c.constructor === 5
+#                (skip set DISABLED because proto is null/falsy).
+#           Contrast: clone({constructor:5, a:1}) -> own keys ['a'] only (skip set active).
+#       E4  clone({a:{b:1}}, {prototype:null})
+#             -> BOTH the outer clone AND clone.a have prototype null (forced prototype
+#                applies recursively at every plain-object node).
+#       E5  clone({a:1}, {prototype: P}) where P = {inherited:9}
+#             -> Object.getPrototypeOf(c) === P, own keys ['a'], c.inherited === 9 (via chain).
+
+# -------------------------------------------------------------------------------------
+# PHASE 5 — SYMBOL KEYS  (only runs if Object.getOwnPropertySymbols exists)
+# -------------------------------------------------------------------------------------
+# N15 for each own symbol key `symbol` of parent (Object.getOwnPropertySymbols):
+#         descriptor := Object.getOwnPropertyDescriptor(parent, symbol)
+#         if descriptor exists AND NOT descriptor.enumerable AND NOT includeNonEnumerable:
+#             continue                                  # skip non-enum symbols unless opted in
+#         child[symbol] := _clone(parent[symbol], depth-1)
+#         if NOT descriptor.enumerable:
+#             Object.defineProperty(child, symbol, { enumerable: false })   # preserve non-enum
+#     (Symbol keys are out of the JSON codec envelope; the generator does not emit them.
+#      Documented for completeness so a blind re-emitter reproduces the behavior if asked.)
+
+# -------------------------------------------------------------------------------------
+# PHASE 6 — NON-ENUMERABLE STRING KEYS  (only when includeNonEnumerable is truthy)
+# -------------------------------------------------------------------------------------
+# N16 if includeNonEnumerable:
+#         for each own string key `propertyName` of parent (Object.getOwnPropertyNames):
+#             descriptor := Object.getOwnPropertyDescriptor(parent, propertyName)
+#             if descriptor exists AND descriptor.enumerable:
+#                 continue                              # enumerable ones already handled in N14
+#             child[propertyName] := _clone(parent[propertyName], depth-1)
+#             Object.defineProperty(child, propertyName, { enumerable: false })  # keep non-enum
+#     So includeNonEnumerable=true ADDITIONALLY copies the object's own NON-enumerable string
+#     properties (e.g. a Object.defineProperty(...,{enumerable:false}) data prop), defining
+#     them as non-enumerable on the clone. Default (false) drops them.
+#
+# N17 return child.
+
+# =====================================================================================
+# DETERMINISM / SEAM
+#   NO seams. clone reads no clock, RNG, env, fs, or net. Output is a pure deterministic
+#   function of (parent, circular, depth, prototype, includeNonEnumerable). The unit never
+#   mutates the input (read-only / pure): the input graph is untouched; a fresh graph is
+#   returned. For every codec-faithful input the generator emits, the returned clone is
+#   STRUCTURALLY EQUAL to the input (same JSON shape, same Map/Set/Date/RegExp/Buffer content),
+#   while being a distinct object identity at every cloned node. ORACLE value mode: the
+#   harness records the returned clone and grades structural equality.
+# =====================================================================================
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    - The full argument-normalization (options-object form, defaults circular=true /
+      depth=Infinity via typeof-undefined checks ONLY — prototype:null is preserved as null),
+      and the entire _clone recursion.
+    - The TYPE LADDER in exact order: null -> depth-0 identity -> primitive passthrough ->
+      Map -> Set -> Promise -> Array -> RegExp(g,i,m + truthy lastIndex) -> Date(getTime) ->
+      Buffer(allocUnsafe+copy, early return) -> Error(Object.create(parent)) -> plain object
+      (Object.create(proto|prototype)).
+    - PROTOTYPE OPTION incl. prototype === null (both options-bag and 4th positional arg):
+      N12 branches on `typeof prototype == 'undefined'` — null takes the forced arm ->
+      Object.create(null) -> null-proto clone WITH all keys; forced prototype applies at
+      every plain-object node of the recursion.
+    - Typed arrays are NOT special-cased: they take the plain-object branch and yield a
+      broken pseudo-typed-array (proto = TypedArray.prototype, own index keys, no buffer).
+    - Circular/shared tracking via allParents/allChildren (circular=true preserves cycles &
+      sharing; circular=false re-clones shared nodes and infinite-loops on real cycles).
+    - Map/Set entry cloning (keys AND values, depth-1, insertion order).
+    - for-in own+inherited enumerable string-key copy where the descriptor lookup is gated
+      by the TRUTHY guard `if (proto)` — NEVER `proto !== undefined` — so proto === null
+      (prototype:null) silently bypasses the lookup, never throws, disables the skip set,
+      and copies every for-in key; when proto is a real object the proto-collision skip
+      (attrs && attrs.set == null -> skip) applies, including the exact Object.prototype
+      skip-key set listed at N14 and the `__proto__`-reassigns-prototype exception.
+      Normative examples E1-E5 at N14 are binding.
+    - Symbol-key copy (N15) and includeNonEnumerable string-key copy (N16) semantics.
+    - depth decrement (-1) at every recursive descent; depth=0 returns the reference as-is.
+
+  CARRIED DATA: none. No literal tables; nothing to attest.
+
+  OUT-OF-CONTRACT (NOT part of this unit — the default-export clone function only):
+    - clone.clonePrototype  (a separate shallow prototype-wrap helper) — OUT.
+    - clone.__objToStr, clone.__isDate, clone.__isArray, clone.__isRegExp,
+      clone.__getRegExpFlags  (private utility statics hung off the function) — OUT. Their
+      LOGIC is inlined into the BEHAVIOR above where the core uses it (isArray/isDate/isRegExp
+      predicates use Object.prototype.toString; getRegExpFlags builds g/i/m), but they are not
+      separately-callable units in scope.
+
+  OUT-OF-ENVELOPE INPUTS (defined here for blind re-emitter completeness; the generator does
+  NOT emit these because the oracle JSON codec cannot round-trip them, OR they have no stable
+  structural form / would throw or loop):
+    - functions and symbols as the value to clone -> returned by reference, UNCLONED (N7).
+    - Promise inputs -> NEW promise resolving to a deep clone (N10); async, not JSON-codec'able.
+    - object VALUES that are `undefined` -> preserved as own keys (N14) but undefined is not
+      a round-trippable object value in the codec.
+    - a key literally named `__proto__` (own enumerable) -> with a truthy proto: mutates the
+      clone prototype via the magic setter (N14 note); with proto === null (prototype:null):
+      becomes an ordinary own data key named '__proto__'.
+    - `null` (or any object) passed as the 2nd positional arg -> options-object branch (N0);
+      `null` specifically THROWS (reads props of null). NOTE the asymmetry a re-emitter must
+      keep straight: null as the 2ND arg (circular slot) THROWS; null as the 4TH arg /
+      options.prototype is VALID and yields a null-proto clone (E1/E2).
+    - a truthy non-object `prototype` (e.g. false, 0, 'x' — anything Object.create rejects)
+      -> Object.create THROWS TypeError inside N12.
+    - genuinely cyclic input together with circular=false -> infinite recursion / stack
+      overflow (N13). The generator only emits cycles with circular defaulted/true.
+    - boxed primitives (new Number/String/Boolean) -> take the plain-object branch and clone
+      to a non-equivalent plain object; not codec-stable -> not emitted.

@@ -1,0 +1,20 @@
+UNIT carried_canonical
+LANG js
+PRIMARY-SHA256 f0f8bfd7fcf65ee10da915c5044801760095bf39afc82f9b18fe04a03e3cf1a3
+SIG carried_canonical(table) -> string
+ABI the artifact is an ES module default-exporting the function. map = a plain object (prototype Object.prototype or
+  null; an own "__proto__" key is an ordinary own property); json = a JSON-shaped JS value; none = null; text = string;
+  f64 = number; list = Array. The result is a string. Every throw (R6, OUT-OF-DOMAIN) is an Error; the message is not graded.
+ENVELOPE widening: `table` may be any JS value; anything but a plain object (null, undefined, a string, a number, a
+  boolean, an Array, a Map, a class instance) throws. Inside, these throw: undefined (as a property value or an Array
+  element), an Array hole, a bigint, a symbol, a function, a boxed Number/String/Boolean, a RegExp, a Date, a Map, a Set, a
+  typed array, any class instance. A null-prototype object is a map. Only own enumerable string keys are read
+  (Object.keys): non-enumerable and symbol keys are ignored; an own toJSON key is an ordinary entry, never invoked. Lone
+  surrogates in keys or strings render as lowercase \udxxx and do not throw.
+MECHANISM a recursive writer, never JSON.stringify on a container and never a rebuilt object (an object's own-key
+  enumeration lists array-index keys first and would undo R2). Strings, booleans and null go through JSON.stringify (R4,
+  R1). A number: throw unless Number.isFinite and not Object.is(x, -0), else JSON.stringify(x) (R5, R6). An Array: throw
+  on any index i with !(i in arr), else '[' + elements + ']'. A plain map: Object.keys(x).sort() with the DEFAULT
+  comparator (UTF-16 code unit order, R2), each key as JSON.stringify(key) + ':' + value. Anything else throws.
+DEPENDS-ON none
+PROVENANCE rederive@b15b56613f9d cli/sir/v05.mjs `canonical` and `plainMap`. Language file re-cut 2026-10-26 with the primary.

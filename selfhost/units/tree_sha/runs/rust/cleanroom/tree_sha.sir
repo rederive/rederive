@@ -1,0 +1,48 @@
+UNIT tree_sha
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@b15b56613f9d cli/tree-sha.mjs treeSha, driven through selfhost/seams/tree_sha.mjs — the srcSha256 of every Rust crate in a v0.5 bundle; reproduce it exactly
+ORACLE-CLASS deterministic
+SIG tree_sha(files: map[text, text]) -> text
+ENVELOPE files maps a path to the file's text. In scope: VALID paths (R1) and INVALID ones (R2 throws). Among the valid
+  paths no path is a proper directory prefix of another (nothing is both a file and a directory), no NAME holds NUL, no two
+  paths are equal under case folding or Unicode canonical equivalence, and every path and text is well-formed Unicode
+  (a line feed in a NAME is allowed). A map with an invalid path holds exactly one. OUT: empty directories and symbolic
+  links (the map cannot express them; the real function contributes nothing for an empty directory, hashes a link to a
+  file as a file holding its target's bytes, and throws on a link to a directory), file-versus-directory clashes and NUL
+  in a NAME (both throw with a message naming a random temporary directory), several invalid paths in one map (which one
+  the message names depends on entry order), and file contents that are not text (raw bytes).
+DEPENDS-ON none
+DESCRIPTION The tree hash of a crate directory: one line per file that is not cargo build output, each line the file's path
+  and the U+0000-separated SHA-256 of its content, the lines sorted and concatenated, and the SHA-256 of that whole text
+  returned as 64 lowercase hexadecimal digits. One byte changed in any kept file, or a kept file added, removed or
+  renamed, changes the result.
+BEHAVIOR
+R1 A path is VALID when it is one or more NAMES joined by "/", it does not start with "/", it holds no backslash, and no
+  NAME is empty, "." or "..". So "", "/abs", "a\b", "a//b", "./a", "a/.", "../x", "a/../b" and "a/" are INVALID; "...",
+  ".hidden" and "a b" are ordinary NAMES.
+R2 If any path of files is INVALID -> throws. The message is the text "tree_sha: not a relative path " followed by the
+  path as a JSON string literal (the message is informative, not graded). No hash is computed. CITED FIDELITY package — the seam refuses before it writes
+R3 Build output is excluded: a path with at least two NAMES whose FIRST NAME is exactly "target" contributes nothing (the
+  crate-root target directory). Everything else is kept: a root FILE named "target", a "target" directory below the root
+  ("src/target/x.rs"), a file "src/target", and any other spelling ("Target", "TARGET", "targets", "target.rs"). CITED FIDELITY package
+R4 Each kept path p yields one LINE: p exactly as given, then U+0000, then HEX(SHA-256 of the UTF-8 bytes of the file's
+  text), then U+000A. An empty text hashes as the SHA-256 of zero bytes.
+R5 The LINES are sorted ascending by the whole line, comparing UTF-16 code units as unsigned integers (lexicographic, a
+  proper prefix first). Because no path holds U+0000, this equals sorting the paths themselves by UTF-16 code units over
+  the FULL path text — never NAME by NAME and never by UTF-8 bytes. So "a-b" < "a.b" < "a/b" (U+002D, U+002E, U+002F),
+  and U+1F600 (units D83D DE00) sorts BEFORE U+E000 and U+FFFD, the reverse of their UTF-8 byte order. CITED FIDELITY package — the host's default string sort
+R6 The result is HEX(SHA-256 of the UTF-8 bytes of T), T being the sorted LINES concatenated with no separator. With no
+  kept path T is empty and the result is HEX of the SHA-256 of zero bytes.
+R7 SHA-256 is the FIPS 180-4 hash. HEX renders a 32-byte digest as 64 characters, two per byte, most significant nibble
+  first, digits 0-9 and lowercase a-f.
+INVARIANT the result of a map without invalid paths never depends on the order of its entries.
+INVARIANT two maps that differ only in entries under the root target directory hash alike; a map whose every path lies
+  there hashes as the empty map.
+ORACLE value -> oracles/tree_sha.json  CANONICAL-SHA256 6063298495118ba58561dc5efcdbcf1cc1effa9a880d2b36cb0e72974ccfea60
+SCOPE IN: R1–R7 over the envelope. OUT: the directory walk itself (the seam materializes the map in a fresh temporary
+  directory and hashes it), empty directories, symbolic links, non-regular files, and the host's case- and
+  normalization-insensitive file-system collisions.
+PROVENANCE rederive@b15b56613f9d cli/tree-sha.mjs (pinned authority, selfhost/.authority/b15b56613f9d; seam
+  selfhost/seams/tree_sha.mjs with its path refusal). Cut 2026-10-26, REDERIVE_SELF_PLAN Tier 1; round 2 re-cut against the
+  root-only target exclusion and the seam's refusal of unsafe paths.

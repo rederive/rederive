@@ -1,0 +1,1039 @@
+{
+ "mode": "vectors",
+ "unit": "pin_lint",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "PINNED regex X = /a/ CITED R1"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "UNIT u\nPINNED charset C = 0-9\nPINNED charset D = a-f ANCHOR spec\nEARNED round-2 heldout v3"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED charset C = 0-9"
+     }
+    ],
+    "pins": 3
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "PINNED x = 1 # not cited"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x = 1 # not cited"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "PINNED x = \"a CITED b\""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x = \"a CITED b\""
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "PINNED x\n  CITED R1"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    "PINNED x\n\n# c\n  EARNED r1\nNOTE n\n  CITED late"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    "PINNED x CITED\nPINNED y CITED   ANCHOR\nPINNED z CITED  \nPINNED q CITED \"\"\nPINNED r CITED '​'\nPINNED s CITED \nPINNED t CITED “”"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x CITED"
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED y CITED   ANCHOR"
+     },
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED z CITED  "
+     },
+     {
+      "line": 4,
+      "what": "pin without a citation",
+      "text": "PINNED q CITED \"\""
+     },
+     {
+      "line": 5,
+      "what": "pin without a citation",
+      "text": "PINNED r CITED '​'"
+     }
+    ],
+    "pins": 7
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "EARNED\nEARNED CITED\nEARNED\n  round-1\nEARNED: r2\nEARNED\n  \"\" CITED\nEARNED  \nEARNED\n\n# c\nprose"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "EARNED"
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "EARNED CITED"
+     },
+     {
+      "line": 6,
+      "what": "pin without a citation",
+      "text": "EARNED"
+     },
+     {
+      "line": 8,
+      "what": "pin without a citation",
+      "text": "EARNED  "
+     }
+    ],
+    "pins": 7
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    "A\rPINNED x\rB CITED y\r\nPINNED z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED x"
+     },
+     {
+      "line": 4,
+      "what": "pin without a citation",
+      "text": "PINNED z"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    "﻿PINNED a\n  ﻿CITED b\n﻿ ﻿PINNED c\n﻿\t﻿﻿ ﻿CITED d\n﻿﻿PINNED e\nPINNED f\n﻿"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 5,
+      "what": "pin without a citation",
+      "text": "PINNED e"
+     },
+     {
+      "line": 6,
+      "what": "pin without a citation",
+      "text": "PINNED f"
+     }
+    ],
+    "pins": 3
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    " PINNED a\n\tEARNED b\n PINNED c\n\u000bPINNED d\nPINNED e\nPINNED: f\nPINNED:g"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 6,
+      "what": "pin without a citation",
+      "text": "PINNED: f"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "PINNEDS x\n  CITED y\nPINNED-X\nPINNED_x\nPINNED9\nR1 rule\npinned x\nEARNEDx"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "PINNED x citeD\nPINNED y Cited z\nPINNED w CITEDx\nPINNED v xCITED y\nPINNED u CITED:y\nPINNED t\tCITED\tq"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x citeD"
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED y Cited z"
+     },
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED w CITEDx"
+     },
+     {
+      "line": 4,
+      "what": "pin without a citation",
+      "text": "PINNED v xCITED y"
+     },
+     {
+      "line": 5,
+      "what": "pin without a citation",
+      "text": "PINNED u CITED:y"
+     }
+    ],
+    "pins": 6
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "PINNED x\nCITED R1\nPINNED y\nCITED: R2"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED y"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "PINNED bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    ""
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "PINNED"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "PINNED x #CITED y\nPINNED y#\tCITED z\nPINNED z # q CITED w\nPINNED w CITED v #"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x #CITED y"
+     },
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED z # q CITED w"
+     }
+    ],
+    "pins": 4
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "NOTE no pins here\nR1 x CITED y"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "PINNED x   \t\n"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "  CITED orphan\nPINNED x\n# CITED y\n  # ANCHOR z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED x"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    "PINNED x=\"a CITED b\"\nPINNED y/\"a CITED b\"\nPINNED z 12\"a CITED b\"\nPINNED w /\"(?:a|b)*\"/ CITED R5\nPINNED v +\"a CITED b\"\nPINNED u ?\"a CITED b\"\nPINNED t ~\"a CITED b\""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x=\"a CITED b\""
+     },
+     {
+      "line": 7,
+      "what": "pin without a citation",
+      "text": "PINNED t ~\"a CITED b\""
+     }
+    ],
+    "pins": 7
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "PINNED x \"a\\\" CITED b\"\nPINNED y \"a\" \"b CITED c\"\nPINNED z \"a\"\"b CITED c\"\nPINNED w \"open CITED q"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x \"a\\\" CITED b\""
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED y \"a\" \"b CITED c\""
+     },
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED z \"a\"\"b CITED c\""
+     }
+    ],
+    "pins": 4
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "PINNED x \"a # b\" CITED c\nPINNED y \"a # b\""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED y \"a # b\""
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "PINNED a\nPINNED b\n  ANCHOR\n  CITED\n  EARNED  　"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED a"
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED b"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "X\n  PINNED in continuation CITED\nPINNED x\n\n\n\n  ANCHOR far"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    "PINNED éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    "PINNED x \"\\😀\" CITED\nPINNED y \"\\"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x \"\\😀\" CITED"
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED y \"\\"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    "EARNED  \nEARNED # x\nEARNED \"\" "
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "EARNED  "
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "EARNED # x"
+     },
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "EARNED \"\""
+     }
+    ],
+    "pins": 3
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    "PINNED x (\"CITED y\")\nPINNED z [\"q CITED r\"]"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x (\"CITED y\")"
+     },
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED z [\"q CITED r\"]"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    "PINNED x CITED CITED\nPINNED y ANCHOR EARNED z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED x CITED CITED"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    "GUARD-PINNED x\nNOTE PINNED y\nEARNED\r\n\r\n  CITED k\r"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "#PINNED x\nPINNED y\n#\tCITED z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED y"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "PINNED x\n\u000b CITED y\nPINNED z\n CITED w"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED z"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # tail comment kept in the text"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "pin without a citation",
+      "text": "PINNED aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    "x a\\ CITED “x”\n\u000bEARNED: x = \"q\" CITED ''\nPINNED: \"a\" CITED R1\n﻿ ﻿  CITED q\r\n  # anchor"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    " x ​ CITED   CITED\r﻿ ﻿NOTE round-1 heldout v2 CITED ''\r\u000bNOTE +\"a CITED b\" CITED R1\r \t \n  round-2 heldout v3\r﻿ ﻿  CITED q"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "  \"\"\n \t \n  \"\"\r\nEARNED é ü 日本 CITEDx zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n  ⁠\n EARNED ' \"CITED x\"\nEARNED é ü 日本 \"CITED x\" CITEDx"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    " \t \n\n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    " CITED \"\" CITED “x”\nprose\rPINNEDS ​ #x CITED y\nCITED z\nEARNED ​   \rR2 +\"a CITED b\" CITED \tCITED\tq\r\nNOTE *\"a CITED \n"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 5,
+      "what": "pin without a citation",
+      "text": "EARNED ​"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "prose CITED y\nEARNED: ('q') \"CITED x\"\n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "PINNED_ '\n  ⁠\nANCHOR \"\" CITED '' \" CITED x\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r EARNED \"\"\t zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\nPINNED_ x = \"q\" cited\n﻿# x\n﻿ ﻿PINNED_ ​ CITED  \n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "\tPINNED_ \"a\" \"CITED x\"\n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    "\n# CITED R2\r\n﻿﻿PINNED é ü 日本 cited CITEDx\r\nNOTE x\nR2   #x CITED y\r\n\r x *\"a CITED b\""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED é ü 日本 cited CITEDx"
+     }
+    ],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    "  EARNED:   CITED  \n  PINNEDS ' CITED  \r\nx x=\"a ANCHOR # CITED x zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n   \n﻿# x"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    "  EARNED\r\n  CITED R1\nprose\r  CITED R1\n  EARNED: \"\" CITED  \n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "prose\n PINNED  \n\tPINNED x=\"a\tCITED\tq\n EARNED:  \t\r﻿# x\r\n PINNED regex X = /a/ CITED  CITEDx"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "  CITED\nPINNEDS +\"a CITED b\"   \nPINNED round-1 heldout v2\n﻿﻿EARNED *\"a CITED R1\n﻿ ﻿R2 round-1 heldout v2 ANCHOR ​ zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n  x +\"a CITED b\" # CITED x\n"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "pin without a citation",
+      "text": "PINNED round-1 heldout v2"
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "# CITED R2\r\nPINNED x=\"a\t\rEARNED  \n CITED x=\"a ANCHOR ​ ANCHOR ​\rEARNED x=\"a CITED  "
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "pin without a citation",
+      "text": "PINNED x=\"a"
+     }
+    ],
+    "pins": 3
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "# CITED R2\r\nCITED round-1 heldout v2 # #x CITED y\nEARNED é ü 日本 cited"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "\n﻿ ﻿  CITED q\r\n\tPINNED: round-1 heldout v2 cited\nEARNED ' CITEDx CITED \"\"\r\n\tEARNED \"CITED x\""
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    "prose CITED y\r\n  PINNED: ​ CITED  \r﻿\n  CITED"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "\n﻿PINNED_ \"a\"\nNOTE \"\" #x CITED y cited zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r CITED w\r\n PINNED_ x=\"a CITED R1\tCITED\tq\n  ⁠\n CITED w"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    " x *\"a CITED b\""
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "PINNEDS '    zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    "PINNED_ a\\\t\tCITED\tq\n PINNED \"\""
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    "PINNEDS x = \"q\"\"\rEARNED: regex X = /a/ #\n  x # CITED"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "﻿ ﻿PINNED_ \"\" # CITED x CITED ''"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "  round-2 heldout v3\r\n ﻿NOTE \"a\" ANCHOR\n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    "﻿ ﻿PINNEDS round-1 heldout v2 # not cited cited\n x *\"a CITED b\"\n﻿\r\n  EARNED\r R2 x = \"q\" CITED\n﻿pinned +\"a CITED b\" CITED ''\n\u000bPINNEDS\t"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    " \t \nprose CITED y\rNOTE x\n﻿# x\n   \n﻿ ﻿PINNED: \"\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    " PINNEDS a\\ cited\nPINNEDS regex X = /a/ ANCHOR CITED “x”\n ﻿PINNED_ +\"a CITED b\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    " PINNEDS 12\" wide CITED \n  EARNED"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "\tPINNED ​\t\nCITED: z\r\n﻿\n"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    "PINNED: a\\ CITEDx\rCITED a\\ CITED \"\"\n﻿﻿PINNEDS ' \"CITED x\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r R2 round-1 heldout v2\"\r\n\tEARNED \"a\" ANCHOR spec"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "R2 x=\"a cited\r\n\tx 12\" wide EARNED round-1 CITED  "
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "\tPINNED +\"a CITED b\" CITED R1\rEARNED:   \" CITED x\"\t\n  EARNED\n﻿﻿PINNED: ('q') \"CITED x\" \"CITED x\"\r\n  CITED\r\n﻿# x"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 4,
+      "what": "pin without a citation",
+      "text": "PINNED: ('q') \"CITED x\" \"CITED x\""
+     }
+    ],
+    "pins": 2
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    "  x # CITED\nCITED z\r ﻿CITED ' CITED  zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n CITED w\n PINNED é ü 日本 CITED \"\"\r  # anchor"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    " PINNED_ é ü 日本\n  PINNED ' CITED R1 CITED  "
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "﻿ ﻿  CITED q\n  CITED\r  CITED R1\nPINNED +\"a CITED b\" ANCHOR\n﻿ ﻿  CITED q"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 1
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    " ANCHOR \"a\" \"CITED x\" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+   ],
+   "expected": {
+    "hits": [],
+    "pins": 0
+   }
+  }
+ ]
+}

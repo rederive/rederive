@@ -1,0 +1,36 @@
+UNIT adopt_kept_content
+LANG rust
+PRIMARY-SHA256 f12abd39c819e36f544857da0f077f9d078ddb864b0e67ccf6ab80e83e8b7ecc
+SIG pub fn adopt_kept_content(unmanaged: &str, managed: &str) -> Vec<String>
+ABI crate shape: the artifact is a LIBRARY crate ([lib], src/lib.rs exporting pub fn adopt_kept_content) — no main, no
+  I/O, no binary, no unsafe, no dependencies. The verifier generates its own harness crate from the abstract SIG and
+  depends on the artifact by path; compiling that harness against this SIG is the signature check.
+ABI text = &str (UTF-8; iterate as chars = code points); list[text] = Vec<String>. Every pinned set is BMP and no
+  rule counts characters beyond "at least one", so code points and UTF-16 units agree. No error path: no Result, no
+  Option, no panic.
+ENVELOPE narrowing: an unpaired surrogate half has no &str form, so such inputs are outside this language's envelope;
+  no oracle vector carries one.
+MECHANISM no regex crate (zero dependencies): realize BEGIN, END, HEADING, LIST, the fence tests and RUN, the R6
+  mask, cut and unmask by hand over chars. HEADING by hand: after 1-6 '#' (the next char not '#') the rest R must start with a
+  BLANK; let k = max(1, one past the LAST NOTDOT in R); heading iff k < R's length and R[..k] is all BLANK. BEGIN by
+  hand: try every "<!--" from the left; it qualifies when followed by zero or more BLANK, "rederive:begin" and then not
+  a WORD char; let e = the end of "rederive:begin" and q = the first "-->" at or after e; it wins when q exists and no
+  "<!--" starts at any index in [e, q); the cut ends after that "-->". ONE-LINE FENCE: the trimmed
+  line starts and ends with "```", has at least 7 chars, and no NOTDOT. R6 and R7: test for '\u{0}' or '\u{1}' first (the raw,
+  uncut branch; the raw KEY is '\u{2}' + the fragment byte-for-byte); in the mask branch every token is the mask's own,
+  so index the span list directly. R9's contiguous test: Vec::windows over the managed list (no window when it is
+  shorter than the item's list). Fence KEY LINES: a Vec built from the opener plus the non-blank middle lines only when the
+  item has two or more lines and its last line CLOSES it; a one-line item only when it is a ONE-LINE FENCE; else empty. The std predicates are NOT the pinned sets: char::is_whitespace /
+  str::trim / split_whitespace use Unicode White_Space, which wrongly includes U+0085 and excludes U+FEFF — write
+  is_blank as a match over BLANK_RS and trim with trim_matches(is_blank). str::lines strips every CR before LF — split
+  on '\n' only and remove at most ONE trailing '\r' per pass (R1 and R2 are two passes, on both texts). Digits in
+  MARKER and in the unmask are ASCII only (is_ascii_digit); START is ASCII A-Z (is_ascii_uppercase), '`', '(' or
+  '\u{0}', never char::is_uppercase. KEY lowercases each prose piece separately with str::to_lowercase (the Unicode
+  default full mapping, final sigma decided within the piece) (asterisks kept), writes each code span as
+  '\u{1}' + its text unchanged + '\u{1}', then collapses BLANK runs. PROSE LISTs are Vec<Vec<String>> (R9 is a contiguous
+  window test), the BLOCK KEYs a HashSet<String>. WORD (BEGIN's boundary) is ASCII only
+  (is_ascii_alphanumeric or '_'), never char::is_alphanumeric.
+DEPENDS-ON none
+PINNED charset BLANK_RS = '\u{9}' '\u{A}' '\u{B}' '\u{C}' '\u{D}' '\u{20}' '\u{A0}' '\u{1680}' '\u{2000}'..='\u{200A}' '\u{2028}' '\u{2029}' '\u{202F}' '\u{205F}' '\u{3000}' '\u{FEFF}' CITED the primary BLANK pin, spelled as Rust char literals and one inclusive range
+PINNED charset NOTDOT_RS = '\u{D}' '\u{2028}' '\u{2029}' CITED the primary NOTDOT pin
+PROVENANCE rederive@c7b0916ed08a cli/lib/adopt.mts — this file states the crate shape, the type mapping and the std-library traps only; no behavior.

@@ -1,0 +1,260 @@
+UNIT merge
+KIND STATE
+ORACLE-CLASS deterministic
+SIG merge(object, ...sources) -> object   # the SAME object reference, mutated IN PLACE (see RETURN/IDENTITY)
+
+# RE-EMITTER DIRECTIVE: this is the DEFAULT export of the package. The blind re-emitter MUST
+#   export default <fn>
+# so the harness can load it via dynamic import() and call it as merge(object, ...sources).
+
+DEPENDS-ON none
+# Pure algorithm. No carried-data tables, no clock/RNG/io/net seam. ORACLE-CLASS deterministic.
+# NOTE on a benign internal clock: lodash wraps the bound function in `shortOut` (a Date.now()-based
+# hot-loop guard that short-circuits to identity after 800 calls within a 16ms span). This guards the
+# *rest-argument binder* (createAssigner via baseRest/setToString), NOT the merge computation, and it
+# only affects the function's OWN toString redefinition. It has ZERO effect on observable merge output
+# for any single call. It is NOT a seam to inject; treat merge as pure.
+
+BEHAVIOR
+# ============================ TOP-LEVEL (createAssigner) ============================
+# merge = createAssigner(assigner) where assigner(object, source, srcIndex) = baseMerge(object, source, srcIndex).
+# IMPORTANT: there is NO customizer in this unit. createAssigner only wires a customizer when the
+# wrapped assigner has arity > 3; this assigner has arity 3 (object, source, srcIndex). So merge
+# behaves exactly like mergeWith with customizer === undefined. Encode NO customizer branch anywhere.
+#
+# Pipeline of the top-level call merge(object, src0, src1, ... srcK):
+#   N1. object = Object(object)
+#       - If object is a plain object/array, Object(object) === object (same ref) -> mutate in place.
+#       - If object is null or undefined, Object(object) yields a NEW plain {} (NOT the same ref;
+#         null/undefined have no ref). Result is a fresh {} populated from the sources.
+#       - If object is a primitive (number/string/boolean/bigint/symbol), Object(object) yields a
+#         BOXED wrapper object (new Number/String/Boolean/...) and properties are attached to that box.
+#         (Boxed-wrapper RESULTS do not survive the oracle JSON codec faithfully; genInputs therefore
+#          NEVER emits a non-object first argument. Documented here for completeness only — see SCOPE.)
+#   N2. For each source in order src0..srcK (LEFT TO RIGHT, index ascending):
+#         if (source) {            # truthiness gate — FALSY sources are SKIPPED ENTIRELY
+#             baseMerge(object, source, index)     # (no customizer arg)
+#         }
+#       Falsy sources skipped: null, undefined, 0, -0, NaN, '' (empty string), false.
+#       (Note 0/'' /false/NaN never reach baseMerge; only TRUTHY sources are merged.)
+#   N3. return object   # the (possibly Object()-wrapped) destination.
+#
+#   RETURN / IDENTITY: returns the value of `object` AFTER step N1. For an object/array first arg this
+#   is the SAME reference that was passed in (=== identity holds), now mutated. For null/undefined/
+#   primitive first arg it is the fresh Object()-wrapper described in N1.
+#
+# ============================ baseMerge(object, source, srcIndex) ============================
+#   B0. if (object === source) return;   # self-merge short-circuit (no-op)
+#   B1. Iterate keys of `source` using keysIn(source): OWN + INHERITED enumerable string-keyed
+#       properties (a for-in over Object(source), minus a 'constructor' key that is inherited-or-
+#       not-own on a prototype). Iteration order = JS for-in order (insertion order for string keys
+#       on plain objects; ascending integer-index order first for arrays/array-likes).
+#       - For a TRUTHY-but-PRIMITIVE source (e.g. a non-empty string "hi"), Object(source) is a String
+#         box whose enumerable keys are its character indices "0","1",...; merging "hi" into {} yields
+#         {0:"h",1:"i"}. A truthy Number/BigInt/Boolean box has NO enumerable own keys -> no-op.
+#       - Set/Map as a top-level SOURCE: they have no own enumerable string keys -> no-op (their
+#         contents are NOT enumerated).
+#   B2. For each (srcValue, key) where srcValue = iterable[key]:
+#         (lazily allocate a Stack for cycle tracking on first key)
+#         if (isObject(srcValue)) {          # isObject := value != null && (typeof === 'object' || 'function')
+#             baseMergeDeep(object, source, key, srcIndex, baseMerge, /*customizer*/ undefined, stack)
+#         } else {                           # srcValue is a primitive (incl. null, undefined, bigint, NaN)
+#             newValue = srcValue
+#             assignMergeValue(object, key, newValue)
+#         }
+#
+# ============================ assignMergeValue(object, key, value) ============================
+#   Assigns ONLY when:
+#       (value !== undefined && !eq(object[key], value))      # value is defined and differs (SameValueZero)
+#     || (value === undefined && !(key in object))            # value is undefined AND key absent on object
+#   otherwise NO write occurs.
+#   eq = SameValueZero: a===b OR (a!==a && b!==b)  (so NaN eq NaN is true; +0 eq -0 is true).
+#   Consequences (VERIFIED):
+#     - UNDEFINED-SKIP RULE: a source value of `undefined` is SKIPPED (does not overwrite) when the
+#       destination already HAS the key (`key in object` true) — EVEN IF the existing value is itself
+#       undefined. If the destination LACKS the key, the key is CREATED with value undefined
+#       (so `'k' in result` becomes true with result.k === undefined).
+#     - A defined value equal (SameValueZero) to the existing dest value is NOT re-written (no-op,
+#       observationally identical).
+#   The actual write goes through baseAssignValue (see below).
+#
+# ============================ baseMergeDeep(object, source, key, srcIndex, mergeFunc, _, stack) ============================
+#   objValue = safeGet(object, key)        # see safeGet proto-guard below
+#   srcValue = safeGet(source, key)        # safeGet applied to BOTH sides
+#   stacked  = stack.get(srcValue)         # CYCLE handling: if this srcValue object was already
+#                                          # being merged on the current path, reuse its merged
+#                                          # counterpart and assignMergeValue(object,key,stacked); return.
+#   newValue = undefined                   # (no customizer) -> isCommon = (newValue === undefined) = true
+#   if (isCommon) {
+#       isArr   = isArray(srcValue)
+#       isBuff  = !isArr && isBuffer(srcValue)              # Node Buffer
+#       isTyped = !isArr && !isBuff && isTypedArray(srcValue)
+#       newValue = srcValue
+#       if (isArr || isBuff || isTyped) {
+#           if (isArray(objValue))               newValue = objValue                 # keep dest array; recurse index-wise
+#           else if (isArrayLikeObject(objValue)) newValue = copyArray(objValue)     # dest is array-like (e.g. typed array)
+#                                                                                    #   -> shallow-copy its elements into a PLAIN Array, then recurse
+#           else if (isBuff)  { isCommon=false; newValue = cloneBuffer(srcValue, true) }   # deep-clone Buffer; NO recurse
+#           else if (isTyped) { isCommon=false; newValue = cloneTypedArray(srcValue, true) } # deep-clone typed array; NO recurse
+#           else                                  newValue = []                      # fresh empty array; recurse
+#       }
+#       else if (isPlainObject(srcValue) || isArguments(srcValue)) {
+#           newValue = objValue
+#           if (isArguments(objValue))                       newValue = toPlainObject(objValue)
+#           else if (!isObject(objValue) || isFunction(objValue)) newValue = initCloneObject(srcValue)  # fresh clone target
+#           # else: dest already an object -> merge INTO it in place
+#       }
+#       else {
+#           isCommon = false        # srcValue is some OTHER object (Date, RegExp, Map, Set, Error,
+#                                   # a class instance, a boxed primitive, ...): NOT recursed.
+#                                   # newValue stays === srcValue -> ASSIGNED BY REFERENCE.
+#       }
+#   }
+#   if (isCommon) {
+#       stack.set(srcValue, newValue)
+#       mergeFunc(newValue, srcValue, srcIndex, undefined, stack)   # RECURSE deep-merge
+#       stack.delete(srcValue)
+#   }
+#   assignMergeValue(object, key, newValue)
+#
+#   DERIVED RULES (all VERIFIED against the running package):
+#     R1. ARRAY INDEX-MERGE (not replace): arrays merge element-by-element by index. Source elements
+#         overwrite/recurse into dest elements at the same index; a longer source EXTENDS the dest;
+#         dest elements past the source length are KEPT.
+#           merge([1,2,3],[4])      -> [4,2,3]
+#           merge([1],[4,5,6])      -> [4,5,6]
+#           merge({a:[{b:2},{d:4}]},{a:[{c:3},{e:5}]}) -> {a:[{b:2,c:3},{d:4,e:5}]}
+#         (Holes in a sparse source array are not enumerated by keysIn, so they leave dest untouched:
+#           merge([1,2],[,9]) -> [1,9].)
+#     R2. PLAIN OBJECT into ARRAY dest (or vice versa) is a type-conflict resolved by the dest type:
+#         - srcValue plain object, objValue Array -> objValue kept, recurse: numeric src keys land at
+#           those indices, NON-index string keys are attached as named props on the array object.
+#             merge({a:[1,2,3]},{a:{1:99,foo:'bar'}}) -> {a:[1,99,3, foo:'bar']}
+#             merge({a:[1,2]},{a:{0:9}})              -> {a:[9,2]}
+#         - srcValue Array, objValue plain object -> objValue is NOT array/array-like-object, so a
+#           fresh [] target is used and the source array's indices populate it.
+#             merge({a:{x:1}},{a:[10]}) -> {a:[10]}
+#             merge({a:{x:1}},{a:[]})   -> {a:[]}
+#     R3. PRIMITIVE vs OBJECT:
+#         - object source value over primitive/absent dest -> dest gets a deep CLONE of the source
+#           object graph (plain objects/arrays recursed; foreign objects assigned by ref).
+#             merge({a:1},{a:{x:2}}) -> {a:{x:2}}
+#         - primitive source value over object dest -> primitive simply overwrites.
+#             merge({a:{x:1}},{a:5}) -> {a:5}
+#     R4. TYPED ARRAYS / BUFFERS are DEEP-CLONED when they land at a fresh/non-array-like dest
+#         (NOT aliased to the source); but if the dest at that key is already an Array or array-like
+#         object, R1/copyArray applies and the RESULT is a PLAIN ARRAY of index-merged values:
+#             merge({}, {ta:new Uint8Array([1,2,3])}).ta  -> a NEW Uint8Array [1,2,3] (!== source)
+#             merge({}, {buf:Buffer.from([5,6,7])}).buf   -> a NEW Buffer [5,6,7]    (!== source)
+#             merge({a:[10,20,30]},{a:new Uint8Array([1,2])}) -> {a:[1,2,30]}  (plain Array; dest array kept)
+#             merge({a:new Uint8Array([9,9,9])},{a:[1,2]})    -> {a:[1,2,9]}    (plain Array; dest typed array copyArray'd)
+#             merge({ta:new Uint8Array([9,9,9,9])},{ta:new Uint8Array([1,2])}) -> {ta:[1,2,9,9]} (plain Array)
+#     R5. DATE, REGEXP, MAP, SET, ERROR, and other non-plain, non-array, non-buffer, non-typed-array
+#         objects are NOT recursed and NOT cloned: newValue === srcValue, ASSIGNED BY REFERENCE.
+#         They OVERWRITE whatever the dest held at that key (including a prior Date/Map/etc).
+#             merge({}, {d:new Date(0)}).d === <that Date>       (same ref)
+#             merge({}, {re:/abc/g}).re === <that RegExp>        (same ref)
+#             merge({}, {s:new Set([1,2])}).s === <that Set>     (same ref)
+#             merge({m:m1},{m:m2}).m === m2                      (overwrite by ref)
+#             merge({x:{a:1}},{x:new Date(0)}).x instanceof Date (Date overrides the object)
+#     R6. CYCLES: a self-referential source is merge-safe via the Stack; the merged counterpart is a
+#         fresh graph, so the cycle is NOT reproduced into the dest as self-reference
+#         (merge({}, s) where s.self=s yields a result whose .self !== result).
+#     R7. INHERITED enumerable source keys ARE merged (keysIn includes prototype-chain enumerables):
+#             merge({}, new Foo()) merges both own and Foo.prototype enumerable props.
+#     R8. NULL-PROTO dest sub-objects are merged in place and KEEP their null prototype.
+#     R9. NaN / +Infinity / -Infinity / bigint primitive values pass through and are assigned
+#         (NaN via the eq SameValueZero check); they are plain primitive writes.
+#
+# ============================ safeGet(object, key)  (PROTO-POLLUTION GUARD) ============================
+#   safeGet returns undefined (treats the key as absent) when:
+#     - key === 'constructor' AND typeof object[key] === 'function'   -> return undefined
+#     - key === '__proto__'                                           -> return undefined
+#   else returns object[key].
+#   Effect inside baseMergeDeep (which reads BOTH objValue and srcValue via safeGet):
+#     - '__proto__' source values are NEVER read (srcValue undefined) -> the '__proto__' branch never
+#       recurses; NO prototype pollution occurs. A JSON-parsed {"__proto__":{...}} source merges to a
+#       result with NO own '__proto__' key and pollutes nothing:
+#         merge({}, JSON.parse('{"__proto__":{"x":1}}'))  -> {} with Object.keys === []  and {}.x === undefined
+#     - A source 'constructor' key whose dest constructor is the native Object function: safeGet(object,
+#       'constructor') returns undefined (Object is a function), so dest is treated as lacking it; if the
+#       source 'constructor' VALUE is itself an object/primitive it IS merged onto an OWN 'constructor'
+#       key of the result (this is a plain own-property write via baseMergeDeep/assignMergeValue, NOT a
+#       prototype change):
+#         merge({}, {constructor:{x:1}}) -> result has OWN key 'constructor' === {x:1}; Object.keys === ['constructor']
+#         merge({}, {constructor:5})     -> result.constructor === 5 (own); Object.keys === ['constructor']
+#   NOTE: the iteration in baseMerge primitive-branch (B2 else) does NOT use safeGet — it reads
+#   iterable[key] directly and writes via assignMergeValue. safeGet is used only on the DEEP path
+#   (baseMergeDeep) and gates which OBJECT-valued keys get recursed. A primitive-valued '__proto__'
+#   source key takes the B2-else path; but for a plain JSON object the value of "__proto__" is an
+#   object, so it takes the deep path and is suppressed by safeGet. (For a primitive-valued __proto__,
+#   assignMergeValue writes to a '__proto__' key via baseAssignValue's defineProperty branch as an OWN
+#   data property — genInputs does NOT emit such keys; documented for completeness, see SCOPE.)
+#
+# ============================ baseAssignValue(object, key, value)  (the actual write) ============================
+#   if (key === '__proto__' && defineProperty exists):
+#       defineProperty(object,'__proto__',{configurable:true,enumerable:true,value,writable:true})  # OWN data prop
+#   else:
+#       object[key] = value
+#   (genInputs never emits a literal '__proto__' or 'constructor' key, so the only observable path here
+#    is the plain `object[key] = value` assignment.)
+
+ORACLE value -> oracle.json
+# Observable graded by the harness: the RETURNED object (the mutated destination), serialized via the
+# oracle JSON codec. Because the unit mutates tuple[0] in place AND returns it, the returned value fully
+# captures the post-merge state. genInputs emits ONLY codec-faithful argument graphs (see merge.inputs.mjs)
+# so every returned graph round-trips through JSON.stringify(encode(result)).
+
+SCOPE
+# ---- IN-CONTRACT LOGIC (reproduce EXACTLY) ----
+#   * The full pipeline above: createAssigner truthiness gate + left-to-right source order; baseMerge
+#     keysIn iteration (own + inherited enumerable string keys); the isObject(srcValue) dispatch;
+#     assignMergeValue's SameValueZero / undefined-skip / key-creation rule; baseMergeDeep's branch
+#     ladder (array/buffer/typed-array vs plain-object/arguments vs foreign-object); array INDEX-MERGE;
+#     type-conflict resolution by dest type; deep clone of plain-object/array graphs; deep clone of
+#     Buffer/typed-array at a fresh/non-array-like dest; by-REFERENCE assignment of Date/RegExp/Map/Set/
+#     and other foreign objects; copyArray->plain-Array when a typed/array-like dest meets an
+#     array/buffer/typed source; cycle handling; null-prototype preservation; safeGet __proto__ /
+#     constructor guards; identity of the returned reference (same ref for object/array first arg).
+#
+#   * In-scope value classes exercised by genInputs (SELF-CONSISTENT with merge.inputs.mjs — every one
+#     of these has its behavior defined above):
+#       - primitives as VALUES: number (incl. 0, -0, negatives, floats), string (incl. ''), boolean,
+#         null, bigint, NaN, +Infinity, -Infinity.
+#       - plain objects (incl. nested, empty {}, Object.create(null) null-proto), arrays (incl. empty
+#         [], sparse-via-holes, nested arrays/objects), index-merge collisions, overlapping keys.
+#       - Date, RegExp, Set, Map as VALUES (assigned by reference per R5).
+#       - Uint8Array and Node Buffer as VALUES (deep-cloned per R4).
+#       - explicit `undefined` source values (undefined-skip / key-creation per assignMergeValue).
+#       - multiple sources; falsy sources (null/undefined/0/false/''/NaN) interspersed (skipped per N2).
+#       - type-conflict pairs: object-vs-array, primitive-vs-object, typed-array-vs-array,
+#         Date-over-object, foreign-over-foreign.
+#     The FIRST argument emitted by genInputs is ALWAYS a plain object or array (never null/undefined/
+#     primitive) so the returned graph is codec-faithful; the null/undefined/primitive-first-arg
+#     behavior is fully specified above for a blind re-emitter but is OUT-OF-ENVELOPE for genInputs.
+#
+# ---- CARRIED DATA ----
+#   none. lodash.merge contains no large constant tables requiring an external authority. (The internal
+#   tag strings like '[object Array]' and the typedArrayTags map are tiny structural constants, not a
+#   carried table; they are reproduced as ordinary in-contract logic, not extracted.)
+#
+# ---- OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs) ----
+#   * FUNCTIONS as source values (including a function stored as an object VALUE): isObject(fn) is true
+#     and isFunction routes them through baseMergeDeep; but functions are NOT JSON-codec-faithful, so
+#     genInputs MUST NOT emit them. A blind re-emitter still reproduces the logic from the spec.
+#   * SYMBOLS as keys or values: merge uses keysIn (STRING keys only) so symbol-keyed source props are
+#     never enumerated; symbol VALUES are not codec-faithful. NOT emitted.
+#   * NON-OBJECT FIRST ARGUMENT (null/undefined/number/string/boolean/bigint): behavior fully specified
+#     (N1 boxing); RESULT (a boxed wrapper or fresh {}) is documented but not codec-faithful for boxed
+#     primitives, so genInputs emits only object/array first args.
+#   * Literal '__proto__' / 'constructor' keys in emitted inputs: specified (safeGet guards) but NOT
+#     emitted, to keep result graphs free of own '__proto__'/exotic keys whose codec round-trip is
+#     fragile.
+#   * STATEFUL-COERCION inputs (getters, Proxies, objects with side-effecting valueOf/toString): NEVER
+#     constructed by genInputs (would make the seam non-deterministic). Out of scope.
+#   * The Date.now()-based shortOut hot-loop guard on the rest-binder: internal, non-observable for a
+#     single call (see DEPENDS-ON). Not a seam.
+
+PROVENANCE lodash.merge@4.6.2 (Lodash custom modularized build), repo lodash/lodash, MIT license,
+  source file: node_modules/lodash.merge/index.js (module.exports = merge; merge =
+  createAssigner(function(object, source, srcIndex){ baseMerge(object, source, srcIndex); })).

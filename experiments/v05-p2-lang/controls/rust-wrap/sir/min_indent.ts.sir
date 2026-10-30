@@ -1,0 +1,15 @@
+UNIT min_indent
+LANG ts
+PRIMARY-SHA256 27d9af564c7f4fa2ac092b56471c5941dc3c0d2315072c4e5f00f7fbfbd19048
+SIG export default function min_indent(input: string): number
+ABI TypeScript compiles to the js runtime: text=string (UTF-16 code units; an unpaired surrogate is representable and
+  is content per R4); u64=number (a non-negative integer). STRICT: the artifact must type-check under strict: true
+  against this SIG, with no any, no non-null assertions (!), and no @ts-ignore / @ts-expect-error. A null match result
+  must be handled by narrowing, not asserted away.
+MECHANISM (restated from js — language files are self-contained) R1-R5 are one global, multiline match of the LEADING
+  pin: each match is the indent of one content line; no match (null) -> 0, else the minimum of the match lengths. The
+  m flag's ^ realizes BREAK exactly; [ \t] realizes INDENT; (?=\S) realizes "next character exists and is not in
+  BLANK". Do NOT split on "\n" alone — CR, U+2028 and U+2029 are breaks too (oracle v15, v16, v17).
+DEPENDS-ON none
+PINNED regex LEADING = /^[ \t]*(?=\S)/gm CITED R1-R5 — min-indent@1.0.1 index.js
+PROVENANCE min-indent@1.0.1 index.js — this file states the typed SIG and the dialect only; no behavior.

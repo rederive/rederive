@@ -1,0 +1,1132 @@
+{
+ "mode": "vectors",
+ "unit": "adopt_replace_block",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v1",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    [
+     "- kept project rule",
+     "Cite §11 of the GDD."
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n- kept project rule\n\nCite §11 of the GDD.\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v2",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "\n\n  <!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->  \n\n",
+    [
+     "",
+     " \t",
+     " ",
+     "　﻿"
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v3",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    [
+     "  padded kept  ",
+     "multi\nline\n\nkept",
+     "ends with lf\n",
+     "crlf\r\nkept\rlone cr",
+     ""
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n  padded kept  \n\nmulti\nline\n\nkept\n\nends with lf\n\ncrlf\nkept\nlone cr\n\n\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v4",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "# Project",
+     "startLine": 0,
+     "endLine": 4
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v5",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Other",
+     "startLine": 8,
+     "endLine": 11
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    [
+     "k"
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n"
+  },
+  {
+   "name": "v6",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Other",
+     "startLine": 8,
+     "endLine": 10
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n"
+  },
+  {
+   "name": "v7",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "x",
+     "startLine": 0,
+     "endLine": 11
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n"
+  },
+  {
+   "name": "v8",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "x",
+     "startLine": 0,
+     "endLine": 11
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    [
+     "k"
+    ]
+   ],
+   "expected": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n"
+  },
+  {
+   "name": "v9",
+   "args": [
+    "# Project\n\n## Hard rules\nbody\n## Other\ntail",
+    {
+     "heading": "## Hard rules",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "# Project\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail"
+  },
+  {
+   "name": "v10",
+   "args": [
+    "# Project\n\n## Hard rules\nbody\n## Other\ntail",
+    {
+     "heading": "## Hard rules",
+     "startLine": 2,
+     "endLine": 6
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "# Project\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n"
+  },
+  {
+   "name": "v11",
+   "args": [
+    "# Project\n\n## Hard rules\nbody\n## Other\ntail",
+    {
+     "heading": "## Other",
+     "startLine": 4,
+     "endLine": 5
+    },
+    "M",
+    []
+   ],
+   "expected": "# Project\n\n## Hard rules\nbody\n\nM\n\ntail"
+  },
+  {
+   "name": "v12",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 4
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [4, 4) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 6,
+     "endLine": 3
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [6, 3) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 12
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [4, 12) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 0,
+     "endLine": 0
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [0, 0) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": -1,
+     "endLine": 3
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [-1, 3) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": -9007199254740991,
+     "endLine": 9007199254740991
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [-9007199254740991, 9007199254740991) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 9007199254740990,
+     "endLine": 9007199254740991
+    },
+    "",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [9007199254740990, 9007199254740991) are not a range of this 11-line file"
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "",
+    [
+     "k"
+    ]
+   ],
+   "expected": {
+    "__throw": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    " \t\r\n 　﻿ ",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "",
+    []
+   ],
+   "expected": "# Project\n\nIntro line.\n\n\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v22",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "​",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 1
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    []
+   ],
+   "expected": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 1
+    },
+    "",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "\n",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 1
+    },
+    "M",
+    []
+   ],
+   "expected": "M\n"
+  },
+  {
+   "name": "v26",
+   "args": [
+    "\n",
+    {
+     "heading": "",
+     "startLine": 1,
+     "endLine": 2
+    },
+    "M",
+    []
+   ],
+   "expected": "M\n"
+  },
+  {
+   "name": "v27",
+   "args": [
+    "\n\n\n",
+    {
+     "heading": "",
+     "startLine": 1,
+     "endLine": 2
+    },
+    "M",
+    []
+   ],
+   "expected": "M\n"
+  },
+  {
+   "name": "v28",
+   "args": [
+    "only one line",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 1
+    },
+    "M",
+    [
+     "k"
+    ]
+   ],
+   "expected": "M\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n"
+  },
+  {
+   "name": "v29",
+   "args": [
+    "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 2,
+     "endLine": 5
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    [
+     "kept\nrule"
+    ]
+   ],
+   "expected": "# Project\r\n\r\n<!-- rederive:begin profile -->\r\n## Hard rules\r\n- managed rule\r\n<!-- rederive:end -->\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nkept\r\nrule\r\n\r\n## Other\r\ntail\r\n"
+  },
+  {
+   "name": "v30",
+   "args": [
+    "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "\r\nM\r\n\nN\r\r\n",
+    []
+   ],
+   "expected": "# Project\r\n\r\nM\r\n\r\nN\r\n\r\n## Other\r\ntail\r\n"
+  },
+  {
+   "name": "v31",
+   "args": [
+    "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+    {
+     "heading": "## Other",
+     "startLine": 5,
+     "endLine": 8
+    },
+    "M",
+    []
+   ],
+   "expected": "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\nM\r\n"
+  },
+  {
+   "name": "v32",
+   "args": [
+    "x\r\r\n## B\r\nb\r\n\r\ny\r",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 3
+    },
+    "M",
+    []
+   ],
+   "expected": "x\r\r\n\r\nM\r\n\r\ny\r"
+  },
+  {
+   "name": "v33",
+   "args": [
+    "# Top\nlf line\r\n\r\n## B\nbody\r\n\n## C\nend",
+    {
+     "heading": "## B",
+     "startLine": 3,
+     "endLine": 6
+    },
+    "M",
+    [
+     "k"
+    ]
+   ],
+   "expected": "# Top\nlf line\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nk\r\n\r\n## C\nend"
+  },
+  {
+   "name": "v34",
+   "args": [
+    "A\n\n## B\r\nx\r\n\n## C\nD\n",
+    {
+     "heading": "## B",
+     "startLine": 2,
+     "endLine": 5
+    },
+    "M\nN",
+    []
+   ],
+   "expected": "A\n\nM\nN\n\n## C\nD\n"
+  },
+  {
+   "name": "v35",
+   "args": [
+    "# Top  \t\n \t\r\n\t\n## Block\nx\n \n\n    indented code after\n  - nested item\n",
+    {
+     "heading": "## Block",
+     "startLine": 3,
+     "endLine": 5
+    },
+    "M",
+    []
+   ],
+   "expected": "# Top  \t\r\n\r\nM\r\n\r\n    indented code after\n  - nested item\n"
+  },
+  {
+   "name": "v36",
+   "args": [
+    "# Top  \t\n \t\r\n\t\n## Block\nx\n \n\n    indented code after\n  - nested item\n",
+    {
+     "heading": "## Block",
+     "startLine": 3,
+     "endLine": 4
+    },
+    "M",
+    []
+   ],
+   "expected": "# Top  \t\r\n\r\nM\r\n\r\nx\n \n\n    indented code after\n  - nested item\n"
+  },
+  {
+   "name": "v37",
+   "args": [
+    "a\n \n## B\nx\n\f\nb",
+    {
+     "heading": "## B",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "M",
+    []
+   ],
+   "expected": "a\n \n\nM\n\n\f\nb"
+  },
+  {
+   "name": "v38",
+   "args": [
+    "a\n　\t\n## B\nx\n\n \t \nb   \n",
+    {
+     "heading": "## B",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "M",
+    []
+   ],
+   "expected": "a\n　\t\n\nM\n\n\n \t \nb   \n"
+  },
+  {
+   "name": "v39",
+   "args": [
+    "  lead\n## B\nx\n\t\ttail  ",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 3
+    },
+    "  M  ",
+    []
+   ],
+   "expected": "  lead\n\nM\n\n\t\ttail  "
+  },
+  {
+   "name": "v40",
+   "args": [
+    "a\nb\r\n## B\r\nx\r\n\ny\nz",
+    {
+     "heading": "## B",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "M",
+    [
+     "k"
+    ]
+   ],
+   "expected": "a\nb\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nk\r\n\r\ny\nz"
+  },
+  {
+   "name": "v41",
+   "args": [
+    "a\n## B\r\nx\r\n",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 4
+    },
+    "M",
+    []
+   ],
+   "expected": "a\n\nM\n"
+  },
+  {
+   "name": "v42",
+   "args": [
+    "x\r\n## B\nb",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 2
+    },
+    "M",
+    []
+   ],
+   "expected": "x\r\n\r\nM\r\n\r\nb"
+  },
+  {
+   "name": "v43",
+   "args": [
+    "x\r\n\r\n## B\nb",
+    {
+     "heading": "## B",
+     "startLine": 2,
+     "endLine": 3
+    },
+    "M",
+    []
+   ],
+   "expected": "x\r\n\r\nM\r\n\r\nb"
+  },
+  {
+   "name": "v44",
+   "args": [
+    "x\r\n## B\nb\ny\r",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 3
+    },
+    "M",
+    []
+   ],
+   "expected": "x\r\n\r\nM\r\n\r\ny\r"
+  },
+  {
+   "name": "v45",
+   "args": [
+    "x\r\n## B\nb\ny\r\nz",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 3
+    },
+    "M",
+    []
+   ],
+   "expected": "x\r\n\r\nM\r\n\r\ny\r\nz"
+  },
+  {
+   "name": "v46",
+   "args": [
+    "## B\r\nb\r\n",
+    {
+     "heading": "## B",
+     "startLine": 0,
+     "endLine": 3
+    },
+    "M\nN",
+    [
+     "k"
+    ]
+   ],
+   "expected": "M\nN\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk\n"
+  },
+  {
+   "name": "v47",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    " ­⁠﻿󠀁󠁁 \n",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: the managed section is empty — refusing to replace the giver's block with nothing"
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "​M​",
+    [
+     "​",
+     "­ 󠀠",
+     "᠎؜",
+     "​k​"
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n​M​\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n​k​\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v49",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "h",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "𑂽x",
+    [
+     "𝅳",
+     "𓐰y",
+     ""
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n𑂽x\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n𓐰y\n\n\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v50",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "a\rb\r\r\nc\n\rd",
+    [
+     "k1\r\n",
+     "k2\n\n\r",
+     "k3\r",
+     "k4 \n",
+     "k5\n ",
+     "k6\n\t\r\n",
+     "in\rner\r\nx\n\ny"
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\na\nb\n\nc\n\nd\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nk1\n\nk2\n\nk3\n\nk4 \n\nk5\n \n\nk6\n\t\n\nin\nner\nx\n\ny\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v51",
+   "args": [
+    "# Project\r\n\r\n## Hard rules\r\nbody\r\n\r\n## Other\r\ntail\r\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 2,
+     "endLine": 5
+    },
+    "a\rb\nc\r\nd",
+    [
+     "k1\r",
+     "r\rs\nt\r\nu\r\n"
+    ]
+   ],
+   "expected": "# Project\r\n\r\na\r\nb\r\nc\r\nd\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\nk1\r\n\r\nr\r\ns\r\nt\r\nu\r\n\r\n## Other\r\ntail\r\n"
+  },
+  {
+   "name": "v52",
+   "args": [
+    "# Project\n\nIntro line.\n\n## Hard rules\n- rule one is long enough\n- rule two is long enough\n\n## Other\ntail text\n",
+    {
+     "heading": "## Hard rules",
+     "startLine": 4,
+     "endLine": 8
+    },
+    "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->",
+    [
+     "\r\n\n\r",
+     "\n"
+    ]
+   ],
+   "expected": "# Project\n\nIntro line.\n\n<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n## Other\ntail text\n"
+  },
+  {
+   "name": "v53",
+   "args": [
+    "# Prøject — 日本語 🎮\n## B\nx\n## C\n🎮 tail",
+    {
+     "heading": "## B",
+     "startLine": 1,
+     "endLine": 3
+    },
+    "Managé 🎮",
+    [
+     "règle ✓"
+    ]
+   ],
+   "expected": "# Prøject — 日本語 🎮\n\nManagé 🎮\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\nrègle ✓\n\n## C\n🎮 tail"
+  },
+  {
+   "name": "v54",
+   "args": [
+    "\r\n §11​\n ``` ```\n\t- item\n\n﻿gamma rule §11  \n\r\n",
+    {
+     "heading": "## X",
+     "startLine": 1,
+     "endLine": 11
+    },
+    "## Managed\nbody\r\n",
+    [
+     "\r- item "
+    ]
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [1, 11) are not a range of this 8-line file"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "​``` §11\r\n\n\n🎮\r\n🎮\n\n\r\n\n\t\n§11  \n󠀠gamma rule - item\n\n",
+    {
+     "heading": "",
+     "startLine": 7,
+     "endLine": 9
+    },
+    "\rM",
+    [
+     "\ré  "
+    ]
+   ],
+   "expected": "​``` §11\r\n\n\n🎮\r\n🎮\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n\r\né  \r\n\r\n§11  \n󠀠gamma rule - item\n\n"
+  },
+  {
+   "name": "v56",
+   "args": [
+    "\r\n🎮 Beta \n### 🎮\n### é\n \n  gamma rule\n\f§11 - item\n### \n# alpha",
+    {
+     "heading": "",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "a\rb  ",
+    [
+     " - item  ",
+     "­two\r\nlines "
+    ]
+   ],
+   "expected": "\r\n🎮 Beta \r\n\r\na\r\nb\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n - item  \r\n\r\n­two\r\nlines \r\n\r\n  gamma rule\n\f§11 - item\n### \n# alpha"
+  },
+  {
+   "name": "v57",
+   "args": [
+    "## 🎮\r\n §11   \r\n\ralpha\r\r\n## gamma rule\r\n\tBeta §11 \r\n﻿gamma rule \r\n\r\n",
+    {
+     "heading": "## X",
+     "startLine": 3,
+     "endLine": 7
+    },
+    " ## M\r\nbody\r\n\r\r\n",
+    [
+     "  alpha\r"
+    ]
+   ],
+   "expected": "## 🎮\r\n §11   \r\n\ralpha\r\r\n\r\n## M\r\nbody\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n  alpha\r\n"
+  },
+  {
+   "name": "v58",
+   "args": [
+    "\falpha alpha　\n﻿§11\r\n\n\nalpha  ",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 1
+    },
+    " M  ",
+    [
+     "󠀠é­",
+     "\tcmd --flag­"
+    ]
+   ],
+   "expected": "M\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n󠀠é­\r\n\r\n\tcmd --flag­\r\n\r\n﻿§11\r\n\n\nalpha  "
+  },
+  {
+   "name": "v59",
+   "args": [
+    "\r\r\n\r\n- item󠀠\r\n``` Beta\n\r\n\r\n\rBeta\r\n \r\n é\r\ncmd --flag §11",
+    {
+     "heading": "h",
+     "startLine": 3,
+     "endLine": 9
+    },
+    "M\n\r\n",
+    [
+     "\f§11\r"
+    ]
+   ],
+   "expected": "\r\r\n\r\n- item󠀠\r\n\r\nM\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n\f§11\r\n\r\ncmd --flag §11"
+  },
+  {
+   "name": "v60",
+   "args": [
+    "\r\n- item \r\n\r\n```\r\r\n\f``` ```\n\r\n\r\n§11 §11\f",
+    {
+     "heading": "h",
+     "startLine": 3,
+     "endLine": 3
+    },
+    " ## Managed\nbody\r\n",
+    [
+     "﻿```﻿"
+    ]
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [3, 3) are not a range of this 8-line file"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    "  - item\f\n ``` cmd --flag \n## gamma rule\n# gamma rule",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 2
+    },
+    "﻿## Managed\nbody",
+    []
+   ],
+   "expected": "## Managed\nbody\n\n## gamma rule\n# gamma rule"
+  },
+  {
+   "name": "v62",
+   "args": [
+    "cmd --flag - item\t\r\r\n  alpha alpha\f\r é alpha\r\r",
+    {
+     "heading": "## X",
+     "startLine": 0,
+     "endLine": 2
+    },
+    "\fM\t\r\n",
+    [
+     "  §11"
+    ]
+   ],
+   "expected": "M\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n  §11\n"
+  },
+  {
+   "name": "v63",
+   "args": [
+    "  - item  \r\n﻿cmd --flag\r\n­Beta - item​\r\n - item​\r\n\r\n# - item\r\n  - item\n",
+    {
+     "heading": "h",
+     "startLine": 2,
+     "endLine": 4
+    },
+    "  M\t\n",
+    []
+   ],
+   "expected": "  - item  \r\n﻿cmd --flag\r\n\r\nM\r\n\r\n# - item\r\n  - item\n"
+  },
+  {
+   "name": "v64",
+   "args": [
+    "   \n\falpha \n󠀠- item\n",
+    {
+     "heading": "",
+     "startLine": 3,
+     "endLine": 4
+    },
+    "a\rb­\n",
+    [
+     "\ftwo\r\nlines ",
+     "\f🎮 "
+    ]
+   ],
+   "expected": "   \n\falpha \n󠀠- item\n\na\nb­\n\n## Project rules (kept by `rdv init --adopt` — review and merge)\n\n\ftwo\nlines \n\n\f🎮 \n"
+  },
+  {
+   "name": "v65",
+   "args": [
+    "- item §11​",
+    {
+     "heading": "h",
+     "startLine": -1,
+     "endLine": 0
+    },
+    "\f<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end --> ",
+    []
+   ],
+   "expected": {
+    "__throw": "adopt: block lines [-1, 0) are not a range of this 1-line file"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "\r\n🎮 é\t\n\ralpha ```\nalpha gamma rule \n\r\n é  \n\talpha - item﻿\n## ```\n é​\n　```​\n​  \n",
+    {
+     "heading": "",
+     "startLine": 0,
+     "endLine": 8
+    },
+    "\r<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end --> \r\n",
+    []
+   ],
+   "expected": "<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n\n é​\n　```​\n​  \n"
+  },
+  {
+   "name": "v67",
+   "args": [
+    " \t\r\r\ncmd --flag - item\f",
+    {
+     "heading": "h",
+     "startLine": 1,
+     "endLine": 2
+    },
+    "\fa\rb­",
+    []
+   ],
+   "expected": " \t\r\r\n\na\nb­\n"
+  },
+  {
+   "name": "v68",
+   "args": [
+    "\n 🎮 \r\n\r\ncmd --flag  \r\n  §11 é﻿\r\n\n§11 §11 \r\n\fBeta\r\n# - item\r\n\r\n",
+    {
+     "heading": "## X",
+     "startLine": 1,
+     "endLine": 4
+    },
+    "󠀠## Managed\nbody\r\n\n",
+    [
+     "cmd --flag"
+    ]
+   ],
+   "expected": "󠀠## Managed\r\nbody\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\ncmd --flag\r\n\r\n  §11 é﻿\r\n\n§11 §11 \r\n\fBeta\r\n# - item\r\n\r\n"
+  },
+  {
+   "name": "v69",
+   "args": [
+    "## alpha\n\r\n\n\nBeta",
+    {
+     "heading": "## X",
+     "startLine": 3,
+     "endLine": 4
+    },
+    "­<!-- rederive:begin profile -->\n## Hard rules\n- managed rule\n<!-- rederive:end -->\n",
+    [
+     " - item\r\n"
+    ]
+   ],
+   "expected": "## alpha\r\n\r\n­<!-- rederive:begin profile -->\r\n## Hard rules\r\n- managed rule\r\n<!-- rederive:end -->\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\n - item\r\n\r\nBeta"
+  },
+  {
+   "name": "v70",
+   "args": [
+    "### \r\r\n\r\r\n## - item",
+    {
+     "heading": "h",
+     "startLine": 1,
+     "endLine": 3
+    },
+    "　a\rb\r\n\r\n",
+    []
+   ],
+   "expected": "### \r\r\n\na\nb\n"
+  },
+  {
+   "name": "v71",
+   "args": [
+    "\r§11 alpha \n­cmd --flag\r\n\n",
+    {
+     "heading": "h",
+     "startLine": 2,
+     "endLine": 3
+    },
+    " ## M\r\nbody\r\n",
+    [
+     "cmd --flag",
+     "­ "
+    ]
+   ],
+   "expected": "\r§11 alpha \n­cmd --flag\r\n\r\n## M\r\nbody\r\n\r\n\r\n## Project rules (kept by `rdv init --adopt` — review and merge)\r\n\r\ncmd --flag\r\n"
+  }
+ ]
+}

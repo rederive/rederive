@@ -1,0 +1,23 @@
+UNIT canonical_text
+LANG js
+PRIMARY-SHA256 7ad7b1a714a12e0050b8b1c5548197cbd6a45b3524731c82f0cd5d55ced78430
+SIG canonical_text(text: string): string
+NOTE default export
+ABI text = string (UTF-16 code units). The artifact is an ES module default-exporting the function; it imports nothing and
+  never throws on a well-formed string. Every cut point is an ASCII character or FEFF, so code-unit and scalar-value scans
+  agree.
+ENVELOPE as the primary: a string holding a lone surrogate is OUT. The package throws there, but that throw is out of
+  scope and never graded, so the artifact must NOT check for it: no well-formedness test, no surrogate scan.
+MECHANISM the pins below are the package's own matchers, applied per line in this order: split on BREAK-SPLIT (R1 — the
+  alternation order CRLF first IS the pairing rule); take the match of LEADING-RUN (if any) and delete every FEFF inside it, keeping its spaces and tabs, then replace TRAILING-PAD with "" (R2, in that
+  order); skip an empty string (R3); a match of LEADING-PAD is replaced by two spaces (R4); join with "\n" plus "\n", or ""
+  when nothing was kept (R5). Do not use String.prototype.trim or \s anywhere: they remove no-break space, ideographic
+  space and the separators, which R2–R4 keep (trim also removes FEFF at the END of a line, which R2 keeps).
+DEPENDS-ON none
+PINNED regex BREAK-SPLIT = /\r\n|\r|\n/ CITED R1 and the BREAK grammar
+PINNED regex LEADING-RUN = /^[ \t\uFEFF]+/ CITED R2 — the leading run of pad characters and marks, in any mix
+PINNED regex TRAILING-PAD = /[ \t]+$/ CITED R2 and the PAD charset
+PINNED regex LEADING-PAD = /^[ \t]+/ CITED R4 and the PAD charset
+PROVENANCE rederive@6199e2cc8b75 cli/sir/sir-parse.mjs sirLines + canonicalText. Language file cut 2026-10-26 with the
+  primary, before any blind re-emission; re-cut 2026-10-27 for round 5 (marks after the indent); re-cut for round 5b on 6199e2cc8b75
+  (every mark in the leading run).

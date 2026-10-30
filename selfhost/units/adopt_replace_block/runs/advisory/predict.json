@@ -1,0 +1,80 @@
+{
+ "status": "ok",
+ "unit": "adopt_replace_block",
+ "primary": "selfhost/units/adopt_replace_block/sir/adopt_replace_block.sir",
+ "primarySha256": "e6eeba5909802787e54f046addbade224098d3b0b3de51c2fb1aa0cc6d286cb5",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "LINES: existing is cut at every LF (U+000A); k LFs give N = k + 1 lines (the empty text is one empty line; a final LF leaves a final empty line). A CR stays part of its line; U+2028, U+2029, VT, FF and NEL are ordinary content.",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R2",
+   "text": "RANGE: S = block.startLine, E = block.endLine. Unless 0 <= S < E <= N the call throws. This check comes first.",
+   "ambiguity": 0.32
+  },
+  {
+   "id": "R3",
+   "text": "VISIBLE: a text is VISIBLE when it holds at least one character that is in neither WS nor CF; the empty text, and a text of only WS and CF characters, is not. If managed is not VISIBLE the call throws. block.heading is never read.",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R4",
+   "text": "EOL: list the lines OUTSIDE the range in order, lines 0 .. S-1 then lines E .. N-1 (BLANK lines included). EOL is CR LF when some line of that list OTHER THAN ITS LAST ends with a CR; otherwise LF. Lines inside the range never count, nor does a CR ending the last listed line: when E = N, a CR ending line S-1 is not counted. An empty list gives LF.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R5",
+   "text": "A line is BLANK when every character of it is a space (U+0020), a tab (U+0009) or a CR; the empty line is BLANK. This is NOT the WS set: a line holding NBSP, FF, VT or U+3000 is content.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R6",
+   "text": "BEFORE: let p be the last line index below S whose line is not BLANK. With no such line BEFORE is empty. Otherwise BEFORE is existing verbatim from its start up to and excluding the LF that follows line p; when EOL is CR LF one CR ending line p is excluded too, and when EOL is LF that CR stays as BEFORE's last character. The BLANK lines p+1 .. S-1 are dropped; trailing spaces of line p survive.",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "R7",
+   "text": "AFTER: let q be the first line index at or above E whose line is not BLANK. With no such line AFTER is empty. Otherwise AFTER is existing verbatim from the start of line q to its end, including whatever ends it (a final LF or CR LF, a lone CR, or nothing). The BLANK lines E .. q-1 are dropped; indentation of line q survives.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R8",
+   "text": "CONVERT a text to EOL: scanning left to right, each CR LF pair, each other CR and each other LF becomes one EOL (CR CR LF gives two EOLs, LF CR gives two).",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R9",
+   "text": "MANAGED: managed with its leading and trailing runs of WS characters removed (interior untouched; CF characters are not removed), then CONVERT.",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R10",
+   "text": "RULES: the kept elements in order, omitting every element that is not VISIBLE. With none left RULES is empty. Otherwise each remaining element loses the maximal run of CR and LF characters at its end (only those two characters: a space, tab or NEL ends the run), then is CONVERTed; RULES is HEADER, EOL, EOL, then those elements joined by EOL EOL. Nothing else is trimmed: leading whitespace, interior line ends and trailing whitespace other than CR and LF survive.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R11",
+   "text": "RESULT: of BEFORE, MANAGED, RULES, AFTER in this order drop the empty ones and join the rest with EOL EOL. When AFTER is empty, append one EOL; otherwise append nothing (the result ends exactly as existing does). CITED FIDELITY package",
+   "ambiguity": 0.34
+  }
+ ],
+ "ranked": [
+  "R6",
+  "R4",
+  "R8",
+  "R10",
+  "R11",
+  "R2",
+  "R7",
+  "R9",
+  "R1",
+  "R3",
+  "R5"
+ ],
+ "at": "2026-10-28T02:50:50Z"
+}

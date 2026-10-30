@@ -1,0 +1,980 @@
+{
+ "mode": "vectors",
+ "unit": "detect_features",
+ "authority": "rederive@69b68b4a1c39",
+ "authorityTreeSha256": "fdf648cfc37d038aed85657e0e6c3a3de9aee504979b89b5e20278916a0bfedb",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {}
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "sirText": "UNIT a\nKIND EFFECT\nPAR {\n  x\n}\nEFFECT a*\"microtask\" b?\"q\"\n"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "par-interleaving",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "sirText": "UNIT a\nENVELOPE text only\nRING token\nCARRIED-DATA \"sbox.json\"\n﻿\t﻿# setTimer\n"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "envelope",
+    "ring"
+   ]
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "sirText": "UNIT a\nLIFECYCLE timer armed\nDESCRIPTION uses schedule(fn) on virtual time\nCARRIED-DATA none\n  EARNED sbox.json"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "lifecycle",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "sirText": "UNIT a\nEFFECT time.timer\nDESCRIPTION arm setTimer(5)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lifecycle",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "sirText": "UNIT a\nANCHOR ref(python:botocore.auth.SigV4Auth)\n"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "sirText": "UNIT a\nANCHOR ref(lodash:x) ref(js:y)\nCARRIED-DATA ANCHOR sbox.json"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "carriedData": [
+      {
+       "name": "t"
+      }
+     ],
+     "mode": "trace"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "trace-seam"
+   ]
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "carriedData": [],
+     "envelope": " \t ",
+     "mode": "vectors",
+     "sirFiles": [
+      "u.ts.ſir",
+      "u.rust.SiR"
+     ]
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lang-variant"
+   ]
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "envelope": "　",
+     "mode": "par"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "envelope",
+    "par-interleaving"
+   ]
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "mode": "ring",
+     "sirFiles": [
+      "sir/a.sir",
+      "sir/a.ts.sir",
+      "sir/a.inputs.mjs"
+     ]
+    }
+   ],
+   "expected": [
+    "vectors",
+    "ring",
+    "lang-variant"
+   ]
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "variants": {
+      "lang:rust": {},
+      "package": {
+       "lang": "js"
+      }
+     }
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lang-variant"
+   ]
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "sirFiles": [
+      "a.go.sir"
+     ]
+    }
+   ],
+   "expected": {
+    "__throw": "a.go.sir: 'go' is not in the closed language registry (js, ts, rust, php, csharp, python)"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "sirText": "UNIT a\n  PAR indented\nPARALLEL x\nPAR-X y\nDESCRIPTION RING and LIFECYCLE in prose\n  ENVELOPE in prose\n PAR\n# PAR in a comment\nNOTE x # setTimer in a trailing comment"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lifecycle"
+   ]
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "sirText": "NOTE we never call \"setTimer\"\nNOTE x CITED virtual time\nNOTE y EARNED schedule(z)\nNOTE w ANCHOR timers.x\nANCHOR setTimer\nANCHOR see \"ref(js:x)\""
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "sirText": "NOTE a;\"setTimer\" b|\"schedule(\" c-\"timers.x\" \"x\"\"virtual time\""
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v16",
+   "args": [
+    null
+   ],
+   "expected": {
+    "__throw": "Cannot read properties of null (reading 'sirText')"
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "sirText": "UNIT a\nFIDELITY spec ANCHOR ref(ts:x)\nNOTE x CITED ANCHOR ref(js:y)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "sirText": "CARRIED-DATA  none\nEFFECT 12\" wide # microtask \"q"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data"
+   ]
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "sirText": "EFFECT \"a\\ \" # \" microtask\nFIDELITY spec ANCHOR \"a CITED b\" ref(ts:x)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "sirText": "setTimer(1) schedule(x)\n  PAR\nUNIT a"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lifecycle",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "sirFiles": [
+      "x y.ts.sir"
+     ]
+    }
+   ],
+   "expected": {
+    "__throw": "x y.ts.sir: \"x y.ts.sir\" — a unit name is letters, digits, _ and -"
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "carriedData": [
+      "x"
+     ],
+     "envelope": "e",
+     "mode": "trace",
+     "sirText": "PAR\nRING\nLIFECYCLE\nDESCRIPTION schedule(\nANCHOR x\n  ref(rust:y)",
+     "sirFiles": [
+      "u.php.sir"
+     ],
+     "variants": {
+      "lang:ts": {}
+     }
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "envelope",
+    "trace-seam",
+    "par-interleaving",
+    "ring",
+    "lifecycle",
+    "scheduler",
+    "lang-variant",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "variants": {
+      " lang:ts": {
+       "sir": "u.ts.sir"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant  lang:ts: a variant key is 'package' or 'lang:<id>'"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "sirText": "DESCRIPTION on virtual\n  time\nNOTE virtual\ttime, virtual  time, virtual timeout\nNOTE x\n  virtual CITED time\nDESCRIPTION a virtual CITED time"
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "sirText": "PAR:\nR1: RING\rUNIT a\r\nTRACE-SEAM http"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "trace-seam",
+    "par-interleaving"
+   ]
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "sirText": "﻿PAR\n﻿﻿RING\n﻿# setTimer\n  # schedule(x)\n\t﻿# timers.x"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "par-interleaving",
+    "ring"
+   ]
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "sirText": "NOTE x\n ﻿\"setTimer\"\n﻿ ﻿\"schedule(\"\n\t﻿\"a # b\" microtask"
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "sirText": " # setTimer\nUNIT a PAR\nCARRIED t = x"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data"
+   ]
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "sirText": "CARRIED-DATA none\nCARRIED-DATA\nCARRIED-DATA none CITED none\nCARRIED-DATA CITED\nCARRIED-DATA\n  none\nCARRIED-DATA\t none \t\nCARRIED-DATA # none\nCARRIED-DATA none # x\nCARRIED-DATA none CITED none EARNED\nCARRIED-DATA\n  ANCHOR none"
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "sirText": "CARRIED-DATA none　\nORACLE-CLASS trace x"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "trace-seam"
+   ]
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "sirText": "CARRIED-DATA \"none\"\nORACLE-CLASS\n trace"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "trace-seam"
+   ]
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "sirText": "CARRIED-DATA \"\"\nORACLE-CLASS \"trace\"\nVARIANT v ANCHOR\n  ANCHOR ref(rust:y)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "sirText": "ORACLE-CLASS tracer\nORACLE-CLASS deterministic (trace)\nORACLE-CLASS CITED trace\nORACLE-CLASS  trace\nCARRIED-DATA none\n  more"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data",
+    "trace-seam"
+   ]
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "sirText": "CARRIED-DATA none CITED x\nEFFECT x CITED time.timer\nEFFECT timeXtimer\nEFFECT CITED microtask\nEFFECT microtasks\nEFFECT x # microtask\nEFFECT \"a\\ b # microtask"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data"
+   ]
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "sirText": "EFFECT \"a \\\" # b\" microtask"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "sirText": "EFFECT x \"a CITED b\" microtask"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "sirText": "EFFECT x \" microtask\"\nEFFECT y=\"time.timer\"\nEFFECT f(\"microtask\")\nEFFECT \"a\"\"microtask\"\nEFFECT z!\"microtask\""
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "sirText": "EFFECT x-\" # microtask\"\nEFFECT \"a\"\"b # c\" microtask\nEFFECT \"\\😀\" # microtask\nEFFECT  \" # microtask\""
+    }
+   ],
+   "expected": [
+    "vectors",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "sirText": "EFFECT x/\"microtask\"\nNOTE 12\"setTimer\""
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lifecycle",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "sirText": "EFFECT \"a\n  microtask\"\nANCHOR \"a\n  ref(js:x) b\""
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "sirText": "EFFECT \"a\" \"b # c\" microtask\nNOTE /(?:a|b)+\"/ CITED R5 \"q\" setTimer"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "scheduler"
+   ]
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "sirText": "ANCHOR \"x # y\" ref(js:z)\nNOTE /[\"]/ CITED a \"b\" setTimer"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lifecycle",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "sirText": "FIDELITY spec ANCHOR \"a\n  ANCHOR ref(js:x) b\""
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "sirText": "FIDELITY spec ANCHOR \"ref(ts:x)\"\nEFFECT \"a # microtask \\"
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "sirText": "ANCHOR \"a\" # ref(ts:b)\nNOTE x CITED ANCHOR ref(js:y)\nUNIT u\n  prose ANCHOR ref(rust:x)\nANCHORS ref(js:x)\nFIDELITY spec CITED ref(js:x)\nFIDELITY spec ANCHOR\nVARIANT x ANCHOR ref(go:y) ANCHOR\nANCHOR xref(js:y) _ref(ts:y) ref(JS:y) ref(js :y) ref(js2:y) ref(js) ref(　js:y) ref( ts:y)\nANCHOR a\n  EARNED ref(js:x)\nANCHOR b\nCITED ref(csharp:y)\nFIDELITY spec \"x ANCHOR ref(js:y)\"\nNOTE a\n  ANCHOR ref(js:q)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "sirText": "ANCHOR x\nCITED: ref(php:y)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "sirText": "ANCHOR ANCHOR ref(js:x)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "sirText": "ANCHOR ref( \tjs:y)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "sirText": "FIDELITY spec\n  ANCHOR ref(ts:x)"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "sirText": "ANCHOR éref(js:y)\nNOTE timers.advance and _setTimer"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "scheduler",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "sirText": "ANCHOR: ref(js:y)\nNOTE éschedule( setTimer_\nNOTE x # see CITED setTimer"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "scheduler",
+    "cross-lang-anchor"
+   ]
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "sirText": "  orphan setTimer\nCITED virtual time"
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lifecycle"
+   ]
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "envelope": null,
+     "carriedData": null,
+     "mode": null,
+     "sirFiles": null,
+     "variants": null
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "carriedData": [
+      null
+     ],
+     "extra": 1
+    }
+   ],
+   "expected": [
+    "vectors",
+    "carried-data"
+   ]
+  },
+  {
+   "name": "v55",
+   "args": [
+    "PAR"
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "sirText": null
+    }
+   ],
+   "expected": {
+    "__throw": "sirText must be text"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "carriedData": {}
+    }
+   ],
+   "expected": {
+    "__throw": "carriedData must be a list"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "envelope": []
+    }
+   ],
+   "expected": {
+    "__throw": "envelope must be text"
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "sirFiles": "a.ts.sir"
+    }
+   ],
+   "expected": {
+    "__throw": "sirFiles must be a list of paths (got string)"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "sirFiles": [
+      "a.TS.sir"
+     ]
+    }
+   ],
+   "expected": {
+    "__throw": "a.TS.sir: 'TS' is not in the closed language registry (js, ts, rust, php, csharp, python)"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "sirFiles": [
+      "a.b.ts.sir"
+     ]
+    }
+   ],
+   "expected": {
+    "__throw": "a.b.ts.sir: \"a.b.ts.sir\" has 2 dotted segments before .sir — a unit name has no dots, so a SIR file is <unit>.sir or <unit>.<lang>.sir"
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "sirFiles": [
+      "é.sir"
+     ]
+    }
+   ],
+   "expected": {
+    "__throw": "é.sir: \"é.sir\" — a unit name is letters, digits, _ and -"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "sirFiles": [
+      "a.sir",
+      ".sir",
+      "a.ts.sir/",
+      "a.ts",
+      "x.sir.bak",
+      "a.sir​x",
+      "a.ts.ſir­",
+      "a.json",
+      "a.sir~",
+      "é.sir~",
+      "a-b_9.sir"
+     ]
+    }
+   ],
+   "expected": [
+    "vectors"
+   ]
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "sirFiles": [
+      "u.ts.sir",
+      "x/ a.js.sir",
+      "d\\b.rust.sir ",
+      "p.python.sir\t",
+      ".ts.sir"
+     ],
+     "variants": {
+      "lang:ts": {},
+      "package": {
+       "lang": "csharp",
+       "sir": "u.csharp.sir"
+      },
+      "lang:js": {
+       "sir": "w/u.js.SIR"
+      }
+     }
+    }
+   ],
+   "expected": [
+    "vectors",
+    "lang-variant"
+   ]
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "variants": {
+      "package": {
+       "sir": "u.txt"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant package: sir must be a path to a .sir file (got \"u.txt\")"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "variants": {
+      "lang:ts": {
+       "sir": "sir/"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant lang:ts: sir must be a path to a .sir file (got \"sir/\")"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "variants": {
+      "package": {
+       "sir": "-u.ts.sir"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant package sir: \"-u.ts.sir\" — a unit name is letters, digits, _ and -"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "variants": {
+      "lang:go": {}
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant lang:go: 'go' is not in the closed language registry (js, ts, rust, php, csharp, python)"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "variants": {
+      "package": {
+       "lang": "ts",
+       "sir": "u.sir"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant package: its sir path \"u.sir\" names no language"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "variants": {
+      "package": {
+       "lang": null
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variant package: lang must be text"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "variants": {
+      "package": {
+       "lang": "ts"
+      },
+      "lang:ts": {
+       "sir": "u.ts.sir"
+      }
+     }
+    }
+   ],
+   "expected": {
+    "__throw": "variants package and lang:ts both claim language 'ts'"
+   }
+  }
+ ]
+}

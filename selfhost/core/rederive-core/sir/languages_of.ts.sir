@@ -1,0 +1,26 @@
+UNIT languages_of
+LANG ts
+PRIMARY-SHA256 05fd6ddaca2f6220ffa46e63262ccd0a720204c407e786983e062989bb37480e
+SIG export default function languages_of(input: Json): string[]
+ABI TypeScript compiles to the js runtime and is driven exactly as js. Declare in the artifact
+  type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json }
+  (the abstract json). text = string; number = number; bool = boolean; none = null; list = an array; map = a plain object.
+  The result is a fresh string[]. A throw (R1–R6) is a thrown Error; the message is not graded. STRICT: the artifact
+  type-checks under strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error; narrow with
+  typeof, Array.isArray and === null. ES module default export; imports nothing.
+ENVELOPE widening (as js): a text may hold a lone surrogate. It is a HIDDEN character (a code unit outside VISIBLE): x.sir
+  followed by one throws (R3a); inside a segment it is an ordinary character, so the claim fails R4.
+MECHANISM (restated from js — language files are self-contained) a map = a non-null, non-array object. R2: only an absent
+  sirFiles defaults to []; a non-array, or a non-string element, throws. R5: absent and null skip. R3: BASE =
+  (path.split(/[\\/]/).pop() ?? '') with /^[ \t]+|[ \t]+$/g replaced by '' — NOT String.prototype.trim, whose set is wider;
+  then HIDDEN-TAIL (throw on a match), then SIR-TAIL (no match: nothing), then BASE.slice(0, -4).split('.'), whose first
+  part, when non-empty, must match UNIT-NAME. R6a: an entry lang or sir present with any non-string value (null included)
+  throws — test === undefined, never truthiness; a string sir is run through R3 (it may throw) and its BASE must then match
+  SIR-TAIL. R6b: K === 'package' or VARIANT-KEY.test(K), else throw; KEYLANG = K.slice(5) for a lang: key. R7: a
+  Set<string>, then the default sort.
+DEPENDS-ON none
+PINNED regex HIDDEN-TAIL = /\.[sS][iI][rR][^\x21-\x7e]+$/ CITED R3(a) — no flags: the class runs over UTF-16 code units, and an astral code point's two surrogates both fall outside it, so it equals the code-point HIDDEN set
+PINNED regex SIR-TAIL = /\.[sS][iI][rR]$/ CITED R3(b) — explicit ASCII classes, never an i flag
+PINNED regex UNIT-NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/ CITED R3(c) — no flags: $ is the end of input only (no final line-feed allowance), so x<LF>.ts.sir throws
+PINNED regex VARIANT-KEY = /^lang:[a-z][a-z0-9]*$/ CITED R6(b) — no flags, ASCII classes; lang:ts<LF> throws
+PROVENANCE rederive@bb8ded84fa50 cli/features.mjs. Language file cut 2026-10-27 (round 5) with the primary, before any blind re-emission.

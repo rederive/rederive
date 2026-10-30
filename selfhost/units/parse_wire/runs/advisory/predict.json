@@ -1,0 +1,62 @@
+{
+ "status": "ok",
+ "unit": "parse_wire",
+ "primary": "selfhost/units/parse_wire/sir/parse_wire.sir",
+ "primarySha256": "4c4e81554252a1204b31465947429f7ed248b5f7d92b440fde8d9c576c9ef1a6",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "line must be exactly one JSON text (RFC 8259 grammar) and nothing else: blanks — and only the four JSON blanks SPACE, TAB, LF and CR — may surround it and any token inside it. Anything else -> throws: empty or blank-only text, trailing content after the value, a byte order mark, NBSP or any other whitespace character, a trailing comma, a missing colon or comma, an unquoted key, single quotes, a numeral with a leading zero, a leading '+', a bare '.', a lone '-', a missing fraction or exponent digit, NaN or Infinity, an unknown or truncated literal, an unterminated string or container, a raw character U+0000..U+001F inside a string, an unknown escape, a backslash ending the line, a backslash-u escape without four hex digits.",
+   "ambiguity": 0.7
+  },
+  {
+   "id": "R2",
+   "text": "The JSON literals \"true\" and \"false\" -> those bools; the literal \"null\" -> none. A list -> list, elements in order.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R3",
+   "text": "A string -> text. An escape is a backslash and one more character: one of  \"  /  b  f  n  r  t  or a second backslash stands for U+0022, U+002F, U+0008, U+000C, U+000A, U+000D, U+0009 and U+005C respectively; a backslash, u and four hex digits XXXX (either case) is the UTF-16 code unit XXXX — so a high-surrogate escape followed by a low-surrogate escape is one supplementary character, while an unpaired surrogate escape (or a low before a high) leaves those lone code units in the text. Every other character (U+2028, U+2029, DEL, non-ASCII, supplementary) is itself.",
+   "ambiguity": 0.5
+  },
+  {
+   "id": "R4",
+   "text": "An object -> map. A repeated key keeps its LAST value, yet every earlier value is still read by R1-R8, so one that throws throws the line ('{\"a\":1e400,\"a\":1}' throws). Every key is an ordinary key, including __proto__, constructor and __f64bits; keys spelling integers are ordinary keys too. A key is read by R3 exactly as a string value is, and what one line's keys read as never depends on any line read before it.",
+   "ambiguity": 0.47
+  },
+  {
+   "id": "R5",
+   "text": "A numeral with a fraction or an exponent -> f64: its decimal value rounded to the nearest double (ties to even), sign kept — so \"-0.0\", \"-0e5\" and \"-1e-400\" are negative zero, and an underflowing numeral is a zero of its sign. When that rounding gives no finite double (magnitude at or above 2^1024 - 2^970, e.g. \"1e400\", \"1.7976931348623159e308\") -> throws.",
+   "ambiguity": 0.56
+  },
+  {
+   "id": "R6",
+   "text": "INTEGER SPELLING (an optional '-' then digits; no fraction, no exponent). When some double equals the numeral's exact value, the result is that double (f64) — every integer up to 2^53 in magnitude, and the exactly representable ones beyond (2^53, 2^60, 2^64, 10^20); \"-0\" is negative zero. Otherwise the result is the numeral's EXACT integer, of unbounded width: 2^53 + 1, 2^64 - 1, and an integer past the whole double range alike (never an infinity, never a throw). A fraction or exponent spelling never takes this path (\"9007199254740993.0\" is the double 9007199254740992) CITED FIDELITY package",
+   "ambiguity": 0.59
+  },
+  {
+   "id": "R7",
+   "text": "R5 and R6 apply at every depth: a top-level numeral, a list element and a map value alike.",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R8",
+   "text": "DEPTH. The top-level value is at depth 0; each element of a list and each value of a map is one deeper than its container. A value at depth above 128 -> throws, whatever it is — so 129 nested lists around a numeral throw, 130 nested empty lists throw, while 129 nested empty lists would be read (that result is outside ENVELOPE) CITED FIDELITY package",
+   "ambiguity": 0.33
+  }
+ ],
+ "ranked": [
+  "R1",
+  "R6",
+  "R5",
+  "R3",
+  "R4",
+  "R8",
+  "R2",
+  "R7"
+ ],
+ "at": "2026-10-28T03:30:23Z"
+}

@@ -1,0 +1,26 @@
+# Frozen oracle for directive — worked input -> output; reproduce EXACTLY. 24 shown; 48 more are HELD OUT.
+# Every whitespace character other than a plain space, and every control or invisible character, is written as a \uXXXX escape.
+  directive("UNIT x\nSIG f(a: text) -> text\nKIND FUNCTIONAL", "SIG") => "f(a: text) -> text"
+  directive("SIG x", "SIG\n") => throw("not a directive name: \"SIG\\n\"")
+  directive("x", "Ä") => throw("not a directive name: \"Ä\"")
+  directive("\ufeff\ufeffSIG a\n\ufeff  b\n  \ufeffc", "SIG") => "a b c"
+  directive("SIG \t ", "SIG") => ""
+  directive("SIG first\nSIG second", "SIG") => "first"
+  directive("SIG a\n# comment\n  b", "SIG") => "a b"
+  directive("SIG\u00a0x\nSIG real", "SIG") => "real"
+  directive("ENVELOPE first line\n  continued here\n\tand tab\n    four\nNOTE n", "ENVELOPE") => "first line continued here and tab four"
+  directive("SIG a#b # c", "SIG") => "a#b"
+  directive("SIG \"a # b", "SIG") => "\"a"
+  directive("SIG f(\"a # b\") x=\" # \" k:\" # \" [\" # \"] {\" # \"} a,\" # \"", "SIG") => "f(\"a # b\") x=\" # \" k:\" # \" [\" # \"] {\" # \"} a,\" # \""
+  directive("SIG \"x\\\" # y\" z", "SIG") => "\"x\\\" # y\" z"
+  directive("SIG \"a\\😀\" # b \"c\"", "SIG") => "\"a\\😀\""
+  directive("PINNED regex A = /x/ CITED R1", "PINNED") => "regex A = /x/"
+  directive("SIG \"a CITED b\" c CITED d", "SIG") => "\"a CITED b\" c"
+  directive("SIG \"a CITED # b\" c", "SIG") => "\"a CITED # b\" c"
+  directive("SIG a\nCITED: b", "SIG") => "a CITED: b"
+  directive("SIG a;\"b # c\" d|\"e # f\" g", "SIG") => "a;\"b # c\" d|\"e # f\" g"
+  directive("SIG /\"a # b\"/ # c", "SIG") => "/\"a"
+  directive("SIG \"a\"\"\"b # c", "SIG") => "\"a\"\"\"b"
+  directive("SIG a\n  \"b CITED c\";\"d CITED e\" CITED f", "SIG") => "a \"b CITED c\";\"d CITED e\""
+  directive("\ufeff  SIG x\n  \ufeff\n\ufeff \t\nSIG y\n \ufeffSIG z", "SIG") => "y SIG z"
+  directive("SIG a\nCITED:\u200bx\n\ufeff\u2060R1 y", "SIG") => "a CITED:\u200bx \u2060R1 y"

@@ -1,0 +1,104 @@
+# typikon for this repo -- schema v0.1 (rederive rust-game profile)
+# Tier 1 (advisory): protected paths ADVISE until the gates are hardened for this repo. Aspects are
+# SPECIFIC-FIRST (typikon: first match wins, no negation globs) -- keep a narrower aspect above the broad
+# `units` catch-all it would otherwise absorb.
+
+typikon: "0.1"
+repo: <owner>/<repo>
+
+unlisted: opinion                      # classify before it grows
+
+canon:
+  rules: CLAUDE.md#hard-rules
+
+integrity:
+  protected:                           # advisory (Tier 1): a change here is reported, not blocked
+    - typikon.yaml
+    - docs/*.md                        # the requirement-giver's words; the anchor the contract cites
+    - units/*/sir/**
+    - units/*/oracles/**
+    - contracts/**
+
+aspects:
+  # ---- the sim's own test crate: harness code, not the product; listed BEFORE sim so first-match keeps it out of the ratchet ----
+  - id: sim-tests
+    paths: [crates/sim/tests/**]
+    regime: opinion
+    reach: [none]
+    authority: { class: none }
+    justification: assumption
+    mode: advise
+    note: the tribunal for the sim aspect's property authority lives here
+
+  # ---- the sim: glue over verified leaves; pure; graded by PROPERTY until it has a stronger leg ----
+  - id: sim
+    paths: [crates/sim/**]
+    regime: dogma
+    reach: [none]                      # no clock, no I/O, no randomness it did not receive
+    authority:
+      class: property
+      source: >-
+        state the acceptance property this sim must hold (e.g. "replay is bit-identical without network
+        access") and cite the design-doc section it comes from.
+      tribunal: cargo test -p sim
+    justification: assumption          # until the property test exists this is a declared debt, not a silent one
+    debt: README.md#debts
+    mode: advise
+
+  # ---- bots / AI opponents, if any: keep any network or credential reach behind a feature flag, never a production build ----
+  - id: bots
+    paths: [crates/bots/**]
+    regime: dogma
+    reach: [network, credentials]
+    authority: { class: none }
+    justification: assumption
+    debt: README.md#debts
+    mode: advise
+
+  # ---- the scratch shell / anything that touches a platform: throwaway until a platform crate exists ----
+  - id: shell
+    paths: [crates/shell/**]
+    regime: opinion
+    reach: [process, filesystem]
+    authority: { class: none }
+    justification: assumption
+    debt: README.md#debts
+    mode: advise
+
+  # ---- the renderer/vis layer: vis only -- reads a client's view, never the sim's state; judged by eye ----
+  - id: tube
+    paths: [crates/tube/**]
+    regime: opinion
+    reach: [none]
+    authority: { class: none }
+    justification: assumption
+    debt: README.md#debts
+    mode: advise
+
+  # ---- the verified leaves: one zero-dependency library crate per unit, byte-identical to an accepted emission ----
+  - id: units
+    paths: [crates/*/**]           # every crate not claimed by a more specific aspect above
+    regime: dogma
+    reach: [none]
+    authority:
+      class: frozen-ruling
+      source: >-
+        cite the design doc section(s) that give every number and rule; the oracle for each unit is COMPUTED
+        from that ruling by units/<unit>/oracle/gen.mjs, never hand-typed; the crate is a blind re-emission
+        that met sir-factory's rungs (type-checked, harness-verified) under quorum.
+      tribunal: tools/lab grade <unit> --round N
+    justification: executed
+    mode: advise
+
+  - id: harness
+    paths: [units/**, tools/**, contracts/**, observer/**]
+    regime: opinion
+    reach: [filesystem, process]
+    authority: { class: none }
+    justification: assumption
+    mode: advise
+
+rulings:
+  queue: .typikon/rulings/
+  pending: []
+  frozen: []

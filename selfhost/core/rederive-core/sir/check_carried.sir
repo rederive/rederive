@@ -1,0 +1,73 @@
+UNIT check_carried
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs checkCarried(decl, table), with canonical(t) and canonicalValue(t) — the carried-data gate; the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG check_carried(decl: json, table: json) -> record[sha: text, hashOk: bool | none, results: list[record[expr: text, equals: bool | f64 | text | list[json] | map[text, json] | none, got: bool | f64 | text | list[json] | map[text, json] | none, ok: bool]], attested: bool, status: text, entries: i64]
+ENVELOPE decl is any json value and table is any json value; every map key and text is well-formed Unicode; a table or
+  an equals may hold NaN, an infinity or -0 at any depth. Every malformed input is IN scope as a throw (R1). Map key ORDER
+  never matters (R2, R5).
+DEPENDS-ON none
+DESCRIPTION Check a bound carried table against its declaration: hash the table's canonical form, compare the hash with
+  the declared pin, evaluate each AUTHORITY assertion (the entry count, or one entry looked up by key) against its
+  expected value in the canonical form, and classify the table as unpinned, hash-mismatch, unattested, attested or
+  authority-FAIL. decl is the declaration map: sha (the declared pin, optional) and assertions (a list of maps, each expr
+  and equals). The result record is, in this order: sha (the computed hash), hashOk, results (one record per assertion,
+  in order), attested, status, entries.
+BEHAVIOR
+R1 Each of these throws, and a call that throws produces no result (which one is reported is not graded): decl is not a
+  map (none, text, a number, a bool, a list); decl has no assertions entry or its assertions is not a list (none, text and
+  a map included); decl has a sha entry that is PRESENT (R3) and not a PIN; table is not a map (a list, text, a number, a
+  bool, none); table has no CANON (R2); an element of assertions, wherever it stands in the list, is not a map, or lacks
+  an expr entry, or has an expr that is not text or is the empty text, or lacks an equals entry; an element's equals has
+  no CANON. equals none is well-formed; any non-empty expr is well-formed, blank or invisible text (" ", U+200B) included.
+R2 CANON of a json value is compact JSON with no whitespace: a map is "{" then its entries joined by "," then "}", each
+  entry the key as a JSON STRING, ":", and the value's CANON, the entries ordered by key ascending, keys compared as
+  sequences of UTF-16 code units, at EVERY depth; a list is "[" then its elements' CANON joined by "," then "]", in list
+  order; text is a JSON STRING; true, false and none are the texts "true", "false" and "null"; a number is NUMBER-TEXT;
+  NaN, the infinities and negative zero have NO CANON, nor does any value containing one. sha is the SHA-256 digest
+  (FIPS 180-4) of the UTF-8 bytes of the table's CANON, written as 64 lowercase hex digits.
+R3 Let S be decl's sha entry. S is ABSENT when decl has no sha entry or S is none; otherwise it is PRESENT, and a PRESENT S
+  must be a PIN — text of exactly 64 characters, each one of 0-9 or a-f — or the call throws (R1: uppercase hex of the
+  right digest, 63 or 65 digits, a trailing newline or space, the empty text, a bool, a number, a list, a map). hashOk is
+  none when S is ABSENT, and otherwise true exactly when S equals sha.
+R4 For each assertion A, in order, GOT is: when A's expr is exactly the text "count", the number of entries of the table —
+  even when the table has its own entry named count, which is never read this way CITED FIDELITY package. Otherwise,
+  when the table has an entry keyed by A's expr (any key: __proto__, constructor, toString and the empty text included),
+  GOT is that entry's value; otherwise GOT is ABSENT. Only the table's own entries exist — no key is ever inherited.
+R5 ok is true exactly when GOT is not ABSENT and CANON(GOT) is the same text as CANON(E), E being A's equals (which has a
+  CANON, R1). Equivalently: GOT and E are the same json value — maps by key set and value per key with entry order
+  ignored, lists element by element in order, numbers by value (7 and 7.0 are one number), text by content. An ABSENT
+  GOT fails whatever E is, none included.
+R6 Each result record is exactly: expr = A's expr; equals = A's equals; got = GOT (none when ABSENT); ok per R5 — A's other
+  entries (its own got, ok or anything else) are dropped. attested is true exactly when hashOk is true, assertions is
+  non-empty and every ok is true. entries = the number of entries of the table.
+TABLE STATUS — the first matching row
+  hashOk is none               | unpinned
+  hashOk is false              | hash-mismatch
+  assertions is empty          | unattested
+  attested is true             | attested
+  otherwise                    | authority-FAIL
+PINNED grammar JSON-STRING = a double quote, each character of the text by ESCAPE, a double quote CITED R2 — the host's JSON string writer
+TABLE ESCAPE — one character of a text inside a JSON STRING
+  double quote (U+0022)                                   | backslash, double quote
+  backslash (U+005C)                                      | two backslashes
+  U+0008 / U+0009 / U+000A / U+000C / U+000D              | backslash then b / t / n / f / r
+  any other character U+0000 to U+001F                    | backslash, u, then 4 LOWERCASE hex digits of the code point
+  every other character (U+007F, U+2028, U+2029, slash, non-ASCII, supplementary) | itself, UTF-8 encoded in the hashed bytes
+PINNED grammar NUMBER-TEXT = the host's shortest round-trip decimal of a finite double CITED R2 — Number::toString
+  0 is "0". Otherwise a leading "-" when negative, then with digits d1..dk the SHORTEST that read back as the same double
+  (k minimal; the nearest such digit string) and n such that the value is 0.d1..dk times 10^n: when k <= n <= 21, the
+  digits then n - k zeros (1e20 is "100000000000000000000"); when 0 < n <= 21, the digits with "." after the n-th; when
+  -6 < n <= 0, "0." then -n zeros then the digits (0.000001 is "0.000001"); otherwise exponent form: d1, then "." and
+  d2..dk when k > 1, then "e", then "+" or "-", then the decimal of |n - 1| (1e21 is "1e+21", 1e-7 is "1e-7", 1.5e-7 is
+  "1.5e-7", 5e-324 is "5e-324").
+INVARIANT entries is the GOT of every count assertion; attested implies hashOk is true and status attested; status is
+  unpinned exactly when hashOk is none, exactly when S is ABSENT; neither argument is modified.
+ORACLE value -> oracles/check_carried.json  CANONICAL-SHA256 1c0a195a32524eb102837628ee60a8554ae88f742e3736aa261ddfa00e838dc4
+SCOPE IN: R1–R6 over ENVELOPE, the five statuses, the refusals (R1) and the PIN form (R3), count shadowing, own-key lookup
+  (__proto__ and the inherited member names ABSENT), order-free map comparison. OUT: every
+  caller — carriedDeclared (which builds decl from SIR text) and carriedTable (which reads a bound module) are other units.
+PROVENANCE rederive@6199e2cc8b75 (rederive, MIT) cli/sir/v05.mjs: checkCarried, canonical, canonicalValue, plainMap,
+  sha256. Re-cut 2026-10-27 (round 5), delta re-cut round 5b (FINDINGS #108) for REDERIVE_SELF_PLAN Tier 3 from the pinned authority snapshot only; oracle
+  stamped by selfhost/stamp.mjs through seams/check_carried.mjs.

@@ -1,0 +1,1415 @@
+{
+  "unit": "wire_line",
+  "primarySha": "dceecb49554e9bcc4cdf9017a3bf90c2cbfc2d054f6a9690ad621a1daa7cf4f9",
+  "features": [
+    "vectors",
+    "lang-variant"
+  ],
+  "lint": {
+    "ok": true,
+    "density": 0.015748031496062992,
+    "leaks": 0
+  },
+  "results": {
+    "js": {
+      "artifacts": [
+        {
+          "artifact": "runs/js/emit_4.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "8/8 (5 narrowed)",
+          "heldout": "8/8 (17 narrowed)",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 22,
+            "names": [
+              "v2",
+              "v14",
+              "v17",
+              "v22",
+              "v23",
+              "v31",
+              "v32",
+              "v33",
+              "v35",
+              "v44",
+              "v48",
+              "v55",
+              "v56",
+              "v60",
+              "v62",
+              "v64",
+              "v65",
+              "v66",
+              "v67",
+              "v68",
+              "v69",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[{\"a\":NaN}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v14",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"x\",\"type\":{\"alts\":[{\"k\":\"text\"},{\"k\":\"f64\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v22",
+                "args": [
+                  "[{\"a\":\"x\"}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"a\",{\"k\":\"text\"}],[\"b\",{\"alts\":[{\"k\":\"text\"},{\"k\":\"none\"}],\"k\":\"union\"}],[\"c\",{\"k\":\"text\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "the absent value has no serde_json form"
+              },
+              {
+                "name": "v23",
+                "args": [
+                  "[{\"a\":9007199254740992,\"b\":9007199254740994}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v31",
+                "args": [
+                  "[{\"x\":{\"a\":NaN}}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"x\",{\"k\":\"json\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v32",
+                "args": [
+                  "[[[{\"a\":2},[1]],[{},\"x\"]]]",
+                  "{\"args\":[{\"name\":\"xs\",\"type\":{\"item\":{\"items\":[{\"k\":\"json\"},{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}],\"k\":\"tuple\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a list value"
+              },
+              {
+                "name": "v33",
+                "args": [
+                  "[{\"a\":NaN},\"not a list\"]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}},{\"name\":\"xs\",\"type\":{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v35",
+                "args": [
+                  "[[1,2]]",
+                  "{\"args\":[{\"name\":\"t\",\"type\":{\"items\":[{\"k\":\"i64\"},{\"k\":\"i64\"},{\"k\":\"i64\"}],\"k\":\"tuple\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a 3-tuple"
+              },
+              {
+                "name": "v44",
+                "args": [
+                  "[[1,[-9007199254740994]]]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v48",
+                "args": [
+                  "[{\"a\":1},{\"b\":-0}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"i64\"}},{\"k\":\"none\"}],\"k\":\"union\"}},{\"name\":\"b\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}},{\"k\":\"none\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "[-1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"u64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a u64 value"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "[2.5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a i64 value"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "[NaN,2]",
+                  "{\"args\":[{\"name\":\"a\"},{\"name\":\"b\",\"type\":{\"k\":\"f64\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}},{\"name\":\"r\",\"rest\":true}]}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v64",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"text\"}],\"k\":\"union\"}}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v65",
+                "args": [
+                  "[5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"union\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'filter')"
+              },
+              {
+                "name": "v66",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"list\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"tuple\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'length')"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "[{}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"record\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'map')"
+              },
+              {
+                "name": "v69",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"zzz\"}}]}"
+                ],
+                "reason": "the rust harness has no route for zzz"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "[1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{}}]}"
+                ],
+                "reason": "the rust harness has no route for undefined"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "4/4 (7 narrowed)",
+            "heldout": "3/3 (20 narrowed)",
+            "ok": true,
+            "misses": []
+          }
+        },
+        {
+          "artifact": "runs/js/emit_5.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "8/8 (5 narrowed)",
+          "heldout": "8/8 (17 narrowed)",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 22,
+            "names": [
+              "v2",
+              "v14",
+              "v17",
+              "v22",
+              "v23",
+              "v31",
+              "v32",
+              "v33",
+              "v35",
+              "v44",
+              "v48",
+              "v55",
+              "v56",
+              "v60",
+              "v62",
+              "v64",
+              "v65",
+              "v66",
+              "v67",
+              "v68",
+              "v69",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[{\"a\":NaN}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v14",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"x\",\"type\":{\"alts\":[{\"k\":\"text\"},{\"k\":\"f64\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v22",
+                "args": [
+                  "[{\"a\":\"x\"}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"a\",{\"k\":\"text\"}],[\"b\",{\"alts\":[{\"k\":\"text\"},{\"k\":\"none\"}],\"k\":\"union\"}],[\"c\",{\"k\":\"text\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "the absent value has no serde_json form"
+              },
+              {
+                "name": "v23",
+                "args": [
+                  "[{\"a\":9007199254740992,\"b\":9007199254740994}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v31",
+                "args": [
+                  "[{\"x\":{\"a\":NaN}}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"x\",{\"k\":\"json\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v32",
+                "args": [
+                  "[[[{\"a\":2},[1]],[{},\"x\"]]]",
+                  "{\"args\":[{\"name\":\"xs\",\"type\":{\"item\":{\"items\":[{\"k\":\"json\"},{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}],\"k\":\"tuple\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a list value"
+              },
+              {
+                "name": "v33",
+                "args": [
+                  "[{\"a\":NaN},\"not a list\"]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}},{\"name\":\"xs\",\"type\":{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v35",
+                "args": [
+                  "[[1,2]]",
+                  "{\"args\":[{\"name\":\"t\",\"type\":{\"items\":[{\"k\":\"i64\"},{\"k\":\"i64\"},{\"k\":\"i64\"}],\"k\":\"tuple\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a 3-tuple"
+              },
+              {
+                "name": "v44",
+                "args": [
+                  "[[1,[-9007199254740994]]]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v48",
+                "args": [
+                  "[{\"a\":1},{\"b\":-0}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"i64\"}},{\"k\":\"none\"}],\"k\":\"union\"}},{\"name\":\"b\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}},{\"k\":\"none\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "[-1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"u64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a u64 value"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "[2.5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a i64 value"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "[NaN,2]",
+                  "{\"args\":[{\"name\":\"a\"},{\"name\":\"b\",\"type\":{\"k\":\"f64\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}},{\"name\":\"r\",\"rest\":true}]}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v64",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"text\"}],\"k\":\"union\"}}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v65",
+                "args": [
+                  "[5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"union\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'filter')"
+              },
+              {
+                "name": "v66",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"list\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"tuple\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'length')"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "[{}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"record\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'map')"
+              },
+              {
+                "name": "v69",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"zzz\"}}]}"
+                ],
+                "reason": "the rust harness has no route for zzz"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "[1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{}}]}"
+                ],
+                "reason": "the rust harness has no route for undefined"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "4/4 (7 narrowed)",
+            "heldout": "3/3 (20 narrowed)",
+            "ok": true,
+            "misses": []
+          }
+        },
+        {
+          "artifact": "runs/js/emit_6.mjs",
+          "control": false,
+          "typeCheck": {
+            "applicable": false,
+            "ok": null,
+            "report": "n/a (js has no static checker)"
+          },
+          "frozen": "8/8 (5 narrowed)",
+          "heldout": "8/8 (17 narrowed)",
+          "exact": true,
+          "rungs": [
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 22,
+            "names": [
+              "v2",
+              "v14",
+              "v17",
+              "v22",
+              "v23",
+              "v31",
+              "v32",
+              "v33",
+              "v35",
+              "v44",
+              "v48",
+              "v55",
+              "v56",
+              "v60",
+              "v62",
+              "v64",
+              "v65",
+              "v66",
+              "v67",
+              "v68",
+              "v69",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[{\"a\":NaN}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v14",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"x\",\"type\":{\"alts\":[{\"k\":\"text\"},{\"k\":\"f64\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v22",
+                "args": [
+                  "[{\"a\":\"x\"}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"a\",{\"k\":\"text\"}],[\"b\",{\"alts\":[{\"k\":\"text\"},{\"k\":\"none\"}],\"k\":\"union\"}],[\"c\",{\"k\":\"text\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "the absent value has no serde_json form"
+              },
+              {
+                "name": "v23",
+                "args": [
+                  "[{\"a\":9007199254740992,\"b\":9007199254740994}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v31",
+                "args": [
+                  "[{\"x\":{\"a\":NaN}}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"x\",{\"k\":\"json\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v32",
+                "args": [
+                  "[[[{\"a\":2},[1]],[{},\"x\"]]]",
+                  "{\"args\":[{\"name\":\"xs\",\"type\":{\"item\":{\"items\":[{\"k\":\"json\"},{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}],\"k\":\"tuple\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a list value"
+              },
+              {
+                "name": "v33",
+                "args": [
+                  "[{\"a\":NaN},\"not a list\"]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}},{\"name\":\"xs\",\"type\":{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v35",
+                "args": [
+                  "[[1,2]]",
+                  "{\"args\":[{\"name\":\"t\",\"type\":{\"items\":[{\"k\":\"i64\"},{\"k\":\"i64\"},{\"k\":\"i64\"}],\"k\":\"tuple\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a 3-tuple"
+              },
+              {
+                "name": "v44",
+                "args": [
+                  "[[1,[-9007199254740994]]]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v48",
+                "args": [
+                  "[{\"a\":1},{\"b\":-0}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"i64\"}},{\"k\":\"none\"}],\"k\":\"union\"}},{\"name\":\"b\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}},{\"k\":\"none\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "[-1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"u64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a u64 value"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "[2.5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a i64 value"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "[NaN,2]",
+                  "{\"args\":[{\"name\":\"a\"},{\"name\":\"b\",\"type\":{\"k\":\"f64\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}},{\"name\":\"r\",\"rest\":true}]}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v64",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"text\"}],\"k\":\"union\"}}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v65",
+                "args": [
+                  "[5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"union\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'filter')"
+              },
+              {
+                "name": "v66",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"list\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"tuple\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'length')"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "[{}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"record\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'map')"
+              },
+              {
+                "name": "v69",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"zzz\"}}]}"
+                ],
+                "reason": "the rust harness has no route for zzz"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "[1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{}}]}"
+                ],
+                "reason": "the rust harness has no route for undefined"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": [],
+          "extension": {
+            "frozen": "4/4 (7 narrowed)",
+            "heldout": "3/3 (20 narrowed)",
+            "ok": true,
+            "misses": []
+          }
+        }
+      ],
+      "divergence": {
+        "round": 2,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    },
+    "ts": {
+      "artifacts": [
+        {
+          "artifact": "runs/ts/emit_4.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc --strict ok, conforms to SIG"
+          },
+          "frozen": "8/8 (5 narrowed)",
+          "heldout": "8/8 (17 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 22,
+            "names": [
+              "v2",
+              "v14",
+              "v17",
+              "v22",
+              "v23",
+              "v31",
+              "v32",
+              "v33",
+              "v35",
+              "v44",
+              "v48",
+              "v55",
+              "v56",
+              "v60",
+              "v62",
+              "v64",
+              "v65",
+              "v66",
+              "v67",
+              "v68",
+              "v69",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[{\"a\":NaN}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v14",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"x\",\"type\":{\"alts\":[{\"k\":\"text\"},{\"k\":\"f64\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v22",
+                "args": [
+                  "[{\"a\":\"x\"}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"a\",{\"k\":\"text\"}],[\"b\",{\"alts\":[{\"k\":\"text\"},{\"k\":\"none\"}],\"k\":\"union\"}],[\"c\",{\"k\":\"text\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "the absent value has no serde_json form"
+              },
+              {
+                "name": "v23",
+                "args": [
+                  "[{\"a\":9007199254740992,\"b\":9007199254740994}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v31",
+                "args": [
+                  "[{\"x\":{\"a\":NaN}}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"x\",{\"k\":\"json\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v32",
+                "args": [
+                  "[[[{\"a\":2},[1]],[{},\"x\"]]]",
+                  "{\"args\":[{\"name\":\"xs\",\"type\":{\"item\":{\"items\":[{\"k\":\"json\"},{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}],\"k\":\"tuple\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a list value"
+              },
+              {
+                "name": "v33",
+                "args": [
+                  "[{\"a\":NaN},\"not a list\"]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}},{\"name\":\"xs\",\"type\":{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v35",
+                "args": [
+                  "[[1,2]]",
+                  "{\"args\":[{\"name\":\"t\",\"type\":{\"items\":[{\"k\":\"i64\"},{\"k\":\"i64\"},{\"k\":\"i64\"}],\"k\":\"tuple\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a 3-tuple"
+              },
+              {
+                "name": "v44",
+                "args": [
+                  "[[1,[-9007199254740994]]]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v48",
+                "args": [
+                  "[{\"a\":1},{\"b\":-0}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"i64\"}},{\"k\":\"none\"}],\"k\":\"union\"}},{\"name\":\"b\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}},{\"k\":\"none\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "[-1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"u64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a u64 value"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "[2.5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a i64 value"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "[NaN,2]",
+                  "{\"args\":[{\"name\":\"a\"},{\"name\":\"b\",\"type\":{\"k\":\"f64\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}},{\"name\":\"r\",\"rest\":true}]}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v64",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"text\"}],\"k\":\"union\"}}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v65",
+                "args": [
+                  "[5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"union\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'filter')"
+              },
+              {
+                "name": "v66",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"list\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"tuple\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'length')"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "[{}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"record\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'map')"
+              },
+              {
+                "name": "v69",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"zzz\"}}]}"
+                ],
+                "reason": "the rust harness has no route for zzz"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "[1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{}}]}"
+                ],
+                "reason": "the rust harness has no route for undefined"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/ts/emit_5.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc --strict ok, conforms to SIG"
+          },
+          "frozen": "8/8 (5 narrowed)",
+          "heldout": "8/8 (17 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 22,
+            "names": [
+              "v2",
+              "v14",
+              "v17",
+              "v22",
+              "v23",
+              "v31",
+              "v32",
+              "v33",
+              "v35",
+              "v44",
+              "v48",
+              "v55",
+              "v56",
+              "v60",
+              "v62",
+              "v64",
+              "v65",
+              "v66",
+              "v67",
+              "v68",
+              "v69",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[{\"a\":NaN}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v14",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"x\",\"type\":{\"alts\":[{\"k\":\"text\"},{\"k\":\"f64\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v22",
+                "args": [
+                  "[{\"a\":\"x\"}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"a\",{\"k\":\"text\"}],[\"b\",{\"alts\":[{\"k\":\"text\"},{\"k\":\"none\"}],\"k\":\"union\"}],[\"c\",{\"k\":\"text\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "the absent value has no serde_json form"
+              },
+              {
+                "name": "v23",
+                "args": [
+                  "[{\"a\":9007199254740992,\"b\":9007199254740994}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v31",
+                "args": [
+                  "[{\"x\":{\"a\":NaN}}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"x\",{\"k\":\"json\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v32",
+                "args": [
+                  "[[[{\"a\":2},[1]],[{},\"x\"]]]",
+                  "{\"args\":[{\"name\":\"xs\",\"type\":{\"item\":{\"items\":[{\"k\":\"json\"},{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}],\"k\":\"tuple\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a list value"
+              },
+              {
+                "name": "v33",
+                "args": [
+                  "[{\"a\":NaN},\"not a list\"]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}},{\"name\":\"xs\",\"type\":{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v35",
+                "args": [
+                  "[[1,2]]",
+                  "{\"args\":[{\"name\":\"t\",\"type\":{\"items\":[{\"k\":\"i64\"},{\"k\":\"i64\"},{\"k\":\"i64\"}],\"k\":\"tuple\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a 3-tuple"
+              },
+              {
+                "name": "v44",
+                "args": [
+                  "[[1,[-9007199254740994]]]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v48",
+                "args": [
+                  "[{\"a\":1},{\"b\":-0}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"i64\"}},{\"k\":\"none\"}],\"k\":\"union\"}},{\"name\":\"b\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}},{\"k\":\"none\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "[-1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"u64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a u64 value"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "[2.5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a i64 value"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "[NaN,2]",
+                  "{\"args\":[{\"name\":\"a\"},{\"name\":\"b\",\"type\":{\"k\":\"f64\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}},{\"name\":\"r\",\"rest\":true}]}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v64",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"text\"}],\"k\":\"union\"}}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v65",
+                "args": [
+                  "[5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"union\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'filter')"
+              },
+              {
+                "name": "v66",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"list\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"tuple\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'length')"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "[{}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"record\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'map')"
+              },
+              {
+                "name": "v69",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"zzz\"}}]}"
+                ],
+                "reason": "the rust harness has no route for zzz"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "[1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{}}]}"
+                ],
+                "reason": "the rust harness has no route for undefined"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        },
+        {
+          "artifact": "runs/ts/emit_6.ts",
+          "control": false,
+          "typeCheck": {
+            "applicable": true,
+            "ok": true,
+            "report": "tsc --strict ok, conforms to SIG"
+          },
+          "frozen": "8/8 (5 narrowed)",
+          "heldout": "8/8 (17 narrowed)",
+          "exact": true,
+          "rungs": [
+            "type-checked",
+            "harness-verified",
+            "cross-verified"
+          ],
+          "narrowed": {
+            "count": 22,
+            "names": [
+              "v2",
+              "v14",
+              "v17",
+              "v22",
+              "v23",
+              "v31",
+              "v32",
+              "v33",
+              "v35",
+              "v44",
+              "v48",
+              "v55",
+              "v56",
+              "v60",
+              "v62",
+              "v64",
+              "v65",
+              "v66",
+              "v67",
+              "v68",
+              "v69",
+              "v70"
+            ],
+            "reasons": [
+              {
+                "name": "v2",
+                "args": [
+                  "[{\"a\":NaN}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v14",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v17",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"x\",\"type\":{\"alts\":[{\"k\":\"text\"},{\"k\":\"f64\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v22",
+                "args": [
+                  "[{\"a\":\"x\"}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"a\",{\"k\":\"text\"}],[\"b\",{\"alts\":[{\"k\":\"text\"},{\"k\":\"none\"}],\"k\":\"union\"}],[\"c\",{\"k\":\"text\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "the absent value has no serde_json form"
+              },
+              {
+                "name": "v23",
+                "args": [
+                  "[{\"a\":9007199254740992,\"b\":9007199254740994}]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v31",
+                "args": [
+                  "[{\"x\":{\"a\":NaN}}]",
+                  "{\"args\":[{\"name\":\"r\",\"type\":{\"fields\":[[\"x\",{\"k\":\"json\"}]],\"k\":\"record\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v32",
+                "args": [
+                  "[[[{\"a\":2},[1]],[{},\"x\"]]]",
+                  "{\"args\":[{\"name\":\"xs\",\"type\":{\"item\":{\"items\":[{\"k\":\"json\"},{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}],\"k\":\"tuple\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a list value"
+              },
+              {
+                "name": "v33",
+                "args": [
+                  "[{\"a\":NaN},\"not a list\"]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}},{\"name\":\"xs\",\"type\":{\"item\":{\"k\":\"i64\"},\"k\":\"list\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v35",
+                "args": [
+                  "[[1,2]]",
+                  "{\"args\":[{\"name\":\"t\",\"type\":{\"items\":[{\"k\":\"i64\"},{\"k\":\"i64\"},{\"k\":\"i64\"}],\"k\":\"tuple\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a 3-tuple"
+              },
+              {
+                "name": "v44",
+                "args": [
+                  "[[1,[-9007199254740994]]]",
+                  "{\"args\":[{\"name\":\"m\",\"type\":{\"k\":\"json\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "a whole number past 2^53 reaches serde_json as a different integer"
+              },
+              {
+                "name": "v48",
+                "args": [
+                  "[{\"a\":1},{\"b\":-0}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"i64\"}},{\"k\":\"none\"}],\"k\":\"union\"}},{\"name\":\"b\",\"type\":{\"alts\":[{\"k\":\"map\",\"key\":{\"k\":\"text\"},\"val\":{\"k\":\"f64\"}},{\"k\":\"none\"}],\"k\":\"union\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v55",
+                "args": [
+                  "[-1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"u64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a u64 value"
+              },
+              {
+                "name": "v56",
+                "args": [
+                  "[2.5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}}],\"name\":\"f\",\"result\":{\"k\":\"text\"}}"
+                ],
+                "reason": "not a i64 value"
+              },
+              {
+                "name": "v60",
+                "args": [
+                  "[NaN,2]",
+                  "{\"args\":[{\"name\":\"a\"},{\"name\":\"b\",\"type\":{\"k\":\"f64\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v62",
+                "args": [
+                  "[1,2]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"i64\"}},{\"name\":\"r\",\"rest\":true}]}"
+                ],
+                "reason": "2 args for a 1-parameter SIG"
+              },
+              {
+                "name": "v64",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"alts\":[{\"k\":\"text\"}],\"k\":\"union\"}}]}"
+                ],
+                "reason": "json holds no NaN/Inf/-0 in serde_json::Value"
+              },
+              {
+                "name": "v65",
+                "args": [
+                  "[5]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"union\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'filter')"
+              },
+              {
+                "name": "v66",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"list\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'k')"
+              },
+              {
+                "name": "v67",
+                "args": [
+                  "[[1]]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"tuple\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'length')"
+              },
+              {
+                "name": "v68",
+                "args": [
+                  "[{}]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"record\"}}]}"
+                ],
+                "reason": "wire: Cannot read properties of undefined (reading 'map')"
+              },
+              {
+                "name": "v69",
+                "args": [
+                  "[NaN]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{\"k\":\"zzz\"}}]}"
+                ],
+                "reason": "the rust harness has no route for zzz"
+              },
+              {
+                "name": "v70",
+                "args": [
+                  "[1]",
+                  "{\"args\":[{\"name\":\"a\",\"type\":{}}]}"
+                ],
+                "reason": "the rust harness has no route for undefined"
+              }
+            ]
+          },
+          "allMisses": [],
+          "misses": []
+        }
+      ],
+      "divergence": {
+        "round": 2,
+        "quorum": "3/3",
+        "verdict": "quorum",
+        "heldoutDisagree": []
+      }
+    }
+  },
+  "cross": {
+    "languages": [
+      "js",
+      "ts"
+    ],
+    "seeded": 2000,
+    "narrowed": 1376,
+    "n": 285,
+    "agree": 285,
+    "ok": true,
+    "examples": [],
+    "envelopeProbes": {
+      "n": 339,
+      "agree": 339,
+      "disagree": 0,
+      "examples": []
+    }
+  },
+  "at": "2026-10-28T03:37:33.897Z",
+  "gradedAt": "2026-10-28T03:37:33.897Z",
+  "labHead": "225ec09"
+}

@@ -1,0 +1,21 @@
+UNIT divergence_of
+LANG js
+PRIMARY-SHA256 0ce7a880e772c6442115ba46d2c5225feb139afcaab6b040c501da8eead05955
+SIG export default function divergence_of(round: number, artifacts: object[]): object | null
+ABI i64 = number (an integer within the safe range; round is returned as the same number); text = string; bool = boolean;
+  none = null; list = Array; record = a plain object with the SIG's field names. An input record arrives with EVERY field
+  present (none as null, never an absent property — a miss's slice of null is a slice of none, read as "heldout" by R6). The result
+  is null (R1) or a fresh plain object with own properties round, quorum, verdict, heldoutDisagree and, only when R8 makes it
+  non-empty, frozenMissed — leaving it out or setting it to null both encode as none; tally entries are plain objects with
+  name, args, expected, failedBy, passedBy, of. args of an entry may be the miss's own array (it is never mutated). The R5
+  throw is a thrown Error; the message is not graded. ES module default-exporting the function, importing nothing.
+ENVELOPE as the primary; no widening is claimed.
+MECHANISM control is "true" only for the boolean true; error counts whenever it is a string, the empty string included (R3:
+  test against null, never truthiness). R4(a) is Array.prototype.includes on the rungs array (element equality, never a
+  substring test); R4(c) is a misses array that is null or of length 0. R5 lets a slice of null pass; the tally reads it as "heldout" (slice ?? "heldout"). Run every R5 check over all graded artifacts before
+  counting votes. Group misses with a Map keyed by the name string, which iterates in first-insertion order (R7); a plain
+  object keyed by name would reorder integer-like names ("10" before "2") and collide with inherited members
+  ("constructor", "__proto__"). failedBy dedupe is includes on the artifact-name strings (R7).
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/sir/v05.mjs divergenceOf. Language file re-cut 2026-10-27 (round 5, delta 5b) with the
+  primary, before any blind re-emission.

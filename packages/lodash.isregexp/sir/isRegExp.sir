@@ -1,0 +1,141 @@
+UNIT isRegExp
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isRegExp(value: any) -> boolean
+DEPENDS-ON none   # this build inlines every dependency; zero external deps
+
+# ---------------------------------------------------------------------------
+# EXPORT SHAPE  (mandatory for the blind re-emitter)
+# ---------------------------------------------------------------------------
+# The module's DEFAULT export IS the predicate function. There is exactly one
+# export and it is value-mode:
+#     module.exports = isRegExp            (the original, CommonJS)
+#     export default <fn>                  (what the blind re-emitter MUST emit)
+# The re-emitter ships the FUNCTION VALUE as the ES-module default export. The
+# oracle calls it as `fn(value)` with a single positional argument.
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (ordered, exact, complete)
+# ---------------------------------------------------------------------------
+# isRegExp(value) returns a boolean: true IFF `value` is a genuine RegExp
+# object, else false. Define it via the package's FALLBACK implementation
+# `baseIsRegExp`, which is the seam-free, portable, observationally-correct
+# definition for every in-envelope input (see SEAM ANALYSIS below):
+#
+#   regexpTag       = '[object RegExp]'
+#   objectToString  = Object.prototype.toString   # the ORIGINAL, unpatched
+#
+#   isObject(value):
+#       type = typeof value
+#       return  (!!value)  AND  (type == 'object'  OR  type == 'function')
+#       # NOTE: !!value rules out null and the falsy primitives; 'object'
+#       #       and 'function' are the only object-language typeofs.
+#
+#   baseIsRegExp(value):
+#       return  isObject(value)  AND  objectToString.call(value) == regexpTag
+#
+#   isRegExp(value):
+#       return baseIsRegExp(value)
+#
+# Pipeline, in order, for an arbitrary value:
+#   NODE-1  Compute t = typeof value.
+#   NODE-2  Guard: if value is falsy (null, undefined, 0, -0, NaN, '', false,
+#           0n) -> return false immediately (the `!!value` term short-circuits;
+#           in particular null/undefined are false here, NOT via any tag path).
+#   NODE-3  Guard: if t is neither 'object' nor 'function' -> return false.
+#           (Catches: string, number, boolean, bigint, symbol — all primitive
+#           typeofs that are not object/function.)
+#   NODE-4  Tag check: return Object.prototype.toString.call(value) ===
+#           '[object RegExp]'.
+#           - A genuine RegExp (literal /x/, new RegExp(...), RegExp subclass
+#             instance, cross-realm RegExp) has internal tag '[object RegExp]'
+#             -> true.
+#           - Everything else object/function-typed (plain object, array, Set,
+#             Map, Uint8Array, Buffer/Node buffers, Date, Error, boxed
+#             Number/String/Boolean, any function) has a different tag
+#             -> false.
+#
+# Determinism / purity: pure, total, no throw on any input (every branch
+# returns a boolean), no I/O, no mutation of `value`, no global state read
+# OTHER than the seam discussed below. Idempotent. Read-only (no in-place
+# mutation concern; N/A).
+
+# ---------------------------------------------------------------------------
+# SEAM ANALYSIS  (why ORACLE-CLASS is deterministic, NOT non-deterministic)
+# ---------------------------------------------------------------------------
+# The ORIGINAL source selects its implementation at load time:
+#
+#     nodeIsRegExp = (process.binding('util') || {}).isRegExp   # may be absent
+#     isRegExp = nodeIsRegExp ? baseUnary(nodeIsRegExp) : baseIsRegExp
+#
+# So the LIVE unit may dispatch to Node's native `util.isRegExp` (when
+# process.binding('util') is reachable) OR to baseIsRegExp (otherwise). This is
+# an ambient ENV/host seam (presence of a deprecated Node internal binding).
+#
+# It is NOT a quarantine seam because the two implementations are
+# OBSERVATIONALLY EQUIVALENT over the ENTIRE input envelope this oracle can
+# produce. VERIFIED EMPIRICALLY (node v24.16.0, native path active):
+#   - For every codec-faithful value class (RegExp of any flags, string,
+#     number, -0, NaN, +/-Infinity, boolean, bigint, null, undefined, plain
+#     object, array, Set, Map, Uint8Array, Buffer), native(value) === base(value).
+#   - The ONLY input where they diverge is an ordinary object carrying a forged
+#     `Symbol.toStringTag === 'RegExp'` property:
+#         base   -> true   (Object.prototype.toString yields '[object RegExp]')
+#         native -> false  (real structural check)
+#     That input is OUT-OF-ENVELOPE: a Symbol-keyed property does NOT survive
+#     the factory codec (JSON.stringify drops it; the round-tripped object is a
+#     plain {} -> both paths agree, false). The generator NEVER emits it.
+#
+# Therefore the seam is invisible to the oracle: the blind re-emitter
+# implements the seam-free `baseIsRegExp` definition above and converges with
+# the live package on every gradable input. The deployed wrapper may use the
+# native fast path at runtime; the verified core is the equivalent fallback.
+# No injected collaborator is required. ORACLE-CLASS deterministic.
+
+ORACLE value -> oracle.json
+
+# ---------------------------------------------------------------------------
+# SCOPE
+# ---------------------------------------------------------------------------
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - isObject gate (!!value && (typeof in {'object','function'})).
+#   - Object.prototype.toString.call(value) === '[object RegExp]' tag check.
+#   - The TRUE set within the envelope: RegExp instances of any flag
+#     combination and any source (/x/, /x/g, /x/gimsuy, new RegExp('ab','i'),
+#     new RegExp('')). The codec stores a RegExp by (source, flags) and rebuilds
+#     a genuine RegExp -> tag '[object RegExp]' -> true.
+#   - The FALSE set within the envelope (each demonstrated in genInputs):
+#       string (incl. '/x/'), number (incl. 0, -0, NaN, +/-Infinity), boolean,
+#       bigint, null, undefined, plain object {}, populated object, array,
+#       empty array, Set, Map, Uint8Array, Buffer.
+#       Falsy primitives short-circuit at NODE-2; non-falsy non-object/function
+#       primitives fail at NODE-3; object-typed non-regexps fail at NODE-4.
+#
+# CARRIED DATA: none. (No literal tables. Two constants only: the string
+#   '[object RegExp]' and the typeof tags 'object'/'function' — given verbatim
+#   in BEHAVIOR above, not a table.)
+#
+# OUT-OF-CONTRACT / DOCUMENT-AS-OUT (NOT emitted by genInputs; a blind
+# re-emitter still reproduces them from the spec, but the codec cannot carry
+# them, so they are not gradable held-out inputs):
+#   - Functions and arrow functions: isObject is true (typeof 'function') but
+#     tag is '[object Function]' (or '[object AsyncFunction]', etc.) != regexpTag
+#     -> FALSE. Not codec-round-trippable.
+#   - Symbols: typeof 'symbol' is neither object nor function -> NODE-3 -> FALSE.
+#     Not codec-round-trippable.
+#   - boxed primitives (new Number/String/Boolean): isObject true, tag is
+#     '[object Number|String|Boolean]' != regexpTag -> FALSE. Boxed primitives
+#     do not round-trip the codec, so excluded from genInputs (but a blind
+#     re-emitter would still compute FALSE for them).
+#   - Object with forged Symbol.toStringTag === 'RegExp': the ONLY native-vs-
+#     fallback divergence; out-of-envelope (see SEAM ANALYSIS). Not emitted.
+#   - process.binding('util') host seam itself: an ambient ENV dependency,
+#     resolved at load time, observationally equivalent over the envelope; not a
+#     runtime input, not quarantined.
+
+PROVENANCE lodash.isregexp@4.0.1
+  repo: lodash/lodash (https://lodash.com/)
+  license: MIT (Copyright jQuery Foundation and other contributors)
+  source file: node_modules/lodash.isregexp/index.js
+  build: `lodash modularize exports="npm" -o ./`
+  verified against the real package on node v24.16.0 (27/27 edge cases + native-vs-fallback equivalence over the codec envelope).

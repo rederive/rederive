@@ -1,0 +1,157 @@
+UNIT flatten
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG flatten(array) -> Array          # default export: module.exports = flatten
+DEPENDS-ON none                       # self-contained; zero runtime deps
+
+# ============================================================================
+# PURPOSE
+# Flatten `array` a SINGLE level deep. Returns a NEW array. Only elements that
+# are "flattenable" (arrays / arguments objects / Symbol.isConcatSpreadable
+# objects) are spread by one level; every other element is copied through
+# unchanged. The input is never mutated.
+#
+# This is lodash _.flatten 4.4.0 = baseFlatten(array, depth=1) with the default
+# isFlattenable predicate, isStrict=false. Describe-as-built (bugs and all).
+# ============================================================================
+
+BEHAVIOR
+
+# --- NODE 0: top-level argument handling (the `flatten` wrapper) ------------
+# length := array ? array.length : 0
+#   - A FALSY argument (null, undefined, 0, '', false, NaN, missing arg) has
+#     `array` falsy at the ternary OR yields length 0:
+#       * null / undefined / no-arg -> array is falsy -> length = 0 -> RETURN []
+#       * a value with no `.length` property (number, boolean, plain object
+#         without length, Symbol) -> array.length is undefined -> length is
+#         falsy (undefined) -> RETURN []
+#   - Otherwise length := array.length (read literally; the arg is treated as
+#     ARRAY-LIKE, NOT required to be a real Array). If length is truthy
+#     (non-zero), proceed to baseFlatten(array, 1); if length is 0 or falsy,
+#     RETURN [].
+#   NOTE (array-like top arg): because only `array.length` is consulted, a
+#   STRING or an array-like object passed as the top-level arg IS iterated:
+#       flatten("abc")                      -> ["a","b","c"]
+#       flatten({length:3, 0:"a",1:"b",2:"c"}) -> ["a","b","c"]
+#       flatten({length:0})                 -> []
+#   (genInputs only emits real Arrays / null / undefined as the top arg; the
+#   array-like-top-arg paths are IN-CONTRACT but covered by spec, not emitted.)
+
+# --- NODE 1: the one-level flatten loop (baseFlatten, depth=1) --------------
+# result := []   (a fresh array)
+# index runs 0,1,...,length-1 over the top-level array-like:
+#   value := array[index]            # a HOLE reads as `undefined`
+#   IF isFlattenable(value):         # see NODE 2
+#       # depth==1, so do NOT recurse; APPEND value's OWN-INDEXED elements:
+#       # arrayPush(result, value): for j in 0..value.length-1:
+#       #     result[result.length] = value[j]
+#       # -> spreads exactly ONE level. Holes inside `value` are read as
+#       #    `undefined` and WRITTEN as real own-property slots (densified).
+#   ELSE (isStrict is false):
+#       result[result.length] = value     # copy the element through unchanged
+# RETURN result
+#
+# ONE LEVEL ONLY (verified):
+#   flatten([[[1]],[2]])        -> [[1],2]        # inner [1] stays nested
+#   flatten([1,[2,[3,[4]],5]])  -> [1,2,[3,[4]],5]
+#   flatten([[1,2],[3]])        -> [1,2,3]
+#   flatten([[],[[2]]])         -> [[2]]          # [] spreads to nothing
+#   flatten([[],[1],[]])        -> [1]
+#
+# ELEMENT IDENTITY / NEW ARRAY (verified):
+#   - The returned array is a NEW object (out !== input).
+#   - A non-spread element is copied BY REFERENCE (same object identity):
+#         out2[0] === objEl  for  flatten([objEl,[9]]).
+#   - The input array and its nested arrays are NOT mutated.
+
+# --- NODE 2: isFlattenable(value) predicate --------------------------------
+# isFlattenable(value) :=
+#     isArray(value)                              # Array.isArray(value)
+#  OR isArguments(value)                          # an `arguments` object
+#  OR !!(SPREADABLE && value && value[SPREADABLE])# Symbol.isConcatSpreadable truthy
+# where SPREADABLE = Symbol.isConcatSpreadable (a real symbol in modern engines).
+#
+# isArguments(value) (lodash 4.4.0 definition) is TRUE iff:
+#     value is an array-like object  (not null, has integer length in
+#       [0, 2^53-1], and is not a function),  AND
+#     value has own property 'callee',  AND
+#     ( 'callee' is NOT enumerable  OR  Object.prototype.toString.call(value)
+#       === '[object Arguments]' ).
+#   In practice a genuine `(function(){return arguments})(...)` object passes.
+#
+# FLATTENABLE (spread one level)  vs  NOT-FLATTENABLE (copied through), verified:
+#   FLATTENABLE:
+#     - real Array (incl. Array subclasses): flatten([[1,2]])           -> [1,2]
+#     - `arguments` object:  flatten([(function(){return arguments})(1,2), 3]) -> [1,2,3]
+#         A nested array INSIDE arguments stays nested (one level):
+#         flatten([(function(){return arguments})([1,2],3)]) -> [[1,2],3]
+#     - object with truthy Symbol.isConcatSpreadable:
+#         flatten([{0:"x",1:"y",length:2,[Symbol.isConcatSpreadable]:true}, [9]]) -> ["x","y",9]
+#         (spread by .length; missing index reads undefined -> written as slot:
+#          flatten([{0:"x",length:3,[Symbol.isConcatSpreadable]:true}]) -> ["x", undefined, undefined])
+#   NOT FLATTENABLE (copied through unchanged, by reference):
+#     - plain object:   flatten([{a:1},[1]])         -> [{a:1},1]
+#     - string:         flatten(["ab",[1]])          -> ["ab",1]   (element string NOT spread)
+#     - number:         flatten([5,[1]])             -> [5,1]
+#     - boolean
+#     - null:           flatten([null,[1]])          -> [null,1]
+#     - undefined elem: flatten([undefined,[1]])     -> [undefined,1]
+#     - Set:            flatten([new Set([1,2]),[1]])        -> [<Set>,1]
+#     - Map:            flatten([new Map([[1,2]]),[1]])      -> [<Map>,1]
+#     - Uint8Array / typed array: flatten([new Uint8Array([1,2]),[9]]) -> [<U8>,9]
+#     - Buffer:         flatten([Buffer.from([1,2]),[9]])    -> [<Buffer>,9]
+#     - bigint:         flatten([10n,[9]])           -> [10n,9]
+#     - RegExp:         flatten([/a/,[1]])           -> [<RegExp>,1]
+#     - array-like object WITHOUT 'callee' and without isConcatSpreadable:
+#         flatten([{0:"a",1:"b",length:2},[9]]) -> [{0:"a",1:"b",length:2},9]
+#     - an array with Symbol.isConcatSpreadable === false is STILL an array
+#       (isArray short-circuits) so it STILL spreads:
+#         flatten([Object.assign([1,2],{[Symbol.isConcatSpreadable]:false}),[9]]) -> [1,2,9]
+
+# --- NODE 3: empty / degenerate input (verified) ---------------------------
+#   flatten([])         -> []   (fresh empty array)
+#   flatten(null)       -> []
+#   flatten(undefined)  -> []
+#   flatten()           -> []   (no argument)
+
+# --- NODE 4: holes in sparse arrays (verified) -----------------------------
+# Both at the TOP level and inside a spread element, a hole is read as
+# `undefined` and WRITTEN as a real own-property slot. The result is DENSE:
+#   flatten([1,,3])     -> [1, undefined, 3]   length 3; result.hasOwnProperty(1) === true
+#   flatten([[1,,3]])   -> [1, undefined, 3]   length 3; result.hasOwnProperty(1) === true
+#   flatten([[1,,3],[4]]) -> [1, undefined, 3, 4]   length 4
+# (i.e. holes are NOT preserved as holes; they become indexed `undefined`.)
+# CODEC NOTE: under JSON serialization an indexed `undefined` slot encodes as
+# `null` (JSON.stringify([1,undefined,3]) === "[1,null,3]"); both the source and
+# a faithful re-emitter produce the same densified result, so the comparison is
+# stable. The genInputs sparse-array case relies on this equivalence.
+
+ORACLE value -> oracle.json     # pure deterministic; expecteds = real package output
+
+SCOPE
+  IN-CONTRACT (reproduce exactly):
+    - the one-level flatten loop (NODE 1), isFlattenable + isArguments +
+      isConcatSpreadable predicate (NODE 2), top-arg length handling incl.
+      array-like/string top args (NODE 0), empty/null/undefined (NODE 3),
+      hole densification (NODE 4), new-array + no-mutation + by-reference
+      element copy semantics.
+  CARRIED DATA: none. (No literal tables; nothing to attest.)
+  OUT-OF-CONTRACT: none (pure function, no side effects, no ambient seam).
+  DOCUMENT-AS-OUT-OF-ENVELOPE (behavior specified here but NOT emitted by
+  genInputs because the harness JSON codec corrupts the input before the
+  expected is computed — a blind re-emitter still reconstructs these from the
+  spec above, NODE 2):
+    - `arguments` object ELEMENT: JSON round-trip turns it into a plain object
+      {"0":..,"1":..} which is NOT flattenable. The real `arguments` SPREAD
+      behavior (flatten([args,3]) -> [1,2,3]) is documented in NODE 2 but the
+      generator must NOT emit a live arguments object.
+    - object with Symbol.isConcatSpreadable: the symbol-keyed property is lost
+      on JSON round-trip, so the spread behavior cannot be exercised through
+      the codec; documented in NODE 2, not emitted.
+    - non-round-trippable element kinds (functions, Symbols) are out of the
+      input envelope and not emitted.
+
+PROVENANCE lodash.flatten@4.4.0 (npm); repo lodash/lodash; MIT license;
+  source file: index.js (module.exports = flatten; baseFlatten/isFlattenable/
+  isArguments/isArray/isArrayLike/isArrayLikeObject/isFunction/isLength/
+  isObject/isObjectLike all inlined in that single file).

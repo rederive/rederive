@@ -1,0 +1,117 @@
+UNIT decode_value
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@bb8ded84fa50 cli/sir/canon.mjs decode — the one-spelling sir-canonical-v1 decoder that turns every oracle argument into the value a js/ts artifact receives; reproduce it exactly, including the two non-canonical forms it still accepts (R9, R12)
+ORACLE-CLASS deterministic
+SIG decode_value(tree: json) -> json
+ENVELOPE IN: any json tree (see SCOPE for the depth the neutral oracle can carry; deeper trees ride the js extension). A sir-canonical-v1
+  tagged tree (every node a map holding exactly its tag's entries, each spelled as R2-R13 require) decodes; every other tree
+  throws (R1, R14, R15), and those throws are IN scope as observations. A throw node is NOT a throw: it decodes to an
+  ordinary map (R13). The result is json only when it holds no big integer (R6, R7), no bytes (R8), no absent value (R5) and
+  no text that is not well-formed Unicode (R3, R11), and only when the tree nests no deeper than SCOPE says; a result holding any of these is a js-native value with no
+  language-neutral form, and tooling routes those vectors to the js envelope extension. A result map whose keys are the
+  codec's marker names (__t, __throw, __threw) is an ordinary map, at the top level and nested.
+DEPENDS-ON none
+DESCRIPTION Decode one canonical tagged tree into the host's native value, accepting exactly one spelling per value (the one the
+  canonical encoder emits, with the two tolerances R9 and R12 name) and throwing on anything else: none, bool and text
+  pass through; f64 is rebuilt from its 64 bits; i64 and u64 are range-checked and become a host number inside plus or minus
+  2^53 and a big integer outside; bytes are rebuilt from canonical base64; lists and tuples become lists; maps (text keys in
+  ascending UTF-16 order) and records become maps; a throw node becomes the one-entry map named __threw (a value, never a
+  throw); the js extension's absent and big-integer tags decode too. A node deeper than 100 (the root is depth 0) throws.
+BEHAVIOR
+R1 A node is a map whose t entry is text. A tree or nested element that is not a node (none, bool, f64, text, list, a map
+  without t, a map whose t is not text) throws. A node whose t is not exactly (case-sensitive) one of TAGS throws, including
+  a t that names a built-in member of a host object ("constructor", "__proto__", "toString"). A node holding any entry its
+  tag's row of NODE-KEYS does not list throws. A listed entry that is missing throws wherever the tag's rule reads it.
+R2 none -> none.
+R3 text -> v, which must be text, with a cu entry that must be exactly "utf8" or "utf16" (else throws). With "utf8", v must
+  be well-formed (no unpaired surrogate code unit), else throws. With "utf16", v must NOT be well-formed (it holds at least
+  one unpaired surrogate; js only), else throws: a well-formed text has one spelling, cu "utf8", so a "utf16" empty text,
+  ASCII text or properly paired astral text throws. The result is v.
+R4 bool -> v, which must be a bool, else throws.
+R5 "undefined" (the js extension's tag) -> the absent value (js only).
+R6 bigint (the js extension's tag) -> v must be DECIMAL text, else throws; the result is that integer as a big integer (js
+  only), never a host number, at any magnitude; no range check.
+R7 i64 and u64 -> v must be DECIMAL text, else throws. Its integer n must lie in the tag's range, else throws: i64
+  -2^63 <= n <= 2^63-1, u64 0 <= n <= 2^64-1. When -2^53 <= n <= 2^53, BOTH bounds inclusive -> the f64 equal to n;
+  otherwise -> n as a big integer (js only).
+R8 bytes -> v must be text matching BASE64-CANONICAL, else throws, and the final group's unused low bits must be zero, else
+  throws: "base64:AR==" and "base64:AQJ=" throw, "base64:AQ==" decodes to the one byte 1. The result (js only) is the bytes
+  the base64 after the prefix encodes; "base64:" alone is no bytes.
+R9 f64 -> v must be text (else throws; its content is a display hint and is never compared with bits: "banana" and the
+  empty text are accepted CITED FIDELITY package). bits must be text of exactly 16 characters, each a digit or a lowercase
+  a-f, nothing before or after, else throws. The result is the binary64 whose IEEE-754 bit pattern, sign bit first, those
+  digits spell; 8000000000000000 is -0, 7ff0000000000000 and fff0000000000000 are the infinities. A NaN pattern is accepted
+  only as exactly 7ff8000000000000; every other NaN pattern (any other payload, the sign bit set) throws.
+R10 list and tuple (identical) -> v must be a list, else throws; each element is decoded by R1 in order; the result is the
+  list of results. A tuple's arity is not checked.
+R11 map -> v must be a list, else throws. Each entry must be a list of exactly two elements, else throws. The first is
+  decoded by R1 and must decode to text (only a text node does, so a utf16 key is one holding a lone surrogate), else
+  throws; it is
+  the key. A key equal to an earlier key throws. Each key must be strictly greater than the previous key under KEY-ORDER,
+  else throws. The second element decoded by R1 is the value. Every key is an ordinary key of the result, including
+  "__proto__" and the names of a host object's built-in members. Entry order is not part of the result (a json map is
+  unordered).
+R12 record -> v must be a list, else throws. Each field must be a list of exactly two elements whose first is well-formed
+  text (the name, NOT decoded; a name holding an unpaired surrogate throws), else throws; the second decoded by R1 is the
+  value. A name equal to an earlier name throws. Field order is NOT checked (the encoder writes the SIG's order, which the
+  decoder does not know). The result is a map from names to values, every name an ordinary key as in R11. CITED FIDELITY
+  package
+R13 throw -> msg must be text, else throws (a missing msg too). The result is a VALUE, never a throw: the map with exactly
+  one entry, named __threw, whose value is msg (the empty msg included), at the top level and nested alike. Decoding a throw
+  node returns that map; it does not raise.
+R14 A throw anywhere in the tree aborts the whole call: there is no partial result. A throw's message is a display hint,
+  never part of the contract.
+R15 Nesting cap, MAX-VALUE-DEPTH = 100: the root is at depth 0; every element of a list or tuple, every map key and every map
+  value, and every record value is one deeper than the node holding it (a record name is not a node). A position at depth
+  greater than 100 throws, whatever it holds (a node, a non-node, a throw node); depth 100 itself is legal: a chain of 101
+  nested nodes (the innermost at depth 100) decodes, a chain of 102 throws. Only positions that exist count: an empty list,
+  map, tuple or record at depth 100 decodes, while one holding any element, entry or field throws. A throw node at depth
+  100 decodes to its one-entry map (R13), whose msg then sits one value deeper than the cap. CITED FIDELITY package
+TABLE TAGS — the fourteen node tags R1 accepts
+  "none" | "bool" | "text" | "f64" | "i64" | "u64" | "bytes" | "list" | "tuple" | "map" | "record" | "throw" | "undefined" | "bigint"
+TABLE NODE-KEYS — the only entries a node may hold (R1)
+  "none" "undefined"                           | t
+  "bool" "bigint" "bytes" "i64" "u64"          | t, v
+  "list" "tuple" "map" "record"                | t, v
+  "text"                                       | t, v, cu
+  "f64"                                        | t, v, bits
+  "throw"                                      | t, msg
+TABLE DECIMAL — the integer text R6 and R7 accept, whole text, nothing before or after
+  "0"                                                       | zero
+  an optional "-", then a digit 1-9, then any ASCII digits  | that integer
+  anything else: "-0", a "+", a leading zero ("007"), whitespace or a line break anywhere (a trailing one included), an exponent, a fraction, a hex prefix, a non-text v, the empty text | throws
+TABLE BASE64-CANONICAL — the bytes text R8 accepts, whole text, nothing before or after
+  the prefix "base64:" (required, exactly once)                                     |
+  then zero or more groups of 4 characters of the standard alphabet A-Z a-z 0-9 + / |
+  then optionally ONE final padded group: 2 alphabet characters and "==", or 3 alphabet characters and "=" |
+  anything else: no prefix, the url-safe alphabet - _, whitespace or a line break anywhere, a missing or extra "=", a group of 1 character | throws
+PINNED order KEY-ORDER = lexicographic over UTF-16 code units (a shorter text that is a prefix of a longer one is smaller) CITED R11 — not code points or UTF-8 bytes: "😀" (D83D DE00) sorts BEFORE "｡" (FF61)
+INVARIANT for every tree the canonical encoder emits from a json-typed value, decode_value returns a value that re-encodes to the same tree.
+INVARIANT decode_value never coerces: every accepted field already has the type its tag requires; the only accepted trees the encoder never emits are the ones R9 (any f64 display v), R12 (record fields in any order) and R15 (a throw node at depth 100, whose result is one value deeper than encode accepts) name;
+  the encoder's own value cap is the same 100, so every deeper tree is one it never emits.
+OUT-OF-DOMAIN every malformed tree throws (R1-R13): a non-node, an unknown tag, an entry the tag does not list, a missing or
+  mistyped field, a non-DECIMAL or out-of-range integer, non-canonical base64 or non-zero padding bits, f64 bits that are not
+  16 lowercase hex digits or a non-canonical NaN, a map entry or record field that is not a pair, a non-text map key, a
+  repeated or out-of-order map key, a record name that is not well-formed text, a repeated record name, a throw without a
+  text msg, any position deeper than 100 (R15). The silent tolerances that remain: an f64 v that disagrees with its bits (R9),
+  record fields in any order (R12).
+ORACLE value -> oracles/decode_value.json  CANONICAL-SHA256 135b0a194d27c6757939edea55c75e0ea66bfb733534a78ca5f888780f5994c4
+NOTE No rust variant, by decision: decode_value IS the js/ts drivers' argument ABI. Its output is a js-native value (host
+  numbers, big integers, byte arrays, the absent value), and the rust driver decodes canonical trees by its own path. A Rust artifact would verify a shadow of the unit, not the unit.
+SCOPE IN: R1-R14 and every TABLE row, over canonical trees and malformed json trees, including result maps keyed by the codec's
+  marker names (since round 4 every driver marker-escapes what an artifact returns, so such a map grades as the map it is;
+  FINDINGS #55 #58). R15 is IN and graded at and past its boundary: the neutral codec carries the json argument only to
+  its own value cap of 100, and each node costs at least two json levels (node map, v list), so the shared oracle holds
+  trees whose innermost node sits at depth 49 at most; every deeper probe (depth 100 legal, 101 refused, over lists,
+  maps, records, tuples and empty containers) rides the js envelope extension, whose arguments travel in the legacy codec.
+  Only the legal side is discriminating: a decoder with a looser cap returns a value deeper than 100, which the js driver's
+  marker escape refuses, so it grades as a throw exactly like the refusal (FINDINGS, round 5). The rule stands as written.
+  OUT-OF-ENVELOPE: a throw node at depth 100 (R15) — the call returns, but its result nests 101 values deep, which the
+  drivers' marker escape and the result encoder refuse, so no oracle can grade it. OUT: the other exports of canon.mjs
+  (encode, canonicalString, parseSig, display, escapeMarkers).
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs, export decode (rederive, MIT), driven through
+  selfhost/seams/decode_value.mjs. Round 5 (2026-10-27) re-cut after FINDINGS #78 (one value-depth model: root 0, each
+  child one deeper, a position deeper than 100 throws; round 4 refused depth 1024 and over). Round 4 re-cut for REDERIVE_SELF_PLAN Tier 1 after FINDINGS #55 #58 #66 (cu
+  utf16 only on ill-formed text, an own-key tag table, well-formed record names, the 1024-node cap, a returned throw-node map
+  graded as a map); oracle stamped by selfhost/stamp.mjs from the pinned authority.

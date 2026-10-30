@@ -1,0 +1,16 @@
+UNIT diff_hint
+LANG ts
+PRIMARY-SHA256 2d15033b23e06a43fadec022b438345a002fa2db509fb185a9629ad23b37a777
+SIG export function diff_hint(existing: string, profile: string): string
+ABI TypeScript compiles to the js runtime: text=string (UTF-16). STRICT: the artifact must type-check under
+  `strict: true` against this SIG with no `any`, no non-null assertions (`!`), and no `@ts-ignore` /
+  `@ts-expect-error`. Indexing a line array or a code-point array yields string | undefined under
+  noUncheckedIndexedAccess: test the index against the length (primary R2, R3) rather than asserting.
+MECHANISM (restated from js, language files are self-contained) R1 = String.prototype.split with the one-character
+  separator "\n". R4/R6 positions are code points: Array.from or for-of over each line, never string [i], .length or .slice
+  (UTF-16 units). R7: JSON.stringify of the window, outer quotes removed, covers the C0, quote and backslash rows only;
+  INVISIBLE needs its own pass (the regex below, u flag); the ELLIPSIS marks are added outside the escaping.
+PINNED regex INVISIBLE = /[\u000a-\u000d\u007f-\u00a0\u00ad\u034f\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u115f\u1160\u1680\u180b-\u180e\u2000-\u200f\u2028-\u202f\u205f-\u2064\u2066-\u206f\u2800\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\u{e0100}-\u{e01ef}]/gu CITED primary PINNED INVISIBLE — profile.mts line 78, the u flag
+  (members above U+FFFF are whole code points); a match above U+FFFF becomes the braced form, any other the four-digit form
+DEPENDS-ON none
+PROVENANCE rederive@6199e2cc8b75 cli/lib/profile.mts diffHint; this file states the typed SIG and mechanism only.

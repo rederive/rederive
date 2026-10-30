@@ -1,0 +1,107 @@
+UNIT isBoolean
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isBoolean(value: any) -> boolean
+DEPENDS-ON none   # zero runtime deps; an INTERNAL helper isObjectLike is defined in the same file (not exported)
+
+# ---------------------------------------------------------------------------
+# BEHAVIOR  (exact transcription of the discrimination rule — pipeline order matters)
+# ---------------------------------------------------------------------------
+# Pure predicate. No seam (no clock / RNG / env / io / net). Total function: never throws
+# for any in-envelope value. Returns a primitive boolean (true | false), never truthy/falsy
+# proxies. The return is the disjunction of THREE clauses, short-circuit-evaluated LEFT->RIGHT:
+#
+#   isBoolean(value):
+#     return  value === true                                   # NODE 1: strict-equal primitive true
+#          || value === false                                  # NODE 2: strict-equal primitive false
+#          || ( isObjectLike(value)                            # NODE 3a: object-like guard
+#               && objectToString.call(value) == boolTag )     # NODE 3b: internal [[Class]] tag test
+#
+# Constants (string literals, exact):
+#   boolTag          = '[object Boolean]'
+#   objectToString   = Object.prototype.toString   # the BUILT-IN, captured at module load
+#
+# Helper (internal, same file):
+#   isObjectLike(value):  return !!value && typeof value == 'object'
+#     # i.e. value is TRUTHY  AND  typeof value === 'object'.
+#     # The !!value truthiness gate rejects null (typeof null === 'object' but !!null === false).
+#     # NOTE the consequence for boxed booleans below.
+#
+# NODE-BY-NODE semantics:
+#   NODE 1  value === true   -> true        (the primitive true, and ONLY the primitive; === is strict,
+#                                            so a Boolean object is NOT === true)
+#   NODE 2  value === false  -> true        (the primitive false, and ONLY the primitive)
+#   NODE 3  reached ONLY when value is neither primitive true nor primitive false. It is true iff
+#           ALL of:
+#             (a) value is truthy            ( !!value === true )
+#             (b) typeof value === 'object'
+#             (c) Object.prototype.toString.call(value) === '[object Boolean]'
+#           Only a Boolean WRAPPER OBJECT (new Boolean(...)) yields tag '[object Boolean]'.
+#           Such an object is ALWAYS truthy (every object is truthy, including new Boolean(false)),
+#           so clause (a) is satisfied for BOTH new Boolean(true) AND new Boolean(false).
+#           => isBoolean(new Boolean(false)) === true   (CRITICAL EDGE — the wrapped value is irrelevant;
+#              the object's truthiness, not the wrapped primitive's, gates clause (a)).
+#
+# RESULTING TRUTH TABLE (complete, in-envelope):
+#   true                        -> true     (NODE 1)
+#   false                       -> true     (NODE 2)
+#   new Boolean(true)           -> true     (NODE 3: truthy object, tag '[object Boolean]')
+#   new Boolean(false)          -> true     (NODE 3: object is truthy, tag '[object Boolean]')
+#   0                           -> false    (primitive number, not ===true/false; not object-like)
+#   1                           -> false
+#   -0                          -> false    (number; -0 !== true/false; not object-like)
+#   NaN                         -> false    (number)
+#   Infinity / -Infinity        -> false    (number)
+#   any other number            -> false
+#   ''  (empty string)          -> false    (string)
+#   'true' / 'false' / any str  -> false    (a string is NEVER a boolean here; no coercion)
+#   null                        -> false    (NODE 3 fails at !!value: null is falsy)
+#   undefined                   -> false    (falsy; typeof 'undefined')
+#   {}  (plain object)          -> false    (object-like & truthy, but tag '[object Object]' != boolTag)
+#   []  (array)                 -> false    (tag '[object Array]')
+#   /re/  (RegExp)              -> false    (tag '[object RegExp]')
+#   new Set() / new Map()       -> false    (tag '[object Set]' / '[object Map]')
+#   Uint8Array / Buffer         -> false    (tag '[object Uint8Array]')
+#   bigint (e.g. 10n)           -> false    (typeof 'bigint', not 'object'; not ===true/false)
+#   new Number(0)               -> false    (truthy object, but tag '[object Number]' != boolTag)
+#   new String('')              -> false    (truthy object, but tag '[object String]' != boolTag)
+#   object carrying a Symbol key-> false    (plain object, tag '[object Object]')
+#   a function                  -> false    (typeof 'function', NOT 'object' -> isObjectLike false)
+#                                            # OUT-OF-ENVELOPE for the generator: a live function does
+#                                            # not survive the JSON oracle codec (encode -> undefined).
+#                                            # Behavior documented here for the blind re-emitter; NOT
+#                                            # emitted by genInputs. The "non-boolean object-like" false
+#                                            # branch is already covered by {}, [], RegExp, Set, Map.
+#
+# NON-OBVIOUS POINTS the blind re-emitter MUST honor:
+#   * The third clause requires the EXACT internal-class tag '[object Boolean]'; it does NOT use
+#     `instanceof Boolean` and does NOT use `typeof`. Re-derive via Object.prototype.toString.call,
+#     because a subclass / cross-realm / tag-spoofing object is judged by its [[Class]]/toStringTag, not
+#     by its prototype chain.
+#   * Symbol.toStringTag CAN influence Object.prototype.toString output; for ordinary inputs the tag is
+#     determined by the internal class. Re-emitters in JS get this for free via toString.call; in other
+#     languages, emulate "the host's canonical class tag string equals '[object Boolean]' iff value is a
+#     Boolean wrapper object".
+#   * Return MUST be a real boolean primitive, not a truthy/falsy value. (The `&&` / `||` chain in JS
+#     already yields a boolean here because NODE 3b's `==` produces one; a port must coerce to boolean.)
+#   * No throw path exists for any in-envelope value.
+#
+# ---------------------------------------------------------------------------
+ORACLE value -> oracle.json
+# ---------------------------------------------------------------------------
+# SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly): the entire predicate above — the three-clause disjunction,
+#     the isObjectLike truthy+typeof gate, and the exact '[object Boolean]' tag comparison. The string
+#     constant boolTag = '[object Boolean]' is the only literal and is reproduced inline (tiny, not
+#     carried data).
+#   CARRIED DATA: none (no large literal table).
+#   OUT-OF-CONTRACT: none (no stateful mutators, no side APIs, no ambient reads). The single
+#     out-of-ENVELOPE input is a live `function` value (codec cannot persist it); its behavior (-> false
+#     via the typeof!=='object' guard) is fully specified above for the blind re-emitter but is excluded
+#     from genInputs to avoid poisoning the held-out store.
+#
+# PROVENANCE
+#   package: lodash.isboolean@3.0.3  (lodash 3.0.3 Custom Build, modularize exports="npm")
+#   repo:    lodash/lodash  (https://lodash.com/)
+#   license: MIT
+#   source:  node_modules/lodash.isboolean/index.js  (function isBoolean, helper isObjectLike)

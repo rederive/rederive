@@ -1,0 +1,165 @@
+UNIT rust_carried_table
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@6199e2cc8b75 cli/sir/v05.mjs rustCarriedTable (with rustTokens, rustValue, castOf, rustEntries, carriedShapeType) — the reader that decides what a Rust carried-data module's table hashes to; reproduced exactly, accidents included
+ORACLE-CLASS deterministic
+SIG rust_carried_table(src: text, shape: text | none) -> map[text, json]
+ENVELOPE src is well-formed text, usually Rust source; the reader never compiles it, so any text is in scope as long as
+  every escape it holds obeys R4's in-scope forms (a "\x" escape followed by two hex digits; a "\u{…}" escape whose HEX is
+  empty, all hex digits, or starts with a character R4 says throws) and no escape names a surrogate code point
+  (U+D800..U+DFFF), and no value R6 reads nests deeper than 50 sequences. shape is none, the empty text, or any text (R10
+  and R11 say which texts throw). Throws are IN scope as observations: R3, R4, R6, R7, R9, R10, R11, R12 and R13 say where
+  the reader throws; the message is never graded.
+DEPENDS-ON none
+DESCRIPTION Read a Rust carried-data module as the (key, value) table it declares. The text is cut into tokens (R1–R5);
+  entries are found in the token stream either as ("key", value) tuples or, failing any tuple, as "key" "=>" value arms
+  (R6–R9); an optional declared SHAPE (an abstract map type) checks every key and value (R10–R12); a repeated key must carry
+  the same value (R13). The result is the table as a map from key text to a json value: text, number, bool, none, or a list
+  of those, nested.
+BEHAVIOR
+R1 Tokens. src is read left to right as a sequence of characters; at each position the FIRST matching row of TABLE LEX
+  applies, then reading continues after what it consumed. Whitespace and comments make no token.
+TABLE LEX — what starts at the current position
+  space, tab, CR or LF                                                                     | skipped
+  two slashes                                                                              | a LINE COMMENT, skipped up to (not including) the next LF, or to the end of src
+  slash then star                                                                          | a BLOCK COMMENT, skipped: depth starts at 1; "/*" adds one, "*/" subtracts one (each consumes two characters); it ends when depth is 0 — or silently at the end of src when it never closes
+  an optional "b", then "r", then zero or more hash marks, then a double quote — all within the next 32 characters | a RAW STRING: STR token, its text is everything up to the first double quote followed by the same number of hash marks, verbatim (no escapes); none such -> throws
+  a double quote, or "b" then a double quote                                               | a STRING: STR token, R3
+  an apostrophe                                                                            | a CHAR literal when R2 accepts: CHR token; otherwise the punctuation token APOSTROPHE (a lifetime or label)
+  an ASCII digit                                                                           | a NUMBER: NUM token, R5
+  an ASCII letter or underscore                                                            | a WORD: the longest run of ASCII letters, digits and underscores; "true" / "false" are BOOL tokens, any other run an IDENT token
+  "=>", "->", "::" or ".."                                                                 | that two-character punctuation token
+  any other character                                                                      | a one-character punctuation token (a non-ASCII character outside a literal included; "||" is two "|" tokens)
+R2 CHAR literal: an apostrophe, then exactly one of — a single character that is neither an apostrophe nor a backslash
+  (any code point, LF included); or a backslash followed by one of n r t 0 \ ' or the double quote; or "\x" and exactly two
+  hex digits; or "\u{" then 1 to 8 characters each a hex digit or underscore, then "}" — then a closing apostrophe. Anything
+  else (a lifetime such as 'a or 'static, a two-character body) is not a char literal. The body is decoded by R4.
+R3 STRING: after the opening double quote (and its "b"), the body runs to the next double quote not consumed by an escape —
+  a backslash always consumes itself and the ONE character after it. No closing quote before the end of src -> throws. The
+  body is decoded by R4. A byte string is read as text exactly like a string.
+R4 ESCAPES (strings and char bodies), by TABLE ESCAPE; every other character stands for itself. A bad or unknown escape
+  anywhere in src — inside any string, not only a table entry — -> throws; escapes inside comments are never read.
+TABLE ESCAPE — backslash followed by
+  n, r, t, 0                    | LF, CR, tab, U+0000
+  backslash, apostrophe, double quote | that character
+  x and two hex digits          | the character whose code is those two digits (0x00..0xFF; "\xFF" is U+00FF, never a byte)
+  u, then "{"                   | HEX = the text up to the next "}" in the body, underscores removed. No "}" -> throws; HEX empty, or starting with a character that is not a hex digit, a TRIM character, "+" or "-" -> throws; HEX all hex digits -> the code point it names, a value above U+10FFFF -> throws
+  LF or CR                      | a LINE CONTINUATION: nothing, and every following space, tab, CR and LF is skipped
+  anything else (u without "{" included) | throws
+PINNED set TRIM = { U+0009, U+000A, U+000B, U+000C, U+000D, U+0020, U+00A0, U+1680, U+2000..U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF } CITED R4 — the ECMAScript WhiteSpace + LineTerminator set (U+FEFF in, U+0085 out); it only separates a throwing "\u{…}" start from an out-of-domain one
+R5 NUMBER: the longest prefix, within the next 64 characters, of the form BODY then an optional SUFFIX, where BODY is
+  "0x" then one or more of hex digits and underscores, or "0o" then octal digits and underscores, or "0b" then binary digits
+  and underscores, or else DECIMAL = an ASCII digit then digits and underscores, an optional fraction ("." then a digit,
+  then digits and underscores), an optional exponent (e or E, an optional sign, a digit, then digits and underscores); and
+  SUFFIX is an optional underscore then one of u8 u16 u32 u64 u128 usize i8 i16 i32 i64 i128 isize f32 f64. The radix
+  prefixes are lowercase only ("0X10" is the number 0 then the word X10). The hex digits of BODY absorb a following f32 or
+  f64 ("0x1f64" is the hex value 0x1F64 = 8036). A numeral longer than 64 characters is cut there; the rest starts a new
+  token. A "." not followed by a digit ends the numeral ("1." is NUM 1 then the punctuation "."). VALUE: drop every
+  underscore and the suffix. An INTEGER-SHAPED body (a radix prefix with at least one digit, or decimal digits with no
+  fraction and no exponent — whatever the suffix, f32 / f64 included) names an integer N: the literal is EXACT when N is
+  exactly a double (N is 0, or N = m × 2^k with m odd, m < 2^53 and N < 2^1024 — so 2^53, 2^60 and 2^64 are exact, 2^53+1
+  and 2^64-1 are not), and its value is N. Any other body (a fraction or an exponent) has the nearest double as its value,
+  correctly rounded ("9007199254740993.0" is 2^53); it is INEXACT only when that is infinite ("1e400"). A radix prefix left
+  with no digit ("0x_") is INEXACT. An f32 SUFFIX on a decimal, octal or binary body (never hex: there it is digits) narrows:
+  the literal is ALSO INEXACT when its value is not exactly a finite IEEE-754 binary32 value ("0.1f32", "16777217f32",
+  "1e-50f32", "1e39f32" and "3.4028235e38f32" are INEXACT; "0.5f32", "16777216f32", "0b1f32" are exact), so an f32 literal
+  that reads keeps its value. An INEXACT literal is harmless until R6 reads it as a value; then it throws. CITED FIDELITY
+  package — exactness is judged per entry value
+R6 VALUE — a table value starting at a token, by TABLE VALUE (first matching row); when no row applies there is no value. A
+  value is read left to right and stops at the first token where it fails; a throw (an INEXACT literal, a CAST) happens
+  when reading reaches that token, even inside a candidate R7 then rejects ("(\"a\", 99999999999999999 + 1)" throws by R6,
+  "(\"a\", 1 + 99999999999999999)" does not: reading stopped at "+" before the numeral).
+TABLE VALUE — the token(s) at the position
+  punctuation "&"                         | the value after it (any number of "&" are skipped)
+  STR, CHR or BOOL                        | its text / text / bool
+  NUM                                     | its value (INEXACT -> throws), then TABLE CAST
+  punctuation "-" then NUM                | the negated value (INEXACT -> throws; negating 0 gives -0), then TABLE CAST
+  IDENT "None"                            | none
+  IDENT "Some", "(" , IDENT Some or None  | throws (a nested Option: "Some(None)", "Some(Some(1))", "Some(Some)") — only when that IDENT is the very next token: "Some(&None)" and "Some((None))" are none, "Some(&Some(1))" is 1
+  IDENT "Some", "(" , a value, ")"        | that value (nothing else may stand inside)
+  "[" or "("                              | a SEQUENCE: values separated by ",", an optional trailing ",", closed by the matching "]" or ")". A list of the items, except that "(" with exactly one item and no comma is that item itself ("(1)" is 1, "(1,)" is [1], "()" is []). Any item without a value, or anything but "," or the closer after an item -> no value
+  anything else                           | no value ("vec!", "b'a'", "c\"x\"", a block, "1 + 2")
+TABLE CAST — after a number value x, by the tokens that follow (at most one cast is read; "1 as u8 as u16" leaves the second "as" after the value, so its candidate is rejected)
+  not IDENT "as"                          | x, unchanged
+  "as" then anything but an IDENT         | throws
+  "as" f64                                | x
+  "as" f32                                | x when x is exactly an IEEE-754 binary32 value (finite); otherwise throws ("0.1 as f32")
+  "as" u8 u16 u32 i8 i16 i32              | x when x is an integer (no fractional part; -0, 1.0 and 1e3 are integers) within the type's range (u8 0..255, u16 0..65535, u32 0..4294967295, i8 -128..127, i16 -32768..32767, i32 -2147483648..2147483647); otherwise throws ("255 as i8", "1.9 as u8", "-1 as u8")
+  "as" u64 usize u128                     | x when an integer within 0..2^53 (2^53 included); otherwise throws ("18014398509481984 as u64", though that literal alone reads)
+  "as" i64 isize i128                     | x when an integer within -2^53..2^53; otherwise throws
+  (every integer-cast row above)          | a -0 that passes gives 0 ("-0 as i64", "-0.0 as u8" are 0); "as f64" / "as f32" keep -0, and an uncast "-0" or "-0i64" stays -0
+  "as" any other IDENT                    | throws ("1 as char", "1 as U8"); a cast after a non-number ("true as u8", "'a' as u8", "(1) as u8") is no cast: that value ends before "as"
+R7 ENTRY scan: the token stream is scanned from the first token. At each token, in this order: (a) TUPLE candidate — the
+  token is "(" followed by a STR token K and ",", a value V starts after the comma, and the token after V is ")": the entry
+  (K, V) joins the TUPLES and the scan resumes after that ")"; when NO value starts after the comma (an IDENT, "b'a'", a
+  sequence with an item that has none, the end of src) -> throws; when a value starts but the token after it is not ")"
+  ("(\"a\", 1 + 2)", "(\"a\", true as u8)", "(\"a\", 1, 2)") the candidate is silently rejected and the scan moves one
+  token on; (b) OR-PATTERN — the token is a STR token, the next is the punctuation
+  "|" and the one after it is a STR token -> throws ("s == \"a\" || t" and "\"a\" | x" do not); (c) ARM candidate — the
+  token is a STR token K followed by "=>": when a value V starts after it and the token after V is "," or "}", the entry
+  (K, V) joins the ARMS and the scan resumes at that "," or "}" token; otherwise (no value, or anything else after it, the
+  end of src included: "\"a\" => 1" alone) -> throws. Otherwise the scan moves one token on. Tokens inside a value an
+  accepted candidate consumed are never visited; tokens of a rejected candidate are: "(\"a\", (\"b\", 1), 3)" yields only
+  the entry b: 1. The scan covers the WHOLE token stream, and its throws fire even when R8 later discards the form: any call
+  shaped ("text", value) anywhere in src is a tuple entry, a ("text", name) call such as format!("{}", n) throws, and so does
+  a "text" => arm whose value is not one R6 reads. CITED FIDELITY package
+R8 FORM: when TUPLES is non-empty the entries are TUPLES, in order, and ARMS are discarded entirely; otherwise the entries
+  are ARMS, in order. A single stray tuple therefore replaces a whole arm table. CITED FIDELITY package
+R9 No entries -> throws.
+R10 SHAPE given: shape is none or the empty text -> no shape check (R11–R12 skipped). Otherwise the DECLARED TYPE is read
+  from shape by R11; when it is not a map type -> throws.
+R11 Reading shape. WS = space, tab, CR, LF (the grammar's own whitespace; never VT, FF, NBSP or other Unicode space).
+  (1) keep the text before its first ";"; (2) NORM: remove WS from both ends; when the result is "map", then one or more
+  WS, then K, optional WS, "->", optional WS, V — K the SHORTEST non-empty piece for which such a split exists, V the rest
+  (at least one character) — the text becomes "map[" NORM(K) ", " NORM(V) "]"; otherwise it stays as it is; (3) WIDTH:
+  every u8, u16, u32 standing as a TYPE becomes u64 and every i8, i16, i32 so standing becomes i64 — standing as a type
+  means: at the start of the text or right after one of "[" "," "|" ":" (WS between allowed), and followed (WS between
+  allowed) by "]", ",", "|" or the end of the text ("record[u8: u8]" renames only the field's type; "map[text,\nu8]" is
+  renamed); (4) the result is read by GRAMMAR TYPE over the whole text; a text it does not accept -> throws (a shape of
+  only WS reads as the empty text, which throws).
+PINNED grammar TYPE = alt ("|" alt)* CITED FIDELITY package — the shape is parsed by the codec's one type reader (canon.mjs parseType)
+  alt = one of the words text bytes bool none i64 u64 f64 json, or tuple[T ("," T)*], list[T], map[T "," T], or
+  record[name ":" T ("," name ":" T)*] with unique names; name = an ASCII letter or underscore then ASCII letters, digits,
+  underscores. Between any two tokens space, tab, CR or LF may stand (optional; required only between two words); no other
+  character may stand anywhere outside a token (a leading NBSP, VT or U+FEFF throws).
+  Composite types (tuple, list, map, record — the shape's own map counted) nest at most 16 deep; 17 throws. A union is
+  refused (throws) when a later alternative is COVERED by an earlier one, by TABLE COVERS.
+TABLE COVERS — an earlier alternative A covers a later B when any row holds
+  same type                     | A and B are the same type, unions compared as SETS of alternatives and records as SETS of named fields (tuples in order)
+  json                          | A is json and B is JSON-ACCEPTED: none, bool, f64, text or json; a list, or a tuple, of JSON-ACCEPTED parts; a map with a text key and a JSON-ACCEPTED value; a record whose fields are all JSON-ACCEPTED; a union of JSON-ACCEPTED alternatives
+  pointwise                     | both lists and A's item covers B's; both tuples of one length, each A item covering B's at its place; both maps, A's key covering B's key and A's value covering B's value
+  record                        | both records and every field of A has a field of B with the same name that it covers (B may have more fields)
+  union                         | A is a union and one of its alternatives covers B; or B is a union and A covers every alternative of B
+R12 FIT, for every entry in order under the declared type map[KT, VT]: the key text must fit KT and the value must fit VT, by
+  TABLE FIT; a misfit -> throws.
+TABLE FIT — a reader value v against a type T
+  text              | v is text
+  bool              | v is a bool
+  none              | v is none
+  f64               | v is a number
+  i64 / u64         | v is a number with no fractional part ("1.0", "1e3" and -0 fit) within -2^63..2^63-1 / 0..2^64-1, compared exactly ("1e19" fits u64, "9.3e18" misfits i64)
+  json              | always
+  list[I]           | v is a list and every item fits I
+  tuple[T1..Tn]     | v is a list of exactly n items, item k fitting Tk
+  union             | v fits at least one alternative
+  bytes, map[…], record[…] | never (the reader yields no bytes and no map)
+R13 DUPLICATES, in entry order, building the result: an entry whose key is already a key of the result must carry the SAME
+  value, else -> throws. SAME: two non-lists are the same when they are one value (one text, one bool, both none, or one
+  number where -0 and 0 DIFFER); an earlier list is the same as a later list with the same items at every depth where,
+  inside a list, -0 and 0 are equal; a list and a non-list differ. When the same, the later value replaces the earlier ([0]
+  then [-0] leaves [-0]). Every key is ordinary text: "constructor", "__proto__", "toString" are keys like any other.
+R14 The result: every key of the entries with its value from R13. Key order is immaterial (the canonical form sorts).
+INVARIANT every number in the result is finite and exactly the double R5 and R6 gave it; the result is never empty.
+OUT-OF-DOMAIN what the reader does outside ENVELOPE (not reproduced; no vector reaches it): a "\x" escape whose next two
+  characters are not both hex digits yields a character from a lenient host integer read (a non-hex start gives U+0000, a
+  single trailing digit stands alone, "\x 1" reads 1); any other "\u{…}" HEX is read leniently — leading TRIM characters
+  skipped, an optional sign, an optional "0x", then the longest hex prefix ("\u{1g}" and "\u{ 0x1}" are U+0001, a negative
+  value throws, "\u{-0}" is U+0000); an escape naming a surrogate gives text that is not well-formed (a shape check of it
+  throws); a value nested past the codec's value cap (100) throws in a shape check, and far deeper exhausts the host stack.
+ORACLE value -> oracles/rust_carried_table.json  CANONICAL-SHA256 29a519c892f505096e614bfbd8bb758dfd7a057c26e0cd97dc9bbd7bb5c6dff2
+SCOPE IN: R1–R14 over ENVELOPE. OUT: OUT-OF-DOMAIN; the error message text (only throw-ness is graded); the file name the
+  reader puts in its messages; the line numbers it records per entry.
+PROVENANCE rederive@6199e2cc8b75 (rederive, the author's own repository), cli/sir/v05.mjs: rustCarriedTable, rustTokens,
+  rustUnescape, rustNumber, RUST_CHAR, RUST_NUM, rustValue, castOf, exact, rustEntries, carriedShapeType; cli/sir/canon.mjs:
+  parseType, covers, inJson, encode. Round-5b delta re-cut 2026-10-27 from the pinned authority snapshot, seam
+  selfhost/seams/rust_carried_table.mjs.

@@ -1,0 +1,174 @@
+UNIT replace
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+
+SIG replace(string?, pattern?, replacement?) -> string
+# Default export of the npm package `lodash.replace` (module.exports = replace).
+# The re-emitter MUST emit a DEFAULT export: `export default replace` (or `module.exports = replace`).
+# There is NO named export. exportName is null; importKind is 'default'.
+# The function is variadic in spirit: it reads arguments by position via the `arguments`
+# object and branches on `arguments.length`. The harness invokes it as fn.apply(null, tuple),
+# so a tuple of length 0/1/2/3 reproduces the corresponding arity branch exactly.
+
+DEPENDS-ON none
+# Zero runtime dependencies. The unit is a self-contained ~4KB file that inlines its own
+# `toString`/`baseToString`/`isSymbol`/`isObjectLike` helpers (lodash custom build). The
+# re-emitter reconstructs these helpers from the BEHAVIOR section below; do not import lodash.
+
+BEHAVIOR
+# ---------------------------------------------------------------------------------------------
+# The whole unit, expressed exactly. `args` is the raw `arguments` object of `replace`.
+#
+#   string = toString(args[0])
+#   if (args.length < 3) return string
+#   return string.replace(args[1], args[2])      # native String.prototype.replace
+#
+# i.e. TWO ordered steps:
+#   NODE 1 (COERCE): coerce the 0th argument to a string via the inlined `toString`.
+#   NODE 2 (BRANCH on arity):
+#       - if FEWER THAN 3 arguments were supplied -> return the coerced string UNCHANGED
+#         (NO call to .replace is made; args[1]/args[2] are ignored entirely).
+#       - otherwise -> delegate to native `String.prototype.replace(args[1], args[2])`
+#         on the coerced string and return its result.
+# ---------------------------------------------------------------------------------------------
+#
+# NODE 1 — toString(value)  (the coercion of the FIRST argument only):
+#   toString(value):
+#     if (value == null)          # loose equality: catches BOTH null AND undefined
+#         return ''
+#     return baseToString(value)
+#
+#   baseToString(value):
+#     if (typeof value === 'string') return value          # fast path, returns as-is
+#     if (isSymbol(value)) return <symbol's string>         # OUT-OF-ENVELOPE (see SCOPE)
+#     result = (value + '')                                 # native ToString via "" concat
+#     # Special-case negative zero: native (-0 + '') === '0', but lodash preserves the sign.
+#     if (result === '0' && (1 / value) === -Infinity) return '-0'
+#     return result
+#
+#   isSymbol(value):
+#     return typeof value === 'symbol'
+#         || (isObjectLike(value) && Object.prototype.toString.call(value) === '[object Symbol]')
+#   isObjectLike(value):
+#     return !!value && typeof value === 'object'
+#
+#   DEMONSTRATED NODE-1 coercions (verified against lodash.replace@4.1.4) — all codec-faithful:
+#     null        -> ''                  undefined   -> ''
+#     ''          -> ''                  'hello'     -> 'hello'    (string fast-path, identity)
+#     0 (+0)      -> '0'                  123         -> '123'
+#     1.5         -> '1.5'               1e21        -> '1e+21'
+#     true        -> 'true'              false       -> 'false'
+#     10n (bigint)-> '10'                [1,2,3]     -> '1,2,3'    (Array#toString = join(','))
+#     []          -> ''                  [1,[2,3]]   -> '1,2,3'
+#     {}          -> '[object Object]'
+#   OUT-OF-ENVELOPE NODE-1 values — the rule above DEFINES them, but the JSON oracle codec
+#   cannot round-trip them, so genInputs never emits them (graded by spec only, not held-out):
+#     -0          -> '-0'   (sign-preserved special case; but JSON.stringify(-0) === '0', so the
+#                            value collapses to +0 through the codec -> un-round-trippable)
+#     NaN         -> 'NaN'           +Infinity -> 'Infinity'     -Infinity -> '-Infinity'
+#                            (these three go through `(value + '')`; codec cannot persist them)
+#
+# NODE 2 — native String.prototype.replace(pattern, replacement), applied to the coerced string,
+#          ONLY when arguments.length >= 3. This is plain ECMAScript String.prototype.replace;
+#          the re-emitter reproduces it by simply calling the host's native String#replace.
+#          The exact contract the oracle exercises (all verified against the real package):
+#
+#   (a) PATTERN is a STRING (non-RegExp): only the FIRST occurrence is replaced; the rest of
+#       the string is left intact. A NUMBER/other primitive pattern is coerced to a string by
+#       the native method (e.g. pattern 123 matches the substring "123").
+#         replace('a-b-c', '-', '_')        -> 'a_b-c'          # first '-' only
+#         replace('a.b.c', '.', 'DOT')      -> 'aDOTb.c'        # '.' is LITERAL, not regex
+#         replace('a123b', 123, 'X')        -> 'aXb'            # number pattern coerced
+#         replace('hello', 'z', 'X')        -> 'hello'          # no match -> unchanged
+#
+#   (b) PATTERN is a RegExp WITHOUT the global flag: the FIRST match is replaced.
+#         replace('a-b-c', /-/, '_')        -> 'a_b-c'
+#         replace('Hello', /h/i, 'J')       -> 'Jello'          # flags (i) honored by native
+#
+#   (c) PATTERN is a RegExp WITH the /g flag: ALL matches are replaced.
+#         replace('a-b-c', /-/g, '_')       -> 'a_b_c'
+#
+#   (d) EMPTY pattern: the empty string (or empty RegExp) matches at position 0 (zero width).
+#         replace('hello', '', 'X')          -> 'Xhello'        # one insertion at start
+#         replace('hello', new RegExp(''), 'X') -> 'Xhello'
+#         replace('hello', /(?:)/g, 'X')     -> 'XhXeXlXlXoX'   # /g: between every char + ends
+#         replace('', '', 'Y')               -> 'Y'             # empty string, empty pattern
+#
+#   (e) REPLACEMENT is a STRING with native $-substitution tokens (only meaningful when the
+#       match has the relevant context; otherwise the token's documented fallback applies):
+#         $$        -> a literal '$'
+#         $&        -> the whole matched substring
+#         $`        -> the portion of the string PRECEDING the match (backtick)
+#         $'        -> the portion of the string FOLLOWING the match (apostrophe)
+#         $n        -> the n-th capture group (n = 1..99, decimal). If group n does not exist,
+#                      the token is left LITERAL (e.g. '$9' with only 1 group -> '$9').
+#         $<name>   -> a named capture group (if the RegExp has one); otherwise host-defined.
+#         $0        -> NOT special: left literal as '$0' (only $1..$99 are group refs).
+#       Verified examples:
+#         replace('John Smith', /(\w+)\s(\w+)/, '$2 $1')        -> 'Smith John'
+#         replace('2024-01-15', /(\d+)-(\d+)-(\d+)/, '$3/$2/$1')-> '15/01/2024'
+#         replace('abc', /b/, '[$&]')                           -> 'a[b]c'
+#         replace('abcdef', /cd/, '[$`]')                       -> 'ab[ab]ef'   # preceding
+#         replace('abcdef', /cd/, "[$']")                       -> 'ab[ef]ef'   # following
+#         replace('xxAByy', /AB/, "<$`|$'>")                    -> 'xx<xx|yy>yy'
+#         replace('abc', /b/, '$$')                             -> 'a$c'        # literal $
+#         replace('John Smith', /(\w+)\s(\w+)/, '$$1')          -> '$1'         # $$ -> $, then '1'
+#         replace('abc', /b/, '[$0]')                           -> 'a[$0]c'     # $0 literal
+#         replace('abc', /(b)/, '[$9]')                         -> 'a[$9]c'     # missing group literal
+#         replace('2024', /(?<y>\d+)/, '[$<y>]')                -> '[2024]'     # named group
+#
+#   (f) REPLACEMENT that is NOT a string is coerced to one by native String#replace BEFORE
+#       substitution (so $-tokens in a coerced number/bool/null are still honored, though they
+#       rarely appear). Verified:
+#         replace('abc', 'b', 9)            -> 'a9c'             # number -> '9'
+#         replace('abc', 'b', null)         -> 'anullc'         # null   -> 'null'
+#         replace('abc', 'b', true)         -> 'atruec'         # bool   -> 'true'
+#         replace('abc', 'b', undefined)    -> 'aundefinedc'    # OUT-OF-ENVELOPE (codec), rule defined
+#
+# ARITY BRANCH (NODE 2 guard) — verified via fn.apply(null, tuple):
+#     []                 (0 args) -> ''        # toString(undefined)='' ; length<3 -> unchanged
+#     ['hello']          (1 arg)  -> 'hello'   # length<3 -> coerced string returned as-is
+#     ['hello','l']      (2 args) -> 'hello'   # length<3 -> pattern IGNORED, NO replace called
+#     [null,'x']         (2 args) -> ''        # toString(null)='' ; length<3
+#     [123,'2']          (2 args) -> '123'     # toString(123)='123' ; length<3 (NOT '1undefined3')
+#   CRITICAL: with only 2 args the pattern is NEVER applied. The distinction between
+#   "2 args" and "3 args where the 3rd is undefined" is OBSERVABLE:
+#     replace('abc','b')           -> 'abc'           (length 2: no replace)
+#     replace('abc','b',undefined) -> 'aundefinedc'   (length 3: replace runs, undefined->'undefined')
+#   The re-emitter MUST branch on arguments.length, NOT on whether args[2] === undefined.
+
+ORACLE value -> oracle.json
+# Pure, deterministic, no seam. Same args -> same string, every time. value-mode.
+# Expecteds are the exact return value of String.prototype.replace under the coerced string,
+# computed by running the real package; the blind re-emitter reproduces them by delegating to
+# the host's native String#replace after applying NODE 1 + the arity branch.
+
+SCOPE
+# IN-CONTRACT LOGIC (reproduce exactly):
+#   - NODE 1 toString coercion of args[0] (null/undefined -> ''; -0 special-case; string fast
+#     path; everything else via (value + '')). Fully demonstrated above; no hidden tables.
+#   - NODE 2 arity branch on arguments.length (< 3 returns coerced string unchanged).
+#   - NODE 2 delegation to native String.prototype.replace for string/RegExp patterns and
+#     string/number/null/bool replacements, including all $-substitution semantics, which are
+#     the host platform's standard ECMAScript behavior (NOT a lodash table).
+#
+# CARRIED DATA: none. No literal tables, no charmaps, no S-boxes. (No carried.json.)
+#
+# OUT-OF-CONTRACT / OUT-OF-ENVELOPE (defined by the spec, but NOT emitted by genInputs because
+# the oracle codec cannot round-trip them or they are non-deterministic-identity values):
+#   - FUNCTION replacement (replacement is a Function): native calls it per match with
+#     (match, p1..pn, offset, string[, namedGroups]) and substitutes the return value.
+#     Non-round-trippable (a function literal cannot be JSON-persisted) -> DOCUMENT-as-OUT.
+#   - SYMBOL as the `string` arg: routed through isSymbol -> symbolToString.call(value)
+#     (e.g. 'Symbol(x)'); a Symbol cannot be JSON-persisted -> DOCUMENT-as-OUT.
+#   - undefined as the `replacement` (3-arg form): coerces to literal 'undefined' (rule (f)),
+#     but `undefined` does not survive the JSON codec -> DOCUMENT-as-OUT.
+#   - NaN / +Infinity / -Infinity as the `string` arg: go through (value + '') -> 'NaN' /
+#     'Infinity' / '-Infinity', but the codec cannot round-trip them -> DOCUMENT-as-OUT.
+#   - NEGATIVE ZERO (-0) as the `string` arg: NODE 1 preserves the sign -> '-0', but
+#     JSON.stringify(-0) === '0' so the value collapses to +0 through the codec -> DOCUMENT-as-OUT.
+#   No state, no I/O, no ambient reads. The unit is read-only and side-effect-free.
+
+PROVENANCE lodash.replace@4.1.4 (npm) — repo lodash/lodash — MIT license —
+  source file: node_modules/lodash.replace/index.js (module.exports = replace, line 156-163).
+  Custom modular build: `lodash modularize exports="npm" -o ./`. Copyright jQuery Foundation.

@@ -1,0 +1,1179 @@
+{
+ "mode": "vectors",
+ "unit": "schema_lint",
+ "authority": "rederive@6199e2cc8b75",
+ "authorityTreeSha256": "cbe9c1b0e8a5b2691b33ddac7696ee4f9284020d9e894a86e41b01ed694a3742",
+ "seed": 1,
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "UNIT u\nDEPENDS-ON none\n\n# ---- carried table ----\nCARRIED tbl FROM tbl.json\n  SHAPE map[text, text]",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    "DEPENDS-ON none # no carried data here\nDEPENDS-ON none #carried\nDEPENDS-ON none\t# tbl\nDEPENDS-ON x #\nNOTE carried",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none # no carried data here"
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none #carried"
+     },
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none\t# tbl"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    "# carried\nDEPENDS-ON none\n  # tbl\n\t#carried\nKIND k\n# carried",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    "DEPENDS-ON x\n#  tbl\nDEPENDS-ON x\n#   tbl\nDEPENDS-ON x\n# tbl\nDEPENDS-ON x\n###\t tbl\nDEPENDS-ON x # \t tbl\nDEPENDS-ON x\n#",
+    "x  tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     },
+     {
+      "line": 7,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    "DEPENDS-ON a\n# tbl\nDEPENDS-ON b # tbl\nDEPENDS-ON c#\ttbl\nDEPENDS-ON d# tbl\nDEPENDS-ON e ## tbl",
+    "# tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 6,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON e ## tbl"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    "DEPENDS-ON none CITED carried\nDEPENDS-ON none\n  CITED tbl\nDEPENDS-ON none EARNED x ANCHOR carried\nDEPENDS-ON none CITED",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none CITED carried"
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none"
+     },
+     {
+      "line": 4,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none EARNED x ANCHOR carried"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    "DEPENDS-ON x CITED z\n  y\nDEPENDS-ON x CITED y\n  z\nDEPENDS-ON x CITED v # c\nDEPENDS-ON x # c\n  CITED v",
+    "y z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x CITED z"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    "DEPENDS-ON x CITED v # c\nDEPENDS-ON x # c\n  CITED v\nDEPENDS-ON x # v\n  c",
+    "v c"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x CITED v # c"
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x # c"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    "DEPENDS-ON x CITED y\nDEPENDS-ON x CITED  CITED y\nDEPENDS-ON \"x CITED y\"\nDEPENDS-ON x CITEDy",
+    "x CITED y"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON \"x CITED y\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    "DEPENDS-ON x CITED\nDEPENDS-ON x CITED CITED\nDEPENDS-ON x\n  CITED",
+    "x  "
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x CITED CITED"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    "DEPENDS-ON \"colorNames, carried\"\nDEPENDS-ON \"a # carried\"\nDEPENDS-ON x\n  \"carried\"\nDEPENDS-ON \"colorNames\"",
+    "colorNames"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON \"colorNames, carried\""
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON \"a # carried\""
+     },
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     },
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON \"colorNames\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    "DEPENDS-ON \"tbl\"\nDEPENDS-ON x\"tbl\"\nDEPENDS-ON 12\"tbl\"",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON \"tbl\""
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x\"tbl\""
+     },
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON 12\"tbl\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    "DEPENDS-ON +\"y CITED z\"\nDEPENDS-ON ?\"y CITED z\"\nDEPENDS-ON *\"y CITED z\"\nDEPENDS-ON -\"y CITED z\"\nDEPENDS-ON ~\"y CITED z\"\nDEPENDS-ON &\"y CITED z\"",
+    "y CITED z"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 4,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON -\"y CITED z\""
+     },
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON ~\"y CITED z\""
+     },
+     {
+      "line": 6,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON &\"y CITED z\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    "DEPENDS-ON x*\"a # tbl\"\nDEPENDS-ON x(\"a # tbl\"\nDEPENDS-ON /\"(?:a|b)*\" CITED R5\nDEPENDS-ON x+\"a # tbl\"",
+    "a # tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x(\"a # tbl\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    "DEPENDS-ON miscarried\nDEPENDS-ON carried_tbl\nDEPENDS-ON carried2\nDEPENDS-ON écarried\nDEPENDS-ON carriedX\nDEPENDS-ON CARRIED-data\nDEPENDS-ON xCaRrIeD",
+    null
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried_tbl"
+     },
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried2"
+     },
+     {
+      "line": 4,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON écarried"
+     },
+     {
+      "line": 6,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON CARRIED-data"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    "DEPENDS-ON uncarried\nDEPENDS-ON carriedly\nDEPENDS-ON 9carried9\nDEPENDS-ON (Carried)\nDEPENDS-ON ſarried\nDEPENDS-ON carrİed\nDEPENDS-ON carried😀",
+    ""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON 9carried9"
+     },
+     {
+      "line": 4,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON (Carried)"
+     },
+     {
+      "line": 7,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried😀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    "DEPENDS-ON tbl_carried\nDEPENDS-ON tbl_x",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl_carried"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    "DEPENDS-ON none\nDEPENDS-ON x none",
+    "none"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    "DEPENDS-ON None\nDEPENDS-ON none",
+    "None"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON None"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    "DEPENDS-ON NONE\nDEPENDS-ON none",
+    "NONE"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON NONE"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    "DEPENDS-ON none ",
+    "none "
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    "DEPENDS-ON x\n ﻿ ﻿tbl\nDEPENDS-ON x\n ﻿tbl\nDEPENDS-ON x\n\t﻿﻿\ttbl",
+    "x tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     },
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     },
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    "﻿DEPENDS-ON tbl\n﻿﻿DEPENDS-ON carried\nDEPENDS-ON ﻿tbl\n﻿ DEPENDS-ON tbl\n﻿\t﻿#carried",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl"
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried"
+     },
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON ﻿tbl"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    "DEPENDS-ON x\n﻿ ﻿\n﻿\n  ﻿ \t",
+    "x"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     }
+    ]
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "UNIT x\rDEPENDS-ON tbl\rKIND k",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    "UNIT x\r\nDEPENDS-ON tbl\r\n\r\nDEPENDS-ON carried\n",
+    null
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 4,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    "DEPENDS-ON tbl   \t\nDEPENDS-ON x\n  ﻿ tbl",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl"
+     },
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    "",
+    "tbl"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    "",
+    null
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    "\n\r\n\r",
+    "x"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    "DEPENDS-ON none\n\n   \n\t\n  tbl",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    "DEPENDS-ON a\n  b\n\n  c",
+    "a b c"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON a"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    "DEPENDS-ON a\n   \n  b",
+    "a   b"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    "DEPENDS-ON-X carried\nDEPENDS-ONX carried\ndepends-on carried\n DEPENDS-ON carried\nDEPENDS-ON carried",
+    null
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    "UNIT u\nDEPENDS-ON tbl\nDEPENDS-ON:tbl\nDEPENDS-ON: tbl\nDEPENDS-ON:\nNOTE x",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl"
+     },
+     {
+      "line": 4,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON: tbl"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    "DEPENDS-ON a\nCITED carried\nCITED: carried\nEARNED carried\nDEPENDS-ON b\nANCHOR tbl",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON a"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    "DEPENDS-ON a\n⁠KIND carried\nR7 tbl\nR carried\nA-1 x\n9X carried\nX_Y carried",
+    null
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON a"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    "DEPENDS-ON a\nlowercase carried here\n　tbl\n⁠# tbl",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON a"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    "NOTE tbl\nDEPENDS-ON\nDEPENDS-ON\t\nDEPENDS-ON",
+    "tbl"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    "  DEPENDS-ON tbl\nDEPENDS-ON none",
+    "tbl"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    "DEPENDS-ON\n  tbl",
+    " tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    "DEPENDS-ON tbl_v2\nDEPENDS-ON tbl.js\nDEPENDS-ON xtbl\nDEPENDS-ON tbl9\nDEPENDS-ON (tbl)\nDEPENDS-ON 9tbl\nDEPENDS-ON étblé",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl.js"
+     },
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON (tbl)"
+     },
+     {
+      "line": 7,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON étblé"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    "DEPENDS-ON TBL\nDEPENDS-ON Tbl\nDEPENDS-ON tbl",
+    "TBL"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON TBL"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    "DEPENDS-ON x\nDEPENDS-ON none",
+    "DEPENDS"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    "DEPENDS-ON a.b\nDEPENDS-ON axb\nDEPENDS-ON a+b\nDEPENDS-ON (a\nDEPENDS-ON a|b",
+    "a.b"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON a.b"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    "DEPENDS-ON x(\nDEPENDS-ON [y\nDEPENDS-ON a\\b\nDEPENDS-ON ^$\nDEPENDS-ON y (",
+    "("
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON y ("
+     }
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    "DEPENDS-ON -tbl-\nDEPENDS-ON x-tbl\nDEPENDS-ON tbl-",
+    "-tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON -tbl-"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    "DEPENDS-ON aaa\nDEPENDS-ON aa aaa\nDEPENDS-ON aaaa",
+    "aa"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 2,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON aa aaa"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    "DEPENDS-ON x---\nDEPENDS-ON x--",
+    "--"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x---"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    "DEPENDS-ON 😀tbl\nDEPENDS-ON tbl😀\nDEPENDS-ON é😀é",
+    "😀"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON é😀é"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    "DEPENDS-ON x \"\"\nDEPENDS-ON \"a\"",
+    "\"\""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON x \"\""
+     }
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    "DEPENDS-ON 1.5\nDEPENDS-ON 12",
+    "1"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON 1.5"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    "DEPENDS-ON tbl",
+    ""
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    "DEPENDS-ON tbl",
+    null
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    "DEPENDS-ON carried aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    null
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    "DEPENDS-ON carried cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc😀zz😀😀😀😀😀",
+    null
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON carried cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc😀"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    "DEPENDS-ON tbl 日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語 # carried",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON tbl 日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    "DEPENDS-ON none CITED qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n  tbl",
+    "tbl"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none CITED qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    "prose    \nDEPENDS-ON\nDESCRIPTION 1 # #tbl\nR3 +\"a 😀 colorNames\n﻿DEPENDS-ON serde_json carried2 #none",
+    "😀"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 5,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON serde_json carried2 #none"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    "DESCRIPTION uncarriedX\r﻿DEPENDS-ON\nDEPENDS-ON écarried\tuncarriedX 　tbl\t# x qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n\nprose ANCHOR miscarried \"a b\"\r﻿DEPENDS-ON EARNED y\n",
+    "DEPENDS"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON écarried\tuncarriedX 　tbl\t# x qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    "﻿\r\ttbl.js DEPENDS 1) #carried \t\n##(\n﻿ ﻿a_b9 none tbl_v2\nDEPENDS-ON-X tbl -tbl *\"x CITED carried_x\ndepends-on -tbl NONE\t\r\nDEPENDS-ON",
+    "TBL"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    " #DEPENDS tblé\n  carried2 \r\n ANCHOR uncarriedX 　tbl\n",
+    "tbl"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    "EARNED\rprose NONE DEPENDS 日本語 CITED TBL\nDEPENDS-ON EARNED \"carried \tCITED #tbl qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀😀😀\rprose\nprose \t\n",
+    "("
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON EARNED \"carried \tCITED #tbl qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    "  ﻿# CITED\nDEPENDS-ON DEPENDS 　tbl \"a b\" ANCHOR\r\n﻿\nUNIT carried_x ANCHOR a_b9\rDEPENDS-ON colorNames  ANCHOR\tEARNED qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\n﻿\n    #none # #x y",
+    "None"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    "\t#carried DEPENDS\nDEPENDS-ON   ON\n\tTBL x",
+    null
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    "DEPENDS-ON qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀😀😀\r\n# écarried NONE écarried",
+    "x CITED y"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 1,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    "# _ a|b",
+    "ON"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    "EARNED carried_x 1) x\r\nDEPENDS-ON qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀😀😀\nDEPENDS-ON \tON étbl\nDEPENDS-ON-X\r\nprose\r\nR3 CITED ANCHOR\rEARNED a|b ﻿ a.b\n",
+    "DEPENDS"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    "    tbl ANCHOR \\\" \t\n﻿ ﻿axb -tbl carried CITED colorNames\nDEPENDS-ON miscarried 1 carried +\"a qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\nDEPENDS-ON: tbl_v2 y\r\n a|b # DEPENDS\nEARNED CITED\n",
+    "carried"
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON miscarried 1 carried +\"a qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    "DEPENDS-ON\tétbl\ttbl_v2 　tbl tblé\t\nDESCRIPTION (crate, EARNED\nDEPENDS-ONX 😀 NONE 　tbl miscarried\t# CITEDx",
+    "x tbl"
+   ],
+   "expected": {
+    "hits": []
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    "  😀 😀 x a|b\nDEPENDS-ON:\nDEPENDS-ON none ﻿ CITED , qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\ndepends-on \"carried 　tbl +\"a #x (crate,\nNOTE NONE EARNED\rUNIT \"a b\"\nDEPENDS-ON \\\" #CITED",
+    ""
+   ],
+   "expected": {
+    "hits": [
+     {
+      "line": 3,
+      "what": "carried data declared under DEPENDS-ON — use CARRIED (§18)",
+      "text": "DEPENDS-ON none ﻿ CITED , qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+     }
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    "#CITED CITED",
+    "x"
+   ],
+   "expected": {
+    "hits": []
+   }
+  }
+ ]
+}

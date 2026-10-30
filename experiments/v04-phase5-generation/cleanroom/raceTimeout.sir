@@ -1,0 +1,22 @@
+UNIT raceTimeout
+KIND FUNCTIONAL
+FIDELITY spec
+SIG raceTimeout(gate, ms, clock) -> Promise<Object>
+DESCRIPTION Waits for `gate.open("work")` while simultaneously holding a timeout of `ms`
+DESCRIPTION virtual milliseconds, and returns whichever happens first:
+DESCRIPTION   the gate resolves first  ->  { ok: <the value the gate resolved with> }
+DESCRIPTION   the timer fires first    ->  { timedOut: true }
+DESCRIPTION The caller supplies both collaborators. The clock offers exactly two calls:
+DESCRIPTION   clock.setTimer(fn, ms) -> handle   run `fn` after `ms` of VIRTUAL time
+DESCRIPTION   clock.clearTimer(handle)           disarm a timer that has not yet fired
+DESCRIPTION `gate.open(value)` is ONLY a completion source: the harness resolves it, with the
+DESCRIPTION value handed to it unchanged. The unit resolves neither collaborator itself and
+DESCRIPTION must not use setTimeout, Date, or any other real-time source.
+DESCRIPTION Export the function as the DEFAULT export. No imports of any kind.
+INVARIANT exactly ONE timer is armed, and it is armed before the unit awaits anything.
+INVARIANT NO LEAK: on the gate-wins path the timer MUST be cleared before returning.
+INVARIANT   Leaving it armed is completely invisible in the returned value and is still
+INVARIANT   wrong — the resource outlives the work it was guarding.
+INVARIANT on the timeout path the timer has already fired, so nothing is cleared; the unit
+INVARIANT   returns { timedOut: true } and does not wait for the gate.
+INVARIANT the result carries exactly one of the two keys, never both and never neither.

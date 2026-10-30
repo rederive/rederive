@@ -1,0 +1,114 @@
+UNIT isNil
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG isNil(value: any) -> boolean
+
+# Default export. module.exports = isNil. The re-emitter MUST `export default isNil`
+# (and MAY additionally `export { isNil }` for clarity), but the DEFAULT export is the
+# contract. exportName is null; importKind is 'default'.
+
+DEPENDS-ON none
+
+BEHAVIOR
+  # The entire unit is a single pure expression. The real source (lodash 4.0.0
+  # modularized build, lodash.isnil@4.0.0/index.js) is EXACTLY:
+  #
+  #     function isNil(value) {
+  #       return value == null;
+  #     }
+  #
+  # This is JavaScript ABSTRACT (LOOSE, ==) equality against the literal `null`,
+  # NOT strict (===) equality. The blind re-emitter MUST reproduce the loose-equality
+  # contract. In the host language the equivalent is:
+  #     return value === null || value === undefined
+  # because, per the ECMAScript Abstract Equality Comparison algorithm, `x == null`
+  # is true for EXACTLY two values — `null` and `undefined` — and false for every
+  # other value of every other type. (Abstract equality short-circuits: when one
+  # operand is null/undefined, the comparison is true iff the OTHER operand is also
+  # null or undefined; no coercion of numbers/strings/objects/bigints occurs.)
+  #
+  # node-1  RETURN true  IF value is `null`
+  # node-2  RETURN true  IF value is `undefined` (this INCLUDES the no-argument call
+  #         isNil() — the missing parameter is `undefined`, which returns true)
+  # node-3  RETURN false FOR EVERY OTHER value, with NO exceptions, NO coercion,
+  #         and NO throw path. There is no branch that can throw; the function
+  #         never inspects properties of `value`, so even exotic objects are safe.
+  #
+  # There is NO option object, NO second parameter, NO configuration. The result
+  # is always a primitive boolean (true | false). The function is total (defined on
+  # all inputs) and pure (no reads of ambient state, no writes, no side effects).
+
+  # ---- EXACT EDGE OUTCOME TABLE (every entry verified by running lodash.isnil@4.0.0) ----
+  # These outcomes are NORMATIVE. The generator + real package will check exactly these.
+  #
+  #   value                         result
+  #   ----------------------------  ------
+  #   null                          true
+  #   undefined                     true
+  #   (no argument supplied)        true     # arg defaults to undefined
+  #   0                             false
+  #   -0                            false
+  #   +0                            false
+  #   1                             false
+  #   -1                            false
+  #   NaN                           false    # NaN is NOT nullish
+  #   Infinity                      false
+  #   -Infinity                     false
+  #   "" (empty string)             false
+  #   "a" / any non-empty string    false
+  #   false (boolean)               false
+  #   true (boolean)                false
+  #   0n (bigint zero)              false
+  #   42n / any bigint              false
+  #   {} (plain object)             false
+  #   [] (empty array)              false
+  #   [1,2,3] / any array           false
+  #   /a/ (RegExp)                  false
+  #   new Set()                     false
+  #   new Map()                     false
+  #   new Uint8Array(n)             false
+  #   Buffer.from(...)              false
+  #   new Number(0)  (boxed)        false    # boxed primitives are objects; object != null
+  #   new String("") (boxed)        false
+  #   new Boolean(false) (boxed)    false
+  #   Symbol(...)                   false    # see OUT-OF-CODEC note below
+  #   function(){}                  false    # see OUT-OF-CODEC note below
+  #
+  # KEY DISTINCTION (the single most likely place a blind engineer diverges):
+  #   A common but WRONG reading is "isNil is falsy-check" — it is NOT. All of
+  #   0, -0, "", false, NaN, 0n are FALSY but isNil returns FALSE for each of them.
+  #   isNil is strictly the null/undefined nullish check, never a truthiness check.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly):
+    The complete predicate `value == null` (loose), equivalently
+    `value === null || value === undefined`, returning a primitive boolean.
+    Every edge in the table above is in-contract and is exercised by the generator.
+
+  CARRIED DATA:
+    none. The unit contains no literal tables, constants, or data module.
+
+  OUT-OF-CONTRACT (side effects / stateful APIs):
+    none. The unit is read-only and pure: it performs no I/O, no clock/RNG/env/fs/net
+    read (NO SEAM — nothing to inject), and no mutation. The side-effect-observing
+    harness machinery is N/A for this unit.
+
+  OUT-OF-CODEC (specified-but-not-tested — behavior pinned here, not emitted by genInputs):
+    The following inputs cannot survive the harness codec
+    (JSON.stringify(encode(args)) round-trip), so genInputs MUST NOT emit them, yet
+    their behavior is fully specified so a blind re-emitter still reconstructs it:
+      - Symbol(...)      -> isNil returns FALSE  (a symbol is not null/undefined)
+      - function(){}     -> isNil returns FALSE  (a function is an object, not null)
+    The codec DOES round-trip the following, and genInputs DOES emit them, all -> FALSE:
+    NaN, +Infinity, -Infinity, -0, bigint (0n and others), RegExp, Set, Map,
+    Uint8Array, Buffer, boxed Number/String/Boolean. The codec round-trips
+    `undefined` and `null` directly -> both TRUE.
+
+PROVENANCE
+  package: lodash.isnil@4.0.0  (npm)
+  export:  default (module.exports = isNil), function name "isNil"
+  repo:    lodash/lodash  (modularized build: `lodash modularize exports="npm" -o ./`)
+  license: MIT  (Copyright 2012-2016 The Dojo Foundation; based on Underscore.js)
+  source:  index.js  (lines 29-33: function isNil(value){ return value == null; })

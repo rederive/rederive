@@ -1,0 +1,193 @@
+UNIT repeatString
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG repeat(str: string, num: number) -> string
+    # module.exports IS this function. The package's single export is the function itself
+    # (CommonJS `module.exports = repeat`). The blind re-emitter exports the function as the
+    # module's default/main export. Call form: repeat(str, num).
+DEPENDS-ON none   # zero runtime dependencies; pure string + arithmetic; no seam (no clock/rng/io/net).
+
+# =============================================================================
+# BEHAVIOR  — ordered, exact. The source is the doubling-accumulation algorithm
+#             with a MODULE-LEVEL memo cache (two module vars: `res` and `cache`).
+# =============================================================================
+#
+# Module-level state (persists across calls):
+#     res   : string  — initialized to ''   (the accumulator / memo of the last-built string)
+#     cache : <undefined initially> then holds the last `str` argument seen.
+#
+# --- NODE 1 (GUARD: first arg must be a string) -------------------------------
+#   if (typeof str !== 'string') THROW  TypeError('expected a string')
+#   - This is the ONLY guard in the function. It fires for ANY non-string first
+#     arg: number, null, undefined, boolean, object, array, and even a boxed
+#     String object `new String('a')` (because the check is `typeof`, and
+#     typeof new String('a') === 'object').
+#   - There is NO 'expected a number' guard anywhere. A bad `num` does NOT throw
+#     (except the native BigInt-mix case below); it flows through and typically
+#     yields '' (see NODE 4 / OUT-OF-ENVELOPE).
+#   - GUARD ORDER: the string check happens FIRST, before any inspection of num.
+#     So repeat(5, -1), repeat(5, 'x'), repeat(5, 2), repeat(null, null), etc.
+#     all THROW 'expected a string' — the string guard wins over any num value.
+#
+# --- NODE 2 (FAST PATH num === 1) ---------------------------------------------
+#   if (num === 1) return str;
+#   - STRICT equality (===). Only the number value 1 hits this. The string '1'
+#     does NOT (it is handled by the generic path, where it coerces and yields
+#     str once). Boolean true does NOT (true === 1 is false; true is handled by
+#     the generic path and coerces to 1 -> yields str once).
+#   - This path does NOT touch res/cache.
+#
+# --- NODE 3 (FAST PATH num === 2) ---------------------------------------------
+#   if (num === 2) return str + str;
+#   - STRICT equality. Only the number value 2. The string '2'/boolean do NOT.
+#   - This path does NOT touch res/cache.
+#
+# --- NODE 4 (GENERIC PATH) ----------------------------------------------------
+#   max = str.length * num
+#     # `num` participates in JS arithmetic here, so non-number nums coerce:
+#     #   '5' -> 5, '2.5' -> 2.5, [3] -> 3, [] -> 0, [1,2] -> NaN, {} -> NaN,
+#     #   null -> 0, undefined -> NaN, false -> 0, true -> 1, NaN -> NaN,
+#     #   Infinity -> Infinity, -1 -> -1, negative -> negative.
+#     #   (BigInt is the exception — it throws here, see OUT-OF-ENVELOPE.)
+#     #   max is therefore: str.length * (coerced num).
+#
+#   Cache management:
+#     if (cache !== str || typeof cache === 'undefined') {
+#         cache = str;
+#         res   = '';
+#     } else if (res.length >= max) {
+#         return res.substr(0, max);     # cache HIT: reuse prefix of prior res
+#     }
+#     # i.e. when the same `str` is seen again AND the prior `res` is already at
+#     # least `max` chars long, the function short-circuits and returns the first
+#     # `max` chars of the cached res. Otherwise it (re)builds below.
+#
+#   Doubling accumulation loop:
+#     while (max > res.length && num > 1) {
+#         if (num & 1) res += str;   # bitwise AND coerces num to int32; odd bit -> append current str
+#         num >>= 1;                 # int32 right-shift: halves num (also truncates fraction & Infinity->0)
+#         str += str;                # double the working string
+#     }
+#     res += str;                    # append final doubled chunk
+#     res = res.substr(0, max);      # truncate to exactly `max` chars (max may be fractional/NaN/<=0)
+#     return res;
+#
+#   Notes on the loop coercions (these MATTER for edge inputs):
+#     - `num & 1` and `num >>= 1` use ToInt32. So Infinity & 1 = 0, Infinity >> 1 = 0
+#       (loop body runs 0 times for Infinity since `num > 1` true once but the >>=1
+#        immediately drives num to 0; net result depends on max). Fractions truncate.
+#     - `res.substr(0, max)`: substr ToIntegers max (floors toward zero for positive,
+#       NaN -> 0, negative -> 0). So a fractional max keeps floor(max) chars; a
+#       NaN/<=0 max yields '' .
+#
+# =============================================================================
+# OBSERVABLE RESULTS — the contract a blind re-emitter must reproduce EXACTLY
+# for every value genInputs can emit (all in-envelope; verified vs real pkg):
+# =============================================================================
+#
+#   typeof str !== 'string'            -> THROW TypeError('expected a string')
+#                                         (str ∈ {number, null, undefined, boolean,
+#                                          object, array, boxed String})
+#   str is a string, num === 0         -> ''            (max = 0)
+#   str is a string, num === 1         -> str           (NODE 2 fast path)
+#   str is a string, num === 2         -> str+str       (NODE 3 fast path)
+#   str is a string, num is integer N>=3 -> str repeated N times, length = str.length*N
+#                                         (== String.prototype.repeat(N); verified
+#                                          cache-neutral even under a heavily warmed
+#                                          cache, 220/220 cases)
+#   str === '', any numeric num        -> ''            (max = 0*num = 0 or NaN -> '')
+#   num < 0  (e.g. -1, -5, -100)       -> ''            (max < 0 -> substr -> '')
+#   num is NaN / null / undefined / false / {} / [] /
+#       a non-numeric string ('abc') / [1,2]           -> ''   (max NaN or 0 -> '')
+#   num === true                       -> str  (coerces to 1 via arithmetic; one copy)
+#   num is a numeric string '5'        -> str repeated 5 ('5' coerces to 5)
+#   num is a single-element numeric
+#       array [3]                      -> str repeated 3 ([3] coerces to 3)
+#
+#   Summary equivalence for the IN-ENVELOPE scope (what genInputs emits):
+#     - If typeof str !== 'string'  -> throw 'expected a string'.
+#     - Else compute k = ToNumber(num) (JS numeric coercion of the count arg).
+#       - If k is not a finite number, or k <= 0 (incl. -0, negatives, NaN) -> ''.
+#       - Else if k is a non-negative INTEGER -> str repeated k times
+#         (identical to String.prototype.repeat(k), '' when k===0).
+#     This summary is EXACT for every value genInputs produces. (Fractional /
+#     Infinity counts are EXCLUDED from the envelope — see OUT-OF-ENVELOPE.)
+#
+# =============================================================================
+# CACHE OUTPUT-NEUTRALITY (the load-bearing scoping claim) — VERIFIED
+# =============================================================================
+#   The module-level memo (`res`, `cache`) is OUTPUT-NEUTRAL — i.e. the return
+#   value is a pure function of (str, num) and independent of call history —
+#   *exactly* on the in-envelope scope: non-negative INTEGER counts, the
+#   zero-producing degenerate counts, and the throw paths. Proof points:
+#     - 220/220 integer cases matched String.prototype.repeat ground truth AFTER
+#       aggressively warming the cache in arbitrary order (cold == warmed).
+#     - The fast paths (num 1, 2) never read/write the cache.
+#   THEREFORE: a blind re-emitter MAY implement the doubling+cache exactly, OR
+#   implement a trivial cacheless `str repeated k times`; on the in-envelope
+#   inputs both produce identical observable output. The cache is purely an
+#   internal speed optimization there.
+#
+#   *** BUT the neutrality does NOT hold for FRACTIONAL / Infinity counts. ***
+#   When `num` is non-integer, `max = str.length * num` is fractional, and the
+#   value returned (`res.substr(0, max)` with floor) depends on how long the
+#   cached `res` already is for that same `str`. Demonstrated divergence
+#   (REAL package): repeat('ab', 2.5) returns 'abab' (len 4) from a COLD cache,
+#   but 'ababa' (len 5) when 'ab' was previously repeated to a longer res.
+#   This makes fractional counts NOT a pure function of (str,num) — they are
+#   call-history dependent. They are therefore OUT-OF-ENVELOPE and the generator
+#   does not emit them (see SCOPE).
+#
+# =============================================================================
+ORACLE value -> oracle.json
+#   Deterministic value oracle. For each genInputs tuple [str, num], the oracle
+#   records the return string, or {__throw: 'TypeError: expected a string'} for
+#   the non-string-first-arg path. No seam, no injection, no trace.
+#
+# =============================================================================
+SCOPE
+#   IN-CONTRACT LOGIC (reproduce exactly — what genInputs covers):
+#     - The single string guard + exact message 'expected a string' (TypeError),
+#       firing BEFORE any num inspection, for every non-string first arg.
+#     - num === 1 fast path (-> str); num === 2 fast path (-> str+str), strict ===.
+#     - num === 0 -> ''.
+#     - Non-negative INTEGER num >= 3 -> str repeated num times.
+#     - '' (empty) string input -> '' for any numeric count.
+#     - Degenerate counts that yield '': negative numbers, NaN, null, undefined,
+#       false, {}, [], non-numeric strings, multi-element arrays.
+#     - Coercing counts: true -> 1 copy; numeric string '5' -> 5 copies; single
+#       numeric array [3] -> 3 copies.
+#     - The memo cache is documented as an internal, output-neutral optimization
+#       ON THIS SCOPE (re-emitter may include or omit it; output identical).
+#
+#   CARRIED DATA: none. (No literal tables; do NOT write a carried.json.)
+#
+#   OUT-OF-CONTRACT / OUT-OF-ENVELOPE (documented; NOT emitted by genInputs):
+#     - FRACTIONAL counts (e.g. 2.5, 2.9, 3.5, 5.5) and Infinity: the return is
+#       CALL-HISTORY-DEPENDENT via the fractional-max / cached-res interaction
+#       (see CACHE section). Not a pure function of (str, num) -> excluded so the
+#       value oracle stays reproducible. A blind re-emitter reconstructs the
+#       mechanism from the BEHAVIOR section if ever needed, but it is unverifiable
+#       as a pure value oracle and is intentionally out of the test envelope.
+#     - BigInt count (e.g. 3n): `str.length * 3n` throws a NATIVE
+#       TypeError('Cannot mix BigInt and other types, use explicit conversions')
+#       — a V8 message, not the package's. Not codec-relevant to scope; excluded.
+#     - Boxed String first arg `new String('a')`: throws 'expected a string'
+#       (typeof object). It is a boxed-primitive (non-round-trippable per the
+#       oracle codec), so documented here but NOT emitted by genInputs. A
+#       plain non-string (number/null/object/array) already covers the throw path.
+#     - Symbols / live functions as args: non-round-trippable; not emitted.
+#     - Module-level `res`/`cache` mutation is internal state, never an output;
+#       there is no external API to read it. Not a side effect a caller observes.
+#
+# =============================================================================
+PROVENANCE
+#   package:  repeat-string@1.6.1
+#   author:   Jon Schlinkert (jonschlinkert)
+#   repo:     https://github.com/jonschlinkert/repeat-string
+#   license:  MIT (Copyright (c) 2014-2016, Jon Schlinkert)
+#   source:   node_modules/repeat-string/index.js  (the entire 'repeat' function,
+#             lines 41-70; module export at line 21: `module.exports = repeat`)
+#   verified-by: read of index.js + execution of the real package over a
+#             curated + swept input set (integer cache-neutrality 220/220;
+#             fractional cache-dependence reproduced cold-vs-warmed).

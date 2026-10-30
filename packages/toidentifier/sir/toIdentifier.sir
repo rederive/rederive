@@ -1,0 +1,162 @@
+UNIT toIdentifier
+KIND FUNCTIONAL
+ORACLE-CLASS deterministic
+SIG toIdentifier(str: string) -> string
+DEPENDS-ON none
+
+# ---------------------------------------------------------------------------
+# Emission note for the BLIND re-emitter:
+#   The original is a CommonJS module:  module.exports = toIdentifier.
+#   The factory loads emitted units as .mjs via dynamic import(), so the
+#   re-emitter MUST expose the function as the DEFAULT export:
+#       export default function toIdentifier(str) { ... }
+#   (No named export is required; the harness calls the default export.)
+# ---------------------------------------------------------------------------
+
+BEHAVIOR
+  # Pure, total-over-strings string transform. NO trimming, NO normalization,
+  # NO mutation of the argument (argument is a primitive string anyway).
+  # The pipeline is EXACTLY these four ordered steps applied to `str`:
+  #
+  #   1. SPLIT on the single SPACE character U+0020 (the literal ' '):
+  #        tokens = str.split(' ')
+  #      - Splitting is on ' ' ONLY. NO other whitespace is a delimiter:
+  #        TAB (U+0009), NEWLINE (U+000A), CR (U+000D), VTAB, FORMFEED,
+  #        non-breaking space, etc. are NOT split points -- they remain
+  #        inside whatever token contains them and are dealt with by step 4.
+  #      - JS String.prototype.split(' ') semantics (NOT a regex): a run of
+  #        N consecutive spaces produces (N-1) empty-string tokens between
+  #        the non-empty pieces; a leading space produces a leading ''
+  #        token; a trailing space produces a trailing '' token.
+  #        Examples of the token arrays (before mapping):
+  #          'Bad Request'      -> ['Bad','Request']
+  #          'Bad   Request'    -> ['Bad','','','Request']   # 3 spaces -> 2 '' between
+  #          ' Bad Request'     -> ['','Bad','Request']
+  #          'Bad Request '     -> ['Bad','Request','']
+  #          '   '              -> ['','','','']
+  #          ''                 -> ['']                       # split('') of '' is ['']
+  #          'foo'              -> ['foo']
+  #
+  #   2. MAP each token to: token.slice(0,1).toUpperCase() + token.slice(1)
+  #      - slice(0,1) = the FIRST UTF-16 code unit of the token (or '' if the
+  #        token is empty). NOTE: code UNIT, not code point -- an astral
+  #        character (e.g. an emoji, surrogate pair) has its leading
+  #        surrogate code unit taken; .toUpperCase() of a lone surrogate is
+  #        a no-op and it will be stripped in step 4 anyway.
+  #      - .toUpperCase() is JS's default (locale-independent, full Unicode
+  #        default case mapping). For the ONLY characters that survive step 4
+  #        (ASCII [A-Za-z0-9_]), this means: 'a'..'z' -> 'A'..'Z'; characters
+  #        already 'A'..'Z', '0'..'9', '_' are unchanged. Any non-ASCII first
+  #        char is upper-cased per Unicode but then STRIPPED in step 4, so its
+  #        case mapping never affects the output.
+  #      - token.slice(1) = the rest of the token (from index 1 to end),
+  #        unchanged. For empty or single-char tokens, slice(1) === ''.
+  #      - An empty token '' maps to '' + '' === '' (no throw).
+  #
+  #   3. JOIN with the empty string: tokens.join('')  -> a single string.
+  #      Because the joiner is '' AND step 1 split out every literal space,
+  #      the joined string contains NO U+0020 spaces.
+  #
+  #   4. STRIP via regex replace, global + case-insensitive:
+  #        joined.replace(/[^ _0-9a-z]/gi, '')
+  #      - Removes EVERY character that is NOT in the class [ _0-9a-z], with
+  #        the /i flag making the a-z range cover ASCII A-Z as well.
+  #      - The KEPT characters are therefore exactly this ASCII set:
+  #          * U+0020 SPACE       (in the class, but step 3 guarantees none remain)
+  #          * U+005F '_'         underscore
+  #          * U+0030..U+0039     digits '0'..'9'
+  #          * U+0041..U+005A     'A'..'Z'  (via /i)
+  #          * U+0061..U+007A     'a'..'z'
+  #      - EVERYTHING ELSE is deleted, including but not limited to:
+  #          hyphen '-', dollar '$', punctuation (.,!?;:'"@#%^&*()[]{}<>/\|+=~`),
+  #          TAB/NEWLINE/CR and all non-space whitespace, and ALL non-ASCII
+  #          characters (accented letters like e-acute/u-umlaut/n-tilde,
+  #          emoji, CJK, etc.). The 'a-z' / 'A-Z' ranges are ASCII ONLY --
+  #          /i does NOT fold accented letters into ASCII.
+  #
+  # The output is the result of step 4. There is NO post-processing, NO
+  # de-duplication, NO leading-digit fixup (a leading digit is preserved even
+  # though it is not a valid JS identifier start -- this function does not
+  # enforce true identifier validity).
+
+  # --- Worked examples (computed against the real package, byte-exact) ---
+  #   'Bad Request'            -> 'BadRequest'
+  #   'Internal Server Error'  -> 'InternalServerError'
+  #   'Not Found'              -> 'NotFound'
+  #   'URI Too Long'           -> 'URITooLong'        # each token's 1st char upper, 'URI' stays 'URI'
+  #   "I'm a Teapot"           -> 'ImATeapot'         # apostrophe stripped, 'a'->'A'
+  #   'foo'                    -> 'Foo'
+  #   'Foo'                    -> 'Foo'
+  #   'BadRequest'             -> 'BadRequest'        # already PascalCase, idempotent here
+  #   'bAd rEquest'            -> 'BAdREquest'        # only FIRST char of each token is upper-cased
+  #   'Bad   Request'          -> 'BadRequest'        # empty tokens map to '' and vanish
+  #   ' Bad Request'           -> 'BadRequest'        # leading '' token
+  #   'Bad Request '           -> 'BadRequest'        # trailing '' token
+  #   '   '                    -> ''                  # all empty tokens
+  #   ''                       -> ''                  # ['']->['']->''->''
+  #   '123 abc'                -> '123Abc'            # digits kept; 'abc' 1st char -> 'A'
+  #   '1abc 2def'              -> '1abc2def'          # leading digit kept, 1st char '1'.toUpperCase()=='1'
+  #   '9'                      -> '9'
+  #   '42'                     -> '42'
+  #   'foo_bar baz'            -> 'Foo_barBaz'        # underscore kept
+  #   '_leading underscore'    -> '_leadingUnderscore'# 1st char '_' .toUpperCase()=='_'
+  #   'foo-bar'                -> 'Foobar'            # hyphen stripped (one token 'foo-bar' -> 'Foo-bar' -> 'Foobar')
+  #   'Hello, World!'          -> 'HelloWorld'        # comma + '!' stripped
+  #   '$foo'                   -> 'foo'               # '$' stripped; remaining 1st kept char is 'f' (already lower; NOTE first char of the token was '$', upper-cased to '$', then stripped)
+  #   '!@#$'                   -> ''
+  #   'a !! b'                 -> 'AB'                 # tokens ['a','!!','b'] -> ['A','!!','B'] -> 'A!!B' -> 'AB'
+  #   'Bad\tRequest'           -> 'BadRequest'        # TAB is not a split point; one token, TAB stripped by regex
+  #   'Bad\nRequest'           -> 'BadRequest'        # NEWLINE likewise not a split point
+  #   '\t'                     -> ''                  # one token '\t' -> '\t'(upper noop)+'' -> stripped
+  #   'café'                   -> 'Caf'               # e-acute stripped (non-ASCII)
+  #   'É'                      -> ''                  # E-acute stripped
+  #   'é'                      -> ''
+  #   'Ünïcödé Tëst'           -> 'ncdTst'            # all accented letters stripped; tokens 'Ünïcödé'->'ncd', 'Tëst'->'Tst'
+  #   'ñame test'              -> 'ameTest'           # n-tilde stripped from 'ñame' -> 'ame'; 'test'->'Test'
+  #   'foo\u{1F600}bar'        -> 'Foobar'            # emoji (astral) stripped; one token
+  #   ' ' (NBSP)          -> ''                  # non-breaking space is NOT U+0020; not a delimiter, and stripped
+
+  # --- THROW behavior (non-string arguments) -------------------------------
+  # The function accesses str.split(' ') with NO guard. Therefore ANY argument
+  # that is not a string THROWS a TypeError (verified against the real package):
+  #
+  #   * null         -> TypeError: "Cannot read properties of null (reading 'split')"
+  #   * undefined    -> TypeError: "Cannot read properties of undefined (reading 'split')"
+  #   * (no args)    -> same as undefined
+  #   * everything else that lacks a string .split method
+  #     (number, boolean, bigint, array, plain object, RegExp, Symbol, ...)
+  #                  -> TypeError: "<value>.split is not a function"
+  #     For the harness's purposes the THROW is recorded as a {__throw}; the
+  #     exact message text differs by engine/value and the re-emitter need not
+  #     reproduce the message -- only that a TypeError is thrown. A re-emitter
+  #     that simply calls str.split(' ') (the natural transcription) reproduces
+  #     the throw automatically. NOTE: there is NO String() coercion -- a value
+  #     with a custom toString() (e.g. {toString(){return 'Custom Value'}}) STILL
+  #     THROWS, because the function never coerces; it calls .split directly.
+  #
+  # These non-string inputs are documented as OUT-OF-ENVELOPE for genInputs:
+  # they are NOT emitted, because the harness's JSON codec cannot persist some
+  # of them faithfully (undefined / NaN / Infinity / Symbol / function), and
+  # because a blind re-emitter reconstructs the throw from this spec directly.
+  # The contract is fully specified: non-string in => TypeError thrown.
+
+ORACLE value -> oracle.json
+
+SCOPE
+  IN-CONTRACT LOGIC (reproduce exactly): the entire 4-step pipeline above --
+    split(' '); map(first-code-unit toUpperCase + rest); join(''); replace
+    of /[^ _0-9a-z]/gi with ''. The regex is LITERALLY /[^ _0-9a-z]/gi --
+    flags exactly 'g' and 'i', class exactly "[^ _0-9a-z]" (a leading space,
+    underscore, the 0-9 range, the a-z range, all negated by '^'). The leading
+    space inside the class is inert in practice (step 1 removed all spaces and
+    step 3 joins with '') but the re-emitter MUST keep the regex byte-exact.
+  CARRIED DATA: none (no embedded tables / literals beyond the inline regex).
+  OUT-OF-CONTRACT: none (pure function; no side effects, no ambient seam,
+    no mutation of inputs). Non-string args are an in-contract THROW path
+    (documented above), not a side effect.
+
+PROVENANCE
+  package: toidentifier@1.0.1
+  repo: jshttp/toidentifier (package.json "repository": component/toidentifier)
+  license: MIT (Copyright(c) 2016 Douglas Christopher Wilson)
+  source file: index.js (single function, 'use strict')

@@ -1,0 +1,599 @@
+{
+  "unit": "get_rgb",
+  "signature": "get_rgb(input: string) -> [r, g, b, a] | null",
+  "fidelity": "spec",
+  "correction": "Percent-to-byte uses round(p * 255 / 100). The original color-string uses round(p * 2.55), which is float-imprecise (50% -> 127, 90% -> 229 instead of 128 / 230). This oracle encodes the CORRECTED behavior — the rederive fixes the bug.",
+  "carriedData": "color names imported from ./carried-color-names.js (do NOT memorize the table)",
+  "frozen": [
+    {
+      "args": [
+        "#F00"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "#ff0000"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "#f008"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5333333333333333
+      ]
+    },
+    {
+      "args": [
+        "#ff000080"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5019607843137255
+      ]
+    },
+    {
+      "args": [
+        "#abcd"
+      ],
+      "expected": [
+        170,
+        187,
+        204,
+        0.8666666666666667
+      ]
+    },
+    {
+      "args": [
+        "#aabbcc"
+      ],
+      "expected": [
+        170,
+        187,
+        204,
+        1
+      ]
+    },
+    {
+      "args": [
+        "#00000000"
+      ],
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "args": [
+        "#ffffffff"
+      ],
+      "expected": [
+        255,
+        255,
+        255,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(255, 0, 0)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb( 255 , 0 , 0 )"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgba(255,0,0,.5)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5
+      ]
+    },
+    {
+      "args": [
+        "rgb(255 0 0)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgba(255,0,0,50%)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5
+      ]
+    },
+    {
+      "args": [
+        "rgb(1e2,0,0)"
+      ],
+      "expected": [
+        100,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(0.5, 0.5, 0.5)"
+      ],
+      "expected": [
+        0.5,
+        0.5,
+        0.5,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(127.5, 0, 0)"
+      ],
+      "expected": [
+        127.5,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(50%,50%,50%)"
+      ],
+      "expected": [
+        128,
+        128,
+        128,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(90%,90%,90%)"
+      ],
+      "expected": [
+        230,
+        230,
+        230,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(25%, 50%, 75%)"
+      ],
+      "expected": [
+        64,
+        128,
+        191,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(+100%,+0%,+0%)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "RED"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "blue"
+      ],
+      "expected": [
+        0,
+        0,
+        255,
+        1
+      ]
+    },
+    {
+      "args": [
+        "transparent"
+      ],
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "args": [
+        "white"
+      ],
+      "expected": [
+        255,
+        255,
+        255,
+        1
+      ]
+    },
+    {
+      "args": [
+        "notacolorname"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "rgb(256,0,0)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(999,0,0)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgba(255,0,0,2)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        ""
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "x"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "#"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "##fff"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "#fffff"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "#gggggg"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "rgb()"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "rgb(1,2)"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "rgbx(1,2,3)"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "x#fff"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "BACON rgb(255,0,0)"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        " rgb(255,0,0)"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "1234"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "x red"
+      ],
+      "expected": null
+    }
+  ],
+  "heldout": [
+    {
+      "args": [
+        "#f00"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "#FF0000"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "#abc"
+      ],
+      "expected": [
+        170,
+        187,
+        204,
+        1
+      ]
+    },
+    {
+      "args": [
+        "#aabbccdd"
+      ],
+      "expected": [
+        170,
+        187,
+        204,
+        0.8666666666666667
+      ]
+    },
+    {
+      "args": [
+        "rgb(255,0,0)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgba(255,0,0,0.5)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5
+      ]
+    },
+    {
+      "args": [
+        "rgb(255 0 0 / 0.5)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5
+      ]
+    },
+    {
+      "args": [
+        "rgb(+255,-0,0)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(100%,0%,0%)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgba(100%,0%,0%,0.5)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0.5
+      ]
+    },
+    {
+      "args": [
+        "red"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rebeccapurple"
+      ],
+      "expected": [
+        102,
+        51,
+        153,
+        1
+      ]
+    },
+    {
+      "args": [
+        "black"
+      ],
+      "expected": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgb(-1,0,0)"
+      ],
+      "expected": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "args": [
+        "rgba(255,0,0,-1)"
+      ],
+      "expected": [
+        255,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "args": [
+        "xyz"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "#ff"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "#12345"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "rgb(1,2,3,4,5)"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "xrgb(255,0,0)"
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        "rgb(255,0,0)x"
+      ],
+      "expected": null
+    }
+  ]
+}

@@ -1,0 +1,324 @@
+{
+ "unit": "parse_wire",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    "[9007199254740991,9007199254740992,9007199254740993,-9007199254740993,9007199254740994,18446744073709551615]"
+   ],
+   "expected": [
+    9007199254740991,
+    9007199254740992,
+    {
+     "__t": "bigint",
+     "v": "9007199254740993"
+    },
+    {
+     "__t": "bigint",
+     "v": "-9007199254740993"
+    },
+    9007199254740994,
+    {
+     "__t": "bigint",
+     "v": "18446744073709551615"
+    }
+   ],
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v13",
+   "args": [
+    "[1.7976931348623157e308,10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]"
+   ],
+   "expected": [
+    1.7976931348623157e+308,
+    {
+     "__t": "bigint",
+     "v": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+     "__t": "bigint",
+     "v": "-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v17",
+   "args": [
+    "-184467440573709551616"
+   ],
+   "expected": {
+    "__t": "bigint",
+    "v": "-184467440573709551616"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v18",
+   "args": [
+    "[115292150460684697636893488147419103232,-1844677440737095571616,[36893488147419103233]]"
+   ],
+   "expected": [
+    {
+     "__t": "bigint",
+     "v": "115292150460684697636893488147419103232"
+    },
+    {
+     "__t": "bigint",
+     "v": "-1844677440737095571616"
+    },
+    [
+     {
+      "__t": "bigint",
+      "v": "36893488147419103233"
+     }
+    ]
+   ],
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v19",
+   "args": [
+    "{\"k\":36893488147419103233,\"n\":{\"m\":-18446744073709551617}}"
+   ],
+   "expected": {
+    "k": {
+     "__t": "bigint",
+     "v": "36893488147419103233"
+    },
+    "n": {
+     "m": {
+      "__t": "bigint",
+      "v": "-18446744073709551617"
+     }
+    }
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    "\"\\ud800\""
+   ],
+   "expected": "\ud800",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v28",
+   "args": [
+    "184467440573709551616"
+   ],
+   "expected": {
+    "__t": "bigint",
+    "v": "184467440573709551616"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v29",
+   "args": [
+    "1844677440737095571616"
+   ],
+   "expected": {
+    "__t": "bigint",
+    "v": "1844677440737095571616"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v30",
+   "args": [
+    "[{\"x\":[-115292150460684697636893488147419103232]}]"
+   ],
+   "expected": [
+    {
+     "x": [
+      {
+       "__t": "bigint",
+       "v": "-115292150460684697636893488147419103232"
+      }
+     ]
+    }
+   ],
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v31",
+   "args": [
+    "{\"a\":1,\"a\":9007199254740993}"
+   ],
+   "expected": {
+    "a": {
+     "__t": "bigint",
+     "v": "9007199254740993"
+    }
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v32",
+   "args": [
+    "-9223372036854775809"
+   ],
+   "expected": {
+    "__t": "bigint",
+    "v": "-9223372036854775809"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v33",
+   "args": [
+    "18446744073709551614"
+   ],
+   "expected": {
+    "__t": "bigint",
+    "v": "18446744073709551614"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v34",
+   "args": [
+    "9007199254740995"
+   ],
+   "expected": {
+    "__t": "bigint",
+    "v": "9007199254740995"
+   },
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v35",
+   "args": [
+    "[1e20,123456789012345678901234567890,1.0]"
+   ],
+   "expected": [
+    100000000000000000000,
+    {
+     "__t": "bigint",
+     "v": "123456789012345678901234567890"
+    },
+    1
+   ],
+   "outsideEnvelope": "json: [object BigInt] has no language-neutral meaning — an envelope fact"
+  },
+  {
+   "name": "v49",
+   "args": [
+    "{\"\\ud800\":1}"
+   ],
+   "expected": {
+    "\ud800": 1
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v50",
+   "args": [
+    "[\"\\ud83d\\u0041\",\"\\uDC00\\uD800\"]"
+   ],
+   "expected": [
+    "\ud83dA",
+    "\udc00\ud800"
+   ],
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v64",
+   "args": [
+    123
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v65",
+   "args": [
+    null
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v66",
+   "args": [
+    true
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "a": 1
+    }
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "length": 3
+    }
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v69",
+   "args": [
+    [
+     "[1]"
+    ]
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v70",
+   "args": [
+    [
+     "[",
+     "1",
+     "]"
+    ]
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v71",
+   "args": [
+    []
+   ],
+   "expected": {
+    "__throw": "wire line: not text"
+   },
+   "outsideEnvelope": "not text"
+  }
+ ]
+}

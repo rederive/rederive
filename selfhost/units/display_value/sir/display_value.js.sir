@@ -1,0 +1,20 @@
+UNIT display_value
+LANG js
+PRIMARY-SHA256 591b9b343cbc8fb26f23c7863113229a2bc06db31202e34d28b70950cfdd2746
+SIG display_value(tv: unknown): string | null
+NOTE default export
+ABI json arrives decoded: text = string; a number = number; bool = boolean; none = null; list = Array; map = a plain object
+  with own enumerable keys. "absent" (TABLE NODE, R5) = the key is not an own property of the node map; "none" = the
+  property holds null. The result is a string, or null for R5's top-level ABSENT (undefined is accepted by the driver as
+  none too). A throw (R2, R6, R7) is a thrown Error; the message is not graded. The artifact is an ES module
+  default-exporting the function and imports nothing.
+ENVELOPE widening: text may hold a lone surrogate (OUT-OF-DOMAIN, js extension) — QUOTE writes it as \u and 4 lowercase hex
+  digits, as JSON.stringify does.
+MECHANISM QUOTE (R4) is exactly JSON.stringify on a string (well-formed JSON.stringify: TABLE ESCAPE, lone surrogates as
+  \uXXXX lowercase). Read fields with Object.hasOwn so an inherited name (constructor, toString) is neither a tag nor a field:
+  {t: "constructor"} displays "?" (R3). FIELDNAME (R11) tests the name against
+  PLAIN-IDENTIFIER (pinned below) and otherwise quotes it with JSON.stringify; a bigint (TABLE NODE) is String(v) + "n"
+  for a text, bool or null v and the literal "undefinedn" for an absent one. A text entry (R6) is split by code point ([...s] / for-of), never by UTF-16 unit.
+PINNED regex PLAIN-IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/ CITED R11 — no flags: no u, no i, no m (with m a name ending in a line feed would pass)
+DEPENDS-ON none
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs display; language file cut 2026-10-27 with the primary.
