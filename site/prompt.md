@@ -12,9 +12,11 @@ Follow these steps in order.
    language. `rdv check` halts with an install hint on a missing toolchain, by design.
 
 1. **Zero-footprint demo first — nothing in my project changes.** In a fresh temporary directory (e.g.
-   `cd "$(mktemp -d)"`), run `npm i @rederive/colors`, then `rdv check node_modules/@rederive/colors` and show me
-   the output (it should say VERIFIED). Then change one character of a file under
-   `node_modules/@rederive/colors/src/` (for example, remove the `g` flag from the pattern in `src/strip.js`) and
+   `cd "$(mktemp -d)"`), run `npm i @rederive/colors`, then `rdv check node_modules/@rederive/colors --lang js` and show me
+   the output (it should say VERIFIED FOR lang:js ONLY — the package also ships TypeScript and Rust versions; `--lang`
+   checks just the languages this machine has, and dropping it checks all three when `typescript` and `cargo` are
+   installed). Then change one character of a file under
+   `node_modules/@rederive/colors/src/` (for example, remove the `g` flag from the pattern in `src/strip.mjs`) and
    run the same `rdv check` again: show me that it now FAILS — some held-back tests miss and the file hash mismatches.
    That is the whole idea in one minute. Do not run anything in my project during this step.
 

@@ -89,7 +89,8 @@ const toolchainReady = (lang: string, dir: string): boolean =>
   lang === 'js' ? true : lang === 'ts' ? findTsc([dir, process.cwd()]) !== null
     : lang === 'rust' ? spawnSync('cargo', ['--version'], { encoding: 'utf-8' }).status === 0 : false;
 type Status = { ok: boolean; label: string; missing?: string[]; languages?: string[]; toolchains?: string[]; reason?: string };
-const structuralStatus = (m: any, dir: string): Status => {
+// `only` (rdv check --lang): languages outside it are not graded here, so their toolchain is not required — every other gate stands.
+const structuralStatus = (m: any, dir: string, only: Set<string> | null = null): Status => {
   try {
     const missing = new Set<string>(), languages = new Set<string>(), toolchains = new Set<string>();
     for (const u of m.units || []) {
@@ -97,7 +98,7 @@ const structuralStatus = (m: any, dir: string): Status => {
       for (const f of detectFeatures(shape)) if (!IMPLEMENTED_FEATURES.has(f)) missing.add(f);
       for (const l of languagesOf(shape)) {
         if (!HARNESSED_LANGUAGES.has(l)) languages.add(l);
-        else if (!toolchainReady(l, dir)) toolchains.add(l);
+        else if ((!only || only.has(l)) && !toolchainReady(l, dir)) toolchains.add(l);
       }
     }
     if (!missing.size && !languages.size && !toolchains.size) return { ok: true, label: '' };
@@ -108,8 +109,8 @@ const structuralStatus = (m: any, dir: string): Status => {
   }
 };
 
-const specStatus = (m: any, dir: string): Status => {
-  const st = structuralStatus(m, dir);
+const specStatus = (m: any, dir: string, only: Set<string> | null = null): Status => {
+  const st = structuralStatus(m, dir, only);
   if (!st.ok) return st;
   const v = m.specVersion;
   if (v === undefined) return { ok: true, label: C.dim('spec v0.1 (legacy/unstamped)') };
@@ -577,17 +578,27 @@ const variantOk = (x: any) => x.full && x.hashes && x.carriedOk && (x.typeCheck?
 
 // v0.2 §12: a unit may carry a `variants` map (package | spec | …), each independently verified against its own
 // anchor. Absence ⇒ ONE implicit `package` variant from the unit's own fields (back-compat — the 218 shipped units).
-async function checkUnit(dir: string, u: any) {
+async function checkUnit(dir: string, u: any, only: Set<string> | null = null) {
   const entries: [string, any][] = u.variants ? Object.entries(u.variants) : [['package', u]];
-  const variants: any[] = [];
-  for (const [vname, v] of entries) variants.push({ variant: vname, anchor: v.anchor ?? null,
+  const variants: any[] = [], skipped: string[] = [];
+  for (const [vname, v] of entries) if (only && vname.startsWith('lang:') && !only.has(vname.slice(5))) skipped.push(vname); else variants.push({ variant: vname, anchor: v.anchor ?? null,
     ...(vname.startsWith('lang:') ? await checkLangVariant(dir, u, vname.slice(5), v) : await checkVariant(dir, u.name, v)) });
-  return { name: u.name, kind: u.kind, sig: u.sig, variants, ok: variants.every(variantOk) };
+  return { name: u.name, kind: u.kind, sig: u.sig, variants, skipped, ok: variants.every(variantOk) };
 }
 
-async function cmdCheck(dir: string) {
+// `only` = rdv check --lang js[,ts…]: an explicit, partial check — the named languages are graded in full and every other
+// lang: variant is reported NOT CHECKED (never "verified"). Without it, a missing toolchain halts the whole check (fail closed).
+async function cmdCheck(dir: string, only: Set<string> | null = null) {
   const m = loadManifest(dir);
-  const sv = specStatus(m, dir);
+  if (only) {
+    const carried = new Set<string>((m.units || []).flatMap((u: any) => Object.keys(u.variants || {}).filter((k) => k.startsWith('lang:')).map((k) => k.slice(5))));
+    const absent = [...only].filter((l) => !carried.has(l));
+    if (!carried.size || absent.length) {
+      console.log(`${C.b('rdv check')}  ${m.name}@${m.version}`);
+      console.log(C.r(`\n  HALTED — --lang ${[...only].join(',')}: ${carried.size ? `this bundle carries no lang:${absent.join(', lang:')} (it carries ${[...carried].map((l) => 'lang:' + l).join(', ')})` : 'this bundle has no per-language variants'}.`)); return 1;
+    }
+  }
+  const sv = specStatus(m, dir, only);
   console.log(`${C.b('rdv check')}  ${m.name}@${m.version}   ${C.dim('source: ' + m.provenance.source)}   ${sv.label}`);
   if (!sv.ok) {
     // name the missing FEATURE when the bundle declared one — "upgrade rdv" is not
@@ -599,11 +610,15 @@ async function cmdCheck(dir: string) {
           .filter(Boolean).join('; ')
       : sv.reason ? sv.reason
       : `built against SIR spec v${m.specVersion} and declares no \`features\` — without a declared feature set this rdv accepts specVersion ≤ v${SUPPORTED_SPEC}; a newer bundle (v0.5 included) verifies through the feature gate when every feature it declares is implemented here (${[...IMPLEMENTED_FEATURES].join(', ')})`;
-    console.log(C.r(`\n  HALTED — ${why}. ${sv.toolchains?.length && !sv.languages?.length && !sv.missing?.length ? 'Install it to verify' : 'Upgrade rdv to verify'}.`)); return 1;
+    const ready = sv.toolchains?.length && !sv.languages?.length && !sv.missing?.length
+      ? [...new Set<string>((m.units || []).flatMap((u: any) => Object.keys(u.variants || {}).filter((k) => k.startsWith('lang:')).map((k) => k.slice(5))))].filter((l) => !sv.toolchains!.includes(l))
+      : [];
+    console.log(C.r(`\n  HALTED — ${why}. ${sv.toolchains?.length && !sv.languages?.length && !sv.missing?.length ? 'Install it to verify' : 'Upgrade rdv to verify'}.`) +
+      (ready.length ? C.dim(`\n  Or check only the languages you have: rdv check ${relative(process.cwd(), dir) || '.'} --lang ${ready.join(',')}`) : '')); return 1;
   }
-  let ok = true; const strict = isV05(m);
+  let ok = true; const strict = isV05(m); const skippedAll = new Set<string>();
   for (const u of m.units) {
-    const r = await checkUnit(dir, u);
+    const r = await checkUnit(dir, u, only);
     const lint = strict ? lintV05(dir, u) : null; if (lint && !lint.ok) r.ok = false;   // a lint error FAILS the unit, whatever it grades
     ok = ok && r.ok;
     const single = r.variants.length === 1 && r.variants[0].variant === 'package';   // back-compat: render exactly as v0.1
@@ -625,6 +640,11 @@ async function cmdCheck(dir: string) {
       if (v.carriedReport.length) console.log(`     carried-data ${v.carriedOk ? C.g('attested') : C.r('UNVERIFIED')}   ` +
         v.carriedReport.map((c: any) => `${c.file} [hash:${c.hashOk ? 'ok' : C.r('BAD')} authority:${c.authOk ? 'ok' : C.r(c.attested ? 'FAIL' : 'none')}]`).join(' '));
     }
+    for (const s of r.skipped) { skippedAll.add(s); console.log(`     ${C.y('– ')}${C.b(s)}  ${C.y('NOT CHECKED')}${C.dim(' (--lang)')}`); }
+  }
+  if (only && skippedAll.size && ok) {
+    console.log(C.y(`\n  VERIFIED FOR ${[...only].map((l) => 'lang:' + l).join(', ')} ONLY — ${[...skippedAll].join(', ')} NOT CHECKED. Drop --lang (with every toolchain installed) for the full check.`));
+    return 0;
   }
   console.log(ok ? C.g(`\n  ALL UNITS VERIFIED — shipped src matches its contract.`)
                  : C.r(`\n  VERIFICATION FAILED — do not trust this src; ${isV05(m) ? 're-derive it from its contract with the sir-factory loop (sir-factory prepare → blind emitters → sir-factory grade → pack-v05)' : `rebuild with: rdv resynth ${relative(process.cwd(), dir) || '.'}`}`));   /* resynth halts on v0.5 bundles: never point a user at a command that refuses */
@@ -1071,6 +1091,9 @@ const USAGE = [
   '  rdv check <pkgdir>',
   '                verify src/ against the held-out oracle + content hashes (deterministic, no tokens); a v0.5',
   '                bundle is also held to the strict v0.5 SIR lint; js/ts/rust variants each graded by their driver',
+  '  rdv check <pkgdir> --lang js[,ts,rust]',
+  '                a PARTIAL check: grade only the named languages, report every other lang: variant NOT CHECKED',
+  '                (exit 0 only if every named language verifies). Without --lang, a missing toolchain halts',
   '  rdv vis <pkgdir>',
   '                (re)generate vis.html from the SIR + manifest (no tokens)',
   '  rdv audit [dir] [--json]',
@@ -1134,7 +1157,12 @@ async function main() {
     }
     if (cmd === 'doctor') process.exit(cmdDoctor(dir, { brief: has('--brief'), strict: has('--strict'), profilesDir: argOpt('--profiles-dir') }));
     if (cmd === 'claude') process.exit(await cmdClaude(process.cwd(), process.argv.slice(3), process.env));
-    if (cmd === 'check') process.exit(await cmdCheck(dir));
+    if (cmd === 'check') {
+      const langs = argOpt('--lang');
+      if (has('--lang') && (!langs || langs.startsWith('-'))) { console.error('rdv check: --lang needs a value, e.g. --lang js or --lang js,ts'); process.exit(2); }
+      const only = langs ? new Set(langs.split(',').map((l) => l.trim()).filter(Boolean)) : null;
+      process.exit(await cmdCheck(dir, only));
+    }
     if (cmd === 'vis') process.exit(cmdVis(dir));
     if (cmd === 'audit') process.exit(cmdAudit(dir, has('--json')));
     if (cmd === 'resynth') process.exit(has('--apply') ? await cmdResynthApply(dir, unit) : cmdResynthPrepare(dir, unit, parseInt(arg('--n', '3'), 10)));
