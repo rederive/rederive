@@ -212,8 +212,8 @@ test('#11: a "github" marketplace source is portable:true, and doctor prints no 
   assert.doesNotMatch(out, /machine-local/);
 });
 
-test('#11 refinement: package.json is 0.5.0 (the v0.5 kit — plugin/lab/rdv all 0.5.0)', () => {
-  assert.equal(rdvInfo().version, '0.5.0');
+test('#11 refinement: package.json is 0.5.x (the v0.5 kit; 0.5.1 added check --lang)', () => {
+  assert.match(rdvInfo().version, /^0\.5\.\d+$/);
 });
 
 test('#11 refinement: rdvInfo().commit is null off a non-git checkout (never the string "unknown")', () => {
@@ -245,7 +245,7 @@ test('#11 refinement: `rdv --version` (and -v) prints exactly one line and exits
     assert.equal(r.status, 0, flag);
     const lines = r.stdout.trim().split('\n');
     assert.equal(lines.length, 1, flag);
-    assert.match(lines[0], /^rdv 0\.5\.0( \([0-9a-f]+\))?$/, flag);
+    assert.match(lines[0], /^rdv 0\.5\.\d+( \([0-9a-f]+\))?$/, flag);
   }
 });
 

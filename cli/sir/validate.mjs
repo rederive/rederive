@@ -7,8 +7,8 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'; import { join, basename, resolve } from 'node:path';
 import { family, lintFamily, carriedBinding, carriedTable, checkCarried, directive, pinCited } from './v05.mjs';
 import { parse } from './sir-parse.mjs'; import { parseSig, vectorSetSha, ENCODING } from './canon.mjs';
-const PSEUDO = new Set(['LET', 'FOR', 'RETURN', 'NODE', 'CONTROL', 'ERROR', 'THROW-PATHS', 'BEHAVIORAL', 'OBSERVABLE', 'PURITY', 'FIREWALL', 'ELSE', 'TERMINATOR-SPLIT', 'STEP', 'GATE', 'IF', 'WHILE']);
-const META = new Set(['EMISSION', 'RE-EMITTER', 'EMISSION-CONTRACT', 'EMITTER-DIRECTIVE', 'EMISSION-INTERFACE', 'ABOUT', 'SETUP', 'FINALIZE']);
+export const PSEUDO = new Set(['LET', 'FOR', 'RETURN', 'NODE', 'CONTROL', 'ERROR', 'THROW-PATHS', 'BEHAVIORAL', 'OBSERVABLE', 'PURITY', 'FIREWALL', 'ELSE', 'TERMINATOR-SPLIT', 'STEP', 'GATE', 'IF', 'WHILE']);
+export const META = new Set(['EMISSION', 'RE-EMITTER', 'EMISSION-CONTRACT', 'EMITTER-DIRECTIVE', 'EMISSION-INTERFACE', 'ABOUT', 'SETUP', 'FINALIZE']);
 
 export function validate(unitDir, { mode = 'strict', enforceDensity = false, gate = 0.10, unit: unitName = null } = {}) {   // `unit`: a multi-unit bundle root (sir/<unit>.sir, oracles/<unit>.json) — the dir's basename otherwise
   const errors = [], warnings = [], advisories = [];
@@ -25,26 +25,7 @@ export function validate(unitDir, { mode = 'strict', enforceDensity = false, gat
   for (const w of fam.warnings ?? []) W('W_LEGACY_BINDING', 'family:' + w.split(':')[0], 0, w);   // valid, but under-covers its primary: re-bind
   for (const err of fam.errors) E(/STALE/.test(err) ? 'E_STALE_BINDING' : /registry/.test(err) ? 'E_LANG_REGISTRY' : /no PRIMARY-SHA256/.test(err) ? 'E_UNBOUND' : 'E_FAMILY', 'family:' + err.split(':')[0], 0, err);   // keyed per file: every stale language file is its own declared error
   const files = [['primary', fam.primary, 'P'], ...Object.entries(fam.langs).map(([l, e]) => [l, e.text, 'L'])];
-  for (const [where, text, reg] of files) {
-    const r = parse(text, { mode });
-    for (const e of r.errors) E(e.code, where, e.line, e.msg);
-    for (const w of r.warnings) {
-      if (w.code === 'W_UNKNOWN_DIRECTIVE') { const n = w.msg; E(PSEUDO.has(n) ? 'E_PSEUDOCODE' : META.has(n) ? 'E_EMITTER_META' : 'E_UNKNOWN_DIRECTIVE', where, w.line, n); }
-      else W(w.code, where, w.line, w.msg);
-    }
-    let notes = 0, directives = 0;
-    for (const d of r.ast) {
-      if (d.kind === 'comment') continue; directives++; if (d.name === 'NOTE') notes++;
-      if (d.register && d.register !== 'B' && d.register !== reg) E('E_REGISTER', where, d.line, `${d.name} belongs to the ${d.register === 'P' ? 'primary' : 'language file'}`);
-      if ((d.name === 'PINNED' || d.name === 'EARNED') && !pinCited(d)) E('E_UNCITED_PIN', where, d.line, d.args);   // the lint's own rule (#104)
-    }
-    if (directives && notes / directives > 0.5) W('W_NOTE_DENSITY', where, 0, `${notes}/${directives} directives are NOTE`);
-    if (reg === 'P') { const sig = directive(text, 'SIG'); let parsed = null; if (!sig) E('E_NO_SIG', 'primary', 0); else { try { parsed = parseSig(sig); } catch (e) { E('E_SIG', 'primary', 0, e.message); } }
-      // STATE units: `STATE mutates <arg>` must name a SIG argument; KIND STATE without it is a warning (the oracle would observe result only)
-      const kind = directive(text, 'KIND'); const st = directive(text, 'STATE');
-      if (st) { const m = st.match(/^mutates\s+(\w+)/); if (!m || !parsed || !parsed.args.some((a) => a.name === m[1])) E('E_STATE_ARG', 'primary', 0, `STATE must read 'mutates <arg>' naming a SIG argument: ${st}`); if (kind && kind !== 'STATE') E('E_STATE_KIND', 'primary', 0, `STATE declared but KIND is ${kind}`); }
-      else if (kind === 'STATE') W('W_STATE_UNDECLARED', 'primary', 0, 'KIND STATE without `STATE mutates <arg>` — the oracle observes result only'); }
-  }
+  for (const [where, text, reg] of files) { const r = validateText(text, { mode, reg }); for (const e of r.errors) E(e.code, where, e.line, e.msg); for (const w of r.warnings) W(w.code, where, w.line, w.msg); }
   const lint = lintFamily(fam, { maxDensity: gate });
   for (const p of lint.problems) {
     const where = p.split(':')[0];
@@ -82,6 +63,32 @@ export function validate(unitDir, { mode = 'strict', enforceDensity = false, gat
   advisories.push({ tier: 'jev', status: (process.env.JEV_API_KEY || process.env.TYPESAFE_API_KEY || existsSync(process.env.JEV_ENV_FILE ?? join(process.env.HOME ?? '', 'jev-bakeoff', '.env'))) ? 'available via tools/jev_advisory.py (predict at prepare, triage at grade; advisory only)' : 'not run (no key) — never affects the exit code' });
   return finish();
   function finish() { const seen = new Set(); const dedup = errors.filter((e) => { const k = `${e.code}|${e.where}|${e.line}`; if (seen.has(k)) return false; seen.add(k); return true; }); return { ok: dedup.length === 0, errors: dedup, warnings, advisories, facts }; }
+}
+/** ONE file's checks — the per-file half of validate(), shared with the editor (cli/lsp): the parse in `mode`, unknown names
+ *  classified, the register (`reg` P = primary, L = language file), uncited pins, NOTE density, and for a primary SIG and
+ *  STATE. → { errors, warnings }, each { code, line, msg } (line 1-based; 0 = the file). The family checks (binding, oracle,
+ *  carried data) and the line lints stay in validate() / v05.mjs. */
+export function validateText(text, { mode = 'strict', reg = 'P' } = {}) {
+  const errors = [], warnings = []; const E = (code, line, msg = '') => errors.push({ code, line, msg }); const W = (code, line, msg = '') => warnings.push({ code, line, msg });
+  const r = parse(text, { mode });
+  for (const e of r.errors) E(e.code, e.line, e.msg);
+  for (const w of r.warnings) {
+    if (w.code === 'W_UNKNOWN_DIRECTIVE') { const n = w.msg; E(PSEUDO.has(n) ? 'E_PSEUDOCODE' : META.has(n) ? 'E_EMITTER_META' : 'E_UNKNOWN_DIRECTIVE', w.line, n); }
+    else W(w.code, w.line, w.msg);
+  }
+  let notes = 0, directives = 0;
+  for (const d of r.ast) {
+    if (d.kind === 'comment') continue; directives++; if (d.name === 'NOTE') notes++;
+    if (d.register && d.register !== 'B' && d.register !== reg) E('E_REGISTER', d.line, `${d.name} belongs to the ${d.register === 'P' ? 'primary' : 'language file'}`);
+    if ((d.name === 'PINNED' || d.name === 'EARNED') && !pinCited(d)) E('E_UNCITED_PIN', d.line, d.args);   // the lint's own rule (#104)
+  }
+  if (directives && notes / directives > 0.5) W('W_NOTE_DENSITY', 0, `${notes}/${directives} directives are NOTE`);
+  if (reg === 'P') { const sig = directive(text, 'SIG'); let parsed = null; if (!sig) E('E_NO_SIG', 0); else { try { parsed = parseSig(sig); } catch (e) { E('E_SIG', 0, e.message); } }
+    // STATE units: `STATE mutates <arg>` must name a SIG argument; KIND STATE without it is a warning (the oracle would observe result only)
+    const kind = directive(text, 'KIND'); const st = directive(text, 'STATE');
+    if (st) { const m = st.match(/^mutates\s+(\w+)/); if (!m || !parsed || !parsed.args.some((a) => a.name === m[1])) E('E_STATE_ARG', 0, `STATE must read 'mutates <arg>' naming a SIG argument: ${st}`); if (kind && kind !== 'STATE') E('E_STATE_KIND', 0, `STATE declared but KIND is ${kind}`); }
+    else if (kind === 'STATE') W('W_STATE_UNDECLARED', 0, 'KIND STATE without `STATE mutates <arg>` — the oracle observes result only'); }
+  return { errors, warnings };
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
   const a = process.argv.slice(2); const dir = a.find((x) => !x.startsWith('--')); const opt = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };

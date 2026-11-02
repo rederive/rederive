@@ -15,6 +15,7 @@
  *   rdv claude  [args…]              report sir-factory/typikon (optional), init if needed, exec `claude`
  *   rdv check   <pkgdir>             verify src/ against the held-out oracle + content hashes  (no tokens)
  *   rdv vis     <pkgdir>             (re)generate vis.html from the SIR + manifest             (no tokens)
+ *   rdv lsp     [--stdio]            a language server for .sir files (diagnostics = rdv's own checks, hover, outline …)
  *   rdv audit   [dir] [--json]       declared vs delivered: the real dependency surface (lockfile / node_modules)
  *   rdv resynth <pkgdir> [--unit U]  PREPARE a local rebuild: write ready-to-spawn worker prompts + a plan
  *   rdv resynth <pkgdir> --apply     APPLY the workers' output: grade vs held-out, pick a quorum
@@ -46,6 +47,7 @@ import { gradeArtifact } from './lang/grade.mjs';
 import * as rustDriver from './lang/rust.mjs';
 import { treeSha } from './tree-sha.mjs';
 import { validate as validateSir } from './sir/validate.mjs';
+import { serve as serveLsp } from './lsp/server.mjs';
 
 const sha256 = (path: string) => hashHex(readFileSync(path));
 const C = { g: (s: string) => `\x1b[32m${s}\x1b[39m`, r: (s: string) => `\x1b[31m${s}\x1b[39m`,
@@ -1096,6 +1098,8 @@ const USAGE = [
   '                (exit 0 only if every named language verifies). Without --lang, a missing toolchain halts',
   '  rdv vis <pkgdir>',
   '                (re)generate vis.html from the SIR + manifest (no tokens)',
+  '  rdv lsp [--stdio]',
+  '                a language server for .sir files, for any LSP editor: rdv\'s own checks as you type, hover, outline',
   '  rdv audit [dir] [--json]',
   '                declared vs delivered: the real dependency surface of a project (package-lock or node_modules),',
   '                install hooks included',
@@ -1163,6 +1167,7 @@ async function main() {
       const only = langs ? new Set(langs.split(',').map((l) => l.trim()).filter(Boolean)) : null;
       process.exit(await cmdCheck(dir, only));
     }
+    if (cmd === 'lsp') { serveLsp(process.stdin, process.stdout, { version: rdvInfo().version }); return; }   // stdio; `--stdio` (what most clients pass) is the only transport
     if (cmd === 'vis') process.exit(cmdVis(dir));
     if (cmd === 'audit') process.exit(cmdAudit(dir, has('--json')));
     if (cmd === 'resynth') process.exit(has('--apply') ? await cmdResynthApply(dir, unit) : cmdResynthPrepare(dir, unit, parseInt(arg('--n', '3'), 10)));

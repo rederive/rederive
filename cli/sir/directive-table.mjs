@@ -50,4 +50,4 @@ export function table() {
   out.push('| `R<n>` | primary | load-bearing | One numbered rule under `BEHAVIOR`. |');
   return out.join('\n');
 }
-if (process.argv[1] === new URL(import.meta.url).pathname) console.log(table());
+if (import.meta.url === `file://${process.argv[1]}`) console.log(table());   // not new URL(import.meta.url): in the CJS bundles (rdv, the editor extension) import.meta.url is empty
