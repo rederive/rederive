@@ -1,0 +1,98 @@
+{
+ "status": "ok",
+ "unit": "git_line",
+ "primary": "selfhost/units/git_line/sir/git_line.sir",
+ "primarySha256": "e142978537632cf19cbb0f7b534edce97496381d204443f466d50efe9b97b9fb",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "BREAKS. Scan text from its start. At each position the break is taken by PINNED grammar BREAK, CR followed by LF being ONE break; a CR not followed by LF is a break; an LF is a break. No other character breaks. A break is LF-BEARING when it contains an LF (the CRLF and the LF break); the lone CR break is not.",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R2",
+   "text": "PARSER LINES. With B breaks the text has P = B + 1 parser lines, numbered 1 to P; line k is the text after break k - 1 (the start, for k = 1) up to break k (the end of text, for k = P). The empty text has one line. A text that ends in a break has an empty last line. An LF then a CR is two breaks; a CR then an LF is one.",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "R3",
+   "text": "GIT(k), for k from 1 to P, is 1 plus the number of LF-BEARING breaks among breaks 1 to k - 1. So GIT(1) = 1 and GIT never decreases; a run of lines joined by lone CRs shares one git line.",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R4",
+   "text": "FINAL is 1 plus the number of LF-BEARING breaks in the whole text. FINAL = GIT(P): a line past the end answers what the last parser line answers.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R5",
+   "text": "Each entry x of lines is answered by TABLE LOOKUP (first matching row). Entries are answered independently: repeats, any order and the empty list are all allowed, and the empty list gives the empty list.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE LOOKUP row 1",
+   "text": "x is zero (negative zero included)                                       | 0 CITED FIDELITY package — the lookup table's slot 0 holds 0",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE LOOKUP row 2",
+   "text": "x is an integer and 1 <= x <= P                                          | GIT(x)",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "TABLE LOOKUP row 3",
+   "text": "anything else: an integer above P, any negative, a fraction, NaN, an infinity | FINAL CITED FIDELITY package — every key without a slot falls back to the final count",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "R6",
+   "text": "Against git (the independent anchor): for every parser line k from 1 to P, git line GIT(k) holds parser line k's text, at the place after the lone CRs that precede it on that git line. The parser lines past git's last line are only the empty last line of a text ending in LF or CRLF, and the one line of the empty text (TABLE ENDINGS).",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE ENDINGS row 1",
+   "text": "the empty text                          | P = 1; FINAL = 1, a line git does not have (G = 0)",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE ENDINGS row 2",
+   "text": "text ends in LF                         | last parser line empty; FINAL = G + 1, a line git does not have",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE ENDINGS row 3",
+   "text": "text ends in CRLF                       | last parser line empty; FINAL = G + 1, a line git does not have",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE ENDINGS row 4",
+   "text": "text ends in CR (not followed by LF)    | last parser line empty; FINAL = G, the git line the CR ends",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE ENDINGS row 5",
+   "text": "text ends in any other character        | FINAL = G",
+   "ambiguity": 0.22
+  }
+ ],
+ "ranked": [
+  "R5",
+  "TABLE LOOKUP row 2",
+  "TABLE LOOKUP row 3",
+  "R2",
+  "R6",
+  "TABLE ENDINGS row 4",
+  "TABLE ENDINGS row 2",
+  "TABLE ENDINGS row 3",
+  "TABLE ENDINGS row 5",
+  "R4",
+  "TABLE LOOKUP row 1",
+  "R1",
+  "TABLE ENDINGS row 1",
+  "R3"
+ ],
+ "at": "2026-11-02T21:07:54Z"
+}

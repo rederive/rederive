@@ -1,0 +1,21 @@
+UNIT hunk_lines
+LANG ts
+PRIMARY-SHA256 e98d50a2e485020969a6d55f9c34392d379ea6d71f47e1e265e0a66307bbffa7
+SIG export default function hunk_lines(diff: string): number[]
+ABI TypeScript compiles to the js runtime. STRICT: the artifact must type-check under `strict: true` against this SIG,
+  with no `any`, no non-null assertions (`!`), and no `@ts-ignore` / `@ts-expect-error`. text = string (UTF-16); i64 = number (IEEE-754 double; R5 keeps every output at or below 2^53 - 1, so exact); list =
+  a fresh Array. The artifact is an ES module default-exporting the function and imports nothing. The real export is the
+  named hunkLines of cli/lsp/pr-review.mjs, driven through the selfhost seam as (diff) => hunkLines(diff).
+MECHANISM (restated from js; language files are self-contained) LINES (R2) = diff.split('\n') — a plain LF split; a splitter that also
+  breaks at CR (/\r\n|\r|\n/) or at U+2028/U+2029 changes the answer. Each line is tested with the pinned regex, which
+  has NO m flag and NO g flag, so ^ is the line's own offset 0. \d without the u or v flag is the ASCII digits only (R4).
+  C and N = Number(capture); an absent count capture is undefined and means N = 1 (TABLE COUNT). TABLE RANGE is realized
+  in doubles exactly as the authority does it: drop when N > MAX_HUNK or !Number.isSafeInteger(C + N - 1), then walk i
+  from Math.max(C, 1) while i < C + N, i++. Those double operations ARE the table: the E = SAFE_LIMIT + 1 row is C + N =
+  2^53 + 1 rounding (ties to even) to 2^53, so C + N - 1 is safe and the walk stops at 2^53 - 1; a start that parses to
+  2^53 or more walks nothing. An exact-integer (BigInt) version must write that row out explicitly. Collect into a
+  Set<number>, then sort with a NUMERIC comparator ((a, b) => a - b), never the default sort (text order: 10 before 9).
+DEPENDS-ON none
+PINNED integer MAX_HUNK = 1_000_000 CITED R5 — the authority's const MAX_HUNK, compared with > (N = 1,000,000 is kept)
+PINNED regex HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/ CITED R3 R4 — the authority's per-line pattern verbatim; no flags (ruling F1 removed the m flag)
+PROVENANCE rederive@9b9e5d24ca9d cli/lsp/pr-review.mjs hunkLines (the reference this file describes).

@@ -1,0 +1,30 @@
+UNIT explain_diff
+LANG ts
+PRIMARY-SHA256 b247f386a1f76aed3899519b572965ca540167a0d571a6666a6f99ccc7041cd5
+SIG export function explain_diff(before: string, after: string, oracleChanged: boolean | null, langs: readonly string[]): Review
+ABI TypeScript compiles to the js runtime and is driven exactly as js: four positional values, the artifact a named export.
+  Declare in the artifact
+  type Piece = { op: '=' | '-' | '+'; text: string };
+  type Change = { section: string; id: string; label: string; kind: 'changed' | 'added' | 'removed'; checked: boolean;
+  text?: string; diff?: Piece[]; whyDiff?: Piece[] | null };
+  type Warning = { level: 'stop' | 'ok' | 'note'; kind: string; text: string };
+  type Review = { unit: string; changes: Change[]; warnings: Warning[] }.
+  Optional keys are omitted, never written as undefined: text on added and removed items; diff and whyDiff (null when the
+  raw citation lists are equal) on changed items. text = string (UTF-16; R18's cut counts code points, Array.from(q));
+  none = null. STRICT: the artifact type-checks under strict: true with no any, no non-null assertions (!), no @ts-ignore
+  and no @ts-expect-error. ES module, imports nothing; never mutates langs.
+MECHANISM (restated from js — language files are self-contained) WS (R15 R16) is exactly the ECMAScript \s class and
+  String.prototype.trim's set; spaces and tabs are [ \t]. R2's line
+  cut is split(/\r\n|\r|\n/); space/tab fields (R8) are split(/[ \t]+/) with the empty pieces filtered out. The LINE
+  SEPARATOR and PARAGRAPH SEPARATOR characters are written as the escapes \u2028 and \u2029, never raw, in any source literal.
+MECHANISM fixed tables (TABLE PIN-KINDS, OTHER-LABELS, KNOWN-OTHER, R17's language names) are a ReadonlyMap<string, string>,
+  a ReadonlySet<string> or an Object.hasOwn test — never a plain indexed object read, which reaches inherited members. The
+  after index (R12, R14) is a Map<string, Item> keyed by section and id; group by section plus id with exactly " #" + digits removed from the end. A Map.get result is Item |
+  undefined; narrow it with an explicit undefined test. R12's numbering counts base ids across the whole version.
+MECHANISM DIFF (R15) needs only the LCS table; build it as (n+1) x (m+1) number arrays filled from the end.
+DEPENDS-ON none
+PINNED regex COMMENT-LEAD = /^#+[ \t]?/ CITED R9 — removed from a comment line that belongs to a directive
+PINNED regex REF-TAIL = /[.,;:)\]]+$/ CITED R18 — removed from each citation token before it is compared to a REF
+PINNED regex ATTR = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R5 — a hit whose keyword starts inside a quoted span is skipped
+PROVENANCE rederive@9b9e5d24ca9d cli/lsp/explain.mjs and cli/sir/sir-parse.mjs (the regexes above are the real code's).
+  Language file cut 2026-11-02 with the primary and revised with it on the re-pin, before any blind re-emission.

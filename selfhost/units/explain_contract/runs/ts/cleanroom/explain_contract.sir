@@ -1,0 +1,201 @@
+UNIT explain_contract
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@9b9e5d24ca9d cli/lsp/explain.mjs explain(primaryText) called with no options, over the parse of
+  cli/sir/sir-parse.mjs in its default (legacy) mode; reproduce both exactly, accidents included
+ORACLE-CLASS deterministic
+SIG explain_contract(primaryText: text) -> json
+ENVELOPE primaryText is any well-formed text (Unicode scalar values only), empty included: a SIR primary, a language
+  file, a legacy v0.1 contract with comments, or text that is not a contract at all. Every such text yields a reading;
+  none throws. Non-text arguments are outside the abstract envelope (the js language file widens to them).
+DEPENDS-ON none
+DESCRIPTION The deterministic plain-English reading of one SIR primary, the one a review renders. The result is a map
+  with five entries: unit (text), summary (a list of text), sig (text or none), checks (a list of text, always empty
+  here) and sections (a list). Each section is a map: id (text), title (text), checked (bool) and items (a non-empty
+  list). Each item is a map: id (text), label (text, absent for the directives TABLE SECTIONS gives no label), text
+  (text), why (a list of text), raw (text), rawWhy (a list of text) and line (a whole number). text and why are the
+  reading; raw and rawWhy are what an edit is compared on; line is where the directive (or stray line) starts. The
+  reading never rewrites contract text: every text is the contract's own words verbatim, or a fixed phrase from the
+  rules and tables below.
+BEHAVIOR
+R1 Lines. The text is cut into lines at every carriage return followed by a line feed (one break), every other
+  carriage return, and every line feed; no other character breaks a line (LINE SEPARATOR, PARAGRAPH SEPARATOR, NEXT
+  LINE, form feed and vertical tab are ordinary characters). Lines are numbered from 1 and every line counts,
+  blank ones included; the empty text is one empty line. On each line, every U+FEFF inside its leading run of
+  SPACE-TAB characters and U+FEFF marks is deleted (the spaces and tabs of that run stay), then the trailing run of
+  SPACE-TAB characters is deleted. A line that is then empty is BLANK and is skipped.
+R2 INDENT of a line = its leading run of SPACE-TAB characters (possibly empty); CONTENT = the rest (never empty, never
+  starting with a space or tab). A line whose CONTENT starts with "#" is a COMMENT line, at any indent. When a
+  directive has been started (R5), the comment line does not end it: its COMMENT TEXT (CONTENT without its leading run
+  of "#" characters, and then without ONE space or tab if one follows) is appended to the COMMENTS of the most
+  recently started directive, whatever directive the comment seems to introduce (a comment written just above R2
+  belongs to the directive before R2). Before the first directive, a comment line is a STRAY line (R17)
+  CITED FIDELITY package — architect's ruling N3: parser semantics, kept
+R3 QUOTED SPANS of a string, found left to right: a quotation mark (U+0022) OPENS a span when it is the first
+  character, or the character before it is in OPENERS, or it comes directly after the closing mark of the previous
+  span. The span runs to the next quotation mark not escaped: a backslash escapes the ONE code point after it. An
+  opener with no closing mark ends the search (no span from it, and none after it). A quotation mark that does not
+  open (after a letter, a digit, "/", "*", "+", "?", a closing quote of no span, ...) is an ordinary character. A
+  position is INSIDE a span when it lies strictly between the span's opening and closing marks. R4 and R6 use the
+  spans of the line's CONTENT; R13 uses the spans of a pin's ARGS.
+R4 Trailing comment. The MARKER is the first "#" of CONTENT that is preceded by a space or tab, is followed by a space,
+  a tab or the end of CONTENT, and is not INSIDE a quoted span (R3). CODE = CONTENT up to the MARKER with its
+  trailing SPACE-TAB run deleted, or all of CONTENT when there is no MARKER. The TRAILING COMMENT = CONTENT after the
+  MARKER with its leading and trailing SPACE-TAB runs deleted (possibly empty). On a line that starts or continues a
+  directive (R5, R7) it is appended to that directive's COMMENTS; it is never part of the display text. So "a #b" and
+  "a##" keep their "#"; "a # b" is CODE "a" with the comment "b"; "a #" is CODE "a" with an empty comment. Comment text is lossy by
+  design: "# x" and "## x" give the same COMMENT TEXT (R2), and moving a comment between a trailing and a full line
+  leaves RAW unchanged CITED FIDELITY package — the legacy parse keeps v0.1 comments aside; architect's ruling N9: kept
+R5 Directive lines. A line with an empty INDENT whose CODE is NAME followed by REST: NAME = CODE up to its first space
+  or tab (all of CODE when it has none), REST = the remainder from that space or tab on (empty when none). When NAME
+  is one capital ASCII letter, then capital letters, ASCII digits and hyphens, then a final colon, and NAME without
+  the colon is not CITED, the colon is dropped (the legacy "UNIT: x" spelling). The line STARTS A DIRECTIVE when NAME
+  matches the grammar DIRECTIVE-NAME and is not CITED. The directive's name is NAME, its line number the line's, its
+  ARGS and ATTRIBUTES come from REST by R6, its CONT starts empty, its COMMENTS start with the line's trailing comment
+  (if any), and it is KNOWN when NAME is in VOCABULARY or is "R" followed by digits. Every other line with an empty
+  INDENT (a lowercase start, "CITED x", "UNIT:glued", a name glued to its text by a character other than a space or
+  tab such as U+00A0, a leading U+00A0 or U+2060) is a continuation by R7.
+R6 Attribute split of a piece S (REST of a directive line, or a space followed by CODE for a continuation). An
+  ATTRIBUTE KEYWORD is one of CITED, EARNED, ANCHOR, case-sensitive, that is preceded by at least one space or tab,
+  followed by a space, a tab or the end of S, and whose first letter is not INSIDE a quoted span of the line (R3).
+  BODY = S before the space-or-tab run that precedes the first keyword (all of S when there is none). Each keyword
+  yields the pair (keyword, value), value = S from just after the keyword up to the space-or-tab run before the
+  next keyword (or the end); BODY and every value have their leading and trailing SPACE-TAB runs deleted, and a
+  value may be empty. Pairs keep their order; a keyword may repeat. A word that only contains a keyword
+  ("aCITED", "CITEDx", "CITED:") is not one.
+R7 Continuations. An indented line that is not a COMMENT line, or a column-0 line that does not start a directive
+  (R5), belongs to the most recently started directive: S = a space followed by its CODE is split by R6, the pairs
+  are appended to that directive's ATTRIBUTES, BODY, when not empty, is appended to its CONT, and then the line's
+  trailing comment (if any) to its COMMENTS. Such a line before the first directive is a STRAY line (R17).
+R8 TEXT of a directive = ARGS followed by each CONT piece, the empty ones left out, joined by single spaces; for a
+  directive named TABLE the joiner is a space, U+23CE (RETURN SYMBOL), a space. TEXT is the empty text when all pieces are
+  empty. RAW of a directive = the same pieces joined by single spaces, except that for TABLE the joiner is
+  a line feed (U+000A), so a literal U+23CE inside a row never reads as a row boundary in RAW; then, for each of its
+  COMMENTS in order, " # " and that comment. In the display a literal U+23CE inside a TABLE row looks like a row
+  boundary; RAW tells the two apart CITED FIDELITY package — architect's ruling N4: kept
+R9 Result. HEAD(n, legacy) = the first directive with a non-empty TEXT among every directive named n (in contract
+  order) followed by every directive named legacy (in contract order); when none has text, the first named n, else
+  the first named legacy, else none. unit = TEXT of HEAD(UNIT, SIR), or "(unnamed)" when there is none or that TEXT
+  is empty. summary, in order: when HEAD(KIND, KIND) has a non-empty TEXT T, the KIND-PHRASE row of T, or "Kind: " T
+  " (not a kind SIR defines)." when T has no row; when HEAD(FIDELITY, VARIANT) has a non-empty TEXT T, the
+  FIDELITY-PHRASE row of T, or "Fidelity: " T " (not a fidelity SIR defines)." when T has no row; then, for the first ANCHOR directive (in
+  contract order) whose TEXT is still non-empty once its trailing run of "." is deleted, "Anchored to " that shortened
+  TEXT ".". No KIND with text, no FIDELITY or VARIANT with text, or no such ANCHOR -> that sentence is left out. Only
+  the trailing run counts: an ANCHOR whose TEXT is ". .." shortens to ". " and gives "Anchored to . .". sig = TEXT of
+  the first SIG directive (not HEAD), or none when there is no SIG. checks = the empty list.
+R10 Sections, in the order of TABLE SECTIONS; a section with no item is left out. Within a section, the items come
+  member by member in the listed order, and for each member every directive of that name in contract order. The
+  rules section holds every directive named "R" followed by digits, in contract order (R1 and R01 are two distinct
+  rules, ids R1 and R01, labels "Rule 1" and "Rule 01"). A blank line makes no item.
+R11 Item of a directive d with label L and shown text X (X = TEXT of d unless a rule below says otherwise): id by
+  R12; label L when the table gives one; text = X, verbatim; why = for each attribute pair of d in order, by TABLE
+  WHY; raw = RAW of d; rawWhy = for each pair, keyword " " value, or the keyword alone when the value is empty;
+  line = d's line.
+R12 Item ids. The BASE of an item is its directive's name; for PINNED it is "PIN:" followed by the pin NAME (R13), or
+  "PIN" when NAME is empty; for a stray item it is "STRAY". Counting runs over the items in the order the sections
+  are listed (so a directive named STRAY, shown in "more", is counted before every stray item). The first item of a
+  BASE has id BASE, the k-th (k >= 2) has id BASE " #" k CITED FIDELITY package — architect's ruling N7: kept
+R13 PINNED parts. EQ = the first "=" of ARGS that is not INSIDE a quoted span of ARGS (R3); HEAD = ARGS up to EQ (all
+  of ARGS when there is no EQ), with its leading and trailing SPACE-TAB runs deleted, cut into words at runs of space
+  and tab; kind = the first word, NAME = the second (each empty when missing; further words are ignored). When there
+  is an EQ: VALUE = the part of ARGS after EQ with its leading and trailing SPACE-TAB runs deleted (any other
+  whitespace, U+00A0 included, is kept), followed by the CONT pieces, the empty ones left out, joined by single
+  spaces; the item's shown text is VALUE (the empty text when VALUE is empty). When there is no EQ, the shown text
+  is TEXT of the pin (kind and name included). Its label is NAME, or "(unnamed pin)" when empty, then " (", then the
+  PIN-KIND row of kind, else kind itself, else "no kind" when kind is empty, then ", empty value" when there is an EQ
+  and VALUE is empty, then ")". So continuation lines appear in two shapes: after the VALUE of a pin with an EQ, or
+  after the kind and name of a pin without one CITED FIDELITY package — architect's ruling N5: kept
+R14 DEPENDS-ON. When TEXT of the directive (comments never count) is "none" in any mix of ASCII upper and lower case,
+  the item's text is "Nothing. No other package is involved." (why, raw and rawWhy unchanged); otherwise the general
+  rule holds.
+R15 Other parts. The "more" section holds, in contract order, every directive whose name is not a member of an earlier
+  or later section in TABLE SECTIONS and is not "R" followed by digits, except a BEHAVIOR whose TEXT is empty and
+  that has no attribute pair. Its label: name " (not in the SIR vocabulary)" when the directive is not KNOWN (R5),
+  else the OTHER-LABEL row of the name, else the name itself. Language-file and legacy names (LANG, ABI, SIR,
+  VARIANT, NOTES, ...) are KNOWN and so are labelled by their bare name. The section is checked whatever it holds
+  (an unknown or prose-only name included) CITED FIDELITY package — architect's ruling F6: it errs toward flagging
+R16 CARRIED. The label is the first word of ARGS (up to its first space or tab), or "Carried data" when ARGS is empty.
+R17 Stray lines. The "stray" section holds one item per STRAY line (R2, R7), in line order: id by R12; label "Line "
+  followed by the line number; text = raw = the line after R1 with its leading SPACE-TAB run deleted (so a trailing
+  comment on it stays in the text, unlike a directive's display text); why and rawWhy empty; line = the line number
+  CITED FIDELITY package — architect's ruling N10: kept
+TABLE SECTIONS — order | id | title | checked | members, each with its item label ("-" = no label)
+  1  | header | What kind of unit it is      | true  | UNIT Name; KIND Kind; FIDELITY Fidelity; ANCHOR Anchor
+  2  | what   | What it is for               | false | DESCRIPTION -
+  3  | inputs | What it accepts              | true  | SIG Signature; ENVELOPE Inputs it is verified on; UNGUARDED-PRECONDITION Assumes, without checking; OUT-OF-DOMAIN Not covered
+  4  | rules  | What it does                 | true  | R<digits> "Rule " followed by the name without its R (leading zeros kept)
+  5  | pins   | Exact definitions            | true  | PINNED by R13
+  6  | table  | Decision table               | true  | TABLE -
+  7  | data   | Data it carries              | true  | CARRIED by R16
+  8  | deps   | What it depends on           | true  | DEPENDS-ON - (text by R14)
+  9  | more   | Other parts of the contract  | true  | everything else, by R15
+  10 | stray  | Text outside any directive   | true  | the STRAY lines, by R17
+  11 | holds  | Should always hold           | false | INVARIANT -
+  12 | scope  | In and out of scope          | false | SCOPE -
+  13 | notes  | Background                   | false | NOTE Note; RATIONALE Why; PROVENANCE Where it came from
+TABLE WHY — attribute pair | the why text
+  CITED v, v not empty   | v
+  CITED, empty value     | no reason given
+  EARNED v, v not empty  | added after a failed test (v)
+  EARNED, empty value    | added after a failed test
+  ANCHOR v, v not empty  | anchored to v
+  ANCHOR, empty value    | anchored (no reference given)
+TABLE KIND-PHRASE — TEXT of HEAD(KIND, KIND) (exact, case-sensitive) | summary sentence
+  FUNCTIONAL | A pure function: the same input always gives the same output.
+  STATE      | Changes one of its arguments in place; the tests check the result and the changed argument.
+  EFFECT     | Talks to the outside world; the tests check the calls it makes, in order.
+TABLE FIDELITY-PHRASE — TEXT of HEAD(FIDELITY, VARIANT) (exact, case-sensitive) | summary sentence
+  package | Matches the original package exactly, quirks included.
+  spec    | Follows the cited standard, even where the original package does not.
+TABLE PIN-KIND — pin kind (exact, case-sensitive) | phrase in the label
+  regex | pattern
+  charset | character set
+  grammar | grammar
+  text | exact text
+  set | set
+  const | constant
+  names | names
+  number | number
+  constant | constant
+  chars | characters
+  order | order
+  map | mapping
+  bytes | bytes
+TABLE OTHER-LABEL — directive name | label in the "more" section
+  ORACLE | The tests (file and fingerprint)
+  ORACLE-CLASS | Kind of tests
+  STATE | What it changes in place
+  SEAM | Export shape
+  TRACE-SEAM | Effect boundary
+  SRC | Source location
+  EFFECT | Effect
+  SURFACE | Module surface
+  EMIT | Emits
+  REQUEST | Requests
+  BRANCH | Branch
+  ON-ERROR | On error
+  PAR | Unordered window
+  RING | Token ring
+  LIFECYCLE | Resource lifecycle
+  REACH | Off-path unit
+  TRIGGER | Trigger
+  EARNED | Earned rule
+  BEHAVIOR | Behavior header
+PINNED grammar DIRECTIVE-NAME = CAPITAL ( CAPITAL | DIGIT | "-" )* | "R" DIGIT+ over the WHOLE name, CAPITAL = A to Z, DIGIT = 0 to 9 (ASCII only) CITED R5 — sir-parse.mjs isDirectiveName
+PINNED names VOCABULARY = UNIT SIR KIND FIDELITY VARIANT ANCHOR SRC TRIGGER REACH ORACLE-CLASS TRACE-SEAM SEAM SIG ENVELOPE DEPENDS-ON DESCRIPTION BEHAVIOR INVARIANT TABLE PINNED EARNED NOTE RATIONALE SCOPE UNGUARDED-PRECONDITION OUT-OF-DOMAIN ORACLE PROVENANCE CARRIED SHAPE CANONICAL-SHA256 AUTHORITY CARRIED-DATA STATE EMIT REQUEST BRANCH ON-ERROR PAR RING LIFECYCLE EFFECT SURFACE NOTES GUARD-PINNED LANG PRIMARY-SHA256 ABI MECHANISM (49 names, case-sensitive) CITED R5 R15 — the sir-parse.mjs directive table
+PINNED charset SPACE-TAB = the code points 0009 0020 (hexadecimal: tab, space) CITED R1 R2 R4 R6 R13 — the parser's one whitespace rule, the only trim the reading uses
+PINNED charset OPENERS = the code points 0009 0020 0028 005B 007B 002C 003D 003A 003B 007C 003C 003E 0021 0026 002D 007E (tab space ( [ { , = : ; | < > ! & - ~) CITED R3 R13 — sir-parse.mjs quotedSpans, round 5b
+INVARIANT a section never has an empty item list, and every item id is unique within the reading.
+INVARIANT text equals TEXT of its directive for every item except DEPENDS-ON none (R14) and pins (R13); raw differs
+  from TEXT only by comments and the TABLE line feeds (R8).
+OUT-OF-DOMAIN non-text input: the host fails reading its lines and throws (js widening; the message is not graded).
+ORACLE value -> oracles/explain_contract.json  CANONICAL-SHA256 a0ce0171381f1cfb903f4778318ef5c35c18a811ef4af74fee55f42b06c35ba1
+NOTE Rust is left out by domain: the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+SCOPE IN: R1-R17 over ENVELOPE. OUT: the options (langs, oracle) and the checks they produce; explainDiff, wordDiff
+  and oracleDiff in the same module; the parser's warnings, error messages and indentation statistics, which the
+  reading never shows.
+PROVENANCE rederive@9b9e5d24ca9d (rederive, MIT) cli/lsp/explain.mjs explain, cli/sir/sir-parse.mjs parse and
+  sirLines, via the seam selfhost/seams/explain_contract.mjs. Cut cold 2026-11-02 for the selfhost phase 2 (the review
+  system), from the pinned snapshot only; re-cut the same day on 9e2245be5f42 (rulings F1-F15),
+  65149601a522 (rulings N1-N10, stamped from 55768a551a48, explain() identical) and 9b9e5d24ca9d (round-3 rulings).

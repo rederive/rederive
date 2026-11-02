@@ -1,0 +1,33 @@
+UNIT binding_of
+LANG js
+PRIMARY-SHA256 a9963d3c62e76df3f93e123b62366f6c8cebcfeffe044b7ab3ee0478499b6d3d
+SIG export function bindingOf(langText, primaryText)
+ABI text = string (UTF-16 code units; an unpaired surrogate is a legal string member); none = null; the record result is a
+  fresh plain object with exactly the own keys status, bound and primarySha (text values are strings, none is null). The
+  driver calls the named export bindingOf(langText, primaryText) positionally. The artifact is an ES module; it may import
+  only the host built-in node:crypto.
+ENVELOPE widens the primary to strings holding unpaired surrogate code units, in either argument: OUT-OF-DOMAIN 1-2 of the
+  primary hold here and the js-only oracle verifies them. A langText that is not a string throws in the package and stays OUT.
+MECHANISM HASH (R4, R5, R7): createHash('sha256').update(s).digest('hex') from node:crypto on the JS string itself — the
+  string overload encodes UTF-8 and writes each unpaired surrogate as EF BF BD, which is exactly OUT-OF-DOMAIN 1's legacy
+  rule; never pre-encode another way. The OUT-OF-DOMAIN 1 refusal is String.prototype.isWellFormed() false (or an explicit
+  scan of code units for unpaired surrogates) checked BEFORE canonical text is built; primarySha is then null and the
+  status rows still run.
+MECHANISM R1 (the bound) is a line walk over SPLIT-LINES, never a regex search of the whole text; there
+  the only separator and trim characters are space and tab (\s, trim() and \S are WRONG for R1: they take U+00A0, U+3000
+  and U+2028). The LEGACY parse (R6-R11) is the opposite: SPACE is exactly the set JS regex \s and String.prototype.trim
+  use (no u flag), and LINE-BREAK is exactly what an unflagged regex . refuses, so the legacy pins below realize R8, R9 and
+  R10 literally, leftmost-match semantics and backtracking included. Legacy pieces (R6) are text.split('\n'), each with one
+  trailing \r removed (/\r$/ unflagged); R1 and R3 lines are SPLIT-LINES. Attribute maps keep keyword insertion order (a
+  plain object or Map; R11 overwrite is Object.assign or set). Write U+2028 and U+2029 as \u escapes in any literal,
+  never raw.
+DEPENDS-ON none
+PINNED regex ARGUMENT = /^[0-9a-f]{64}$/ CITED R1 (a) — tested on the stripped ARGUMENT, never searched for
+PINNED regex NAME-END = /[ \t]/ CITED TABLE PARSE-LINE — the first match ends NAME; no other whitespace separates
+PINNED regex SPLIT-LINES = /\r\n|\r|\n/ CITED R1 R3 — CRLF is tried first; R1 and R3 share it
+PINNED regex TRAILING-COMMENT = /^(.*?)(?:^|\s)#(?=\s|$)(.*)$/ CITED R8 — CODE is capture 1 with /\s+$/ removed
+PINNED regex HEAD = /^(\S+)(?:\s+(.*))?$/ CITED R9 — NAME capture 1, REST capture 2 (absent means empty)
+PINNED regex NAME-COLON = /^[A-Z][A-Z0-9-]*:$/ CITED R9 — the colon is dropped
+PINNED regex DIRECTIVE = /^(?:[A-Z][A-Z0-9-]*|R\d+)$/ CITED R9 DIRECTIVE-NAME
+PINNED regex ATTR = /\s+(CITED|EARNED|ANCHOR)\s+(.+)$/ CITED R10 — applied repeatedly, each match cutting the piece at its index
+PROVENANCE rederive@9e2245be5f42 cli/lsp/analyze.mjs bindingOf; cli/sir/v05.mjs boundSha; cli/sir/sir-parse.mjs; cli/sir/legacy-print.mjs. Cut cold 2026-11-02, revised for 9e2245be5f42.

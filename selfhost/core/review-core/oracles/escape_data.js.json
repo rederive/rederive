@@ -1,0 +1,388 @@
+{
+ "unit": "escape_data",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v4",
+   "args": [
+    42
+   ],
+   "expected": "42",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v5",
+   "args": [
+    null
+   ],
+   "expected": "null",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v6",
+   "args": [
+    [
+     "a%",
+     "b\n"
+    ]
+   ],
+   "expected": "a%25,b%0A",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "toString": null
+    }
+   ],
+   "expected": {
+    "__throw": "Cannot convert object to primitive value"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "__t": "undef"
+    }
+   ],
+   "expected": "undefined",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v9",
+   "args": [],
+   "expected": "undefined",
+   "outsideEnvelope": "arity 0 ≠ SIG 1 — outside the abstract SIG"
+  },
+  {
+   "name": "v10",
+   "args": [
+    "two",
+    "args%"
+   ],
+   "expected": "two",
+   "outsideEnvelope": "arity 2 ≠ SIG 1 — outside the abstract SIG"
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "__t": "num",
+     "v": "-0"
+    }
+   ],
+   "expected": "0",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "__t": "num",
+     "v": "NaN"
+    }
+   ],
+   "expected": "NaN",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "__t": "bigint",
+     "v": "123"
+    }
+   ],
+   "expected": "123",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v14",
+   "args": [
+    true
+   ],
+   "expected": "true",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v15",
+   "args": [
+    [
+     1,
+     [
+      2,
+      3
+     ]
+    ]
+   ],
+   "expected": "1,2,3",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v16",
+   "args": [
+    [
+     null,
+     {
+      "__t": "undef"
+     },
+     "x"
+    ]
+   ],
+   "expected": ",,x",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v17",
+   "args": [
+    []
+   ],
+   "expected": "",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "a": "%"
+    }
+   ],
+   "expected": "[object Object]",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      98,
+      117,
+      102,
+      37,
+      10
+     ],
+     "buf": true
+    }
+   ],
+   "expected": "buf%25%0A",
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      37,
+      10,
+      13
+     ],
+     "buf": false
+    }
+   ],
+   "expected": "37,10,13",
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "__t": "map",
+     "entries": [
+      [
+       "k",
+       "%"
+      ]
+     ]
+    }
+   ],
+   "expected": "[object Map]",
+   "outsideEnvelope": "legacy codec tag 'map' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "__t": "regex",
+     "source": "a%\\n",
+     "flags": "g"
+    }
+   ],
+   "expected": "/a%25\\n/g",
+   "outsideEnvelope": "legacy codec tag 'regex' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "__t": "boxed",
+     "k": "String",
+     "v": "boxed%\n"
+    }
+   ],
+   "expected": "boxed%25%0A",
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v26",
+   "args": [
+    "\ud800"
+   ],
+   "expected": "\ud800",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v29",
+   "args": [
+    "lone \udfff low"
+   ],
+   "expected": "lone \udfff low",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v32",
+   "args": [
+    "\ud83d%\n"
+   ],
+   "expected": "\ud83d%25%0A",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v35",
+   "args": [
+    0
+   ],
+   "expected": "0",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v38",
+   "args": [
+    -3.5
+   ],
+   "expected": "-3.5",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v41",
+   "args": [
+    1e+21
+   ],
+   "expected": "1e+21",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "__t": "num",
+     "v": "Infinity"
+    }
+   ],
+   "expected": "Infinity",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "__t": "num",
+     "v": "-Infinity"
+    }
+   ],
+   "expected": "-Infinity",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v50",
+   "args": [
+    false
+   ],
+   "expected": "false",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v53",
+   "args": [
+    {}
+   ],
+   "expected": "[object Object]",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      255,
+      37,
+      10
+     ],
+     "buf": true
+    }
+   ],
+   "expected": "�%25%0A",
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "__t": "set",
+     "values": [
+      "%"
+     ]
+    }
+   ],
+   "expected": "[object Set]",
+   "outsideEnvelope": "legacy codec tag 'set' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "__t": "boxed",
+     "k": "Number",
+     "v": 7
+    }
+   ],
+   "expected": "7",
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "__t": "boxed",
+     "k": "Boolean",
+     "v": false
+    }
+   ],
+   "expected": "false",
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v68",
+   "args": [
+    [
+     {
+      "toString": 1
+     }
+    ]
+   ],
+   "expected": {
+    "__throw": "Cannot convert object to primitive value"
+   },
+   "outsideEnvelope": "not text"
+  }
+ ]
+}

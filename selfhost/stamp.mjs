@@ -38,6 +38,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   // STAGE.json names the authority the unit is stamped from (#69: its source/realPath were never read and went stale while the
   // brief told decomposers to trust them). A stamp from a different pin is refused unless --restage records the new one.
   const pinned = { source: `rederive@${auth.commit}`, realPath: `.authority/${auth.commit}` };
+  // the authority must LOAD before anything is written: a pin that does not parse never rewrites STAGE.json (review-system
+  // selfhost, oracle_diff F9 — a pin whose explain.mjs did not parse was restaged to, and STAGE.json pointed at it)
+  { const seam0 = await import(pathToFileURL(join(HERE, stage.seam)).href); try { await import(pathToFileURL(join(auth.dir, seam0.module)).href); } catch (e) { stop(`the pinned authority ${auth.commit} does not load ${seam0.module}: ${String(e.message).split('\n')[0]} — nothing written`); } }
   if (stage.source !== pinned.source || stage.realPath !== pinned.realPath) {
     if (!argv.includes('--restage')) stop(`STAGE.json names ${stage.source} (${stage.realPath}); the pinned authority is ${pinned.source} — re-run with --restage to record it`);
     Object.assign(stage, pinned, { stagedAt: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), note: `${(stage.note ?? '').replace(/ \[restaged on [0-9a-f]+\]$/, '')} [restaged on ${auth.commit}]` }); writeFileSync(join(unitDir, 'STAGE.json'), JSON.stringify(stage, null, 2) + '\n');

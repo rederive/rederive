@@ -1,0 +1,188 @@
+{
+ "status": "ok",
+ "unit": "binding_of",
+ "primary": "selfhost/units/binding_of/sir/binding_of.sir",
+ "primarySha256": "a9963d3c62e76df3f93e123b62366f6c8cebcfeffe044b7ab3ee0478499b6d3d",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "BOUND is read through the parser. Cut lang_text into lines as R3 does (CRLF, lone CR, lone LF; U+FEFF removed from the leading run; trailing spaces and tabs dropped) but keep every line as it then is (no dropping, no re-indenting), and classify each line by TABLE PARSE-LINE. D = the FIRST line classified DIRECTIVE whose NAME is PRIMARY-SHA256. bound is none when there is no D. Otherwise bound = the ARGUMENT of D when both hold, and none when either fails: (a) the ARGUMENT is exactly 64 characters of LOWER-HEX; (b) every non-empty line after D, up to the next DIRECTIVE line or the end, is a COMMENT. Only the first D counts: a later PRIMARY-SHA256 directive never rescues or overrides it. The ARGUMENT is D's text after its NAME, cut before its comment marker (the first number sign with a space or tab before it and a space, a tab or the line end after it), then stripped of spaces and tabs at both ends; an attribute (CITED, EARNED or ANCHOR), a second word or any other character leaves it not 64 hex digits. A hash on the next line, a 65th digit, a suffix, uppercase hex, an NBSP or U+2028 separator, an attribute or a continuation line all give none CITED FIDELITY package",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "R2",
+   "text": "STATUS, decided in TABLE STATUS order; the first matching row wins. bound is computed before any row and is reported in every row as R1 found it.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R3",
+   "text": "CANONICAL TEXT (the binding normal form). Cut the text into lines at every CRLF pair, every lone CR and every lone LF (a CR directly followed by LF is one break). For each line: delete every U+FEFF inside the line's leading run of characters drawn from space, tab and U+FEFF (U+FEFF elsewhere stays); then drop trailing spaces and tabs; a line now empty is dropped; a line that begins with spaces or tabs has that whole run replaced by exactly two spaces. Every other character is kept as it is (U+00A0, U+3000, U+2028 and comment text included). The kept lines are joined with LF and followed by one LF; no kept line gives the empty text.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R4",
+   "text": "HASH. A hash is SHA-256 (FIPS 180-4) over the UTF-8 encoding of a text, written as 64 lowercase hex digits.",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R5",
+   "text": "primarySha = the hash (R4) of the canonical text (R3) of primary_text (OUT-OF-DOMAIN 1 is the one case where it is none although primary_text is text).",
+   "ambiguity": 0.38
+  },
+  {
+   "id": "R6",
+   "text": "LEGACY HASH = the hash (R4) of the LEGACY PRINT of primary_text, where the legacy print comes from the LEGACY PARSE. LEGACY PARSE: cut primary_text at every LF only (a CR is not a break); from each piece remove one trailing CR when it ends with one; walk the pieces in order with a CURRENT entry (none at the start) and classify each by TABLE LEGACY-LINE. INDENT is a piece's leading run of spaces and tabs; CONTENT is the rest.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R7",
+   "text": "LEGACY PRINT: one line per entry in entry order, the entry's NAME, then a space and its ARGS when ARGS is not empty, then for every attribute in its order a space, the keyword, a space and the value (an empty value leaves the line ending in that space); after it, one line per continuation in order, two spaces then the continuation. Lines are joined with LF and followed by one LF; no entry gives the text of one LF CITED FIDELITY package",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R8",
+   "text": "TRAILING COMMENT CUT, applied to CONTENT (giving CODE): find the smallest index j such that the characters before j hold no LINE-BREAK, the character at j is in SPACE, the next is the number sign, the one after that is absent or in SPACE, and the characters from j+2 to the end hold no LINE-BREAK. When found, CODE = CONTENT before j with its trailing SPACE members removed; otherwise CODE = CONTENT. So a line-break character inside CONTENT blocks the cut unless that very character is the space before the number sign CITED FIDELITY package",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R9",
+   "text": "HEAD of a column-0 CODE: CODE splits into NAME and REST only when CODE is not empty and its first character is not in SPACE: NAME = the longest leading run of characters outside SPACE, then the run of SPACE members after it is skipped, REST = what remains, and REST must hold no LINE-BREAK. Otherwise (empty CODE, a first character in SPACE such as U+00A0 or U+FEFF, or a line break in REST) CODE has no head. A NAME made of DIRECTIVE-NAME followed by one colon loses the colon. The head is a directive when NAME (after that) is a DIRECTIVE-NAME CITED FIDELITY package",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R10",
+   "text": "ATTRIBUTES of a piece s (REST of a directive line, or CODE of an indented line), giving a BODY and attributes in found order: repeatedly take the LEFTMOST start i of a run of SPACE members such that the run (all of it), then one KEYWORD, then a second run of one or more SPACE members, then a VALUE reach the end of s, where VALUE is one or more characters holding no LINE-BREAK. The second run is as long as possible while leaving a valid VALUE; when s ends in that run the VALUE is its last character, so the run must be at least two characters long and that last character not a LINE-BREAK. Each find records the keyword with the VALUE stripped of SPACE members at both ends (repeating a keyword within one piece appends with one space unless the earlier value is empty, which is replaced), and s is cut to its characters before i; stop when nothing is found. BODY = what is left, stripped of SPACE members at both ends. Without a line break in s at most one attribute is found, and it takes everything after its keyword (later keywords included) CITED FIDELITY package",
+   "ambiguity": 0.66
+  },
+  {
+   "id": "R11",
+   "text": "MERGE across lines: a directive's attributes start as those of its own line; an indented continuation's attributes overwrite same-keyword values (the earlier value is lost) and a keyword new to the entry is added after the existing ones; a keyword already present keeps its position CITED FIDELITY package",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "R12",
+   "text": "KEPT, declared (architect ruling 2026-11-02, F7 and F8). (a) A legacy binding survives every edit the legacy print cannot see: comment lines, trailing comments, lines made only of SPACE members, lines before the first entry, and an attribute value overwritten by R11; so legacy does not mean unchanged since binding (the review flags every status other than ok). (b) The hash of the empty text is ok for every primary whose canonical text is empty (empty, or only blank lines), and the hash of the one-LF text is legacy for every primary whose legacy parse yields no entry (only comments, or only text before any directive) CITED FIDELITY package",
+   "ambiguity": 0.5
+  },
+  {
+   "id": "TABLE STATUS row 1",
+   "text": "primary_text is none                         | status no-primary, primarySha none",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE STATUS row 2",
+   "text": "bound is none                                | status unbound, primarySha per R5",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE STATUS row 3",
+   "text": "bound equals primarySha                      | status ok, primarySha per R5",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE STATUS row 4",
+   "text": "primarySha is not none and bound equals L   | status legacy, primarySha per R5",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "TABLE STATUS row 5",
+   "text": "otherwise                                    | status stale, primarySha per R5",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "TABLE PARSE-LINE row 1",
+   "text": "empty                                                                              | blank (ignored)",
+   "ambiguity": 0.64
+  },
+  {
+   "id": "TABLE PARSE-LINE row 2",
+   "text": "after its leading spaces and tabs it begins with the number sign                   | COMMENT",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "TABLE PARSE-LINE row 3",
+   "text": "begins with a space or tab                                                         | CONTINUATION",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE PARSE-LINE row 4",
+   "text": "NAME, the text before its first space or tab (the whole line when it has none), with one final colon removed when what precedes it is a DIRECTIVE-NAME other than CITED, is a DIRECTIVE-NAME other than CITED | DIRECTIVE",
+   "ambiguity": 0.56
+  },
+  {
+   "id": "TABLE PARSE-LINE row 5",
+   "text": "otherwise (CITED x, CITED: x, a lowercase word, a name glued to its text by U+00A0, U+3000 or U+2028, a line led by U+00A0) | CONTINUATION",
+   "ambiguity": 0.68
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 1",
+   "text": "every character of the piece is in SPACE, or it is empty                           | skipped",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 2",
+   "text": "CONTENT begins with the number sign                                                | dropped (a comment; CURRENT unchanged)",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 3",
+   "text": "INDENT empty and CODE (R8) has a head (R9) that is a directive                     | a new entry: NAME, ARGS = BODY and attributes of R10 on REST; it becomes CURRENT",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 4",
+   "text": "INDENT empty, no directive, CURRENT exists                                         | CODE itself, unstripped and with no attribute split, appended as a continuation of CURRENT",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 5",
+   "text": "INDENT empty, no directive, no CURRENT                                             | dropped",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 6",
+   "text": "INDENT not empty, no CURRENT                                                       | dropped",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE LEGACY-LINE row 7",
+   "text": "INDENT not empty, CURRENT exists                                                   | R10 on CODE: attributes merged by R11, BODY (possibly empty) appended as a continuation",
+   "ambiguity": 0.48
+  }
+ ],
+ "ranked": [
+  "TABLE PARSE-LINE row 5",
+  "R10",
+  "TABLE PARSE-LINE row 1",
+  "TABLE PARSE-LINE row 4",
+  "R12",
+  "R1",
+  "R11",
+  "TABLE LEGACY-LINE row 7",
+  "R7",
+  "TABLE LEGACY-LINE row 3",
+  "R3",
+  "TABLE LEGACY-LINE row 4",
+  "R6",
+  "R5",
+  "R9",
+  "TABLE STATUS row 4",
+  "R8",
+  "TABLE LEGACY-LINE row 1",
+  "TABLE STATUS row 5",
+  "R4",
+  "TABLE STATUS row 3",
+  "TABLE PARSE-LINE row 2",
+  "TABLE LEGACY-LINE row 2",
+  "R2",
+  "TABLE STATUS row 2",
+  "TABLE PARSE-LINE row 3",
+  "TABLE LEGACY-LINE row 6",
+  "TABLE LEGACY-LINE row 5",
+  "TABLE STATUS row 1"
+ ],
+ "at": "2026-11-02T20:42:59Z"
+}

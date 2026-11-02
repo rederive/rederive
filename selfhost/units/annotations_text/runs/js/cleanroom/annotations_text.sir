@@ -1,0 +1,78 @@
+UNIT annotations_text
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@9e2245be5f42 cli/lsp/pr-review.mjs annotations — the GitHub workflow-command lines for the review findings; reproduce the code exactly, accidents included
+ORACLE-CLASS deterministic
+SIG annotations_text(findings: list[json]) -> text
+ENVELOPE findings is a list; each element is normally a map holding level, path, line, title and message, but any json
+  element is in scope (R1: an element that is not a map is skipped). Field values are any json. Text is well-formed
+  Unicode (no lone surrogate). Values outside the abstract types (a findings value that is not a list, a host value with
+  no json meaning) belong to the js file's envelope widening. Throws are IN scope as observations: R6 says where; the
+  message is not graded.
+DEPENDS-ON none
+DESCRIPTION Render the review's findings as GitHub Actions workflow commands, one line per finding, so the runner shows
+  each as a check annotation. A finding { level, path, line, title, message } becomes
+  "::" LEVEL " file=" PROP(path) [",line=" LINE] ",title=" PROP(title) "::" DATA(message). This is the injection
+  boundary: text from a contract reaches stdout here and the runner executes any line that starts with "::", so every
+  value a contract controls is escaped (path and title as properties, message as data) and the two values that are not
+  escaped (level and line) are held to a fixed domain. The two escapes are restated here (DEPENDS-ON none). The contract
+  assumes, and does not check, that the runner splits its output into lines on CR and LF only (PINNED LINE-BREAKS-ESCAPED).
+BEHAVIOR
+R1 KEPT = the elements of findings that are maps, in list order; every other element (none, text, number, bool, list) is
+  skipped and leaves no line and no separator. The result is the rendered line of each element of KEPT, in order, joined
+  by a single LF (U+000A); no LF before the first line or after the last. An empty KEPT (the empty list, or a list of
+  skipped elements only) yields the empty text; one kept element yields its line with no LF at all. CITED FIDELITY package — the fix of 9e2245be5f42: one bad element never aborts the output
+R2 FIELD(e, k) for a kept element e is the value e holds under key k, or ABSENT when e has no key k. ABSENT and none read
+  alike everywhere below.
+R3 Each line is, in exactly this order with no other separator or whitespace: "::", LEVEL, " file=", PROP(TEXT-OF(path)),
+  then LINE-PART, then ",title=", PROP(TEXT-OF(title)), "::", DATA(TEXT-OF(message)). path, title and message are
+  FIELD(e, "path"), FIELD(e, "title"), FIELD(e, "message"). The file property and the title property are always written,
+  with an empty value when their field is ABSENT or none.
+R4 LEVEL is FIELD(e, "level") when that is exactly the text error, warning or notice (case-sensitive, no trimming);
+  anything else (another text, a non-text value, ABSENT) gives the text "error", so an unknown level fails toward the
+  most visible annotation. LEVEL is never escaped. CITED FIDELITY package — kept by ruling (F8)
+R5 LINE-PART: let L = FIELD(e, "line"). When L is a number with no fractional part and 1 <= L <= 9007199254740991
+  (2^53 - 1, the largest SAFE integer), LINE-PART is ",line=" followed by L as plain decimal digits (no sign, no point, no
+  exponent). Otherwise LINE-PART is empty: ABSENT, none, text (also "3"), bool, list, map, NaN, an infinity, zero,
+  negative zero, a negative number, a fraction, and every number from 2^53 up (9007199254740992, 1e21) all omit it.
+  CITED FIDELITY package — the fix of 9e2245be5f42 (F2): only a safe positive integer is written
+R6 TEXT-OF(v), the text a field value renders as, by TABLE TEXT-OF. Coercion applies before escaping.
+TABLE TEXT-OF — v is a field value (or ABSENT)
+  ABSENT or none                        | the empty text (never "undefined" or "null")
+  bool                                  | "true" or "false"
+  text                                  | itself, unchanged
+  number                                | NUM-TEXT(v) (R7)
+  list                                  | the TEXT-OF of each element joined by "," with no spaces; an element that is none renders as the empty text; a nested list renders by the same rule (so [[1,[2]],3] gives 1,2,3); the empty list gives the empty text
+  map without an own key toString       | the text "[object Object]" (its entries never matter; a key valueOf alone does not change this)
+  map with an own key toString          | throws, for the whole call (whatever that key holds, none included), whether at the top or nested inside a list at any depth CITED FIDELITY package — kept by ruling (F4): the host's text conversion finds a toString member that is not callable, and the map's other members yield no primitive; only text reaches this code from the review
+R7 NUM-TEXT(x) is the shortest round-trip decimal text of the double x in the ECMAScript Number-to-String form: NaN gives
+  "NaN"; the infinities give "Infinity" and "-Infinity"; both zeros give "0" (no sign); otherwise a leading - for a negative,
+  then, with k significant digits s and decimal exponent n (value = s * 10^(n-k), s the shortest digit string that reads
+  back as x): plain digits with no point when k <= n <= 21 (trailing zeros padded: 1e20 gives 100000000000000000000);
+  a point after the first n digits when 0 < n < k; "0." then -n zeros then the digits when -6 < n <= 0 (0.000001); otherwise
+  exponent form: the first digit, then "." and the rest when k > 1, then "e", then "+" or "-", then the decimal |n-1|
+  (1e+21, 1e-7, 1.7976931348623157e+308). There is never a trailing ".0" and never a leading "+" on the mantissa.
+R8 PROP(t), the property escape for path and title, replaces in t, character by character, using TABLE ESCAPES column
+  PROP; DATA(t), the data escape for message, uses column DATA. Every other character, including U+2028, U+2029, U+0085,
+  TAB, VT, FF, "=", "::"-forming colons in DATA and every non-ASCII character, passes unchanged. The replacement is one
+  pass over the original characters: an inserted "%" is never escaped again, so "%0A" in the input becomes "%250A" and a
+  real LF becomes "%0A". CITED FIDELITY package — the code runs the replacements in sequence with "%" first, which is equivalent
+TABLE ESCAPES — character | PROP | DATA
+  % (U+0025)  | %25 | %25
+  CR (U+000D) | %0D | %0D
+  LF (U+000A) | %0A | %0A
+  : (U+003A)  | %3A | unchanged
+  , (U+002C)  | %2C | unchanged
+PINNED charset LINE-BREAKS-ESCAPED = { U+000A, U+000D } CITED R8 — the only line-break characters either escape removes; ASSUMED (kept by ruling, F5): the runner splits its output on exactly these
+INVARIANT no rendered line contains CR or LF, so the result holds exactly one line per kept element (an LF only between lines).
+INVARIANT each line starts with "::" then error, warning or notice, then " file="; the text between " file=" and the
+  second "::" of the line contains no colon and holds only the properties the code writes (file, an optional line,
+  title), because PROP removes every colon and comma from path and title.
+INVARIANT the hex digits of every escape are uppercase.
+ORACLE value -> oracles/annotations_text.json  CANONICAL-SHA256 246a4ea6961a89cbd37b26e7f2372036ce7db4f8d8df914ee59d1306a4de7193
+SCOPE IN: R1–R8 over any list of json elements, including the throw of R6. OUT: printing the result (the caller
+  writes it to stdout), the review that produces the findings, and what the GitHub runner does with each line.
+NOTE rust omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub Action); there is no Rust consumer.
+PROVENANCE rederive@9e2245be5f42 (MIT) cli/lsp/pr-review.mjs: annotations, val, escapeProperty, escapeData, LEVELS. Cut
+  2026-11-02 in the v0.5 contract register for the review system's self-treatment, phase 2; revised the same day on the
+  architect's rulings (F1 F2 F3 fixed in the code; F4 F5 F6 F7 F8 F9 kept).

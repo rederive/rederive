@@ -1,0 +1,92 @@
+{
+ "status": "ok",
+ "unit": "hunk_lines",
+ "primary": "selfhost/units/hunk_lines/sir/hunk_lines.sir",
+ "primarySha256": "e98d50a2e485020969a6d55f9c34392d379ea6d71f47e1e265e0a66307bbffa7",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "The result is the ascending list, without repeats, of every line number covered (R5) by any header (R3) in diff. Headers may arrive in any order and may overlap; the union is sorted numerically. No header -> the empty list. The function never throws on in-envelope text.",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "R2",
+   "text": "diff is cut into LINES at each LINE_BREAK character and only there; a line starts at offset 0 or right after a LINE FEED. CR, U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR, U+0085 NEXT LINE and every other character are ordinary characters inside a line, so header-shaped text after any of them never starts a header. In a CR LF diff the CR stays at the end of the earlier line, after that line's header, where R3 ignores it. CITED ruling F1 (2026-11-02)",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R3",
+   "text": "A header is a line that BEGINS with HEADER. Only that prefix must match: whatever follows the closing \" @@\" in the same line (git's function-context text, a CR, a third \"@\", further header-shaped text) is ignored and never yields a second header. Every line of the whole text is examined, not only lines between hunks.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R4",
+   "text": "Numbers are runs of the ten ASCII digits only; leading zeros are allowed and a run of any length is read as its exact decimal value. Let C be the new-side start and N the new-side count (TABLE COUNT). The old side \"-a[,b]\" must have the shape, but its values are never read or bounded. CITED ruling F6 (kept)",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R5",
+   "text": "Let E = C + N - 1, the header's last line, in exact integer arithmetic on the values of R4. The header covers the lines L with max(C, 1) <= L <= the upper bound TABLE RANGE gives, or nothing when the table drops it. Hence N = 0 covers nothing; line 0 is never covered, and a start of 0 covers lines 1 through N - 1 (ruling N3, kept: git never writes it); line SAFE_LIMIT itself can be covered. CITED ruling F2 F3 N1 N2 (2026-11-02)",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R6",
+   "text": "Any line that does not begin with HEADER contributes nothing; there is no partial or lenient reading. In particular each separator is exactly one ordinary space (a tab or a doubled space breaks the header); there is no sign; a comma must be followed by at least one digit (\",\": not a header, NOT the default count); a second \",digits\" on either side breaks the header; \"@@@\" combined-diff headers are not headers. CITED ruling F4 (kept)",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE COUNT row 1",
+   "text": "absent (the start digits are followed directly by \" @@\") -> 1",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE COUNT row 2",
+   "text": "\",\" then digits whose value is 0 (\",0\", \",000\")          -> 0",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE COUNT row 3",
+   "text": "\",\" then digits with value d >= 1 (\",3\", \",0003\")         -> d",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "TABLE RANGE row 1",
+   "text": "N > MAX_HUNK                    -> dropped",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE RANGE row 2",
+   "text": "E <= SAFE_LIMIT                 -> E",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE RANGE row 3",
+   "text": "E = SAFE_LIMIT + 1              -> SAFE_LIMIT (the range is CUT one line short, not dropped) CITED ruling N4 (kept, declared)",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE RANGE row 4",
+   "text": "E > SAFE_LIMIT + 1              -> dropped",
+   "ambiguity": 0.23
+  }
+ ],
+ "ranked": [
+  "TABLE COUNT row 3",
+  "R5",
+  "R4",
+  "R1",
+  "R6",
+  "TABLE RANGE row 1",
+  "R2",
+  "R3",
+  "TABLE RANGE row 2",
+  "TABLE RANGE row 4",
+  "TABLE RANGE row 3",
+  "TABLE COUNT row 2",
+  "TABLE COUNT row 1"
+ ],
+ "at": "2026-11-02T20:50:38Z"
+}

@@ -1,0 +1,34 @@
+UNIT review_summary
+LANG ts
+PRIMARY-SHA256 fe7f51846968e8fb812b0a909bdb5804e1a5391897addb22bca6cdf9890705c4
+SIG export default function review_summary(units: readonly Row[], stops: number | bigint): string
+ABI TypeScript compiles to the js runtime and is driven exactly as js: the default export is called positionally as
+  (units, stops). Declare in the artifact
+  type Row = { readonly unit: string; readonly status: string; readonly change: string; readonly tests: string; readonly bindings: string; readonly citations: string }
+  (a row may carry further fields at runtime; they are never read). stops = i64: a number when it is a safe integer, a
+  BigInt otherwise; both render as plain decimal by template interpolation and compare with > 0 (a number | bigint
+  compares with a number literal under strict). The result is a string; LF = "\n". STRICT: the artifact type-checks
+  under strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. ES module default
+  export; imports nothing.
+ENVELOPE as the primary; no widening (the OUT-OF-DOMAIN values are graded by js only).
+MECHANISM (restated from js — language files are self-contained) a row passes when row.status === 'pass'. A cell's text
+  is the field with the LINE-BREAK pin -> ' ', then /\|/g -> '\\|'. K is the longest match of the BACKTICK-RUN pin (0
+  when none; t.match returns RegExpMatchArray | null, narrow the null). PAD (R4d): /^`|`$/ matches, or /^ .* $/ matches
+  and text.trim() !== '' (String.prototype.trim strips exactly TRIM_SPACE). Write the two separators as the escapes
+  \u2028 and \u2029, never raw (a raw one inside a regex literal is a LineTerminator of the source; the compile fails).
+  The STOPS block is present exactly when stops > 0 and follows EMPTY_REPORT too (R1); it is singular exactly when
+  stops === 1 (a BigInt only arrives past 2^53, so it is always plural). Emit the icons as the single code points U+2705
+  and U+274C (the escapes \u2705 and \u274C), never with a U+FE0F selector.
+MECHANISM TRANSPORT — the LINE-BREAK pattern MUST be written with escapes only, in one of two spellings: the
+  constructor new RegExp("\\r\\n|\\r|\\n|\\u2028|\\u2029", "g") (a string literal holding backslash escapes,
+  each backslash doubled), or the literal /\r\n|\r|\n|\u2028|\u2029/g typed with the backslash-u escapes exactly as the
+  LINE-BREAK pin shows. The ts source must contain NO raw LINE SEPARATOR (U+2028) or PARAGRAPH SEPARATOR (U+2029)
+  character anywhere: not in a regex literal, a string, a template, a character class or a comment. Each is a
+  LineTerminator of the source, so it ends a regex literal (the module fails to load with "Invalid regular expression:
+  missing /") and ends a line comment (the rest of that line becomes code). Check the emitted file: it holds no code
+  point 2028 or 2029. EARNED round-1 reject runs/ts/rejected/round1/emit_1.ts and emit_2.ts, no held-out vector: 4 of 6 emitters pasted a raw separator into the regex literal and the file could not load; the 2 that used new RegExp with escapes agreed 2000/2000
+DEPENDS-ON none
+PINNED regex LINE-BREAK = /\r\n|\r|\n|\u2028|\u2029/g CITED R4a TABLE CELL_ESCAPE rows 1-5 — CRLF first in the alternation; the separators are \u escapes, never raw
+PINNED regex BACKTICK-RUN = /`+/g CITED R4c — K is the longest match
+PROVENANCE rederive@9b9e5d24ca9d cli/lsp/pr-review.mjs summary, cell, val, stopsLine. Language file re-cut 2026-11-02
+  with the primary, before any blind re-emission.

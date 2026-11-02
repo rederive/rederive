@@ -1,0 +1,580 @@
+{
+ "unit": "escape_property",
+ "sig": "escape_property(value: text) -> text",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "plain",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "plain",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0D",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": ":",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%3A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": ",",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%2C",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0D%0A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "::",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%3A%3A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "%25",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%2525",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": "%3A%2C",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%253A%252C",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "a:b,c=d",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a%3Ab%2Cc=d",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "x,title=injected::boom",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "x%2Ctitle=injected%3A%3Aboom",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "evil\n::error file=x::pwned",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "evil%0A%3A%3Aerror file=x%3A%3Apwned",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "café",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "café",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "=",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "=",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "src/a.js",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "src/a.js",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "C:\\Users\\x\\file.js",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "C%3A\\Users\\x\\file.js",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "unit_x: language files left on the old contract",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "unit_x%3A language files left on the old contract",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "Hidden test v3: answer rewritten",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "Hidden test v3%3A answer rewritten",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "line1\r\nline2\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "line1%0D%0Aline2%0D%0A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\r",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0A%0D",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "%%25",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%25%2525",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "\t tab ; semi \" quote ' apos `tick` <a> & | $ # @ ! ? * ( ) [ ] { } / \\",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\t tab ; semi \" quote ' apos `tick` <a> & | $ # @ ! ? * ( ) [ ] { } / \\",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "日本語:テスト",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "日本語%3Aテスト",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "😀,😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "😀%2C😀",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "  ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "：，",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "：，",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "\u0000",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\u0000",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "%0D%0A:,\r\n%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%250D%250A%3A%2C%0D%0A%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\nZ\t😀.\r\n/-,.b,-\n ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0D%0AZ\t😀.%0D%0A/-%2C.b%2C-%0A ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "=\r.\"",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "=%0D.\"",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "aé\\A",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "aé\\A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "/F\r\nbA,0.b,😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "/F%0D%0AbA%2C0.b%2C😀",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "b\r",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "b%0D",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "b\r\n😀.0日::%25日%252:::",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "b%0D%0A😀.0日%3A%3A%2525日%25252%3A%3A%3A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "Z5_::😀,日:::\r\n, :",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "Z5_%3A%3A😀%2C日%3A%3A%3A%0D%0A%2C %3A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "é__\nD",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "é__%0AD",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "canonicalSha256": "ff14a08e51b7415429531a615bac3b02c1ec17d6cde45c8701a1539dbba116d1"
+}

@@ -1,0 +1,25 @@
+UNIT oracle_diff
+LANG js
+PRIMARY-SHA256 cf05e74bcd874e0f77f27a94bd57c15451b1032f5299916d07f61a943cdd571b
+SIG export function oracle_diff(before: string, after: string): { before: string, after: string, added: object[], removed: object[], rewritten: object[], inputsChanged: object[], moved: object[], otherChanged: object[], fileChanged: string[], reordered: boolean }
+NOTE named export; the driver passes the two texts positionally
+ABI text = string (UTF-16); bool = boolean; record = a plain object with exactly the listed own keys, in the listed order;
+  list = Array. Nothing in scope throws. The artifact is an ES module and imports nothing.
+ENVELOPE as the primary; no widening.
+MECHANISM R1 = JSON.parse inside try/catch. R2/R3 = Array.isArray on frozen and heldout, then an ITERATIVE depth walk (an explicit stack of [value, depth], never
+  recursion) over Object.keys of every object and array from the root at 0, too-deep at the first depth > 2000; a case element is a map when it is
+  a non-null, non-array object, else it is counted as junk and skipped. R4: ID = JSON.stringify([has ? KEY-TEXT(name) : null,
+  has]) with has = Object.hasOwn(case, 'name'); KEY = JSON.stringify([ID, k]) with k from a Map of ID counts. R5 = a Map from
+  KEY to case per file, iterated by AFTER's case LIST. OTHER and FILE = object rest; R13 reads OWN values only
+  (Object.hasOwn, else the absent mark), never o[k] on a missing key (that reaches Object.prototype for __proto__ and a
+  function for constructor); sort = the default Array.prototype.sort(). KEY-TEXT (R14) = a recursive keyOf(v, depth = 0): depth > 2000 -> '!deep'; null 'z'; undefined 'u'; number 'n' + (Object.is(v, -0) ? '-0' : String(v)); string 's' + JSON.stringify(v); boolean 'b' + v; Array '[' + items at depth + 1 joined ',' + ']'; object '{' + Object.keys(v) each JSON.stringify(k) + ':' + keyOf(v[k], depth + 1) joined ',' + '}'.
+  JSON-TEXT, QUOTE, KEY-ORDER and NUMBER-TEXT = JSON.stringify (undefined for ABSENT). TEXT-OF = String(x) or template
+  interpolation; JOIN = Array.prototype.join(','), which renders undefined and null as "". R7's depth is an explicit counter
+  (level 0 = the compared value; fail past 416), never the host stack. R10: one try/catch around DISP giving "?"; a result
+  whose typeof is not "string", or "?", becomes JSON.stringify(x) ?? 'undefined'; an outer try/catch returns "?".
+DEPENDS-ON none
+PINNED regex IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/ CITED R12 — tested on String(n) for a non-text n: ABSENT, none, a bool pass as "undefined", "null", "true", "false"
+PINNED regex ESCAPED = /\\u00([0-9a-f]{2})|\\u([0-9a-f]{4})/g CITED R11 pass 1 — the two alternatives name one set: a backslash, u, four lowercase hex digits
+PINNED regex CONTROL = /[\u0000-\u001f\u007f-\u009f]/g CITED R11 pass 2 — applied after pass 1
+PINNED regex BITS = /^[0-9a-f]{16}$/ CITED R7
+PROVENANCE rederive@4c134cacd842 cli/lsp/explain.mjs and cli/sir/canon.mjs (MIT). Language file re-cut 2026-11-02 with the primary.

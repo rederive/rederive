@@ -97,6 +97,11 @@ export function divergenceOf(round, artifacts) {
   return { round, quorum: `${full}/${graded.length}`, verdict: full >= 2 ? 'quorum' : 'no-quorum', heldoutDisagree, ...(frozenMissed.length ? { frozenMissed } : {}) };
 }
 
+/** A language file's binding, read through the PARSER (review-system selfhost, binding_of): the first PRIMARY-SHA256 directive,
+ *  whose argument is exactly 64 lowercase hex digits, on its own line, with no continuation or attribute. The old line regex
+ *  bound a hash written on the NEXT line (\s+ crossed the break), 65+ digits or a suffix (nothing ended the match), and lines the
+ *  parser never sees as directives (^ under /m starts a line at U+2028; \s took NBSP and U+3000 as the separator). */
+export const boundSha = (text) => { const d = get(parse(text).ast, 'PRIMARY-SHA256'); return d && !d.cont.length && !d.attrList.length && /^[0-9a-f]{64}$/.test(d.args) ? d.args : null; };
 /** Parse a family: sir/<unit>.sir (PRIMARY) + sir/<unit>.<lang>.sir (per-language), with PRIMARY-SHA256 binding. */
 export function family(sirDir, unit) {
   const primaryPath = join(sirDir, `${unit}.sir`);
@@ -112,7 +117,7 @@ export function family(sirDir, unit) {
     const lang = m[2];
     if (!LANGS.has(lang)) { errors.push(`${f}: '${lang}' is not in the closed language registry ${[...LANGS].join(',')}`); continue; }
     const bytes = readFileSync(join(sirDir, f)); const text = bytes.toString('utf8');
-    const bound = text.match(/^PRIMARY-SHA256\s+([0-9a-f]{64})/m)?.[1] ?? null;
+    const bound = boundSha(text);
     const declared = directive(text, 'LANG');
     const legacyBinding = bound !== null && bound !== primarySha && bound === legacySha;
     const entry = { lang, path: join(sirDir, f), text, sha: sha256(bytes), bound, stale: bound !== primarySha && !legacyBinding, legacyBinding, declared };

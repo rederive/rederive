@@ -1,0 +1,47 @@
+UNIT explain_contract
+LANG ts
+PRIMARY-SHA256 5f4391dc71cff3f2f9a4239e33b20bfa0bd53caebe57dc0047fb9040b804b2c8
+SIG export function explain_contract(primaryText: unknown): Reading
+NOTE named export explain_contract, also the default export.
+ABI TypeScript compiles to the js runtime and is driven exactly as js. Declare in the artifact
+  type Item = { id: string; label?: string; text: string; why: string[]; raw: string; rawWhy: string[]; line: number }
+  type Section = { id: string; title: string; checked: boolean; items: Item[] }
+  type Reading = { unit: string; summary: string[]; sig: string | null; checks: string[]; sections: Section[] }
+  text = string (UTF-16 code units); line is an integer number. An item without a label has NO label property (build
+  the object without it; never assign undefined). The parameter is unknown because the js widening applies: narrow
+  with typeof primaryText === 'string' and throw a TypeError otherwise. STRICT: the artifact type-checks under
+  strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. ES module; imports nothing.
+ENVELOPE ts WIDENS primaryText exactly as js does: a value that is not a string THROWS a TypeError; the message is not graded.
+MECHANISM (restated from js; language files are self-contained) table lookups (VOCABULARY, KIND-PHRASE, FIDELITY-PHRASE, PIN-KIND, OTHER-LABEL) are own-property tests
+  (Object.hasOwn or a Map): a KIND of constructor or __proto__, or a pin kind toString, must NOT hit an inherited
+  member; such a value takes the fallback sentence or label.
+MECHANISM R1 lines = primaryText.split(LINE_BREAK). The leading U+FEFF deletion, the trailing deletion and every
+  SPACE-TAB trim of R2, R4, R6 and R13 (HEAD and VALUE alike) is over spaces and tabs only: never
+  String.prototype.trim, which would also strip U+00A0, U+FEFF, line separators and the other Unicode spaces.
+MECHANISM R8 TEXT and RAW are two joins of the same pieces: for TABLE, " \u23ce " for TEXT and "\n" for RAW. R13's
+  shown text: EQ found -> VALUE (possibly ''), and the label gets ", empty value" when it is ''; no EQ -> TEXT. R14 tests TEXT, never RAW.
+MECHANISM R13 ", empty value" is decided on the WHOLE VALUE: build value = [the after-EQ piece trimmed of spaces and
+  tabs, ...cont].filter((p) => p !== '').join(' ') FIRST, then empty = (an EQ was found) && value === ''. Never test the
+  after-EQ piece alone: PINNED charset S = followed by the continuation U+0020 U+0009 has VALUE "U+0020 U+0009", so its
+  label is "S (character set)" with no suffix, and its text is that VALUE EARNED round-1 heldout v38 v62 (and frozen v23): emit_1 and emit_2 both tested the after-EQ piece before joining the continuation lines
+MECHANISM R3 may scan code units: a backslash skips the next code point (two code units for an astral one); since no
+  surrogate is a quotation mark or a backslash, skipping one code unit gives the same spans. INSIDE is strict on both
+  ends. A span search that reaches the end without a closing mark stops the whole scan. R13 runs R3 on the pin's ARGS
+  alone (not on the line), and EQ is the first "=" not INSIDE one of those spans.
+MECHANISM COMMENTS (R2, R4, R7) are kept per directive in line order: a directive line's own trailing comment first,
+  then each later comment line and each continuation's trailing comment, until the next directive starts. The
+  comment-line text is CONTENT.replace(COMMENT_LEAD, ''). RAW appends " # " + comment for each, an empty comment
+  included (so "R1 x #" has RAW "x # ").
+MECHANISM STRAY lines (R17) are collected while reading, before the first directive only, and listed in line order
+  after the "more" section; their ids share the one id counter with directives (base STRAY), so a directive named STRAY
+  takes "STRAY" and the stray items start at "STRAY #2". The TABLE joiner (R8) is a space, U+23CE RETURN SYMBOL, a space
+  (the literal character or its escape); never put a raw LINE SEPARATOR or PARAGRAPH SEPARATOR in source.
+DEPENDS-ON none
+PINNED regex LINE_BREAK = /\r\n|\r|\n/ CITED R1
+PINNED regex COMMENT_LEAD = /^#+[ \t]?/ CITED R2 — the comment-line text: every leading "#", then at most one space or tab
+PINNED regex NONE = /^none$/i CITED R14 — tested on TEXT, comments never count; ASCII-only folding (no u flag)
+PINNED regex ATTR = /[ \t]+(CITED|EARNED|ANCHOR)(?=[ \t]|$)/g CITED R6 — a hit whose keyword starts INSIDE a quoted span is discarded
+PINNED regex ANCHOR_DOTS = /\.+$/ CITED R9 — the trailing run of "." removed from each ANCHOR's TEXT; the first non-empty result is read
+PROVENANCE rederive@9b9e5d24ca9d cli/lsp/explain.mjs and cli/sir/sir-parse.mjs (MIT). Language file cut 2026-11-02 with the
+  primary; re-cut with it on 9e2245be5f42,
+  65149601a522 and 9b9e5d24ca9d after the architect's rulings.

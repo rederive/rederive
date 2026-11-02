@@ -1,0 +1,22 @@
+UNIT escape_data
+LANG ts
+PRIMARY-SHA256 988966d9dcfe63af4de8d8707bc097ebd72c3b902496673ac2616c7d751524d6
+SIG export function escapeData(v: unknown): string
+ABI TypeScript compiles to the js runtime: text=string (UTF-16 code units); the result is a new string; R1 per code unit.
+  STRICT: the artifact must type-check under `strict: true` against this SIG with no `any`, no non-null assertions (`!`),
+  and no `@ts-ignore` / `@ts-expect-error`. The parameter is `unknown` because the runtime converts any value (ENVELOPE).
+ENVELOPE widening (restated — language files are self-contained): any JS value is first converted with String(v), the
+  generic ToString, NOT @actions/core's toCommandValue, then R1-R5 apply to that text. Numbers by JS Number-to-String
+  ("NaN", "Infinity", "1e+21"; -0 -> "0"); bigint -> digits; booleans -> "true"/"false"; null -> "null"; undefined and a
+  missing argument -> "undefined"; arrays -> elements joined with "," (null/undefined elements empty, nesting flattened);
+  plain objects -> "[object Object]"; Map/Set -> "[object Map]"/"[object Set]"; RegExp -> "/source/flags"; Uint8Array ->
+  decimal bytes joined by ","; Node Buffer -> UTF-8 decoded text (invalid bytes -> U+FFFD); boxed primitives -> their
+  primitive's text. An object with a non-callable toString (directly or as an array element) -> throws TypeError
+  "Cannot convert object to primitive value". Extra positional arguments are ignored. Text holding an unpaired surrogate half
+  (not well-formed Unicode, so outside the primary) is in scope here and passes through unchanged (R4).
+MECHANISM String(v), then .replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A') in that order (R2), or one
+  pass with a function replacer over /[%\r\n]/g.
+DEPENDS-ON none
+PINNED regex ESCAPES = /[%\r\n]/g CITED R1 and TABLE ESCAPES — the same ECMAScript dialect as the js file
+PROVENANCE rederive@c509956a8f8a cli/lsp/pr-review.mjs line 120 — the real source (js); this file states the typed SIG,
+  dialect and envelope only.

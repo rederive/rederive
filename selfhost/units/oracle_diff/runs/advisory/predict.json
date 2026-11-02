@@ -1,0 +1,218 @@
+{
+ "status": "ok",
+ "unit": "oracle_diff",
+ "primary": "selfhost/units/oracle_diff/sir/oracle_diff.sir",
+ "primarySha256": "cf05e74bcd874e0f77f27a94bd57c15451b1032f5299916d07f61a943cdd571b",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "PARSE. Each argument is read as one JSON text by the PINNED grammar JSON-GRAMMAR. A text that does not match it is the shape \"unparseable\" and contributes no cases; it is not an error. The shapes, in the order they are decided: \"unparseable\", \"unknown-shape\", \"too-deep\", \"malformed-cases\", \"ok\". In a parsed map a repeated key keeps its LAST value at the position of its FIRST occurrence (positions matter only to KEY-ORDER). A number is the double nearest its decimal value; one beyond the double range is an infinity of its sign; a value that rounds to zero keeps its sign (\"-0\" is negative zero). ABSENT below means a map has no such key; it is distinct from none.",
+   "ambiguity": 0.61
+  },
+  {
+   "id": "R2",
+   "text": "SHAPE. A parsed value is a map whose own keys \"frozen\" and \"heldout\" both hold lists (\"__proto__\" is an ordinary key), or it is the shape \"unknown-shape\" (none, a bool, a number, a text, a list, a map missing either list or holding something else there) and contributes no cases and no FILE keys. A conforming map whose DEPTH exceeds 2000 is the shape \"too-deep\" and likewise contributes no cases and no FILE keys; DEPTH counts the map itself as level 0 and every value under an own key of a map, or an element of a list, as one level below its container, over the whole file (any value at level 2001 or deeper, a scalar or an empty list included, makes it too-deep; \"too-deep\" wins over \"malformed-cases\") CITED FIDELITY package — so no compared value reaches R14's marker Otherwise a conforming map is the shape \"ok\" when every element of both lists is a map, and \"malformed-cases\" when any element is not (none, a bool, a number, a text, a list); such an element is skipped and the other cases are still read. FILE = the map's own keys other than \"frozen\", \"heldout\" and \"canonicalSha256\"; an \"unparseable\" or \"unknown-shape\" file has no FILE keys.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R3",
+   "text": "CASES: the map elements of \"frozen\" in order, then those of \"heldout\". A case has KEY and NAME (R4); hidden, false from \"frozen\" and true from \"heldout\"; ARGS, its key \"args\" as written (ABSENT when missing); EXPECTED, its key \"expected\", or ABSENT; and OTHER, its own keys other than \"name\", \"args\" and \"expected\".",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R4",
+   "text": "KEY and NAME. ID = (whether the case has the key \"name\", and when it has, KEY-TEXT of its value, R14). The case is the k-th in case order (frozen then heldout) with its ID, and KEY = (ID, k): so 1 and \"1\" differ, a missing name differs from none, 0 from -0, an infinity from none, and no literal name can equal a numbered one. Two names are the same ID exactly when their KEY-TEXTs are the same text. NAME, the displayed name: the name itself when it is text, its JSON-TEXT when it is another value, \"(no name)\" when the key is missing; then, for k >= 2, \" (#\" k \")\". Displayed names may repeat (a literal \"(no name)\" or \"x (#2)\"); keys never do CITED FIDELITY package — keyed by (name as JSON, presence, occurrence)",
+   "ambiguity": 0.37
+  },
+  {
+   "id": "R5",
+   "text": "RESULT. LOOKUP(K) = BEFORE's case with KEY K, or nothing. For each case c of AFTER in case order: (a) LOOKUP(c.KEY) is nothing -> added gets {c.NAME, c.hidden, INPUT(c), SHOWN(c.EXPECTED)}. (b) otherwise, with o = LOOKUP(c.KEY), each of the following that holds appends, in this order: EQUAL(o.ARGS, c.ARGS) fails -> inputsChanged gets {c.NAME, c.hidden, INPUT(o), INPUT(c)}; EQUAL(o.EXPECTED, c.EXPECTED) fails -> rewritten gets {c.NAME, c.hidden, INPUT(c), SHOWN(o.EXPECTED), SHOWN(c.EXPECTED), inputChanged = whether the args comparison failed}; o.hidden differs from c.hidden -> moved gets {c.NAME, \"hidden\" or \"visible\" for o, the same for c}; CHANGED-KEYS(o.OTHER, c.OTHER) is not empty -> otherChanged gets {c.NAME, those keys}. Then for each case of BEFORE in case order whose KEY is the KEY of no AFTER case: removed gets {its NAME, its hidden, its INPUT, SHOWN of its EXPECTED}. fileChanged = CHANGED-KEYS(BEFORE's FILE, AFTER's FILE). reordered is true when the KEYs common to both files, in BEFORE's case order, are not the same sequence as in AFTER's case order. before and after are the two shapes (R1, R2). INPUT(case): ARGS a list -> SHOWN of each element, in order, joined by \", \" (a comma and a space); otherwise \"(args: \" then SHOWN(ARGS) then \")\" — an ABSENT ARGS shows \"(args: undefined)\".",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R6",
+   "text": "EQUAL(X, Y), each a value or ABSENT: when both X and Y are CANONICAL (R7) -> CANON-EQUAL (R8); otherwise -> KEY-TEXT(X) is the same text as KEY-TEXT(Y) (R14) CITED FIDELITY package — canonicalString's throw falls back to keyOf; kept by ruling",
+   "ambiguity": 0.42
+  },
+  {
+   "id": "R7",
+   "text": "CANONICAL. Visit X and, recursively, every element of a visited list and every value of a visited map, except: of an F64-NODE (a map whose key t is the text \"f64\") only t and bits are visited; of a THROW-NODE (a map whose t is \"throw\") only t. X is CANONICAL when no visited position is ABSENT, none or a number; every F64-NODE's bits is a text of exactly 16 characters from 0-9 and a-f; and no visited position lies more than 416 levels below X (X is level 0; an element or a map value is one level below its container) CITED FIDELITY package — the 4 x 100 + 16 raw-depth cap of canonicalString; kept by ruling",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "R8",
+   "text": "CANON-EQUAL: texts are equal when they are the same code units; bools by value; lists of the same length elementwise; an F64-NODE equals exactly the F64-NODEs with the same bits; a THROW-NODE equals exactly the THROW-NODEs; any other two maps are equal when they have the same key set and CANON-EQUAL values under every key; values of different kinds are never equal. So map key order is immaterial, while an F64-NODE's v, a THROW-NODE's msg and any further key of either node are ignored CITED FIDELITY package — a throw message and an f64's v are display hints, by ruling",
+   "ambiguity": 0.29
+  },
+  {
+   "id": "R9",
+   "text": "JSON-TEXT(X): none -> \"null\"; a bool -> \"true\" or \"false\"; a finite number -> NUMBER-TEXT; an infinite number -> \"null\"; a text -> QUOTE; a list -> \"[\" then the elements' JSON-TEXT joined by \",\" then \"]\"; a map -> \"{\" then, in KEY-ORDER, QUOTE(key) \":\" JSON-TEXT(value), joined by \",\", then \"}\". No whitespace is ever inserted.",
+   "ambiguity": 0.3
+  },
+  {
+   "id": "R10",
+   "text": "SHOWN(X), X a value or ABSENT: D = DISP(X) by TABLE DISPLAY, or the text \"?\" when DISP FAILS anywhere inside it, at any depth. When D is not text, or is exactly the text \"?\", it is replaced by JSON-TEXT(X), or by the text \"undefined\" when X is ABSENT. The result is D after CONTROL-NAMING (R11); SHOWN never throws. A \"?\" nested inside a larger display stays. DISP yields text or a RAW value (a value or ABSENT taken verbatim from the file). Composing a part into a list uses JOIN: text itself, ABSENT and none -> the empty text, a bool or number -> TEXT-OF. Composing a part into a map or a record uses TEXT-OF: text itself, ABSENT -> \"undefined\", none -> \"null\", a bool -> \"true\" or \"false\", a finite number -> NUMBER-TEXT CITED FIDELITY package — host renderings, kept by ruling",
+   "ambiguity": 0.58
+  },
+  {
+   "id": "TABLE DISPLAY row 1",
+   "text": "X is ABSENT or none                                    | FAILS",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE DISPLAY row 2",
+   "text": "X is a bool, a number, a text or a list                | \"?\"",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE DISPLAY row 3",
+   "text": "X is a map whose t is none of the texts below          | \"?\" (t ABSENT, not text, or another text)",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE DISPLAY row 4",
+   "text": "t \"none\"                                               | \"null\"",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE DISPLAY row 5",
+   "text": "t \"undefined\"                                          | \"undefined\"",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE DISPLAY row 6",
+   "text": "t \"bool\"                                               | TEXT-OF(v)",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "TABLE DISPLAY row 7",
+   "text": "t \"bigint\"                                             | TEXT-OF(v) then \"n\"",
+   "ambiguity": 0.49
+  },
+  {
+   "id": "TABLE DISPLAY row 8",
+   "text": "t \"text\"                                               | JSON-TEXT(v); RAW ABSENT when v is ABSENT",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE DISPLAY row 9",
+   "text": "t \"f64\", \"i64\", \"u64\" or \"bytes\"                       | v itself, RAW (ABSENT when missing); at the top, a v that is not text, or is \"?\", falls back by R10",
+   "ambiguity": 0.58
+  },
+  {
+   "id": "TABLE DISPLAY row 10",
+   "text": "t \"throw\"                                              | \"throw(\" then JSON-TEXT(msg) then \")\"; msg ABSENT or none counts as the empty text",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE DISPLAY row 11",
+   "text": "t \"list\" or \"tuple\"                                    | v not a list -> FAILS; else \"[\" then each element's DISP by JOIN, joined by \",\", then \"]\"",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE DISPLAY row 12",
+   "text": "t \"map\"                                                | v not a list, or an entry that is none, a bool, a number or a map -> FAILS; else \"{\" then per entry TEXT-OF(DISP(e[0])) \":\" TEXT-OF(DISP(e[1])), joined by \",\", then \"}\"",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "TABLE DISPLAY row 13",
+   "text": "t \"record\"                                             | v not a list, or an entry that is none, a bool, a number or a map -> FAILS; else \"{\" then per entry FIELD(e[0]) \":\" TEXT-OF(DISP(e[1])), joined by \", \", then \"}\"",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "R11",
+   "text": "CONTROL-NAMING, two passes over D. A CONTROL is a code unit U+0000 to U+001F or U+007F to U+009F; LABEL(c) is U+2039, then the TABLE NAMES label of c or else \"U+\" and c's four hex digits in uppercase, then U+203A. Pass 1: every occurrence of a backslash, the letter u and four characters from 0-9 and a-f (lowercase only) whose value is a CONTROL is replaced by the LABEL of that value; other occurrences stay. Pass 2: every CONTROL code unit left in the text is replaced by its LABEL. QUOTE's two-character escapes for backspace, tab, line feed, form feed and carriage return hold no CONTROL and stay as written. A text holding a backslash then \"u001b\", or the label text itself, displays like a real ESC; R6 still tells them apart CITED FIDELITY package — literal spoofing of the display, kept by ruling",
+   "ambiguity": 0.56
+  },
+  {
+   "id": "TABLE NAMES row 1",
+   "text": "U+0000 | NUL",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE NAMES row 2",
+   "text": "U+0007 | BEL",
+   "ambiguity": 0.08
+  },
+  {
+   "id": "TABLE NAMES row 3",
+   "text": "U+0009 | a backslash then t",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE NAMES row 4",
+   "text": "U+000A | a backslash then n",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE NAMES row 5",
+   "text": "U+000D | a backslash then r",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE NAMES row 6",
+   "text": "U+001B | ESC",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE NAMES row 7",
+   "text": "U+009B | CSI",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "R12",
+   "text": "FIELD(n), a record field name: a text matching IDENT -> itself; any other text -> QUOTE(n); ABSENT -> \"undefined\"; none -> \"null\"; a bool -> \"true\" or \"false\"; a finite number -> NUMBER-TEXT; a map -> JSON-TEXT(n) CITED FIDELITY package",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R13",
+   "text": "CHANGED-KEYS(X, Y), two maps: the keys of either, de-duplicated and sorted by UTF-16 code units, whose OWN values differ by KEY-TEXT, a key missing from a map reading as ABSENT-MARK, a mark equal only to itself (\"__proto__\" and \"constructor\" are ordinary keys, never read through any inheritance).",
+   "ambiguity": 0.62
+  },
+  {
+   "id": "R14",
+   "text": "KEY-TEXT(X), a value's identity as text, a TYPED encoding: none -> \"z\"; ABSENT -> \"u\"; a number -> \"n\" then \"-0\" for negative zero, else NUMBER-TEXT or \"Infinity\" / \"-Infinity\"; a text -> \"s\" then QUOTE; a bool -> \"b\" then \"true\" or \"false\"; a list -> \"[\" then the elements' KEY-TEXTs joined by \",\" then \"]\"; a map -> \"{\" then, in KEY-ORDER, QUOTE(key) \":\" KEY-TEXT(value), joined by \",\", then \"}\". Every value carries its kind, so no value spells another; map key order counts except for index-like keys. A position nested more than 2000 levels below X (X at level 0, an element or map value one level below its container) is written as the marker \"!deep\" whatever it holds, so two values that differ only there have the same KEY-TEXT; R2's too-deep shape keeps every compared value of an \"ok\" or \"malformed-cases\" file above it, so the marker is never reached CITED FIDELITY package — keyOf's depth marker, made unreachable by the depth walk",
+   "ambiguity": 0.54
+  }
+ ],
+ "ranked": [
+  "R13",
+  "R1",
+  "R10",
+  "TABLE DISPLAY row 9",
+  "R11",
+  "R14",
+  "R7",
+  "TABLE DISPLAY row 7",
+  "R5",
+  "R6",
+  "R2",
+  "TABLE DISPLAY row 12",
+  "R4",
+  "TABLE DISPLAY row 13",
+  "TABLE DISPLAY row 6",
+  "R9",
+  "R8",
+  "TABLE DISPLAY row 8",
+  "R12",
+  "TABLE DISPLAY row 2",
+  "R3",
+  "TABLE DISPLAY row 3",
+  "TABLE DISPLAY row 11",
+  "TABLE NAMES row 3",
+  "TABLE DISPLAY row 5",
+  "TABLE DISPLAY row 10",
+  "TABLE NAMES row 6",
+  "TABLE DISPLAY row 4",
+  "TABLE NAMES row 1",
+  "TABLE DISPLAY row 1",
+  "TABLE NAMES row 4",
+  "TABLE NAMES row 7",
+  "TABLE NAMES row 5",
+  "TABLE NAMES row 2"
+ ],
+ "at": "2026-11-02T21:01:47Z"
+}

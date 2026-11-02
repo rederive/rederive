@@ -1,0 +1,22 @@
+UNIT directive_spans
+LANG js
+PRIMARY-SHA256 a5c85ce6a72d5e96ae2ae12844a074c05fe48a590f6eddec3163e696476774aa
+SIG directive_spans(text: string): Array<[number, number]>
+NOTE default export: a plain function of one string. The real export is a Map from git start line to end; the seam hands over its entries in insertion order, and the reconstruction returns that list directly.
+ABI text=string (UTF-16, well-formed); i64=number (a safe integer, a line number of at most the line count); tuple=a
+  two-element Array; list=Array. The result is a fresh Array of fresh pairs.
+MECHANISM R1 = text.split with the pinned LINE_BREAK regex. R7 = walk the same breaks in order (matchAll of LINE_BREAK
+  with the g flag) and advance the git line on "\n" and "\r\n", never on a lone "\r"; LAST = Math.max(1, text.split("\n").length
+  minus 1 when text.endsWith("\n")). R8 = one pair per distinct git line; a Map keyed by git line reproduces it.
+MECHANISM R2 = replace the pinned LEAD match by itself with every U+FEFF deleted, then delete the pinned TRAIL match.
+  JS \s, String.prototype.trim, trimStart and trimEnd must not realize SPACE: their set holds no-break space, U+FEFF,
+  LINE SEPARATOR, U+3000 and others that are content here (R4).
+MECHANISM R4 = the line up to the first index of a space or a tab; R5 and R6 = the pinned COLON_NAME and NAME regexes,
+  without the i flag (so A-Z stays ASCII capitals), and a strict comparison with "CITED".
+DEPENDS-ON none
+PINNED regex LINE_BREAK = /\r\n|\r|\n/ CITED R1 R7 (alternation order puts CR LF first)
+PINNED regex LEAD = /^[ \t\uFEFF]+/ CITED R2
+PINNED regex TRAIL = /[ \t]+$/ CITED R2
+PINNED regex COLON_NAME = /^[A-Z][A-Z0-9-]*:$/ CITED R5
+PINNED regex NAME = /^[A-Z][A-Z0-9-]*$/ CITED R6
+PROVENANCE rederive@9e2245be5f42 cli/lsp/pr-review.mjs spans, gitLine and cli/sir/sir-parse.mjs (sirLines, parse, isDirectiveName, ATTR_ONLY), MIT.

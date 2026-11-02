@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "unit": "word_diff",
+ "primary": "selfhost/units/word_diff/sir/word_diff.sir",
+ "primarySha256": "f45b61112159279c9411e046d62f3489959604337b9c74a1b3ca1f321da41a9c",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "WHITESPACE is exactly the code-unit set WS (pin below); every other code unit, including NEXT LINE U+0085, ZERO WIDTH SPACE U+200B, MONGOLIAN VOWEL SEPARATOR U+180E and WORD JOINER U+2060, is a word character.",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R2",
+   "text": "TOKENS of a text: the text is cut into maximal runs of whitespace and maximal runs of word characters, and the token list always begins and ends with a word token — an EMPTY word token is placed first when the text begins with whitespace, and last when it ends with whitespace. So the list alternates word, whitespace, word, … and has an odd length; the empty text is the one-token list [\"\"], and a whitespace-only text w is [\"\", w, \"\"].",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R3",
+   "text": "ALIGNMENT over the token lists X (from a) and Y (from b), two tokens being equal when their code-unit sequences are identical (empty tokens are equal to each other). Let L(i, j) be the length of a longest common subsequence of X from i on and Y from j on. Starting at i = j = 0 while both lists have tokens left: when X[i] equals Y[j], emit (=, X[i]) and advance both; otherwise, when L(i+1, j) >= L(i, j+1), emit (-, X[i]) and advance i; otherwise emit (+, Y[j]) and advance j. Then emit (-, t) for every token left in X, then (+, t) for every token left in Y. Ties therefore always prefer removing from a before inserting from b CITED FIDELITY package",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "R4",
+   "text": "COALESCE: each emission whose op equals the op of the previous emission is appended to that entry's text instead of starting a new entry. The RAW script is the resulting entry list: no two adjacent entries share an op, and an entry's text may be empty (an empty token emitted alone, R2).",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R5",
+   "text": "WORDS of a text = the number of its maximal runs of word characters (R1); a whitespace-only or empty text has 0.",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R6",
+   "text": "MERGE walks the RAW script left to right and builds the result. An = entry is copied unchanged. A - or + entry at position k opens a GROUP with DEL = \"\", INS = \"\", END = k, and the entries from k on are read in order: a - entry appends its text to DEL and sets END to its position; a + entry appends its text to INS and sets END to its position; an = entry E is GLUE when E is not the last entry of the RAW script AND WORDS(E) <= 2 (a whitespace-only or empty E has 0 words). Glue appends E's text to BOTH DEL and INS and leaves END unchanged; the first = entry that is not glue ends the reading (it is not consumed). The group then emits (-, DEL) when DEL is not empty and then (+, INS) when INS is not empty, and the walk resumes at position END + 1 CITED FIDELITY package — explain.mjs wordDiff merge loop By R4 the entry after a non-last = entry is always a change, so glue always joins two change runs, and the last RAW entry, when it is an = entry, always stays a single = entry. Word length is not tested: two shared words of any length glue.",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "R7",
+   "text": "ORDER: the result lists, in walk order, the copied = entries and each group's (-, DEL) then (+, INS); nothing is reordered or re-joined after the walk.",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "R8",
+   "text": "EMPTY ENTRIES: as the last step every entry whose text is empty is removed from the result. So a = b = \"\" gives the empty list, a change of only empty tokens vanishes (a = \"\", b = \"abc\" gives one +\"abc\"), and the empty boundary tokens of R2 never show as entries.",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "R9",
+   "text": "a or b not text -> throws.",
+   "ambiguity": 0.53
+  }
+ ],
+ "ranked": [
+  "R9",
+  "R3",
+  "R6",
+  "R2",
+  "R1",
+  "R5",
+  "R4",
+  "R8",
+  "R7"
+ ],
+ "at": "2026-11-02T19:54:58Z"
+}

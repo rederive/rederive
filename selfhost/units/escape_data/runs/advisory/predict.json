@@ -1,0 +1,62 @@
+{
+ "status": "ok",
+ "unit": "escape_data",
+ "primary": "selfhost/units/escape_data/sir/escape_data.sir",
+ "primarySha256": "988966d9dcfe63af4de8d8707bc097ebd72c3b902496673ac2616c7d751524d6",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "The result is the input with each character of ESCAPES replaced by its three-character escape, judged one code unit at a time in a single left-to-right pass. Every other code unit is copied unchanged in its original position; nothing is dropped, added or reordered.",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "R2",
+   "text": "The percent sign is escaped, and it is escaped BEFORE (independently of) the escapes R1 inserts: the \"%\" that begins an inserted \"%0D\" or \"%0A\" is never escaped again. Equivalently each input character maps once, by ESCAPES.",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "R3",
+   "text": "The operation is not idempotent: an input that already contains an escape sequence (\"%0A\", \"%25\") has its percent sign escaped again (\"%250A\", \"%2525\"). A carriage return and a line feed are escaped separately, so CR LF becomes \"%0D%0A\".",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "R4",
+   "text": "Only the three characters of ESCAPES are escaped. Colon, comma, equals, \"::\", tab, the other ASCII controls (NUL, VT, FF), next line (U+0085), line and paragraph separators (U+2028, U+2029), non-ASCII letters, surrogate pairs and unpaired surrogate halves are all copied unchanged. CITED FIDELITY package — colon and comma are escaped by the sibling escape_property (a command PROPERTY value), not here; the toolkit's message escaping is the same three-character set.",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "R5",
+   "text": "Empty text -> empty text.",
+   "ambiguity": 0.08
+  },
+  {
+   "id": "TABLE ESCAPES row 1",
+   "text": "\"%\"  (U+0025 percent sign)    -> \"%25\"",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE ESCAPES row 2",
+   "text": "CR   (U+000D carriage return) -> \"%0D\"",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE ESCAPES row 3",
+   "text": "LF   (U+000A line feed)       -> \"%0A\"",
+   "ambiguity": 0.11
+  }
+ ],
+ "ranked": [
+  "R4",
+  "R1",
+  "R2",
+  "TABLE ESCAPES row 1",
+  "R3",
+  "TABLE ESCAPES row 3",
+  "TABLE ESCAPES row 2",
+  "R5"
+ ],
+ "at": "2026-11-02T20:25:15Z"
+}

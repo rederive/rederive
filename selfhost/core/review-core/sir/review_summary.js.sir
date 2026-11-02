@@ -1,0 +1,39 @@
+UNIT review_summary
+LANG js
+PRIMARY-SHA256 fe7f51846968e8fb812b0a909bdb5804e1a5391897addb22bca6cdf9890705c4
+SIG review_summary(units: object[], stops: number | bigint): string
+NOTE default export
+ABI The driver calls the default export positionally as (units, stops). text = string; units = an Array of plain objects
+  whose fields are strings (a row may carry further own fields, never read); stops = i64, which arrives as a number when
+  it is a safe integer and as a BigInt otherwise, so both must render (R5) and compare correctly; String(n) and template
+  interpolation give the plain decimal for every i64 in either form. The result is a string; LF = "\n". The artifact is
+  an ES module default-exporting the function and imports nothing.
+ENVELOPE widened to the primary's OUT-OF-DOMAIN (1)-(5), graded by the js extension oracle: units may be a plain object
+  (no length member -> EMPTY_REPORT plus the STOPS block) or null (throws); a row may be null (throws), lack fields or
+  hold non-string values; stops may be null, a boolean, a non-integer number or a numeric string. A throw is a thrown
+  Error; the message is not graded.
+MECHANISM The empty test is the falsiness of units.length (so a map without length is empty, and null throws reading it).
+  A row passes when row.status === 'pass' (strict; a plain member access, so a null row throws). A cell's text is
+  String(v === undefined || v === null ? '' : v) — so an Array is its join(','), a plain object "[object Object]" —
+  then the LINE-BREAK pin -> ' ', then /\|/g -> '\\|'. K is the longest match of /`+/g (0 when none). PAD (R4d): the
+  text matches /^`|`$/, or it matches /^ .* $/ and text.trim() !== '' — String.prototype.trim strips exactly the
+  TRIM_SPACE set, so a text made only of spaces, tabs, no-break spaces and the like gets no PAD. Write the two
+  separators as the escapes \u2028 and \u2029, never raw: a raw one inside a regex literal is a LineTerminator of the
+  source and the module fails to parse. The STOPS block is present when the loose stops > 0 holds (true > 0 holds, '0'
+  > 0 does not, null > 0 does not, a BigInt compares exactly); its singular test is stops === 1 (strict, so the string
+  '1' is plural), and stops renders by template interpolation. The same block follows EMPTY_REPORT (R1). Emit the two
+  icons as the single code points U+2705 and U+274C (the escapes \u2705 and \u274C are safest), never with a U+FE0F
+  selector.
+MECHANISM TRANSPORT — the LINE-BREAK pattern MUST be written with escapes only, in one of two spellings: the
+  constructor new RegExp("\\r\\n|\\r|\\n|\\u2028|\\u2029", "g") (a string literal holding backslash escapes,
+  each backslash doubled), or the literal /\r\n|\r|\n|\u2028|\u2029/g typed with the backslash-u escapes exactly as the
+  LINE-BREAK pin shows. The js source must contain NO raw LINE SEPARATOR (U+2028) or PARAGRAPH SEPARATOR (U+2029)
+  character anywhere: not in a regex literal, a string, a template, a character class or a comment. Each is a
+  LineTerminator of the source, so it ends a regex literal (the module fails to load with "Invalid regular expression:
+  missing /") and ends a line comment (the rest of that line becomes code). Check the emitted file: it holds no code
+  point 2028 or 2029. EARNED round-1 reject runs/js/rejected/round1/emit_1.mjs and emit_2.mjs, no held-out vector: 4 of 6 emitters pasted a raw separator into the regex literal and the file could not load; the 2 that used new RegExp with escapes agreed 2000/2000
+DEPENDS-ON none
+PINNED regex LINE-BREAK = /\r\n|\r|\n|\u2028|\u2029/g CITED R4a TABLE CELL_ESCAPE rows 1-5 — CRLF first in the alternation; the separators are \u escapes, never raw
+PINNED regex BACKTICK-RUN = /`+/g CITED R4c — K is the longest match
+PROVENANCE rederive@9b9e5d24ca9d cli/lsp/pr-review.mjs summary, cell, val, stopsLine. Language file re-cut 2026-11-02
+  with the primary, before any blind re-emission.

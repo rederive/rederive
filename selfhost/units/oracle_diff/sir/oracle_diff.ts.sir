@@ -1,0 +1,33 @@
+UNIT oracle_diff
+LANG ts
+PRIMARY-SHA256 cf05e74bcd874e0f77f27a94bd57c15451b1032f5299916d07f61a943cdd571b
+SIG export function oracle_diff(before: string, after: string): { before: string; after: string; added: Shown[]; removed: Shown[]; rewritten: Rewritten[]; inputsChanged: Changed[]; moved: Moved[]; otherChanged: Other[]; fileChanged: string[]; reordered: boolean }
+ABI TypeScript compiles to the js runtime and is driven exactly as js. Declare in the artifact
+  type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+  type Shown = { name: string; hidden: boolean; input: string; to: string };
+  type Rewritten = { name: string; hidden: boolean; input: string; from: string; to: string; inputChanged: boolean };
+  type Changed = { name: string; hidden: boolean; from: string; to: string };
+  type Moved = { name: string; from: string; to: string };
+  type Other = { name: string; keys: string[] }.
+  Field order as listed. A parsed file is unknown: narrow with typeof, Array.isArray and === null, never a cast to any.
+  Nothing in scope throws. STRICT: the artifact type-checks under strict: true with no
+  any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. ES module, named export, imports nothing.
+ENVELOPE as the primary; no widening.
+MECHANISM (restated from js — language files are self-contained) R1 = JSON.parse inside try/catch, its result typed
+  unknown. R2/R3 = Array.isArray on frozen and heldout, then an ITERATIVE depth walk (an explicit stack of [value, depth], never
+  recursion) over Object.keys of every object and array from the root at 0, too-deep at the first depth > 2000; a case element is a map when it is a non-null, non-array object,
+  else it is junk and skipped. R4: ID = JSON.stringify([has ? KEY-TEXT(name) : null, has]), has = Object.hasOwn(case, 'name');
+  KEY = JSON.stringify([ID, k]) with k from a Map<string, number>. R5 = a Map<string, case> per file, iterated by AFTER's
+  case LIST. OTHER and FILE = object rest; R13 reads OWN values only
+  (Object.hasOwn, else the absent mark), never o[k] on a missing key; sort = the default Array.prototype.sort().
+  KEY-TEXT (R14) = a recursive keyOf(v, depth = 0): depth > 2000 -> '!deep'; null 'z'; undefined 'u'; number 'n' + (Object.is(v, -0) ? '-0' : String(v)); string 's' + JSON.stringify(v); boolean 'b' + v; Array '[' + items at depth + 1 joined ',' + ']'; object '{' + Object.keys(v) each JSON.stringify(k) + ':' + keyOf(v[k], depth + 1) joined ',' + '}'.
+  JSON-TEXT, QUOTE, KEY-ORDER and NUMBER-TEXT = JSON.stringify (string | undefined; compare with
+  ===). TEXT-OF = String(x); JOIN = Array.prototype.join(','), undefined and null -> "". R7's depth is an explicit counter
+  (fail past 416). R10: try/catch around DISP giving "?"; a non-string or "?" becomes JSON.stringify(x) ?? 'undefined'; an
+  outer try/catch returns "?".
+DEPENDS-ON none
+PINNED regex IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/ CITED R12 — tested on String(n) for a non-text n
+PINNED regex ESCAPED = /\\u00([0-9a-f]{2})|\\u([0-9a-f]{4})/g CITED R11 pass 1 — one set: a backslash, u, four lowercase hex digits
+PINNED regex CONTROL = /[\u0000-\u001f\u007f-\u009f]/g CITED R11 pass 2 — applied after pass 1
+PINNED regex BITS = /^[0-9a-f]{16}$/ CITED R7
+PROVENANCE rederive@4c134cacd842 cli/lsp/explain.mjs and cli/sir/canon.mjs (MIT). Language file re-cut 2026-11-02 with the primary.

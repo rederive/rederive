@@ -1,0 +1,565 @@
+{
+ "unit": "escape_data",
+ "sig": "escape_data(value: text) -> text",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0D%0A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "%0A",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%250A",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "plain message",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "plain message",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "a%0A##\r\t😀,#=::0:% ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a%250A##%0D\t😀,#=::0:%25 ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0D",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "\n\r",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0A%0D",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "%%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%25%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "\r\r\n\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%0D%0D%0A%0A",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "100% done",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "100%25 done",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "line one\nline two",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "line one%0Aline two",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "b:\"\r%b,%25'\r%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "b:\"%0D%25b,%2525'%0D%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "windows\r\nline",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "windows%0D%0Aline",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "%0D",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%250D",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v42",
+   "args": [
+    {
+     "t": "text",
+     "v": "%25",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%2525",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v43",
+   "args": [
+    {
+     "t": "text",
+     "v": "%0A\n%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%250A%0A%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "::",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "::",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "::error::injected",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "::error::injected",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "a\n::error file=x::injected",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a%0A::error file=x::injected",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "%0A\"%😀=\"#%\" \n,% 😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%250A\"%25😀=\"#%25\" %0A,%25 😀",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": ":",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": ":",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": ",",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": ",",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": "=",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "=",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "a:b,c=d",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "a:b,c=d",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "\t tab",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\t tab",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "\u000b\f",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\u000b\f",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "\u0000nul",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "\u0000nul",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "0\rb\t$&%#😀:\n中><",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "0%0Db\t$&%25#😀:%0A中><",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "nel",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "nel",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": " ls ps",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": " ls ps",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "café ü 中文",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "café ü 中文",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "😀 emoji",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "😀 emoji",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "  leading and trailing  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "  leading and trailing  ",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "%\r%\n%",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "%25%0D%25%0A%25",
+    "cu": "utf8"
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx%\n",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "text",
+    "v": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx%25%0A",
+    "cu": "utf8"
+   }
+  }
+ ],
+ "canonicalSha256": "10910a115e2248977df0c494da7a5c6c95796049bbb455c03b673052b418678f"
+}

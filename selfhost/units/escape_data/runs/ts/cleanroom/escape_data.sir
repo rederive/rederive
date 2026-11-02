@@ -1,0 +1,47 @@
+UNIT escape_data
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@c509956a8f8a cli/lsp/pr-review.mjs escapeData, reproduced exactly. Independent anchor: GitHub's toolkit
+  @actions/core@3.0.1 (lib/command.js escapeData, observed through core.error(message) with stdout captured, the text after
+  "::error::"). On every TEXT argument the two agree (39899 of 39899 seeded and curated texts, R1-R5); they differ only on
+  non-text values, which the pinned code renders by the host's generic text conversion and the toolkit by its own
+  toCommandValue (a JSON rendering, none and absent -> empty). That difference is the ruling already made for the sibling
+  unit escape_property: the pinned conversion is kept, and it lives in the js and ts language files.
+ORACLE-CLASS deterministic
+SIG escape_data(value: text) -> text
+ENVELOPE text only: any length (including empty), any well-formed Unicode text. Text holding an unpaired surrogate half
+  and non-text arguments are js widenings (see the js and ts files), not part of the abstract contract; R4 states that
+  such halves pass through unchanged.
+DEPENDS-ON none
+DESCRIPTION Escape a text for use as the MESSAGE of a GitHub Actions workflow command (the part after the second "::" in
+  "::error file=…::message"), so that the runner reads the whole text as one message and nothing in it can end the
+  command line or start another command. Pull-request contract text flows into this; a missing escape is a
+  workflow-command injection.
+BEHAVIOR
+R1 The result is the input with each character of ESCAPES replaced by its three-character escape, judged one code unit at
+  a time in a single left-to-right pass. Every other code unit is copied unchanged in its original position; nothing is
+  dropped, added or reordered.
+R2 The percent sign is escaped, and it is escaped BEFORE (independently of) the escapes R1 inserts: the "%" that begins an
+  inserted "%0D" or "%0A" is never escaped again. Equivalently each input character maps once, by ESCAPES.
+R3 The operation is not idempotent: an input that already contains an escape sequence ("%0A", "%25") has its percent sign
+  escaped again ("%250A", "%2525"). A carriage return and a line feed are escaped separately, so CR LF becomes "%0D%0A".
+R4 Only the three characters of ESCAPES are escaped. Colon, comma, equals, "::", tab, the other ASCII controls (NUL, VT,
+  FF), next line (U+0085), line and paragraph separators (U+2028, U+2029), non-ASCII letters, surrogate pairs and unpaired
+  surrogate halves are all copied unchanged. CITED FIDELITY package — colon and comma are escaped by the sibling
+  escape_property (a command PROPERTY value), not here; the toolkit's message escaping is the same three-character set.
+R5 Empty text -> empty text.
+TABLE ESCAPES — input character -> replacement (uppercase hex, the UTF-8 / ASCII code of the character)
+  "%"  (U+0025 percent sign)    -> "%25"
+  CR   (U+000D carriage return) -> "%0D"
+  LF   (U+000A line feed)       -> "%0A"
+INVARIANT length(result) = length(input) + 2 × (number of ESCAPES characters in input).
+INVARIANT the result contains no CR and no LF, so it cannot end the workflow-command line.
+NOTE rust is omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+ORACLE value -> oracles/escape_data.json  CANONICAL-SHA256 10910a115e2248977df0c494da7a5c6c95796049bbb455c03b673052b418678f
+SCOPE IN: R1-R5 over any text. OUT: the workflow-command framing itself (the "::name props::" prefix, the annotations
+  builder), property escaping (escape_property), the runner's unescaping, and the toolkit's toCommandValue conversion of
+  non-text values (ruled out; see ANCHOR).
+PROVENANCE rederive@c509956a8f8a (rederive, the review system), cli/lsp/pr-review.mjs line 120, named export escapeData;
+  selfhost seam seams/escape_data.mjs. Anchor @actions/core@3.0.1 (actions/toolkit, MIT) lib/command.js. Cut cold
+  2026-11-02 into the v0.5 contract register (REDERIVE_SELF_PLAN Tier 1, review system phase 2).

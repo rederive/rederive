@@ -1,0 +1,31 @@
+UNIT binding_of
+LANG ts
+PRIMARY-SHA256 a9963d3c62e76df3f93e123b62366f6c8cebcfeffe044b7ab3ee0478499b6d3d
+SIG export function bindingOf(langText: string, primaryText: string | null): { readonly status: string; readonly bound: string | null; readonly primarySha: string | null }
+ABI TypeScript compiles to the js runtime and is driven exactly as js: the named export bindingOf(langText, primaryText).
+  text = string (UTF-16; an unpaired surrogate is legal); none = null; the result is a fresh object with exactly the keys
+  status, bound and primarySha. STRICT: the artifact type-checks under strict: true with no any, no non-null assertions (!),
+  no @ts-ignore and no @ts-expect-error; a RegExp match is RegExpMatchArray | null — narrow it, and read an optional capture
+  as string | undefined. ES module; it may import only node:crypto (import { createHash } from 'node:crypto').
+ENVELOPE as the primary; no widening.
+MECHANISM (restated from js — language files are self-contained) HASH: createHash('sha256').update(s).digest('hex') on the
+  string itself (the string overload writes an unpaired surrogate as EF BF BD). The OUT-OF-DOMAIN 1 refusal is an explicit test for
+  unpaired surrogates (String.prototype.isWellFormed, or a scan of code units) before canonical text is built.
+MECHANISM (restated from js) R1 (the bound) is a line walk over SPLIT-LINES, never a regex search of the whole text; there
+  the only separator and trim characters are space and tab (\s, trim() and \S are WRONG for R1: they take U+00A0, U+3000
+  and U+2028). The LEGACY parse (R6-R11) is the opposite: SPACE is exactly the set JS regex \s and String.prototype.trim
+  use (no u flag), and LINE-BREAK is exactly what an unflagged regex . refuses, so the legacy pins below realize R8, R9 and
+  R10 literally, leftmost-match semantics and backtracking included. Legacy pieces (R6) are text.split('\n'), each with one
+  trailing \r removed (/\r$/ unflagged); R1 and R3 lines are SPLIT-LINES. Attribute maps keep keyword insertion order (a
+  plain object or Map; R11 overwrite is Object.assign or set). Write U+2028 and U+2029 as \u escapes in any literal,
+  never raw.
+DEPENDS-ON none
+PINNED regex ARGUMENT = /^[0-9a-f]{64}$/ CITED R1 (a) — tested on the stripped ARGUMENT, never searched for
+PINNED regex NAME-END = /[ \t]/ CITED TABLE PARSE-LINE — the first match ends NAME; no other whitespace separates
+PINNED regex SPLIT-LINES = /\r\n|\r|\n/ CITED R1 R3 — CRLF is tried first; R1 and R3 share it
+PINNED regex TRAILING-COMMENT = /^(.*?)(?:^|\s)#(?=\s|$)(.*)$/ CITED R8 — CODE is capture 1 with /\s+$/ removed
+PINNED regex HEAD = /^(\S+)(?:\s+(.*))?$/ CITED R9 — NAME capture 1, REST capture 2 (absent means empty)
+PINNED regex NAME-COLON = /^[A-Z][A-Z0-9-]*:$/ CITED R9 — the colon is dropped
+PINNED regex DIRECTIVE = /^(?:[A-Z][A-Z0-9-]*|R\d+)$/ CITED R9 DIRECTIVE-NAME
+PINNED regex ATTR = /\s+(CITED|EARNED|ANCHOR)\s+(.+)$/ CITED R10 — applied repeatedly, each match cutting the piece at its index
+PROVENANCE rederive@9e2245be5f42 cli/lsp/analyze.mjs bindingOf; cli/sir/v05.mjs boundSha; cli/sir/sir-parse.mjs; cli/sir/legacy-print.mjs. Cut cold 2026-11-02, revised for 9e2245be5f42.

@@ -1,0 +1,101 @@
+{
+ "unit": "binding_of",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v15",
+   "args": [
+    "UNIT is_number\nLANG js\nPRIMARY-SHA256 4aa5cea5898114eaa972bfdabdbef768883df47088f71c660abd5ef57181df4f\nSIG isNumber(num: any): boolean\nNOTE default export\nABI f64=number (finite ⇔ neither NaN nor ±Infinity; -0 is a distinct finite value); text=UTF-16 string; bool=boolean; none=null|undefined.\n  \"primitive\" (R1, R2, R4) = typeof; boxed wrappers are typeof 'object'. \"parses as a number\" (R2) = numeric coercion of the\n  trimmed string (+s / Number(s)); \"trimmed\" = String.prototype.trim.\nENVELOPE js widens the primary's envelope to any JS value: objects, arrays, functions and boxed wrappers are in scope here (R3/R4).\nDEPENDS-ON none\nPROVENANCE the shipped @rederive/is-number src (runs/js/emit_1.mjs), verified-recompose quorum 3/3, differential 400/400.\n",
+    "UNIT is_num\ud800ber\nKIND FUNCTIONAL\nFIDELITY package\nANCHOR is-number@7.0.0 — reproduce the package exactly, accidents included (R4)\nORACLE-CLASS deterministic\nSIG is_number(x: f64 | text | bool | none) -> bool\nENVELOPE a JS-shaped value space: numbers (incl. NaN, ±Infinity, -0), text, booleans, none. Objects and boxed wrappers are\n  representable only in the js variant (see its ENVELOPE narrowing); other languages verify the numeric/text/bool/none subset.\nDEPENDS-ON none\nDESCRIPTION Decide whether a value is a finite number, or text that parses as one.\nBEHAVIOR\nR1 a primitive number that is finite -> true; NaN and ±Infinity -> false. (-0 is finite -> true.)\nR2 primitive text that is non-empty after trimming whitespace and parses as a finite number -> true.\nR3 everything else -> false (booleans, none, non-numeric or empty text).\nR4 a boxed wrapper (a Number object, a String object) is not a primitive -> R3 -> false. CITED FIDELITY package — the primitive/boxed accident of is-number@7.0.0 (js-only; outside other languages' envelope)\nINVARIANT the result is a boolean for every input in the envelope.\nORACLE value -> oracles/is_number.json  CANONICAL-SHA256 35a0059cdc9f6f5bc9a341a13797d7eb6d3aee5c843b4bcdd000782c069478f4\nNOTE 16 frozen + 13 held-out from the shipped @rederive/is-number bundle (captured from the real package); carries NaN, ±Infinity\n  and -0 as v0.4 codec tags — the NaN-rule validation unit; re-ENCODED as sir-canonical-v1, never regenerated\nSCOPE IN: R1–R4. OUT: anything is-number@7.0.0 does not do.\nPROVENANCE is-number@7.0.0 (jonschlinkert/is-number, MIT); shipped bundle @rederive/is-number (quorum 3/3, differential 400/400).\n  Re-cut 2026-09-22 into the v0.5 contract register (the plan's own illustration) as the NaN / signed-zero / infinity test unit.\n"
+   ],
+   "expected": {
+    "status": "stale",
+    "bound": "4aa5cea5898114eaa972bfdabdbef768883df47088f71c660abd5ef57181df4f",
+    "primarySha": null
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v16",
+   "args": [
+    "UNIT u\nLANG js\nPRIMARY-SHA256 df3ffcdfb6a99164e39e78b647176116bdd5b05129d7b9d7e12b7ba51951cda2\nSIG u(x: string): string\nDEPENDS-ON none\n",
+    "UNIT x\nNOTE ok \ud83d\n"
+   ],
+   "expected": {
+    "status": "stale",
+    "bound": "df3ffcdfb6a99164e39e78b647176116bdd5b05129d7b9d7e12b7ba51951cda2",
+    "primarySha": null
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v38",
+   "args": [
+    "UNIT u\nLANG js\nPRIMARY-SHA256 86c41ff0d16986b24f9802932a90106aacaaf0de0d89511a6088ad7c16b3dc12\nSIG u(x: string): string\nDEPENDS-ON none\n",
+    "UNIT x\nNOTE \udc00 trail\n"
+   ],
+   "expected": {
+    "status": "stale",
+    "bound": "86c41ff0d16986b24f9802932a90106aacaaf0de0d89511a6088ad7c16b3dc12",
+    "primarySha": null
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v39",
+   "args": [
+    "UNIT u\nLANG js\n",
+    "UNIT x\nNOTE \udc00 trail\n"
+   ],
+   "expected": {
+    "status": "unbound",
+    "bound": null,
+    "primarySha": null
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v59",
+   "args": [
+    "UNIT u\nLANG js\nPRIMARY-SHA256 71319aa718dee194f8a3f16b840978c04547226bc1c082e3ed68c9e420204212\nSIG u(x: string): string\nDEPENDS-ON none\n",
+    "UNIT x\nNOTE \udc00 trail\n"
+   ],
+   "expected": {
+    "status": "stale",
+    "bound": "71319aa718dee194f8a3f16b840978c04547226bc1c082e3ed68c9e420204212",
+    "primarySha": null
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  },
+  {
+   "name": "v60",
+   "args": [
+    "UNIT u\nLANG js \udfff\nPRIMARY-SHA256 c81335bb04764b1f95dd06f35d1f218911a56222ba2dcccf8b0b4a57b2695932\nSIG u(x: string): string\nDEPENDS-ON none\n",
+    "UNIT x\nNOTE ok \n"
+   ],
+   "expected": {
+    "status": "ok",
+    "bound": "c81335bb04764b1f95dd06f35d1f218911a56222ba2dcccf8b0b4a57b2695932",
+    "primarySha": "c81335bb04764b1f95dd06f35d1f218911a56222ba2dcccf8b0b4a57b2695932"
+   },
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v71",
+   "args": [
+    "UNIT u\nLANG js\nPRIMARY-SHA256 b245b5875bbf1f416a685beb1542801564a30a8fc679a1a54ce5cefdd763eb03\nSIG u(x: string): string\nDEPENDS-ON none\n",
+    "UNIT x\nNOTE \udc00 trail\n"
+   ],
+   "expected": {
+    "status": "stale",
+    "bound": "b245b5875bbf1f416a685beb1542801564a30a8fc679a1a54ce5cefdd763eb03",
+    "primarySha": null
+   },
+   "outsideEnvelope": "fits no alternative: not none"
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+UNIT annotations_text
+LANG js
+PRIMARY-SHA256 13d76a1b9a6b77c8510c8e57fa0ce844bd57fa787d5a8a1f326338b29f291b28
+SIG export function annotations_text(findings: any[]): string
+NOTE named export annotations_text
+ABI text = string (UTF-16; the escapes work per code unit, which for the five escaped ASCII characters equals per
+  character); a number = number (IEEE-754 double); bool = boolean; none = null; list = Array; map = a plain object whose
+  keys are own enumerable properties (an own key toString, valueOf or __proto__ is DATA, set as an own property). The
+  driver passes one positional argument. The result is a string. A throw (R6, a non-list findings) is a thrown Error;
+  the message is not graded. The artifact is an ES module that exports the function by name and imports nothing.
+ENVELOPE widening: findings may be any value; a value that is not an Array throws (findings.filter is not a function, or a
+  member read of null). A field value, or a list element inside a field value, may be undefined: it reads exactly as null
+  (R2, TABLE TEXT-OF); an undefined element of findings is skipped (R1). These vectors are graded from the js extension.
+MECHANISM KEPT (R1) is findings.filter((f) => f !== null && typeof f === 'object' && !Array.isArray(f)). FIELD (R2) is a
+  plain member read (f.level, f.path …); undefined is ABSENT. TEXT-OF (R6) is String(v) after mapping undefined and null
+  to '' at the TOP of the value only (String of an Array already renders null and undefined elements as ''): it gives
+  true/false, Number::toString for NUM-TEXT (R7), Array.prototype.join(',') for a list, "[object Object]" for a plain
+  object, and the TypeError "Cannot convert object to primitive value" for an object with an own non-callable toString.
+  Do not hand-roll any of it and do not use JSON.stringify. The line test (R5) is Number.isSafeInteger(L) && L > 0,
+  rendered with String(L). The level test (R4) is a strict comparison with the three strings (or a Set of them); never
+  coerce the level. The escapes (R8) are String.prototype.replace with global regexes, % first: PROP = /%/g -> %25,
+  /\r/g -> %0D, /\n/g -> %0A, /:/g -> %3A, /,/g -> %2C; DATA = the first three only. Join with '\n'. Never escape U+2028
+  or U+2029.
+DEPENDS-ON none
+PINNED regex PROP-CLASS = /[%\r\n:,]/g CITED R8 TABLE ESCAPES column PROP — the characters PROP replaces
+PINNED regex DATA-CLASS = /[%\r\n]/g CITED R8 TABLE ESCAPES column DATA — the characters DATA replaces
+PROVENANCE rederive@9e2245be5f42 cli/lsp/pr-review.mjs annotations. Language file cut 2026-11-02 with the primary, before any blind re-emission.

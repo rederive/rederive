@@ -1,0 +1,25 @@
+UNIT escape_data
+LANG js
+PRIMARY-SHA256 988966d9dcfe63af4de8d8707bc097ebd72c3b902496673ac2616c7d751524d6
+SIG escapeData(v: any): string
+NOTE named export escapeData (the pinned module exports it beside escapeProperty; the reconstruction exports one plain function)
+ABI text=string (UTF-16 code units); the result is a new string. R1 is per code unit: the three ESCAPES members are single
+  ASCII code units, so surrogate pairs and unpaired halves are never split or altered, and no normalization occurs.
+ENVELOPE widening: the runtime accepts any JS value in the argument slot and first converts it with String(v) — the
+  generic ToString, NOT @actions/core's toCommandValue — then applies R1-R5 to that text. So: numbers render as JS
+  Number-to-String ("42", "-3.5", "1e+21", "NaN", "Infinity"; -0 -> "0"); bigint -> its digits; booleans -> "true"/"false";
+  null -> "null"; undefined and a missing argument -> "undefined"; arrays -> their elements joined with "," after the same
+  conversion, with null/undefined elements as empty text, nested arrays flattened by the join ([] -> "", [1,[2,3]] ->
+  "1,2,3", ["a%","b\n"] -> "a%25,b%0A"); plain objects -> "[object Object]"; Map -> "[object Map]"; Set -> "[object Set]";
+  RegExp -> its "/source/flags" text, then escaped; a Uint8Array -> its bytes in decimal joined by ","; a Node Buffer -> its
+  bytes DECODED AS UTF-8 (Buffer's own toString; invalid bytes -> U+FFFD), then escaped; boxed String/Number/Boolean -> their
+  primitive's text. A value with no usable conversion (an object whose toString is not callable, so the conversion falls to
+  valueOf, which yields an object — also when such an object is an array element) -> throws TypeError "Cannot convert object
+  to primitive value". Extra positional arguments are ignored. Text holding an unpaired surrogate half
+  (not well-formed Unicode, so outside the primary) is in scope here and passes through unchanged (R4).
+MECHANISM String(v), then String.prototype.replace three times in this order with global regexes: /%/g -> '%25',
+  /\r/g -> '%0D', /\n/g -> '%0A'. The percent replacement MUST run first (R2); the replacement strings are constant
+  literals with no $ patterns. A single pass with a function replacer over /[%\r\n]/g is equivalent.
+DEPENDS-ON none
+PINNED regex ESCAPES = /[%\r\n]/g CITED R1 and TABLE ESCAPES — the ECMAScript spelling of the three-member set
+PROVENANCE rederive@c509956a8f8a cli/lsp/pr-review.mjs line 120 — the real source; this file states dialect and envelope only.

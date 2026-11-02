@@ -1,0 +1,50 @@
+UNIT escape_property
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@c41c5fcd84e0 cli/lsp/pr-review.mjs escapeProperty, reproduced exactly. Independent anchor: GitHub's toolkit
+  @actions/core@3.0.1 lib/command.js escapeProperty (driven through core.error's title property). Over text the two agree
+  on 16914 of 16914 text inputs (the full generator at n = 20000 under mulberry32 seed 7, plus 15 targeted probes); they
+  differ only on non-text arguments, which the primary's envelope excludes (the js files' widening, findings in the report).
+ORACLE-CLASS deterministic
+SIG escape_property(value: text) -> text
+ENVELOPE text only: any length (including empty) and any well-formed Unicode — control characters (NUL included), letters
+  of any script and astral characters are all in scope. Non-text arguments and text carrying an unpaired surrogate half are
+  outside this envelope; the js and ts files widen it to both.
+DEPENDS-ON none
+DESCRIPTION Escape a value for use as a PROPERTY of a GitHub Actions workflow command (the file= and title= values in
+  "::error file=<value>,title=<value>::message"), so that the value cannot end the property, start another property, end
+  the property list or break the command line. Each of five characters becomes "%" followed by its two-digit uppercase
+  hexadecimal code; the runner reverses exactly this mapping. One argument, no options.
+BEHAVIOR
+R1 The result is the input with every occurrence of a character in ESCAPES replaced by its replacement from that table,
+  judged one code unit at a time with no context. Every other code unit is copied unchanged and in its original position.
+R2 Empty text -> empty text.
+R3 The percent sign is itself escaped, and replacements are never re-examined: an input that already contains an escape
+  sequence ("%3A") is escaped again ("%253A"), so the operation is NOT idempotent and the runner's single unescape
+  restores the original exactly.
+R4 Carriage return and line feed are escaped independently: CRLF -> "%0D%0A", LF CR -> "%0A%0D".
+R5 The equals sign, semicolon, quotes, backslash, solidus, space, tab, every other control character (NUL, VT, FF, NEL,
+  U+2028, U+2029), the fullwidth colon and comma (U+FF1A, U+FF0C), every non-ASCII letter and astral characters are
+  copied unchanged. CITED FIDELITY package — the escaped set is exactly ESCAPES, the same
+  set as @actions/core@3.0.1.
+TABLE ESCAPES — input code unit -> replacement text (R1); every replacement is three ASCII characters
+  "%"  (U+0025, percent sign)     -> "%25"
+  CR   (U+000D, carriage return)  -> "%0D"
+  LF   (U+000A, line feed)        -> "%0A"
+  ":"  (U+003A, colon)            -> "%3A"
+  ","  (U+002C, comma)            -> "%2C"
+INVARIANT length(result) = length(input) + 2 * (number of ESCAPES code units in input).
+INVARIANT the result contains no CR, LF, colon or comma, so it can neither end the command line nor the property list,
+  nor introduce another property.
+ORACLE value -> oracles/escape_property.json  CANONICAL-SHA256 ff14a08e51b7415429531a615bac3b02c1ec17d6cde45c8701a1539dbba116d1
+NOTE 24 frozen + 48 held-out, stamped once from the pinned authority (seed 1). 38 are language-neutral; 34 are js-only
+  (three texts carrying an unpaired surrogate half; non-text arguments: none, bool, f64 including NaN/Infinity/-0, bigint, absent, list, map, boxed, RegExp, Set, byte
+  array, Buffer; a missing argument; an extra second argument), routed by the tooling to the js envelope extension. Two of those
+  are throws (a map whose conversion to text finds no callable method).
+NOTE No rust variant. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+SCOPE IN: R1-R5 over any text. OUT: escaping of the command MESSAGE (pr-review escapeData, which leaves colon and comma
+  alone), assembly of the command line (pr-review annotations, including its unescaped line= value), and the anchor's
+  omission of empty or falsy properties (an @actions/core issueCommand behavior, not part of property escaping).
+PROVENANCE rederive@c41c5fcd84e0 (MIT), cli/lsp/pr-review.mjs line 119, export escapeProperty; seam
+  selfhost/seams/escape_property.mjs. Independent anchor @actions/core@3.0.1 (MIT), lib/command.js escapeProperty.

@@ -1,0 +1,24 @@
+UNIT vector_set_sha
+LANG ts
+PRIMARY-SHA256 8b5022fdc658ffc607a31321298cfe965b315f8427a5ff1286efbe397db4fe00
+SIG export default function vector_set_sha(oracle: unknown): string
+ABI TypeScript compiles to the js runtime: json = any JS value typed unknown: text=string; bool=boolean; list=Array;
+  map=a plain object (prototype Object.prototype or null) with own enumerable string keys; f64=number; none=null.
+  Result = a string of 64 lower-case hex digits; a throw is an Error thrown out of the call, message free. STRICT: the
+  artifact must type-check under strict: true against this SIG with no any, no non-null assertions (!), and no
+  @ts-ignore / @ts-expect-error. Narrow from unknown by typeof, Array.isArray and Object.getPrototypeOf; read map
+  members through Record<string, unknown>. It may import node:crypto and nothing else.
+ENVELOPE widens exactly as js does (the same runtime): undefined under args/expected and Array holes throw; strings with
+  unpaired surrogates render escaped as lower-case \udxxx; a null-prototype object is a map. "__proto__" keys are OUT.
+  The R5 cap vectors (nested ~414 deep) are js-only: past the neutral codec's 100-value cap.
+MECHANISM (restated from js — language files are self-contained) R1/R2: Array.isArray on frozen and heldout; each case a
+  plain object whose args and expected are not undefined; project into fresh { args, expected } objects. R4: text and
+  keys via JSON.stringify(string) only; list = Array.isArray, throw on a hole; map = plain object, Object.keys(o).sort()
+  (code-unit order); test t === 'f64' / 'throw' first, validate bits with HEX16, render a fresh { t: 'f64', bits } or
+  { t: 'throw' }; everything else throws. R5: pass a depth down the render (the projection 0, +1 per list element and per map
+  value, the texts of a fresh f64/throw node included), checked on ENTRY to each value: throw past 416 before looking at
+  the value, so a 480-deep input throws without descending further; plain recursion fits Node's default stack. R6: createHash('sha256').update(canon, 'utf8').digest('hex').
+DEPENDS-ON none
+PINNED regex HEX16 = /^[0-9a-f]{16}$/ CITED R4 — the f64 bits accept-set
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs vectorSetSha (own code). Round 1 language file 2026-10-26; round 4
+  re-cut 2026-10-27 (the R5 nesting cap); round 5 re-cut 2026-10-27 (the cap is 416).

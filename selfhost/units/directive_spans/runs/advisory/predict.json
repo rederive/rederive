@@ -1,0 +1,98 @@
+{
+ "status": "ok",
+ "unit": "directive_spans",
+ "primary": "selfhost/units/directive_spans/sir/directive_spans.sir",
+ "primarySha256": "a5c85ce6a72d5e96ae2ae12844a074c05fe48a590f6eddec3163e696476774aa",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "PARSER LINES. The text is cut into parser lines at every parser break (PINNED LINE_BREAK), scanning left to right, so CR LF is one break and never two. No other character breaks a parser line: LINE SEPARATOR, PARAGRAPH SEPARATOR, NEXT LINE, form feed and vertical tab are content. Parser lines are judged one by one by R2 to R6.",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "R2",
+   "text": "NORMALIZE. Each parser line is judged after two edits. First, every U+FEFF inside the line's leading run of SPACE and U+FEFF characters is removed, and the spaces and tabs of that run stay in their order. A U+FEFF after the first other character is content. Second, the line's trailing run of SPACE characters is removed.",
+   "ambiguity": 0.28
+  },
+  {
+   "id": "R3",
+   "text": "SKIP. A normalized line is not a directive line when it is empty, when its first character is a SPACE (an indented continuation), or when its first character is \"#\" (a comment; the parser keeps comments, and spans drops them).",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "R4",
+   "text": "NAME. Otherwise the line's NAME is its text up to its first SPACE (excluded), or the whole line when it has none. Only SPACE separates. Any other whitespace or invisible character (no-break space, U+3000, U+200B, U+2060, U+FEFF after the first character, LINE SEPARATOR, NEXT LINE, form feed, vertical tab) is part of the NAME. So a name glued to its arguments by such a character is never a directive, and neither is a line that starts with one.",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R5",
+   "text": "COLON. When the NAME is PINNED NAME followed by exactly one \":\" at its end, that \":\" is dropped. The one exception is the NAME \"CITED:\", which keeps its colon. A NAME with two colons, or with characters after the colon, is not changed.",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R6",
+   "text": "SHAPE. The line is a directive line exactly when its NAME (after R5) matches PINNED NAME and is not exactly \"CITED\". Whether the name is known does not matter. Unknown names count, and so do one-letter words of column-0 prose (\"A\", \"I\"), R-numbers of any length, and \"EARNED\" and \"ANCHOR\" at column 0. Only \"CITED\" is excluded: it is an attribute, and a column-0 \"CITED\" line continues the directive above it. Nothing after the NAME matters (arguments, quotes, a trailing comment, attributes), and the parse mode does not change the directive set.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R7",
+   "text": "GIT LINES. The git line of a parser line is 1 plus the number of git breaks (PINNED GIT_BREAK) among the parser breaks before it. A lone CR breaks a parser line but does not advance the git line, so a lone CR's two sides share one git line. LAST, the text's last git line, is 1 plus the number of LF characters in the text (those inside CR LF included), minus 1 when the text ends with LF, and never less than 1. A final LF adds no line; a final lone CR adds no line either. The empty text has LAST 1.",
+   "ambiguity": 0.4
+  },
+  {
+   "id": "R8",
+   "text": "SPANS. Let S1 < S2 < … < Sk be the DISTINCT git lines (R7) of the directive lines (R2 to R6). The result is [Si, S(i+1) − 1] for each i < k, then [Sk, LAST]. With no directive line the result is the empty list. Directives on one git line (parser lines separated only by lone CRs) share ONE pair. Every end is at least its start, and Sk never exceeds LAST, since a directive line is never the empty line after a final LF. CITED FIDELITY package — the real function keys a map by git line, and a later directive on the same git line replaces the earlier entry's end but keeps its place. Only the last directive's end on each git line survives.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "R9",
+   "text": "ATTRIBUTION. Every line from a directive's git line up to the next pair's start belongs to that pair. That covers its continuations, blank lines, comment lines (even one written about the NEXT directive), column-0 prose and glued-name lines. CITED FIDELITY package — kept by ruling. Strict mode reports the comment, column-0 prose and glued-name lines as errors. A directive-shaped column-0 word (R6) is only a warning there, and it starts its own pair.",
+   "ambiguity": 0.31
+  },
+  {
+   "id": "TABLE LINE row 1",
+   "text": "empty (blank, only spaces and tabs, only U+FEFF marks)                                         | not a directive (R3)",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE LINE row 2",
+   "text": "first character a space or tab, including after U+FEFF removal                                 | not a directive: continuation (R3)",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE LINE row 3",
+   "text": "first character \"#\"                                                                            | not a directive: comment (R3)",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE LINE row 4",
+   "text": "NAME after R5 matches PINNED NAME and is not \"CITED\"                                           | DIRECTIVE (R6)",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "TABLE LINE row 5",
+   "text": "otherwise: a lowercase, digit, \"-\", \"_\", non-ASCII or invisible first character; \"CITED\"; \"CITED:\"; \"A::\"; \"UNIT:x\"; a glued separator | not a directive (R4 to R6)",
+   "ambiguity": 0.64
+  }
+ ],
+ "ranked": [
+  "TABLE LINE row 5",
+  "TABLE LINE row 4",
+  "R6",
+  "R7",
+  "R5",
+  "R4",
+  "R8",
+  "R9",
+  "R2",
+  "R1",
+  "TABLE LINE row 2",
+  "R3",
+  "TABLE LINE row 1",
+  "TABLE LINE row 3"
+ ],
+ "at": "2026-11-02T20:42:58Z"
+}

@@ -1,0 +1,363 @@
+{
+ "unit": "escape_property",
+ "encoding": "js-native-v0.4",
+ "envelope": "js",
+ "note": "vectors whose values fall OUTSIDE the primary's abstract envelope (boxed wrappers, plain objects, bigint, undefined) — a js ENVELOPE EXTENSION, verified only by the js variant, in its own native encoding",
+ "frozen": [
+  {
+   "name": "v15",
+   "args": [
+    "\ud800"
+   ],
+   "expected": "\ud800",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v16",
+   "args": [
+    null
+   ],
+   "expected": "null",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v17",
+   "args": [
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   "expected": "1%2C2%2C3",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v18",
+   "args": [
+    {}
+   ],
+   "expected": "[object Object]",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v19",
+   "args": [
+    42
+   ],
+   "expected": "42",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v20",
+   "args": [],
+   "expected": "undefined",
+   "outsideEnvelope": "arity 0 ≠ SIG 1 — outside the abstract SIG"
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "toString": "x:y"
+    }
+   ],
+   "expected": {
+    "__throw": "Cannot convert object to primitive value"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "__t": "boxed",
+     "k": "String",
+     "v": "boxed:,"
+    }
+   ],
+   "expected": "boxed%3A%2C",
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v23",
+   "args": [
+    true
+   ],
+   "expected": "true",
+   "outsideEnvelope": "not text"
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v35",
+   "args": [
+    "\udc00"
+   ],
+   "expected": "\udc00",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v36",
+   "args": [
+    "a\ud800:b"
+   ],
+   "expected": "a\ud800%3Ab",
+   "outsideEnvelope": "not well-formed Unicode (lone surrogate) — UTF-16 only, no utf8 form"
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "__t": "undef"
+    }
+   ],
+   "expected": "undefined",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v42",
+   "args": [
+    false
+   ],
+   "expected": "false",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v43",
+   "args": [
+    0
+   ],
+   "expected": "0",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "__t": "num",
+     "v": "-0"
+    }
+   ],
+   "expected": "0",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v45",
+   "args": [
+    -1.5
+   ],
+   "expected": "-1.5",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v46",
+   "args": [
+    1e+21
+   ],
+   "expected": "1e+21",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v47",
+   "args": [
+    0.1
+   ],
+   "expected": "0.1",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "__t": "num",
+     "v": "NaN"
+    }
+   ],
+   "expected": "NaN",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "__t": "num",
+     "v": "Infinity"
+    }
+   ],
+   "expected": "Infinity",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "__t": "bigint",
+     "v": "12345678901234567890"
+    }
+   ],
+   "expected": "12345678901234567890",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v51",
+   "args": [
+    []
+   ],
+   "expected": "",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v52",
+   "args": [
+    [
+     "a:b",
+     "c"
+    ]
+   ],
+   "expected": "a%3Ab%2Cc",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v53",
+   "args": [
+    [
+     null,
+     {
+      "__t": "undef"
+     },
+     1
+    ]
+   ],
+   "expected": "%2C%2C1",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v54",
+   "args": [
+    [
+     {}
+    ]
+   ],
+   "expected": "[object Object]",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "a": 1
+    }
+   ],
+   "expected": "[object Object]",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v56",
+   "args": [
+    [
+     {
+      "valueOf": 1,
+      "toString": 2
+     }
+    ]
+   ],
+   "expected": {
+    "__throw": "Cannot convert object to primitive value"
+   },
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "__t": "boxed",
+     "k": "Number",
+     "v": 3.5
+    }
+   ],
+   "expected": "3.5",
+   "outsideEnvelope": "legacy codec tag 'boxed' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "__t": "regex",
+     "source": "a,b:c",
+     "flags": "g"
+    }
+   ],
+   "expected": "/a%2Cb%3Ac/g",
+   "outsideEnvelope": "legacy codec tag 'regex' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "__t": "set",
+     "values": [
+      1,
+      2
+     ]
+    }
+   ],
+   "expected": "[object Set]",
+   "outsideEnvelope": "legacy codec tag 'set' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      1,
+      2,
+      58
+     ],
+     "buf": false
+    }
+   ],
+   "expected": "1%2C2%2C58",
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "__t": "u8",
+     "bytes": [
+      97,
+      58,
+      98,
+      44,
+      195,
+      169
+     ],
+     "buf": true
+    }
+   ],
+   "expected": "a%3Ab%2Cé",
+   "outsideEnvelope": "legacy codec tag 'u8' has no language-neutral meaning — an ENVELOPE fact, not a value"
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "__t": "num",
+     "v": "-Infinity"
+    }
+   ],
+   "expected": "-Infinity",
+   "outsideEnvelope": "not text"
+  },
+  {
+   "name": "v63",
+   "args": [
+    "first:",
+    "second,"
+   ],
+   "expected": "first%3A",
+   "outsideEnvelope": "arity 2 ≠ SIG 1 — outside the abstract SIG"
+  }
+ ]
+}

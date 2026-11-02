@@ -1,0 +1,28 @@
+UNIT escape_property
+LANG ts
+PRIMARY-SHA256 1a681329e2db069b1a3348780bc6c8d749a36ffcdca1f97da4b00b7b2eb61c6d
+SIG export default function escape_property(v: unknown): string
+ABI TypeScript compiles to the js runtime: text=string (UTF-16 code units); R1 is applied per code unit; surrogate pairs and
+  an unpaired surrogate half pass through intact (the ts widening admits such text, as js does; the primary excludes it). The parameter is `unknown` because the runtime contract accepts any value
+  (the widening below). STRICT: the artifact must type-check under `strict: true` against this SIG with no `any`, no
+  non-null assertions (`!`), and no `@ts-ignore` / `@ts-expect-error`.
+ENVELOPE widening, exactly as the js file (the same runtime): any JS value is converted to text first by String(v) and then
+  escaped by R1. undefined or a missing argument -> "undefined"; null -> "null"; booleans -> "true"/"false"; numbers ->
+  the shortest round-trip decimal ("1e+21", "1e-7"), -0 -> "0", NaN -> "NaN", ±Infinity -> "Infinity"/"-Infinity";
+  bigint -> decimal digits; boxed primitives -> their primitive's text; Array -> elements converted the same way
+  (undefined, null, holes -> empty) joined with "," (each comma then escaped); RegExp -> "/source/flags"; plain object ->
+  "[object Object]"; Set -> "[object Set]"; Map -> "[object Map]"; Uint8Array -> decimal bytes joined with ","; Node
+  Buffer -> its bytes decoded as UTF-8; Symbol -> "Symbol(description)". An object with a non-callable own toString and
+  no primitive-returning valueOf -> throws "Cannot convert object to primitive value" (also as an Array element). Extra
+  positional arguments are ignored.
+MECHANISM (restated — language files are self-contained, not inherited) conversion = String(v) first (not a template
+  literal, not v.toString()); R1 = String.prototype.replace with each pin below, percent FIRST then CR, LF, colon, comma,
+  or one pass over code units through ESCAPES; constant replacement strings.
+DEPENDS-ON none
+PINNED regex PCT = /%/g CITED R1 ESCAPES "%" -> "%25" — must run first (R3)
+PINNED regex CR = /\r/g CITED R1 ESCAPES CR -> "%0D"
+PINNED regex LF = /\n/g CITED R1 ESCAPES LF -> "%0A"
+PINNED regex COLON = /:/g CITED R1 ESCAPES ":" -> "%3A"
+PINNED regex COMMA = /,/g CITED R1 ESCAPES "," -> "%2C"
+PROVENANCE rederive@c41c5fcd84e0 cli/lsp/pr-review.mjs line 119 — the real source (js); this file states the typed SIG,
+  dialect and envelope only; no behavior.

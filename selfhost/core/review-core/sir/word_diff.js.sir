@@ -1,0 +1,17 @@
+UNIT word_diff
+LANG js
+PRIMARY-SHA256 f45b61112159279c9411e046d62f3489959604337b9c74a1b3ca1f321da41a9c
+SIG export function wordDiff(a, b)
+ABI text = string (UTF-16 code units). The result is a fresh Array of plain objects { op, text }, both strings, op one of
+  "=", "-", "+"; key order is immaterial. The driver calls wordDiff(a, b) positionally. A throw (R9) is a thrown Error; the
+  message is not graded. The artifact is an ES module with the named export wordDiff and imports nothing.
+ENVELOPE widened: a non-string a or b (null, a number) is a js-only probe; the artifact throws as the package does when it
+  calls a.split / b.split on it, so it must not coerce the argument with String().
+MECHANISM the token cut (R2) is String.prototype.split with the TOKENS pin: a split on a capturing regex keeps the separators
+  and yields exactly R2's list, leading and trailing empty strings included. JS \s is exactly the WS pin. WORDS (R5) may be
+  text.trim().split(/\s+/).length on a text with a word character (trim removes the same WS set); test a
+  whitespace-only text with the WS-ONLY pin first, since the split of an empty trim has length 1. Token equality is ===. The LCS table L may be a typed array of n+1 rows of m+1 zeros.
+DEPENDS-ON none
+PINNED regex TOKENS = /(\s+)/ CITED R2 — the capture group keeps the whitespace runs as tokens
+PINNED regex WS-ONLY = /^\s*$/ CITED R6 — a whitespace-only or empty glue candidate, 0 words
+PROVENANCE rederive@c41c5fcd84e0 cli/lsp/explain.mjs wordDiff. Language file cut 2026-11-02 with the primary.

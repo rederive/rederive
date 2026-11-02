@@ -29,3 +29,12 @@ test('#164 the js extension: expected values escaped like results, Map/Set grade
   let deep: any = 1; for (let i = 0; i < 120; i++) deep = [deep];
   assert.throws(() => extensionCases({ frozen: [{ name: 'd', args: [1], expected: deep }], heldout: [] }, sig), (e: any) => e.verifierFault === true);
 });
+
+test('the driver hands an artifact the argument the oracle was stamped from: a Buffer stays a Buffer (escape_property v61)', async () => {
+  const call = nativeCaller((v: any, m: any, s: any) => [Buffer.isBuffer(v), String(v), m instanceof Map, s instanceof Set]);
+  const buf = Buffer.from('a:b,é');
+  const [r] = await call([[buf, new Map([[1, 'x']]), new Set([2])]]);
+  assert.deepEqual(r, [true, 'a:b,é', true, true]);
+  const [u] = await call([[Uint8Array.from([1, 2])]]); assert.deepEqual(u, [false, '1,2', false, false], 'a plain Uint8Array stays plain');
+  const arg = [1, 2]; await nativeCaller((a: any) => { a.push(3); return a.length; })([[arg]]); assert.deepEqual(arg, [1, 2], 'a mutating artifact never corrupts the next case');
+});

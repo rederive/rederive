@@ -1,0 +1,88 @@
+UNIT review_summary
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@9b9e5d24ca9d cli/lsp/pr-review.mjs summary({ units, stops }) — the per-contract report written to the
+  GitHub job summary; reproduce it exactly, including its code-span cells (R4) and its fail-closed status (R2)
+ORACLE-CLASS deterministic
+SIG review_summary(units: list[record[unit: text, status: text, change: text, tests: text, bindings: text, citations: text]], stops: i64) -> text
+ENVELOPE units is a list (empty included) of report rows, each holding the six text fields of the SIG; any further field a
+  row carries is never read. Every text is well-formed (any Unicode scalar values, line breaks, Markdown and HTML
+  characters included). stops is any i64 (the review only produces counts from 0 up; a negative count is in scope and R5
+  says what it renders). Nothing in the envelope throws. Values outside the SIG (a units that is not a list, a row that
+  is not a map, a missing or non-text field, a stops that is not an integer) are OUT-OF-DOMAIN below; the js language
+  file widens to them.
+DEPENDS-ON none
+DESCRIPTION Render the review's per-contract report as Markdown: a level-2 heading carrying the pass/fail count, a
+  six-column table with one row per contract in input order (a status icon, then the unit, change, tests, bindings and
+  citations cells), and, when there are Stops, a line counting them. The row values come from the review and can carry
+  contract text (unit names, labels), so every non-empty cell is a Markdown code span (R4): nothing inside one renders
+  (no emphasis, link, image, autolink or HTML), and its vertical lines are escaped because a GitHub-flavored table splits
+  its cells before it reads code spans. The result is one text; every line break is a single LF.
+BEHAVIOR
+R1 An empty units list yields EMPTY_REPORT (PINNED) followed by the STOPS block of R5 (which is empty unless stops is at
+  least 1).
+R2 A row PASSES exactly when its status equals the text "pass" (exact comparison: case-sensitive, no trimming). Every
+  other status, the empty text and "fail" included, FAILS. F = the number of failing rows, N = the number of rows.
+  CITED FIDELITY package — the status fails closed: "PASS", "pass " and "error" all count as failing
+R3 For N at least 1 the heading is "## SIR review: " followed by the VERDICT of TABLE VERDICT. NOUN is "contract" when N
+  is 1 and "contracts" otherwise; it follows N in both rows (so "1 of 2 contracts failing", "1 of 1 contract failing").
+R4 Each row, in input order, renders as ROW (PINNED): the icon is FAIL_ICON for a failing row and PASS_ICON for a passing
+  one (R2); each of the five cells is CELL(field), defined in four steps.
+  (a) T = the field's text scanned left to right with each match of TABLE CELL_ESCAPE replaced; a CR immediately followed
+  by an LF is one match (one space), any other CR or LF is a match on its own; every other character is kept.
+  (b) An empty T is the empty cell (CELL is the empty text).
+  (c) K = the length of the longest run of consecutive backticks (U+0060) in T, 0 when there is none; FENCE = K + 1
+  backticks.
+  (d) PAD = one space (U+0020) when T begins with a backtick, or ends with a backtick, or begins with a space and ends with
+  a space and holds at least one character outside TRIM_SPACE (PINNED); otherwise PAD is empty.
+  CELL = FENCE PAD T PAD FENCE. No other character is altered or escaped.
+  CITED FIDELITY package — the fence rule is CommonMark's; the all-space test is the host's trim set, not CommonMark's
+R5 The STOPS block is chosen by TABLE STOPS_LINE. A count renders as its decimal digits, no grouping, no plus sign, no
+  exponent, at any magnitude of the i64 range. A zero or negative count yields no block.
+R6 For N at least 1 the result is REPORT (PINNED): the heading, a blank line, the two fixed table lines, the rows joined by
+  single LFs, a final LF, then the STOPS block when there is one (a blank line, the stops line, and a final LF).
+TABLE VERDICT — F, N -> the heading's verdict (R3)
+  F at least 1 -> FAIL_ICON " " F " of " N " " NOUN " failing"
+  F is 0       -> PASS_ICON " " N " " NOUN " passing"
+TABLE STOPS_LINE — stops -> the STOPS block (R1, R5)
+  stops at most 0  -> no block (the empty text)
+  stops is 1       -> LF stops " Stop" STOPS_TAIL LF
+  stops at least 2 -> LF stops " Stops" STOPS_TAIL LF
+TABLE CELL_ESCAPE — character of a field -> its text in T (R4a)
+  CR LF (U+000D U+000A, as a pair)  -> " " (one space)
+  CR (U+000D) alone                 -> " "
+  LF (U+000A)                       -> " "
+  LINE SEPARATOR (U+2028)           -> " "
+  PARAGRAPH SEPARATOR (U+2029)      -> " "
+  "|" (U+007C)                      -> "\|" (a backslash, then the vertical line)
+PINNED text EMPTY_REPORT = "## SIR review" LF "No SIR contract changed." LF CITED R1 — the empty-units text; LF = U+000A
+PINNED text PASS_ICON = U+2705 CITED R2 R4 — WHITE HEAVY CHECK MARK, one code point, no variation selector
+PINNED text FAIL_ICON = U+274C CITED R2 R4 — CROSS MARK, one code point, no variation selector
+PINNED text STOPS_TAIL = ": each one is an annotation on its line, explained in full in the review." CITED R5
+PINNED charset TRIM_SPACE = { U+0009, U+000A, U+000B, U+000C, U+000D, U+0020, U+00A0, U+1680, U+2000..U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF } CITED R4d — the ECMAScript WhiteSpace and LineTerminator set the package's all-space test trims; NEXT LINE (U+0085) and MONGOLIAN VOWEL SEPARATOR (U+180E) are NOT in it
+PINNED grammar ROW = "| " ICON " | " CELL(unit) " | " CELL(change) " | " CELL(tests) " | " CELL(bindings) " | " CELL(citations) " |" CITED R4 — every separator is exactly one space, a vertical line, one space, also around an empty cell; the line opens with "| " and closes with " |"
+PINNED grammar REPORT = HEADING LF LF "| | unit | change | tests | bindings | citations |" LF "|---|---|---|---|---|---|" LF ROW ( LF ROW )* LF STOPS CITED R6 — HEADING per R3, ROW per R4, STOPS per R5 (empty, or LF line LF); the header's first cell is a single space between two vertical lines, the rule line has six cells of three hyphens
+INVARIANT the result contains no CR, no LINE SEPARATOR and no PARAGRAPH SEPARATOR. It holds exactly 2 LFs for no rows and
+  N + 4 for N rows, plus 2 with a STOPS block. Every row line has exactly seven vertical lines not preceded by a
+  backslash (six cells), and every non-empty value cell is one code span whose fence is longer than any backtick run
+  inside it, so no value text stands outside a code span.
+INVARIANT the heading's verdict and the STOPS block are computed independently: a report may say every contract passes
+  and still carry Stops, or fail contracts with no Stops (the two counts are never cross-checked).
+OUT-OF-DOMAIN js only, recorded in the js extension oracle: (1) units with no length member (a map) is taken as empty and
+  yields EMPTY_REPORT plus the STOPS block; (2) units absent (none) throws; (3) a row that is none throws; (4) a field
+  that is missing or none is the empty text before CELL; any other non-text field is the host's text of it ("true",
+  "false", "0", "7", "2.5", a list as its elements' texts joined by ",", a map as "[object Object]"), then CELL; a
+  missing, none or non-text status fails (R2); (5) a stops that is none, false, the empty text or a text the host reads
+  as at most 0 yields no block; any other stops value yields the block when the host's loose comparison stops > 0
+  holds, takes the singular only when stops is the number 1 exactly (the text "1" takes "Stops"), and renders as the
+  host's text of it ("1.5 Stops", "0.5 Stops", "true Stops").
+NOTE rust is omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+ORACLE value -> oracles/review_summary.json  CANONICAL-SHA256 2063650031bff66d8e01c0f02bd525c584b6581d5eca8a8504761ade031a7333
+SCOPE IN: R1-R6 over the SIG. OUT: review() that builds the rows and the stops count, the comment body, the annotations
+  and the Action's I/O (writing GITHUB_STEP_SUMMARY); the js widening's values are OUT-OF-DOMAIN, graded by js only.
+PROVENANCE rederive@9b9e5d24ca9d (MIT) cli/lsp/pr-review.mjs, export summary (cells through cell and val, the Stops line
+  through stopsLine), driven through selfhost/seams/review_summary.mjs as (units, stops) -> summary({ units, stops }).
+  summary, cell, val and stopsLine are byte-identical at 65149601a522 (the round-2 ruling's pin) and d76102039c43; the stamp tool required
+  the restage. Re-cut 2026-11-02 on the architect's round-2 rulings; every rule checked against the pinned code on a
+  seeded sample.

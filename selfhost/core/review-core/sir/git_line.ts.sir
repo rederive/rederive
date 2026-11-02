@@ -1,0 +1,24 @@
+UNIT git_line
+LANG ts
+PRIMARY-SHA256 e142978537632cf19cbb0f7b534edce97496381d204443f466d50efe9b97b9fb
+SIG export default function git_line(text: string, lines: readonly number[]): number[]
+ABI TypeScript compiles to the js runtime and is driven exactly as js. text = string (UTF-16; only U+000D and U+000A
+  matter). Each entry of lines = number (double; -0, NaN and the infinities arrive as such). The result = a fresh number[]
+  of integers, one per entry of lines, in order. STRICT: the artifact type-checks under strict: true with no any, no
+  non-null assertions (!), no @ts-ignore and no @ts-expect-error. ES module default export; imports nothing.
+ENVELOPE as the primary; no widening is claimed (the js-only extension observations are graded on the js variant).
+MECHANISM (restated from js — language files are self-contained, not inherited) a table whose slot 0 holds 0, a counter
+  lf = 1, then for each match m of text.matchAll(BREAKS) in order: push lf; when m[0] is "\n" or "\r\n", lf += 1; when
+  m[0] is "" stop. The pin's alternation takes "\r\n" before "\r" (R1); its `$` has no m flag, so it matches only at the
+  end of text, exactly once and last, pushing the last parser line's slot (R2, the empty text included); the stop on it is
+  redundant. FINAL (R4) is lf after the loop.
+MECHANISM TABLE LOOKUP = table[x] ?? lf (under noUncheckedIndexedAccess the read is number | undefined, which ?? narrows).
+  Indexing converts x to its property key: -0 becomes "0" (answer 0); a key that is not an index of the table ("-1",
+  "1.5", "NaN", "Infinity", "1e+21", an integer past P) reads undefined and falls to lf. An explicit Number.isInteger and
+  range test is equivalent. Map over lines with the table built ONCE per call.
+MECHANISM the LINE SEPARATOR and PARAGRAPH SEPARATOR are not breaks and need no handling; if the artifact names them,
+  write them only as the escapes \u2028 and \u2029, never raw.
+PINNED regex BREAKS = /\r\n|\r|\n|$/g CITED R1 R2 — the order CRLF before CR is R1; the end-of-text empty match closes the last line
+DEPENDS-ON none
+PROVENANCE rederive@4c134cacd842 cli/lsp/pr-review.mjs gitLine (JavaScript). Language file cut 2026-11-02 with the
+  primary, before any blind re-emission.

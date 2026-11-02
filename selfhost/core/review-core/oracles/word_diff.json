@@ -1,0 +1,5105 @@
+{
+ "unit": "word_diff",
+ "sig": "word_diff(a: text, b: text) -> list[record[op: text, text: text]]",
+ "encoding": "sir-canonical-v1",
+ "frozen": [
+  {
+   "name": "v0",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": []
+   }
+  },
+  {
+   "name": "v1",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "abc",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "abc",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v2",
+   "args": [
+    {
+     "t": "text",
+     "v": "abc",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "abc",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v3",
+   "args": [
+    {
+     "t": "text",
+     "v": "same text here",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "same text here",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "same text here",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v4",
+   "args": [
+    {
+     "t": "text",
+     "v": "   ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "   ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "   ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v5",
+   "args": [
+    {
+     "t": "text",
+     "v": " ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "\t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "\t",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v6",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": " ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v7",
+   "args": [
+    {
+     "t": "text",
+     "v": " a",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": " b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v8",
+   "args": [
+    {
+     "t": "text",
+     "v": "a ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "b ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v9",
+   "args": [
+    {
+     "t": "text",
+     "v": "a  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "b \t",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a  ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b \t",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v10",
+   "args": [
+    {
+     "t": "text",
+     "v": " \ta",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " \ta",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "  b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v11",
+   "args": [
+    {
+     "t": "text",
+     "v": "one two",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "one two three",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "one two",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " three",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v12",
+   "args": [
+    {
+     "t": "text",
+     "v": "one two three",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "one three",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "one ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "two ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "three",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v13",
+   "args": [
+    {
+     "t": "text",
+     "v": "x y",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v14",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "b a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v15",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "c b a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a b c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c b a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v16",
+   "args": [
+    {
+     "t": "text",
+     "v": "the cat sat",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "the dog sat",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "the ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "cat",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "dog",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " sat",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v17",
+   "args": [
+    {
+     "t": "text",
+     "v": "a x b y c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a p b q c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x b y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "p b q",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v18",
+   "args": [
+    {
+     "t": "text",
+     "v": "a x b c y d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a p b c q d",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x b c y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "p b c q",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " d",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v19",
+   "args": [
+    {
+     "t": "text",
+     "v": "a x b c e y d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a p b c e q d",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "p",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " b c e ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "q",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " d",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v20",
+   "args": [
+    {
+     "t": "text",
+     "v": "x b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v21",
+   "args": [
+    {
+     "t": "text",
+     "v": "x b c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y b c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " b c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v22",
+   "args": [
+    {
+     "t": "text",
+     "v": "p x q",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "p y q",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "p ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " q",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v23",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b c d",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "w b x d",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a b c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "w b x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " d",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "heldout": [
+  {
+   "name": "v24",
+   "args": [
+    {
+     "t": "text",
+     "v": "alpha beta",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "gamma delta",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "alpha beta",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "gamma delta",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v25",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v26",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v27",
+   "args": [
+    {
+     "t": "text",
+     "v": "a　b c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a　d c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a　",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "d",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v28",
+   "args": [
+    {
+     "t": "text",
+     "v": "﻿a b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "﻿a c",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "﻿a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v29",
+   "args": [
+    {
+     "t": "text",
+     "v": "ab",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "ac",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "ab",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "ac",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v30",
+   "args": [
+    {
+     "t": "text",
+     "v": "a​b c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a​b d",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a​b ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "d",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v31",
+   "args": [
+    {
+     "t": "text",
+     "v": "x\r\ny",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x\ny",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "\r\n",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "\n",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v32",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b a b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "b a b a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b a b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v33",
+   "args": [
+    {
+     "t": "text",
+     "v": "insert here",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "insert new words here",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "insert ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "new words ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "here",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v34",
+   "args": [
+    {
+     "t": "text",
+     "v": "keep drop1 drop2 keep",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "keep keep",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "keep ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "drop1 drop2 ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "keep",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v35",
+   "args": [
+    {
+     "t": "text",
+     "v": "a x y b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a b x y",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x y b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b x y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v36",
+   "args": [
+    {
+     "t": "text",
+     "v": "😀 日本 é",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "😀 é 日本",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "😀 ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "日本 é",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "é 日本",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v37",
+   "args": [
+    {
+     "t": "text",
+     "v": "old one middle old two",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "new one middle new two",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "old one middle old",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "new one middle new",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " two",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v38",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b c d e f",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a X c Y e Z",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b c d e f",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "X c Y e Z",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v39",
+   "args": [
+    {
+     "t": "text",
+     "v": "a b c d e f",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a b X d e Y",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a b ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c d e f",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "X d e Y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v40",
+   "args": [
+    {
+     "t": "text",
+     "v": "x b c ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y b c ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " b c ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v41",
+   "args": [
+    {
+     "t": "text",
+     "v": "x  ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "y  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "y",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "  ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v44",
+   "args": [
+    {
+     "t": "text",
+     "v": "none\u000bx x foo 😀 a 😀 é c 😀 rule c b ᠎a.b 日本 日本\fa.brule",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "日本⁠R1 rule foo a.b rule",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "none\u000bx x foo 😀 a 😀 é c 😀 rule c b ᠎a.b 日本 日本\fa.brule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "日本⁠R1 rule foo a.b rule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v45",
+   "args": [
+    {
+     "t": "text",
+     "v": "b rule b the none rule",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "b rule b the none",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b rule b the none",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " rule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v46",
+   "args": [
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v47",
+   "args": [
+    {
+     "t": "text",
+     "v": "a.b the the none b R1 a.b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a.b the the none b R1",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a.b the the none b R1",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " a.b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v48",
+   "args": [
+    {
+     "t": "text",
+     "v": "R1 ⁠bar b c é",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "R1 ⁠bar b c é",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v49",
+   "args": [
+    {
+     "t": "text",
+     "v": "the none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "the none",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v50",
+   "args": [
+    {
+     "t": "text",
+     "v": "foo",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "bar",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "foo",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "bar",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v51",
+   "args": [
+    {
+     "t": "text",
+     "v": "é a é 日本⁠a",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "é a é 日本⁠a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "é a é 日本⁠a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v52",
+   "args": [
+    {
+     "t": "text",
+     "v": "none 😀 😀 日本 none a.b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "😀 😀 😀 日本 none a.b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "none",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "😀",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " 😀 😀 日本 none a.b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v53",
+   "args": [
+    {
+     "t": "text",
+     "v": "a ⁠none - x 😀",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": " rule",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a ⁠none - x 😀",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " rule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v54",
+   "args": [
+    {
+     "t": "text",
+     "v": " \n - foo b 😀 ⁠😀 😀\r\n",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "日本 😀",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " \n - foo b 😀 ⁠😀 😀\r\n",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "日本 😀",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v55",
+   "args": [
+    {
+     "t": "text",
+     "v": "-\né R1 ",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "-\né",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "-\né",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " R1 ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v56",
+   "args": [
+    {
+     "t": "text",
+     "v": "c R1　a bar R1 c rule",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "c R1　a bar a R1 c bar rule",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c R1　a bar ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "R1 c ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a R1 c bar ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "rule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v57",
+   "args": [
+    {
+     "t": "text",
+     "v": "é R1 é ​b - a",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "é R1 é ​b -",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "é R1 é ​b -",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v58",
+   "args": [
+    {
+     "t": "text",
+     "v": "a.b a foo rule a.b bar foo",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": " the rule R1 R1 none",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a.b a foo rule a.b bar foo",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " the rule R1 R1 none",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v59",
+   "args": [
+    {
+     "t": "text",
+     "v": "foo x - rule",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "foo - rule",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "foo ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "- rule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v60",
+   "args": [
+    {
+     "t": "text",
+     "v": "bar bar é 😀 none x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a.b a a ᠎b ᠎日本  é",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "bar bar é 😀 none x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a.b a a ᠎b ᠎日本  é",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v61",
+   "args": [
+    {
+     "t": "text",
+     "v": "😀 - a é x foo 日本 x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "- none⁠bar b bar rule the\u000b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "😀 - a é x foo 日本 x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "- none⁠bar b bar rule the\u000b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v62",
+   "args": [
+    {
+     "t": "text",
+     "v": "-",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v63",
+   "args": [
+    {
+     "t": "text",
+     "v": "b 日本 foo foo  b",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "b 日本 foo  b",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b 日本 foo",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " foo",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "  b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v64",
+   "args": [
+    {
+     "t": "text",
+     "v": "😀 a.b  日本 a.b x",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "😀 😀 a.b  foo x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "😀 ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a.b  日本 a.b",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "😀 a.b  foo",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": " x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v65",
+   "args": [
+    {
+     "t": "text",
+     "v": "᠎x\u000b😀 the b a rule bar rule",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "᠎x\u000b😀 the bar the b a rule bar rule",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "᠎x\u000b😀 the ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "bar the ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "b a rule bar rule",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v66",
+   "args": [
+    {
+     "t": "text",
+     "v": "  😀",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "  ",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "  ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "😀",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v67",
+   "args": [
+    {
+     "t": "text",
+     "v": "the rule ​none",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "é　rule　R1　none　​none",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "the rule ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "é　rule　R1　none　",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "​none",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v68",
+   "args": [
+    {
+     "t": "text",
+     "v": "a.b᠎none bar rule R1 bar the\u000ba.b é rule 😀 a.b ᠎none c a.b c ​rule b the none é rule a.b é none c - é -",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "a.b᠎none bar rule R1 bar the\u000ba.b é rule 😀 a.b ᠎none c a.b c ​rule b the none é rule a.b é none - é -",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "a.b᠎none bar rule R1 bar the\u000ba.b é rule 😀 a.b ᠎none c a.b c ​rule b the none é rule a.b é none ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c ",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "=",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "- é -",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v69",
+   "args": [
+    {
+     "t": "text",
+     "v": "é",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "é",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v70",
+   "args": [
+    {
+     "t": "text",
+     "v": "bar\r\n😀 a \n c b the",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "x x",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "bar\r\n😀 a \n c b the",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     },
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "+",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "x x",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "v71",
+   "args": [
+    {
+     "t": "text",
+     "v": "c",
+     "cu": "utf8"
+    },
+    {
+     "t": "text",
+     "v": "",
+     "cu": "utf8"
+    }
+   ],
+   "expected": {
+    "t": "list",
+    "v": [
+     {
+      "t": "record",
+      "v": [
+       [
+        "op",
+        {
+         "t": "text",
+         "v": "-",
+         "cu": "utf8"
+        }
+       ],
+       [
+        "text",
+        {
+         "t": "text",
+         "v": "c",
+         "cu": "utf8"
+        }
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "canonicalSha256": "e25044193c7d3c0b65a9b1f0eba0c326991e2a34bc8793b564b24eeb521e3230"
+}

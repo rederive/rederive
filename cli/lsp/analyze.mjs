@@ -8,7 +8,7 @@ import { dirname, basename, join, resolve } from 'node:path';
 import { parse, canonicalSha, canonicalText, DIRECTIVES } from '../sir/sir-parse.mjs';
 import { legacyPrintSha } from '../sir/legacy-print.mjs';
 import { validateText } from '../sir/validate.mjs';
-import { LANGS, transcriptionLint, leakLint, pinLint, schemaLint, carriedDeclared, carriedBinding } from '../sir/v05.mjs';
+import { LANGS, boundSha, transcriptionLint, leakLint, pinLint, schemaLint, carriedDeclared, carriedBinding } from '../sir/v05.mjs';
 import { vectorSetSha, ENCODING, TYPES } from '../sir/canon.mjs';
 import { MEANINGS } from '../sir/directive-table.mjs';
 import { linkSections } from './spec-sections.mjs';
@@ -47,12 +47,12 @@ const firstLine = (doc, name) => { const d = doc.ast.find((x) => x.name === name
 
 /** PRIMARY-SHA256 against the primary's canonical text: ok | stale | legacy | unbound | no-primary. */
 export function bindingOf(langText, ptext) {
-  const bound = langText.match(/^PRIMARY-SHA256\s+([0-9a-f]{64})/m)?.[1] ?? null;
+  const bound = boundSha(langText);
   if (ptext === null) return { status: 'no-primary', bound, primarySha: null };
   const primarySha = safeSha(ptext);
   if (!bound) return { status: 'unbound', bound, primarySha };
   if (bound === primarySha) return { status: 'ok', bound, primarySha };
-  let legacy = false; try { legacy = bound === legacyPrintSha(ptext); } catch {}
+  let legacy = false; if (primarySha !== null) { try { legacy = bound === legacyPrintSha(ptext); } catch {} }   // an unhashable primary (a lone surrogate) is never 'legacy': the legacy print would collide it
   return { status: legacy ? 'legacy' : 'stale', bound, primarySha };
 }
 

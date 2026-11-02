@@ -1,4 +1,5 @@
-// selfhost/core.mjs [--out <dir>] [--only u1,u2] — rederive's own kernel as ONE v0.5 bundle, @rederive/rederive-core
+// selfhost/core.mjs [--out <dir>] [--only u1,u2] [--name @rederive/x] — rederive's own kernel as ONE v0.5 bundle, @rederive/rederive-core
+// (or, with --only and --name, another verified bundle: @rederive/review-core is the review system's units)
 // (REDERIVE_SELF_PLAN, "the bootstrapping step": rdv N checks rdv N+1's core). Every VERIFIED selfhost unit is packed by
 // sir-factory's pack-v05 — which refuses anything it cannot back (unbound family, lint, no quorum, no license) and deletes a
 // bundle unless `rdv check` verifies it as written — then the per-unit bundles are merged into one manifest and the WHOLE
@@ -16,6 +17,7 @@ const FACTORY = process.env.SIR_FACTORY ?? join(homedir(), 'sir-factory');
 const argv = process.argv.slice(2); const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 const OUT = resolve(opt('--out', join(HERE, 'core', 'rederive-core')));
 const only = opt('--only', null)?.split(',');
+const NAME = opt('--name', '@rederive/rederive-core');
 const { packV05 } = await import(pathToFileURL(join(FACTORY, 'lib', 'pack-v05.mjs')).href);
 const { detectFeatures, specVersionFor } = await import(pathToFileURL(join(REPO, 'cli', 'features.mjs')).href);
 const auth = JSON.parse(readFileSync(join(HERE, 'AUTHORITY.json'), 'utf8'));
@@ -46,17 +48,17 @@ for (const p of packed) {
 rmSync(scratch, { recursive: true, force: true });
 // features: the UNION of what every unit's own contract uses (one detector), and the spec version that union needs
 const features = [...new Set(manifestUnits.flatMap((mu) => detectFeatures({ sirText: readFileSync(join(OUT, mu.sir), 'utf8'), sirFiles: Object.values(mu.variants).map((v) => v.sir), variants: mu.variants })))];
-const manifest = { name: '@rederive/rederive-core', version, zeroDep: true, specVersion: specVersionFor(features), features,
+const manifest = { name: NAME, version, zeroDep: true, specVersion: specVersionFor(features), features,
   provenance: { source: `rederive@${auth.commit}`, sourceRepo: 'rederive/rederive', license: 'Apache-2.0', decompiledBy: "rederive's own v0.5 loop on itself (selfhost/): a cold sighted decomposer per unit, an oracle stamped from the pinned authority, blind re-emitters per language, verifier-owned drivers", capturedAt: new Date().toISOString().slice(0, 10),
     note: 'each unit names the authority its oracle was stamped from (units[].authority); every one reproduces on the current kernel (selfhost/regress.test.mjs)' },
   units: manifestUnits };
 writeFileSync(join(OUT, 'sir.manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 writeFileSync(join(OUT, 'src', 'index.js'), packed.filter((p) => p.languages.includes('js')).map((p) => `export * as ${p.unit} from './${p.unit}.mjs';`).join('\n') + '\n');
-writeFileSync(join(OUT, 'package.json'), JSON.stringify({ name: '@rederive/rederive-core', version, private: true,
+writeFileSync(join(OUT, 'package.json'), JSON.stringify({ name: NAME, version, private: true,
   description: "rederive's trust kernel, re-derived by rederive: every unit a contract (SIR + held-out oracle) with verified js, ts and rust implementations. Verify with `npx -p rederive rdv check .` (the npm name `rdv` belongs to an unrelated package).",
   license: 'Apache-2.0', type: 'module', main: 'src/index.js', exports: { '.': './src/index.js' }, sir: 'sir.manifest.json', dependencies: {} }, null, 2) + '\n');
 cpSync(join(REPO, 'LICENSE'), join(OUT, 'LICENSE'));
-writeFileSync(join(OUT, 'README.md'), `# @rederive/rederive-core
+writeFileSync(join(OUT, 'README.md'), `# ${NAME}
 
 rederive's own trust kernel, given the rederive treatment (\`selfhost/\`, REDERIVE_SELF_PLAN). ${packed.length} units — the
 canonical codec, the SIR parser and lints, the gates, the graders — each shipped as its **contract**: a primary SIR, a

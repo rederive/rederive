@@ -1,0 +1,147 @@
+UNIT oracle_diff
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@4c134cacd842 cli/lsp/explain.mjs oracleDiff and shown, with the canon.mjs display and canonicalString they call — the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG oracle_diff(before: text, after: text) -> record[before: text, after: text, added: list[record[name: text, hidden: bool, input: text, to: text]], removed: list[record[name: text, hidden: bool, input: text, to: text]], rewritten: list[record[name: text, hidden: bool, input: text, from: text, to: text, inputChanged: bool]], inputsChanged: list[record[name: text, hidden: bool, from: text, to: text]], moved: list[record[name: text, from: text, to: text]], otherChanged: list[record[name: text, keys: list[text]]], fileChanged: list[text], reordered: bool]
+ENVELOPE before and after are any well-formed text; a text that is not JSON is in scope (R1). Inside a parsed file every JSON
+  value is in scope, with these exceptions, which are OUT: a record or map entry (TABLE DISPLAY) that is text; a list or a
+  map, or a number that is not finite, in a position read by TEXT-OF (TABLE DISPLAY rows bool and bigint, a record field name,
+  a RAW result composed inside a list, map or record); a RAW display result (TABLE DISPLAY rows f64, i64, u64, bytes, and
+  TEXT-OF of a text) or a text case name or file or case key that holds a lone surrogate; and a JSON text nested deeper than 2100
+  levels (the too-deep boundary of R2 at 2000 is IN). Nothing in scope throws.
+DEPENDS-ON none
+DESCRIPTION Tell a reviewer what a change did to an oracle (test-vector) file: given the file's text before and after, report
+  each file's shape and list the cases added, removed, whose expected answer was rewritten, whose inputs changed, and that
+  moved between the visible (frozen) and hidden (heldout) sets; the cases whose other keys changed; the file's own keys that
+  changed; and whether the common cases were reordered. Each reported case carries its displayed name and, in the first four
+  lists, whether it is hidden and its input and expected values rendered for a human, every control character named. Field
+  order: the result {before, after, added, removed, rewritten, inputsChanged, moved, otherChanged, fileChanged, reordered};
+  added and removed {name, hidden, input, to}; rewritten {name, hidden, input, from, to, inputChanged}; inputsChanged {name,
+  hidden, from, to}; moved {name, from, to}; otherChanged {name, keys}.
+  A rewritten answer is the finding that stops a review.
+BEHAVIOR
+R1 PARSE. Each argument is read as one JSON text by the PINNED grammar JSON-GRAMMAR. A text that does not match it is the
+  shape "unparseable" and contributes no cases; it is not an error. The shapes, in the order they are decided:
+  "unparseable", "unknown-shape", "too-deep", "malformed-cases", "ok". In a parsed map a repeated key keeps its LAST value at
+  the position of its FIRST occurrence (positions matter only to KEY-ORDER). A number is the double nearest its decimal
+  value; one beyond the double range is an infinity of its sign; a value that rounds to zero keeps its sign ("-0" is
+  negative zero). ABSENT below means a map has no such key; it is distinct from none.
+R2 SHAPE. A parsed value is a map whose own keys "frozen" and "heldout" both hold lists ("__proto__" is an ordinary key), or
+  it is the shape "unknown-shape" (none, a bool, a number, a text, a list, a map missing either list or holding something
+  else there) and contributes no cases and no FILE keys. A conforming map whose DEPTH exceeds 2000 is the shape "too-deep"
+  and likewise contributes no cases and no FILE keys; DEPTH counts the map itself as level 0 and every value under an own
+  key of a map, or an element of a list, as one level below its container, over the whole file (any value at level 2001 or
+  deeper, a scalar or an empty list included, makes it too-deep; "too-deep" wins over "malformed-cases") CITED FIDELITY package — so no compared value reaches R14's marker
+  Otherwise a conforming map is the shape "ok" when every element of both lists
+  is a map, and "malformed-cases" when any element is not (none, a bool, a number, a text, a list); such an element is
+  skipped and the other cases are still read. FILE = the map's own keys other than "frozen", "heldout" and "canonicalSha256";
+  an "unparseable" or "unknown-shape" file has no FILE keys.
+R3 CASES: the map elements of "frozen" in order, then those of "heldout". A case has KEY and NAME (R4); hidden, false from
+  "frozen" and true from "heldout"; ARGS, its key "args" as written (ABSENT when missing); EXPECTED, its key "expected", or
+  ABSENT; and OTHER, its own keys other than "name", "args" and "expected".
+R4 KEY and NAME. ID = (whether the case has the key "name", and when it has, KEY-TEXT of its value, R14). The case is the
+  k-th in case order (frozen then heldout) with its ID, and KEY = (ID, k): so 1 and "1" differ, a missing name differs from
+  none, 0 from -0, an infinity from none, and no literal name can equal a numbered one. Two names are the same ID exactly
+  when their KEY-TEXTs are the same text. NAME, the displayed name: the name itself when it is text, its JSON-TEXT
+  when it is another value, "(no name)" when the key is missing; then, for k >= 2, " (#" k ")". Displayed names may repeat
+  (a literal "(no name)" or "x (#2)"); keys never do CITED FIDELITY package — keyed by (name as JSON, presence, occurrence)
+R5 RESULT. LOOKUP(K) = BEFORE's case with KEY K, or nothing. For each case c of AFTER in case order:
+  (a) LOOKUP(c.KEY) is nothing -> added gets {c.NAME, c.hidden, INPUT(c), SHOWN(c.EXPECTED)}.
+  (b) otherwise, with o = LOOKUP(c.KEY), each of the following that holds appends, in this order: EQUAL(o.ARGS, c.ARGS)
+  fails -> inputsChanged gets {c.NAME, c.hidden, INPUT(o), INPUT(c)}; EQUAL(o.EXPECTED, c.EXPECTED) fails -> rewritten gets
+  {c.NAME, c.hidden, INPUT(c), SHOWN(o.EXPECTED), SHOWN(c.EXPECTED), inputChanged = whether the args comparison failed};
+  o.hidden differs from c.hidden -> moved gets {c.NAME, "hidden" or "visible" for o, the same for c}; CHANGED-KEYS(o.OTHER,
+  c.OTHER) is not empty -> otherChanged gets {c.NAME, those keys}.
+  Then for each case of BEFORE in case order whose KEY is the KEY of no AFTER case: removed gets {its NAME, its hidden, its
+  INPUT, SHOWN of its EXPECTED}. fileChanged = CHANGED-KEYS(BEFORE's FILE, AFTER's FILE). reordered is true when the KEYs
+  common to both files, in BEFORE's case order, are not the same sequence as in AFTER's case order. before and after are the
+  two shapes (R1, R2).
+  INPUT(case): ARGS a list -> SHOWN of each element, in order, joined by ", " (a comma and a space); otherwise "(args: "
+  then SHOWN(ARGS) then ")" — an ABSENT ARGS shows "(args: undefined)".
+R6 EQUAL(X, Y), each a value or ABSENT: when both X and Y are CANONICAL (R7) -> CANON-EQUAL (R8); otherwise -> KEY-TEXT(X)
+  is the same text as KEY-TEXT(Y) (R14) CITED FIDELITY package — canonicalString's throw falls back to keyOf; kept by ruling
+R7 CANONICAL. Visit X and, recursively, every element of a visited list and every value of a visited map, except: of an
+  F64-NODE (a map whose key t is the text "f64") only t and bits are visited; of a THROW-NODE (a map whose t is "throw")
+  only t. X is CANONICAL when no visited position is ABSENT, none or a number; every F64-NODE's bits is a text of exactly 16
+  characters from 0-9 and a-f; and no visited position lies more than 416 levels below X (X is level 0; an element or a map
+  value is one level below its container) CITED FIDELITY package — the 4 x 100 + 16 raw-depth cap of canonicalString; kept by ruling
+R8 CANON-EQUAL: texts are equal when they are the same code units; bools by value; lists of the same length elementwise; an
+  F64-NODE equals exactly the F64-NODEs with the same bits; a THROW-NODE equals exactly the THROW-NODEs; any other two maps
+  are equal when they have the same key set and CANON-EQUAL values under every key; values of different kinds are never
+  equal. So map key order is immaterial, while an F64-NODE's v, a THROW-NODE's msg and any further key of either node are
+  ignored CITED FIDELITY package — a throw message and an f64's v are display hints, by ruling
+R9 JSON-TEXT(X): none -> "null"; a bool -> "true" or "false"; a finite number -> NUMBER-TEXT; an infinite number -> "null";
+  a text -> QUOTE; a list -> "[" then the elements' JSON-TEXT joined by "," then "]"; a map -> "{" then, in KEY-ORDER,
+  QUOTE(key) ":" JSON-TEXT(value), joined by ",", then "}". No whitespace is ever inserted.
+R10 SHOWN(X), X a value or ABSENT: D = DISP(X) by TABLE DISPLAY, or the text "?" when DISP FAILS anywhere inside it, at any
+  depth. When D is not text, or is exactly the text "?", it is replaced by JSON-TEXT(X), or by the text "undefined" when X is
+  ABSENT. The result is D after CONTROL-NAMING (R11); SHOWN never throws. A "?" nested inside a larger display stays.
+  DISP yields text or a RAW value (a value or ABSENT taken verbatim from the file). Composing a part
+  into a list uses JOIN: text itself, ABSENT and none -> the empty text, a bool or number -> TEXT-OF. Composing a part into
+  a map or a record uses TEXT-OF: text itself, ABSENT -> "undefined", none -> "null", a bool -> "true" or "false", a finite
+  number -> NUMBER-TEXT CITED FIDELITY package — host renderings, kept by ruling
+TABLE DISPLAY — DISP(X), first matching row; v, msg and bits name X's keys; e[0], e[1] are an entry's first two elements, ABSENT when it is shorter
+  X is ABSENT or none                                    | FAILS
+  X is a bool, a number, a text or a list                | "?"
+  X is a map whose t is none of the texts below          | "?" (t ABSENT, not text, or another text)
+  t "none"                                               | "null"
+  t "undefined"                                          | "undefined"
+  t "bool"                                               | TEXT-OF(v)
+  t "bigint"                                             | TEXT-OF(v) then "n"
+  t "text"                                               | JSON-TEXT(v); RAW ABSENT when v is ABSENT
+  t "f64", "i64", "u64" or "bytes"                       | v itself, RAW (ABSENT when missing); at the top, a v that is not text, or is "?", falls back by R10
+  t "throw"                                              | "throw(" then JSON-TEXT(msg) then ")"; msg ABSENT or none counts as the empty text
+  t "list" or "tuple"                                    | v not a list -> FAILS; else "[" then each element's DISP by JOIN, joined by ",", then "]"
+  t "map"                                                | v not a list, or an entry that is none, a bool, a number or a map -> FAILS; else "{" then per entry TEXT-OF(DISP(e[0])) ":" TEXT-OF(DISP(e[1])), joined by ",", then "}"
+  t "record"                                             | v not a list, or an entry that is none, a bool, a number or a map -> FAILS; else "{" then per entry FIELD(e[0]) ":" TEXT-OF(DISP(e[1])), joined by ", ", then "}"
+R11 CONTROL-NAMING, two passes over D. A CONTROL is a code unit U+0000 to U+001F or U+007F to U+009F; LABEL(c) is U+2039,
+  then the TABLE NAMES label of c or else "U+" and c's four hex digits in uppercase, then U+203A. Pass 1: every occurrence
+  of a backslash, the letter u and four characters from 0-9 and a-f (lowercase only) whose value is a CONTROL is replaced by
+  the LABEL of that value; other occurrences stay. Pass 2: every CONTROL code unit left in the text is replaced by its
+  LABEL. QUOTE's two-character escapes for backspace, tab, line feed, form feed and carriage return hold no CONTROL and stay
+  as written. A text holding a backslash then "u001b", or the label text itself, displays like a real ESC; R6 still tells
+  them apart CITED FIDELITY package — literal spoofing of the display, kept by ruling
+TABLE NAMES — the CONTROL and its label; every other CONTROL is labelled by its code
+  U+0000 | NUL
+  U+0007 | BEL
+  U+0009 | a backslash then t
+  U+000A | a backslash then n
+  U+000D | a backslash then r
+  U+001B | ESC
+  U+009B | CSI
+R12 FIELD(n), a record field name: a text matching IDENT -> itself; any other text -> QUOTE(n); ABSENT -> "undefined"; none
+  -> "null"; a bool -> "true" or "false"; a finite number -> NUMBER-TEXT; a map -> JSON-TEXT(n) CITED FIDELITY package
+R13 CHANGED-KEYS(X, Y), two maps: the keys of either, de-duplicated and sorted by UTF-16 code units, whose OWN values differ by
+  KEY-TEXT, a key missing from a map reading as ABSENT-MARK, a mark equal only to itself ("__proto__" and "constructor" are
+  ordinary keys, never read through any inheritance).
+R14 KEY-TEXT(X), a value's identity as text, a TYPED encoding: none -> "z"; ABSENT -> "u"; a number -> "n" then "-0" for
+  negative zero, else NUMBER-TEXT or "Infinity" / "-Infinity"; a text -> "s" then QUOTE; a bool -> "b" then "true" or
+  "false"; a list -> "[" then the elements' KEY-TEXTs joined by "," then "]"; a map -> "{" then, in KEY-ORDER, QUOTE(key)
+  ":" KEY-TEXT(value), joined by ",", then "}". Every value carries its kind, so no value spells another; map key order
+  counts except for index-like keys. A position nested more than 2000 levels below X (X at level 0, an element or map value
+  one level below its container) is written as the marker "!deep" whatever it holds, so two values that differ only there
+  have the same KEY-TEXT; R2's too-deep shape keeps every compared value of an "ok" or "malformed-cases" file above it, so the
+  marker is never reached CITED FIDELITY package — keyOf's depth marker, made unreachable by the depth walk
+PINNED grammar JSON-GRAMMAR = RFC 8259 JSON-text, exactly: optional whitespace (space, tab, LF, CR only), one value, optional whitespace, end. A value is "null", "true", "false", a number, a string, an array or an object; a number is an optional "-", then "0" or a digit 1-9 followed by digits, then optionally "." and one or more digits, then optionally "e" or "E", an optional sign and one or more digits; a string is a double quote, then characters at or above U+0020 other than double quote and backslash, or an escape: a backslash then one of double quote, backslash, slash, b, f, n, r, t, or a backslash, u and four hex digits of either case (a lone surrogate escape included), then a double quote. Nothing else parses: no byte-order mark, no trailing comma, no comment, no single quote, no NaN or Infinity, no leading "+" or zero, no empty text. CITED R1
+PINNED grammar QUOTE = a double quote; then each UTF-16 code unit of the text in order: double quote -> backslash then double quote; backslash -> two backslashes; U+0008, U+0009, U+000A, U+000C, U+000D -> a backslash then b, t, n, f, r respectively; any other code unit below U+0020, and a lone surrogate code unit, -> backslash, u, and its four hex digits in lowercase; every other code unit -> itself (U+007F to U+009F, U+2028, U+2029 and all non-ASCII included); then a double quote. CITED R9 R11 R12
+PINNED order KEY-ORDER = first every key that is an array index — the decimal spelling, with no leading zero unless it is "0", of an integer from 0 to 4294967294 — in ascending numeric order; then every other key in the order of its first occurrence in the parsed text. CITED R9
+PINNED grammar NUMBER-TEXT = the shortest round-trip decimal of a finite double, as ECMAScript Number::toString with radix 10: zero of either sign -> "0"; a negative value -> "-" then the text of its magnitude; otherwise with s the shortest digit string (the one nearest the value on a tie) and n its decimal exponent so the value is 0.s times 10^n: when the digit count k <= n <= 21 the digits then n - k zeros; when 0 < n <= 21 the digits with "." after the first n; when -6 < n <= 0 "0." then -n zeros then the digits; otherwise the first digit, "." and the rest when k > 1, then "e", "+" or "-", and the decimal of n - 1 without sign (1e21 -> "1e+21", 1e-7 -> "1e-7"). CITED R4 R9 R10 R12 R14
+PINNED charset IDENT = an ASCII letter or underscore, then zero or more ASCII letters, digits or underscores, over the whole name. CITED R12
+INVARIANT the KEYs of one file are distinct; every case in rewritten, inputsChanged, moved or otherChanged has its KEY in
+  both files, every case in added only in AFTER, every case in removed only in BEFORE; inputChanged is true exactly when the
+  same AFTER case also produced an inputsChanged entry.
+INVARIANT the result depends on before and after only through their parsed values: whitespace and escape spelling in the
+  JSON texts never change it, and map key order changes it only through KEY-TEXT (R6's fallback, a non-text name, CHANGED-KEYS)
+  and JSON-TEXT (a displayed value, R10).
+NOTE rust is omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub Action); there is no Rust consumer.
+ORACLE value -> oracles/oracle_diff.json  CANONICAL-SHA256 8e5957121e5ead1befa9b7902bd4a7bee1e74701441b2a50cb54f45999e1cace
+SCOPE IN: R1-R14 over ENVELOPE. Declared by ruling: canonicalSha256 is not compared (graders check it); junk elements make
+  the shape malformed-cases, a Stop, and are not itemised; a change can be reported in several lists; ABSENT shows
+  "undefined"; names apart by KEY-TEXT may display alike (0 and -0 both "0"; none and an infinity both "null"), as a
+  removed plus an added of one displayed name; a value shown through its JSON-TEXT (R10) writes -0 as "0" and an infinity
+  as "null", so a reported rewrite of [-0, an infinity] may read "[0,null]". OUT: the other review functions of the module (explain,
+  explainDiff, wordDiff) and the ENVELOPE exclusions.
+PROVENANCE rederive@4c134cacd842 (MIT), cli/lsp/explain.mjs: oracleDiff, shown, NAMES, nameOf, keyOf, same, ownVal; cli/sir/canon.mjs:
+  display, canonicalString (unchanged since c509956a8f8a). Driven through selfhost/seams/oracle_diff.mjs as
+  oracleDiff(beforeJson, afterJson). Re-cut 2026-11-02 on the architect's round-5 rulings.

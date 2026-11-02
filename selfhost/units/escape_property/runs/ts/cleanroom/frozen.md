@@ -1,0 +1,17 @@
+# Frozen oracle for escape_property — worked input -> output; reproduce EXACTLY. 15 shown; 23 more are HELD OUT.
+# Every whitespace character other than a plain space, and every control or invisible character, is written as a \uXXXX escape.
+  escape_property("") => ""
+  escape_property("plain") => "plain"
+  escape_property("%") => "%25"
+  escape_property("\r") => "%0D"
+  escape_property("\n") => "%0A"
+  escape_property(":") => "%3A"
+  escape_property(",") => "%2C"
+  escape_property("\r\n") => "%0D%0A"
+  escape_property("::") => "%3A%3A"
+  escape_property("%25") => "%2525"
+  escape_property("%3A%2C") => "%253A%252C"
+  escape_property("a:b,c=d") => "a%3Ab%2Cc=d"
+  escape_property("x,title=injected::boom") => "x%2Ctitle=injected%3A%3Aboom"
+  escape_property("evil\n::error file=x::pwned") => "evil%0A%3A%3Aerror file=x%3A%3Apwned"
+  escape_property("café") => "café"

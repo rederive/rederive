@@ -1,0 +1,117 @@
+UNIT binding_of
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@9e2245be5f42 cli/lsp/analyze.mjs bindingOf, with boundSha from cli/sir/v05.mjs (over parse from cli/sir/sir-parse.mjs), canonicalText and sha256 from cli/sir/sir-parse.mjs and legacyPrintSha from the frozen cli/sir/legacy-print.mjs; the code is the truth, accidents included
+ORACLE-CLASS deterministic
+SIG binding_of(lang_text: text, primary_text: text | none) -> record[status: text, bound: text | none, primarySha: text | none]
+ENVELOPE lang_text is any well-formed text; primary_text is any well-formed text or none. Nothing in scope throws. Text
+  holding an unpaired surrogate code unit is outside the abstract text type; OUT-OF-DOMAIN 1-2 state what the package does
+  with it, and the js language file widens its envelope to cover those cases.
+DEPENDS-ON none
+DESCRIPTION Report whether a SIR v0.5 language file is bound to its primary (SIR v0.5 section 23b): the language file
+  declares PRIMARY-SHA256 followed by a hash, and the binding holds when that hash is the SHA-256 of the primary's
+  canonical text. The result is a record: status (one of ok, stale, legacy, unbound, no-primary), bound (the 64 hex digits
+  found in the language file, or none) and primarySha (the primary's canonical-text hash, or none). A hash written before
+  2026-10-26 hashed the old canonical print instead; it is recognized as legacy. The review and the editor both report
+  bindings with it.
+NOTE Rust is omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+BEHAVIOR
+R1 BOUND is read through the parser. Cut lang_text into lines as R3 does (CRLF, lone CR, lone LF; U+FEFF removed from the
+  leading run; trailing spaces and tabs dropped) but keep every line as it then is (no dropping, no re-indenting), and
+  classify each line by TABLE PARSE-LINE. D = the FIRST line classified DIRECTIVE whose NAME is PRIMARY-SHA256. bound is
+  none when there is no D. Otherwise bound = the ARGUMENT of D when both hold, and none when either fails: (a) the
+  ARGUMENT is exactly 64 characters of LOWER-HEX; (b) every non-empty line after D, up to the next DIRECTIVE line or the
+  end, is a COMMENT. Only the first D counts: a later PRIMARY-SHA256 directive never rescues or overrides it. The ARGUMENT
+  is D's text after its NAME, cut before its comment marker (the first number sign with a space or tab before it and a
+  space, a tab or the line end after it), then stripped of spaces and tabs at both ends; an attribute (CITED, EARNED or
+  ANCHOR), a second word or any other character leaves it not 64 hex digits. A hash on the next line, a 65th digit, a
+  suffix, uppercase hex, an NBSP or U+2028 separator, an attribute or a continuation line all give none CITED FIDELITY package
+R2 STATUS, decided in TABLE STATUS order; the first matching row wins. bound is computed before any row and is reported
+  in every row as R1 found it.
+R3 CANONICAL TEXT (the binding normal form). Cut the text into lines at every CRLF pair, every lone CR and every lone LF
+  (a CR directly followed by LF is one break). For each line: delete every U+FEFF inside the line's leading run of
+  characters drawn from space, tab and U+FEFF (U+FEFF elsewhere stays); then drop trailing spaces and tabs; a line now empty
+  is dropped; a line that begins with spaces or tabs has that whole run replaced by exactly two spaces. Every other
+  character is kept as it is (U+00A0, U+3000, U+2028 and comment text included). The kept lines are joined with LF and
+  followed by one LF; no kept line gives the empty text.
+R4 HASH. A hash is SHA-256 (FIPS 180-4) over the UTF-8 encoding of a text, written as 64 lowercase hex digits.
+R5 primarySha = the hash (R4) of the canonical text (R3) of primary_text (OUT-OF-DOMAIN 1 is the one case where it is
+  none although primary_text is text).
+R6 LEGACY HASH = the hash (R4) of the LEGACY PRINT of primary_text, where the legacy print comes from the LEGACY PARSE.
+  LEGACY PARSE: cut primary_text at every LF only (a CR is not a break); from each piece remove one trailing CR when it
+  ends with one; walk the pieces in order with a CURRENT entry (none at the start) and classify each by TABLE LEGACY-LINE.
+  INDENT is a piece's leading run of spaces and tabs; CONTENT is the rest.
+R7 LEGACY PRINT: one line per entry in entry order, the entry's NAME, then a space and its ARGS when ARGS is not empty,
+  then for every attribute in its order a space, the keyword, a space and the value (an empty value leaves the line ending
+  in that space); after it, one line per continuation in order, two spaces then the continuation. Lines are joined with LF
+  and followed by one LF; no entry gives the text of one LF CITED FIDELITY package
+R8 TRAILING COMMENT CUT, applied to CONTENT (giving CODE): find the smallest index j such that the characters before j
+  hold no LINE-BREAK, the character at j is in SPACE, the next is the number sign, the one after that is absent or in SPACE,
+  and the characters from j+2 to the end hold no LINE-BREAK. When found, CODE = CONTENT before j with its trailing SPACE
+  members removed; otherwise CODE = CONTENT. So a line-break character inside CONTENT blocks the cut unless that very
+  character is the space before the number sign CITED FIDELITY package
+R9 HEAD of a column-0 CODE: CODE splits into NAME and REST only when CODE is not empty and its first character is not in
+  SPACE: NAME = the longest leading run of characters outside SPACE, then the run of SPACE members after it is skipped,
+  REST = what remains, and REST must hold no LINE-BREAK. Otherwise (empty CODE, a first character in SPACE such as U+00A0 or
+  U+FEFF, or a line break in REST) CODE has no head. A NAME made of DIRECTIVE-NAME followed by one colon loses the colon.
+  The head is a directive when NAME (after that) is a DIRECTIVE-NAME CITED FIDELITY package
+R10 ATTRIBUTES of a piece s (REST of a directive line, or CODE of an indented line), giving a BODY and attributes in found
+  order: repeatedly take the LEFTMOST start i of a run of SPACE members such that the run (all of it), then one KEYWORD,
+  then a second run of one or more SPACE members, then a VALUE reach the end of s, where VALUE is one or more characters
+  holding no LINE-BREAK. The second run is as long as possible while leaving a valid VALUE; when s ends in that run the
+  VALUE is its last character, so the run must be at least two characters long and that last character not a LINE-BREAK.
+  Each find records the keyword with the VALUE stripped of SPACE members at both ends (repeating a keyword within one piece
+  appends with one space unless the earlier value is empty, which is replaced), and s is cut to its characters before i;
+  stop when nothing is found. BODY = what is left, stripped of SPACE members at both ends. Without a line break in s at most
+  one attribute is found, and it takes everything after its keyword (later keywords included) CITED FIDELITY package
+R11 MERGE across lines: a directive's attributes start as those of its own line; an indented continuation's attributes
+  overwrite same-keyword values (the earlier value is lost) and a keyword new to the entry is added after the existing ones;
+  a keyword already present keeps its position CITED FIDELITY package
+R12 KEPT, declared (architect ruling 2026-11-02, F7 and F8). (a) A legacy binding survives every edit the legacy print
+  cannot see: comment lines, trailing comments, lines made only of SPACE members, lines before the first entry, and an
+  attribute value overwritten by R11; so legacy does not mean unchanged since binding (the review flags every status
+  other than ok). (b) The hash of the empty text is ok for every primary whose canonical text is empty (empty, or only
+  blank lines), and the hash of the one-LF text is legacy for every primary whose legacy parse yields no entry (only
+  comments, or only text before any directive) CITED FIDELITY package
+NOTE Kept, declared (architect ruling 2026-11-02, F6): the package guards the legacy-hash computation with a catch that no
+  text input reaches, since the legacy parse and print never fail on text. It is not observable and need not be reproduced.
+TABLE STATUS — first matching row wins; bound per R1; L = the legacy hash of R6
+  primary_text is none                         | status no-primary, primarySha none
+  bound is none                                | status unbound, primarySha per R5
+  bound equals primarySha                      | status ok, primarySha per R5
+  primarySha is not none and bound equals L   | status legacy, primarySha per R5
+  otherwise                                    | status stale, primarySha per R5
+TABLE PARSE-LINE — first matching row wins, per line of R1 (the live parser's tolerant reading)
+  empty                                                                              | blank (ignored)
+  after its leading spaces and tabs it begins with the number sign                   | COMMENT
+  begins with a space or tab                                                         | CONTINUATION
+  NAME, the text before its first space or tab (the whole line when it has none), with one final colon removed when what precedes it is a DIRECTIVE-NAME other than CITED, is a DIRECTIVE-NAME other than CITED | DIRECTIVE
+  otherwise (CITED x, CITED: x, a lowercase word, a name glued to its text by U+00A0, U+3000 or U+2028, a line led by U+00A0) | CONTINUATION
+TABLE LEGACY-LINE — first matching row wins, per piece of R6
+  every character of the piece is in SPACE, or it is empty                           | skipped
+  CONTENT begins with the number sign                                                | dropped (a comment; CURRENT unchanged)
+  INDENT empty and CODE (R8) has a head (R9) that is a directive                     | a new entry: NAME, ARGS = BODY and attributes of R10 on REST; it becomes CURRENT
+  INDENT empty, no directive, CURRENT exists                                         | CODE itself, unstripped and with no attribute split, appended as a continuation of CURRENT
+  INDENT empty, no directive, no CURRENT                                             | dropped
+  INDENT not empty, no CURRENT                                                       | dropped
+  INDENT not empty, CURRENT exists                                                   | R10 on CODE: attributes merged by R11, BODY (possibly empty) appended as a continuation
+PINNED charset SPACE = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000..U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED R8 R9 R10 and TABLE LEGACY-LINE row 1 — every whitespace test of the LEGACY parse (R1 and R3 use only space and tab)
+PINNED charset LINE-BREAK = U+000A U+000D U+2028 U+2029 CITED R8 R9 R10 — the characters a single-line scan of the legacy parse cannot cross
+PINNED charset LOWER-HEX = U+0030..U+0039 U+0061..U+0066 CITED R1 (a) — uppercase hex never binds
+PINNED grammar DIRECTIVE-NAME = one ASCII uppercase letter, then zero or more of ASCII uppercase letters, ASCII digits and hyphen CITED R9 and TABLE PARSE-LINE — R1, R12 and ABC-123 qualify; unknown names are directives too
+PINNED grammar KEYWORD = CITED | EARNED | ANCHOR CITED R10 — case-sensitive
+OUT-OF-DOMAIN what the package does with an unpaired surrogate code unit (reproduced; the js-only oracle verifies it).
+  1. In primary_text: canonical text is refused and primarySha is none. The STATUS rows still run in order with that none:
+  no-primary only when primary_text is none, unbound when bound is none, and otherwise stale, never ok and never legacy
+  (the legacy row needs a primarySha) CITED FIDELITY package
+  2. In lang_text: no effect of its own; an unpaired surrogate is not LOWER-HEX and is content to TABLE PARSE-LINE.
+INVARIANT status ok implies bound equals primarySha and primarySha is not none; status no-primary implies primarySha none;
+  status unbound implies bound none. Formatting-only edits of R3 (line endings, U+FEFF marks in a leading run, trailing
+  spaces and tabs, blank lines, indentation width or style) never change status ok.
+ORACLE value -> oracles/binding_of.json  CANONICAL-SHA256 d762b0da5a1e61d9d63de6a8a5af9fb838f3b5ff87b77084a2db69d0e9bc1dcc
+SCOPE IN: the bound reading through the parser, the status order, canonical text with its surrogate refusal, SHA-256, the legacy parse and
+  print. OUT: how the review and the editor render a status; reading files.
+PROVENANCE rederive@9e2245be5f42 cli/lsp/analyze.mjs bindingOf (safeSha), cli/sir/v05.mjs boundSha, cli/sir/sir-parse.mjs parse,
+  canonicalText, sirLines and sha256, cli/sir/legacy-print.mjs legacyPrintSha (parse in legacy mode and print, frozen as of rederive 20bdd3dd041a).
+  Cut cold 2026-11-02 by the sighted decomposer on c509956a8f8a, revised the same day on 9e2245be5f42 (architect rulings F1-F5); seeds from packages/colors/sir/strip and the lab's is_number family.

@@ -1,0 +1,20 @@
+UNIT word_diff
+LANG ts
+PRIMARY-SHA256 f45b61112159279c9411e046d62f3489959604337b9c74a1b3ca1f321da41a9c
+SIG export function wordDiff(a: string, b: string): { op: '=' | '-' | '+'; text: string }[]
+ABI TypeScript compiles to the js runtime and is driven exactly as js: wordDiff(a, b) positionally. text = string (UTF-16
+  code units). The result is a fresh array of plain objects { op, text }. STRICT: the artifact type-checks under strict: true
+  with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error; reading an array element past a bound is
+  undefined at runtime, so index reads are guarded or typed as possibly undefined, never asserted. A throw (R9) is a thrown
+  Error; the message is not graded. ES module with the named export wordDiff; imports nothing.
+ENVELOPE as js: a non-string a or b reaches the artifact at runtime despite the typed SIG (js-only probe) and must throw, as
+  the package does when it calls .split on it; never coerce it with String().
+MECHANISM (restated from js — language files are self-contained) the token cut (R2) is String.prototype.split with the
+  TOKENS pin, which keeps the separators and yields R2's list with its leading and trailing empty strings. JS \s is exactly
+  the WS pin. WORDS (R5) may be text.trim().split(/\s+/).length on a text with a word character; test a whitespace-only text with the
+  WS-ONLY pin first. The result drops entries with empty text (R8). Token equality is ===.
+  The LCS table may be an array of Uint32Array rows.
+DEPENDS-ON none
+PINNED regex TOKENS = /(\s+)/ CITED R2 — the capture group keeps the whitespace runs as tokens
+PINNED regex WS-ONLY = /^\s*$/ CITED R6 — a whitespace-only or empty glue candidate, 0 words
+PROVENANCE rederive@c41c5fcd84e0 cli/lsp/explain.mjs wordDiff. Language file cut 2026-11-02 with the primary.

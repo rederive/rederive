@@ -1,0 +1,422 @@
+{
+ "status": "ok",
+ "unit": "explain_diff",
+ "primary": "selfhost/units/explain_diff/sir/explain_diff.sir",
+ "primarySha256": "b247f386a1f76aed3899519b572965ca540167a0d571a6666a6f99ccc7041cd5",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "Both texts are read by the parser of R2–R7 into an ordered list of directives, each with a name, args (text), a list of continuation pieces (text), an ordered list of attributes (keyword, value) and a list of comments (text), plus the STRAY lines (R9). Nothing else the parser reports affects the result, and the parser never fails on text.",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R2",
+   "text": "LINES. The text is cut into lines at every CR LF pair, lone CR and lone LF — no other character breaks a line; lines are numbered from 1, empty ones included. On each line every U+FEFF inside the leading run of spaces, tabs and U+FEFF is deleted, and trailing spaces and tabs are deleted. A line left empty is skipped. The INDENT is the line's leading run of spaces and tabs; the CONTENT is the rest.",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R3",
+   "text": "COMMENTS. A line whose content starts with \"#\" is a COMMENT LINE (R9) and nothing else. Otherwise the content is cut at its first TRAILING MARK — a \"#\" that is preceded by a space or tab, followed by a space, a tab or the end, and not inside a quoted span (R7) of the content: the CODE is the content before the mark, its trailing spaces and tabs dropped, and the TRAILING COMMENT is the text after the mark trimmed of spaces and tabs (possibly empty). Without a mark the code is the whole content and there is no trailing comment.",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "R4",
+   "text": "DIRECTIVE LINES. An indented line is a continuation (R6). On an unindented line the NAME is the code up to its first space or tab (all of it when there is none) and the REST is the code from that space or tab on. A name that is an uppercase ASCII letter, then any ASCII uppercase letters, digits and \"-\", then one \":\" loses the \":\". When the name is then an uppercase ASCII letter followed by any ASCII uppercase letters, digits and \"-\", and is not \"CITED\", the line starts a new directive with that name, whether or not the name is known; its args and attributes come from splitting the rest (R5), and its trailing comment, if any, is its first comment. Every other unindented line is a continuation (R6).",
+   "ambiguity": 0.39
+  },
+  {
+   "id": "R5",
+   "text": "ATTRIBUTE SPLIT of a piece of text. An ATTRIBUTE MARK is one of the words \"CITED\", \"EARNED\", \"ANCHOR\" that has one or more spaces or tabs right before it, has a space, a tab or the end right after it, and whose first letter is not inside a quoted span (R7) of that same piece. Marks are found left to right, without overlap. With no mark, the body is the whole piece trimmed of spaces and tabs. Otherwise the body is the piece before the first mark's run of spaces and tabs, and each mark yields an attribute whose value is the text after the word up to the next mark's run of spaces and tabs (or the end); bodies and values are trimmed of spaces and tabs, and an empty value is kept as the empty text.",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "R6",
+   "text": "CONTINUATIONS. A continuation with no current directive is a STRAY line (R9). Otherwise its code (for an unindented line, the whole code) is prefixed with one space and split by R5: its attributes are appended, in order, to the current directive's attributes, its body, when not empty, is appended to the directive's continuation pieces, and its trailing comment, if any, is appended to the directive's comments. So an unindented line starting \"CITED \" attaches to the directive above, while one starting \"EARNED \" or \"ANCHOR \" starts a directive of its own (R4).",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R7",
+   "text": "QUOTED SPANS of a piece of text, scanned left to right: a span opens at a straight double quote that is at the start of the piece, or right after one of the characters of OPENERS, or exactly where the previous span closed; it closes at the next double quote, where a backslash skips itself and the one code point after it. When no closing quote exists, the scan stops and no further span opens. A position is inside a span when it lies strictly between its two quotes.",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "R8",
+   "text": "The JOINED TEXT of a directive is its args followed by its continuation pieces, the empty ones dropped, joined with single spaces — for TABLE joined with \" ⏎ \" (U+0020 U+23CE U+0020) instead. Texts are never rewritten. The RAW TEXT of a directive is the same pieces joined with single spaces — for TABLE joined with LF (U+000A), so a literal \" ⏎ \" inside a row is not a row boundary — followed, when it has comments, by \" # \" and its comments joined with \" # \". The SPACE/TAB FIELDS of a text are its pieces between runs of spaces and tabs, empty pieces dropped.",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "R9",
+   "text": "COMMENT LINES AND STRAY LINES. A comment line while a directive is current is appended to that directive's comments with its leading run of \"#\" and then at most one space or tab removed (\"#x\", \"##x\" and \"# x\" all give \"x\"); a comment line before the first directive is a STRAY line. Every STRAY line (also R6's continuation with no current directive, and an unindented line that is not a directive before the first directive) gives one item in the section \"Text outside any directive\", in line-number order: base id \"STRAY\", label \"Line \" + its line number in decimal, and raw text = text = the line (after R2) with its leading spaces and tabs removed, its trailing comment included; no citations.",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "R10",
+   "text": "CITATIONS of a directive: its attributes in order, keeping the \"CITED\", \"EARNED\" and \"ANCHOR\" ones. Its RAW CITATION list holds keyword + \" \" + value for each, or the bare keyword when the value is empty. Its WHY-LIST holds, for each: a \"CITED\" value as is, \"added after a failed test (\" + value + \")\" for \"EARNED\", \"anchored to \" + value for \"ANCHOR\" (an empty value reads \"no reason given\", \"added after a failed test\", \"anchored (no reference given)\" — these never reach the result, since R18 quotes only entries that name a package).",
+   "ambiguity": 0.25
+  },
+  {
+   "id": "R11",
+   "text": "THE ITEMS of a version. Every directive gives at most one item, in the section TABLE SECTIONS assigns it, in the order of the table rows and, within a row, in text order. An item has an id, a label (or none), a raw text (R8), a text (its SHOWN text), a raw citation list and a why-list (R10). The shown text is the joined text, except for PINNED. PINNED: split the args at the first \"=\" that is not inside a quoted span (R7) of the args (with none, the whole args is the HEAD and the value part is empty). KIND-WORD and NAME are the first and second space/tab fields of the HEAD (each the empty text when missing); later fields reach only the raw text. With an \"=\", the shown text is the value part trimmed of spaces and tabs (a no-break space is kept) followed by the pin's continuation pieces, the empty ones dropped, joined with single spaces (possibly the empty text); without one, the shown text is the joined text. The BASE id is \"PIN:\" + NAME, or \"PIN\" when NAME is empty — the KIND-WORD is not part of the id. The label is NAME (or \"(unnamed pin)\" when empty) + \" (\" + PHRASE + EMPTY + \")\", PHRASE being KIND-WORD's entry in TABLE PIN-KINDS, else KIND-WORD itself, else \"no kind\" when KIND-WORD is empty, and EMPTY being \", empty value\" when the pin has an \"=\" and its shown text is empty (a continuation piece makes it non-empty), else nothing: \"E (exact text, empty value)\". Every other directive's BASE id is its name. A DEPENDS-ON item whose joined text (comments not included) is exactly \"none\" in any ASCII letter case has the text \"Nothing. No other package is involved.\" instead.",
+   "ambiguity": 0.53
+  },
+  {
+   "id": "R12",
+   "text": "IDS AND PAIRING. Over the whole version, in the order items are produced (R11, R9 in its section's place), the first item with a given base id gets the base id itself and the k-th one (k >= 2) gets base + \" #\" + k in decimal, counting across sections (a directive named STRAY makes the first stray line \"STRAY #2\"); every id within a section is distinct. An item's GROUP is its section plus its id with one trailing \" #\" + digits removed (a pin named \"#2\" has the id \"PIN:#2\" and groups only with pins of that name). Groups are taken in order of first appearance in the before items followed by the after items. Within a group, each before item in order is first paired with the first still-unpaired after item whose raw text and raw citation list equal its own; the before items left over are then paired, in order, with the after items left over, in order. Before items still left are UNPAIRED-BEFORE, collected group by group in that order (not in plain before order); after items still left are unpaired. THE UNIT is the joined text of the after version's first UNIT directive whose joined text is not empty, else of its first such SIR directive, else \"(unnamed)\".",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "TABLE SECTIONS row 1",
+   "text": "section title                | tested | directives, in this order                                                | label",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE SECTIONS row 2",
+   "text": "What kind of unit it is      | yes    | UNIT, then KIND, then FIDELITY, then the \"ANCHOR\" directives             | Name / Kind / Fidelity / Anchor",
+   "ambiguity": 0.43
+  },
+  {
+   "id": "TABLE SECTIONS row 3",
+   "text": "What it is for               | no     | DESCRIPTION                                                              | none",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "TABLE SECTIONS row 4",
+   "text": "What it accepts              | yes    | SIG, then ENVELOPE, then UNGUARDED-PRECONDITION, then OUT-OF-DOMAIN      | Signature / Inputs it is verified on / Assumes, without checking / Not covered",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "TABLE SECTIONS row 5",
+   "text": "What it does                 | yes    | every directive named \"R\" + ASCII digits                                 | \"Rule \" + the name without its \"R\"",
+   "ambiguity": 0.33
+  },
+  {
+   "id": "TABLE SECTIONS row 6",
+   "text": "Exact definitions            | yes    | PINNED                                                                   | R11",
+   "ambiguity": 0.46
+  },
+  {
+   "id": "TABLE SECTIONS row 7",
+   "text": "Decision table               | yes    | TABLE                                                                    | none",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "TABLE SECTIONS row 8",
+   "text": "Data it carries              | yes    | CARRIED                                                                  | the first space/tab field of its args, or \"Carried data\" when the args are empty",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE SECTIONS row 9",
+   "text": "What it depends on           | yes    | DEPENDS-ON                                                               | none",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE SECTIONS row 10",
+   "text": "Other parts of the contract  | yes    | every directive not named in another row, in text order (see below)     | TABLE OTHER-LABELS",
+   "ambiguity": 0.36
+  },
+  {
+   "id": "TABLE SECTIONS row 11",
+   "text": "Text outside any directive   | yes    | the STRAY lines (R9)                                                     | \"Line \" + the line number",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE SECTIONS row 12",
+   "text": "Should always hold           | no     | INVARIANT                                                                | none",
+   "ambiguity": 0.27
+  },
+  {
+   "id": "TABLE SECTIONS row 13",
+   "text": "In and out of scope          | no     | SCOPE                                                                    | none",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE SECTIONS row 14",
+   "text": "Background                   | no     | NOTE, then RATIONALE, then PROVENANCE                                    | Note / Why / Where it came from",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "TABLE SECTIONS row 15",
+   "text": "A BEHAVIOR whose joined text is empty and that has no attributes gives no item; any other BEHAVIOR is an Other part.",
+   "ambiguity": 0.26
+  },
+  {
+   "id": "TABLE SECTIONS row 16",
+   "text": "SIR and VARIANT are Other parts too (SIR also names the unit, R12; VARIANT also stands in for FIDELITY in R18).",
+   "ambiguity": 0.35
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 1",
+   "text": "ORACLE | The tests (file and fingerprint)",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 2",
+   "text": "ORACLE-CLASS | Kind of tests",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 3",
+   "text": "STATE | What it changes in place",
+   "ambiguity": 0.21
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 4",
+   "text": "SEAM | Export shape",
+   "ambiguity": 0.19
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 5",
+   "text": "TRACE-SEAM | Effect boundary",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 6",
+   "text": "SRC | Source location",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 7",
+   "text": "EFFECT | Effect",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 8",
+   "text": "SURFACE | Module surface",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 9",
+   "text": "EMIT | Emits",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 10",
+   "text": "REQUEST | Requests",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 11",
+   "text": "BRANCH | Branch",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 12",
+   "text": "ON-ERROR | On error",
+   "ambiguity": 0.17
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 13",
+   "text": "PAR | Unordered window",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 14",
+   "text": "RING | Token ring",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 15",
+   "text": "LIFECYCLE | Resource lifecycle",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 16",
+   "text": "REACH | Off-path unit",
+   "ambiguity": 0.18
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 17",
+   "text": "TRIGGER | Trigger",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 18",
+   "text": "\"EARNED\" | Earned rule",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 19",
+   "text": "BEHAVIOR | Behavior header",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 20",
+   "text": "a name in KNOWN-OTHER | the name itself",
+   "ambiguity": 0.2
+  },
+  {
+   "id": "TABLE OTHER-LABELS row 21",
+   "text": "any other name | the name + \" (not in the SIR vocabulary)\"",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "TABLE PIN-KINDS row 1",
+   "text": "regex | pattern",
+   "ambiguity": 0.54
+  },
+  {
+   "id": "TABLE PIN-KINDS row 2",
+   "text": "charset | character set",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE PIN-KINDS row 3",
+   "text": "grammar | grammar",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE PIN-KINDS row 4",
+   "text": "text | exact text",
+   "ambiguity": 0.13
+  },
+  {
+   "id": "TABLE PIN-KINDS row 5",
+   "text": "set | set",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE PIN-KINDS row 6",
+   "text": "const | constant",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE PIN-KINDS row 7",
+   "text": "constant | constant",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE PIN-KINDS row 8",
+   "text": "names | names",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE PIN-KINDS row 9",
+   "text": "number | number",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "TABLE PIN-KINDS row 10",
+   "text": "chars | characters",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "TABLE PIN-KINDS row 11",
+   "text": "order | order",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE PIN-KINDS row 12",
+   "text": "map | mapping",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE PIN-KINDS row 13",
+   "text": "bytes | bytes",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "R13",
+   "text": "Two paired items are EQUAL when their raw texts are identical and their raw citation lists are identical entry by entry. The shown texts and why-lists never decide equality; they only fill the diffs and the citation quote.",
+   "ambiguity": 0.23
+  },
+  {
+   "id": "R14",
+   "text": "CHANGES, in this order. For every item of the AFTER version in production order (R12): unpaired -> an \"added\" change with the after item's text; paired but not EQUAL -> a \"changed\" change with diff = DIFF(old text, new text) when that has a \"-\" or \"+\" entry, else DIFF(old raw text, new raw text) (a comment-only edit, a pin head edit, a TABLE row-boundary edit); and whyDiff = none when the raw citation lists are identical, else DIFF(old raw citations joined with \"; \", new raw citations joined with \"; \"). Then every UNPAIRED-BEFORE item, in R12's order -> a \"removed\" change with the before item's text. Every change has section = the item's section title, id = the item's own id, label = the item label or, when it has none, the section title, and checked = the section's tested column.",
+   "ambiguity": 0.44
+  },
+  {
+   "id": "R15",
+   "text": "DIFF(a, b), step 1. Each text is cut into TOKENS that alternate a run of non-WS characters (possibly empty) and a run of WS characters, starting and ending with a non-WS run: \"\" is [\"\"], \" x\" is [\"\", \" \", \"x\"], \"x y \" is [\"x\", \" \", \"y\", \" \", \"\"]. Let LCS(i, j) be the length of a longest common subsequence of a's tokens from i on and b's tokens from j on (tokens equal when identical). Walk i and j from the start: when the tokens at i and j are identical emit (\"=\", that token) and advance both; otherwise when LCS(i+1, j) >= LCS(i, j+1) emit (\"-\", a's token) and advance i; otherwise emit (\"+\", b's token) and advance j. When one side is used up, emit the rest of a as \"-\" then the rest of b as \"+\". An entry with the same op as the entry just emitted is appended to it (texts concatenated), empty tokens included.",
+   "ambiguity": 0.52
+  },
+  {
+   "id": "R16",
+   "text": "DIFF step 2 (phrases), over step 1's list from the start: an \"=\" entry is kept as is. At a \"-\" or \"+\" entry a RUN begins with empty DEL and INS; walk on from it: a \"-\" entry appends to DEL, a \"+\" entry to INS, each making that entry the run's last change; an \"=\" entry is GLUE when another entry follows it and its text is only WS (or empty) or, trimmed by WS, has at most two WS-separated words — glue appends its text to both DEL and INS; any other \"=\" entry ends the run. The run emits (\"-\", DEL) when DEL is not empty, then (\"+\", INS) when INS is not empty, and the walk resumes right after the run's last change. Finally every entry whose text is empty is dropped (DIFF of two empty texts is the empty list).",
+   "ambiguity": 0.41
+  },
+  {
+   "id": "R17",
+   "text": "WARNINGS, in this order; TESTED = the changes with checked true, N = their count. (a) N > 0 and oracleChanged is exactly false -> { level \"stop\", kind \"untested-change\", text: N in decimal + \" tested part was \" (N = 1) or \" tested parts were \" (N > 1) + VERBS + \" (\" + the TESTED labels, duplicates dropped, in first-seen order, joined with \", \" + \"), but the tests did not change. Nothing in this PR proves the new behavior: the hidden tests still expect the old one.\" }, VERBS being those of \"changed\", \"added\", \"removed\" (in that order) that occur among the TESTED kinds, joined with \" or \". (b) R18, when it fires. (c) N = 0 and at least one change -> { level \"ok\", kind \"prose-only\", text \"Only unchecked prose changed. The code is held to exactly what it was held to before.\" }. (d) N > 0 and STALE is not empty, STALE being langs with the empty entries dropped and repeats dropped (first kept, case-sensitive) -> { level \"note\", kind \"stale-langs\", text \"The \" + STALE in order, each js as \"JavaScript\", ts as \"TypeScript\", rust as \"Rust\" and any other entry as itself, joined with \", \" + one of two tails: for one entry \" file was written against the old version. It goes out of date until someone reviews it against this one and re-binds it.\", for more \" files were written against the old version. They go out of date until someone reviews them against this one and re-binds them.\" }. The citation and stale-langs warnings do not look at oracleChanged.",
+   "ambiguity": 0.45
+  },
+  {
+   "id": "R18",
+   "text": "THE CITATION RULE reads each version's HEADER: its FIDELITY is the joined text of its first FIDELITY directive whose joined text is not empty, else of its first such VARIANT directive; its REF is the first space/tab field of the joined text of its first \"ANCHOR\" directive whose joined text is not empty. The rule applies when the FIDELITY of EITHER version is exactly \"package\" (so \"package\" with a continuation piece does not count). The REFS are the two versions' REFS, kept only when they contain \"@\". For every TESTED change of kind \"changed\" (never added or removed), in order, find the first entry of the after item's RAW CITATION list that contains \"FIDELITY package\" or has a space/tab-separated token equal to a REF once its trailing run of the characters . , ; : ) ] is removed (\"lib@2).\" and \"lib@2]\" match lib@2; \"(lib@2\" and \"lib@2.x\" do not; a REF that itself ends in one of those characters matches no token). The CITING changes are those that have one, and each takes the WHY-LIST entry at the same position. When there is a CITING change -> { level \"stop\", kind \"citation\", text \"This contract promises to match the original package exactly, and \" + the CITING labels in order, duplicates kept, joined with \" and \" + \" still \" + (\"cites\" for one, \"cite\" for more) + \" that package as the reason for the old behavior (\" + U+0022 + Q + U+0022 + \"). The edit contradicts its own citation.\" }, where Q is the first CITING change's entry with one leading \"FIDELITY package — \" (U+2014 between spaces) removed and, when it has more than 110 code points, cut to its first 109 code points followed by \"…\" (U+2026).",
+   "ambiguity": 0.6
+  }
+ ],
+ "ranked": [
+  "R18",
+  "TABLE PIN-KINDS row 1",
+  "R11",
+  "R15",
+  "R12",
+  "TABLE SECTIONS row 6",
+  "R6",
+  "R17",
+  "R5",
+  "R7",
+  "R14",
+  "R1",
+  "R9",
+  "TABLE SECTIONS row 2",
+  "TABLE SECTIONS row 1",
+  "TABLE SECTIONS row 14",
+  "R16",
+  "R4",
+  "TABLE SECTIONS row 4",
+  "TABLE SECTIONS row 10",
+  "R3",
+  "TABLE SECTIONS row 7",
+  "TABLE SECTIONS row 16",
+  "R2",
+  "TABLE SECTIONS row 5",
+  "R8",
+  "TABLE SECTIONS row 8",
+  "TABLE SECTIONS row 12",
+  "TABLE SECTIONS row 11",
+  "TABLE SECTIONS row 15",
+  "R10",
+  "TABLE SECTIONS row 9",
+  "TABLE OTHER-LABELS row 19",
+  "TABLE OTHER-LABELS row 21",
+  "TABLE SECTIONS row 3",
+  "R13",
+  "TABLE OTHER-LABELS row 1",
+  "TABLE OTHER-LABELS row 3",
+  "TABLE SECTIONS row 13",
+  "TABLE OTHER-LABELS row 6",
+  "TABLE OTHER-LABELS row 20",
+  "TABLE OTHER-LABELS row 4",
+  "TABLE OTHER-LABELS row 13",
+  "TABLE OTHER-LABELS row 16",
+  "TABLE OTHER-LABELS row 11",
+  "TABLE OTHER-LABELS row 12",
+  "TABLE OTHER-LABELS row 5",
+  "TABLE OTHER-LABELS row 7",
+  "TABLE OTHER-LABELS row 17",
+  "TABLE OTHER-LABELS row 18",
+  "TABLE OTHER-LABELS row 2",
+  "TABLE OTHER-LABELS row 8",
+  "TABLE OTHER-LABELS row 10",
+  "TABLE OTHER-LABELS row 14",
+  "TABLE OTHER-LABELS row 15",
+  "TABLE OTHER-LABELS row 9",
+  "TABLE PIN-KINDS row 11",
+  "TABLE PIN-KINDS row 4",
+  "TABLE PIN-KINDS row 2",
+  "TABLE PIN-KINDS row 6",
+  "TABLE PIN-KINDS row 12",
+  "TABLE PIN-KINDS row 7",
+  "TABLE PIN-KINDS row 8",
+  "TABLE PIN-KINDS row 10",
+  "TABLE PIN-KINDS row 13",
+  "TABLE PIN-KINDS row 3",
+  "TABLE PIN-KINDS row 5",
+  "TABLE PIN-KINDS row 9"
+ ],
+ "at": "2026-11-02T20:51:14Z"
+}

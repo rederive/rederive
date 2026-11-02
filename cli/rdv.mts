@@ -15,6 +15,8 @@
  *   rdv claude  [args…]              report sir-factory/typikon (optional), init if needed, exec `claude`
  *   rdv check   <pkgdir>             verify src/ against the held-out oracle + content hashes  (no tokens)
  *   rdv vis     <pkgdir>             (re)generate vis.html from the SIR + manifest             (no tokens)
+ *   rdv review  --base <ref> [--head <ref>]  plain-English review of the SIR contract changes between two git refs;
+ *                                      exit 1 on a Stop (a tested change without a test change, a rewritten answer …)
  *   rdv lsp     [--stdio]            a language server for .sir files (diagnostics = rdv's own checks, hover, outline …)
  *   rdv audit   [dir] [--json]       declared vs delivered: the real dependency surface (lockfile / node_modules)
  *   rdv resynth <pkgdir> [--unit U]  PREPARE a local rebuild: write ready-to-spawn worker prompts + a plan
@@ -48,6 +50,7 @@ import * as rustDriver from './lang/rust.mjs';
 import { treeSha } from './tree-sha.mjs';
 import { validate as validateSir } from './sir/validate.mjs';
 import { serve as serveLsp } from './lsp/server.mjs';
+import { review as reviewPr, summary as reviewSummary, annotations as reviewAnnotations } from './lsp/pr-review.mjs';
 
 const sha256 = (path: string) => hashHex(readFileSync(path));
 const C = { g: (s: string) => `\x1b[32m${s}\x1b[39m`, r: (s: string) => `\x1b[31m${s}\x1b[39m`,
@@ -1098,6 +1101,8 @@ const USAGE = [
   '                (exit 0 only if every named language verifies). Without --lang, a missing toolchain halts',
   '  rdv vis <pkgdir>',
   '                (re)generate vis.html from the SIR + manifest (no tokens)',
+  '  rdv review --base <ref> [--head <ref>] [--format markdown|summary|github|json] [--fail-on stop|never]',
+  '                review the SIR contract changes between two git refs in plain English; exit 1 on a Stop',
   '  rdv lsp [--stdio]',
   '                a language server for .sir files, for any LSP editor: rdv\'s own checks as you type, hover, outline',
   '  rdv audit [dir] [--json]',
@@ -1166,6 +1171,14 @@ async function main() {
       if (has('--lang') && (!langs || langs.startsWith('-'))) { console.error('rdv check: --lang needs a value, e.g. --lang js or --lang js,ts'); process.exit(2); }
       const only = langs ? new Set(langs.split(',').map((l) => l.trim()).filter(Boolean)) : null;
       process.exit(await cmdCheck(dir, only));
+    }
+    if (cmd === 'review') {   // the PR review of SIR contract changes, for any CI (the GitHub Action is rederive/sir-review)
+      const base = argOpt('--base'), head = arg('--head', 'HEAD'), format = arg('--format', 'markdown'), failOn = arg('--fail-on', 'stop');
+      if (!base || base.startsWith('-')) { console.error('rdv review: --base <ref> is required, e.g. rdv review --base origin/main'); process.exit(2); }
+      if (!['markdown', 'summary', 'github', 'json'].includes(format) || !['stop', 'never'].includes(failOn)) { console.error('rdv review: --format markdown|summary|github|json, --fail-on stop|never'); process.exit(2); }
+      const r = reviewPr({ base, head });
+      console.log(format === 'json' ? JSON.stringify({ stops: r.stops, units: r.units, findings: r.findings }, null, 2) : format === 'github' ? reviewAnnotations(r.findings) : format === 'summary' ? reviewSummary(r) : r.body);
+      process.exit(r.stops && failOn === 'stop' ? 1 : 0);
     }
     if (cmd === 'lsp') { serveLsp(process.stdin, process.stdout, { version: rdvInfo().version }); return; }   // stdio; `--stdio` (what most clients pass) is the only transport
     if (cmd === 'vis') process.exit(cmdVis(dir));

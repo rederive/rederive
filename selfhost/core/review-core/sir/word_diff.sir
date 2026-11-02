@@ -1,0 +1,60 @@
+UNIT word_diff
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@c41c5fcd84e0 cli/lsp/explain.mjs wordDiff — the phrase-level diff every SIR PR review shows for a changed
+  rule. The token LCS is a named algorithm; the tie rule and the MERGE pass (R6–R8) are rederive's own design with no outside
+  anchor, stated exactly as the code does them, accidents included
+ORACLE-CLASS deterministic
+SIG word_diff(a: text, b: text) -> list[record[op: text, text: text]]
+ENVELOPE a and b are text of any content (short to medium: the alignment is quadratic in the token counts). Text is a sequence
+  of UTF-16 code units; equality and whitespace tests are per code unit. A non-text argument is OUT of the abstract domain;
+  the package throws on it (R9), observed by the js-only probes.
+DEPENDS-ON none
+DESCRIPTION Diff old text a against new text b at the level of words. Both texts are cut into tokens (word runs and whitespace
+  runs), aligned by a longest common subsequence with a fixed tie rule, and the resulting edit script is then rewritten into
+  readable phrases: change runs separated only by whitespace, or by a shared stretch of at most two words, become one removal
+  followed by one insertion. Each result entry is a record with op ("=" kept, "-" removed from a, "+" inserted from b) and
+  text, in reading order.
+NOTE rust is omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+BEHAVIOR
+R1 WHITESPACE is exactly the code-unit set WS (pin below); every other code unit, including NEXT LINE U+0085, ZERO WIDTH SPACE
+  U+200B, MONGOLIAN VOWEL SEPARATOR U+180E and WORD JOINER U+2060, is a word character.
+R2 TOKENS of a text: the text is cut into maximal runs of whitespace and maximal runs of word characters, and the token list
+  always begins and ends with a word token — an EMPTY word token is placed first when the text begins with whitespace, and
+  last when it ends with whitespace. So the list alternates word, whitespace, word, … and has an odd length; the empty text
+  is the one-token list [""], and a whitespace-only text w is ["", w, ""].
+R3 ALIGNMENT over the token lists X (from a) and Y (from b), two tokens being equal when their code-unit sequences are
+  identical (empty tokens are equal to each other). Let L(i, j) be the length of a longest common subsequence of X from i on
+  and Y from j on. Starting at i = j = 0 while both lists have tokens left: when X[i] equals Y[j], emit (=, X[i]) and advance
+  both; otherwise, when L(i+1, j) >= L(i, j+1), emit (-, X[i]) and advance i; otherwise emit (+, Y[j]) and advance j. Then
+  emit (-, t) for every token left in X, then (+, t) for every token left in Y. Ties therefore always prefer removing from a
+  before inserting from b CITED FIDELITY package
+R4 COALESCE: each emission whose op equals the op of the previous emission is appended to that entry's text instead of
+  starting a new entry. The RAW script is the resulting entry list: no two adjacent entries share an op, and an entry's text
+  may be empty (an empty token emitted alone, R2).
+R5 WORDS of a text = the number of its maximal runs of word characters (R1); a whitespace-only or empty text has 0.
+R6 MERGE walks the RAW script left to right and builds the result. An = entry is copied unchanged. A - or + entry at position
+  k opens a GROUP with DEL = "", INS = "", END = k, and the entries from k on are read in order:
+  a - entry appends its text to DEL and sets END to its position; a + entry appends its text to INS and sets END to its
+  position; an = entry E is GLUE when E is not the last entry of the RAW script AND WORDS(E) <= 2 (a whitespace-only or empty
+  E has 0 words). Glue appends E's text to BOTH DEL and INS and leaves END unchanged; the first = entry that is not glue ends
+  the reading (it is not consumed). The group then emits (-, DEL) when DEL is not empty and then (+, INS) when INS is not
+  empty, and the walk resumes at position END + 1 CITED FIDELITY package — explain.mjs wordDiff merge loop
+  By R4 the entry after a non-last = entry is always a change, so glue always joins two change runs, and the last RAW entry,
+  when it is an = entry, always stays a single = entry. Word length is not tested: two shared words of any length glue.
+R7 ORDER: the result lists, in walk order, the copied = entries and each group's (-, DEL) then (+, INS); nothing is
+  reordered or re-joined after the walk.
+R8 EMPTY ENTRIES: as the last step every entry whose text is empty is removed from the result. So a = b = "" gives the empty
+  list, a change of only empty tokens vanishes (a = "", b = "abc" gives one +"abc"), and the empty boundary tokens of R2 never
+  show as entries.
+R9 a or b not text -> throws.
+INVARIANT op is one of "=", "-", "+"; no entry has empty text; within a group - precedes +; no two adjacent result entries
+  share an op. The result's = and - texts concatenated give exactly a, and its = and + texts concatenated give exactly b.
+PINNED charset WS = U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000 U+2001 U+2002 U+2003 U+2004 U+2005 U+2006 U+2007 U+2008 U+2009 U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF CITED R1 — the ECMAScript WhiteSpace and LineTerminator set the code's split and trim use; it is not Unicode White_Space (no U+0085) and not Rust's char::is_whitespace
+ORACLE value -> oracles/word_diff.json  CANONICAL-SHA256 e25044193c7d3c0b65a9b1f0eba0c326991e2a34bc8793b564b24eeb521e3230
+SCOPE IN: tokenization, the tie-broken token LCS, coalescing, the merge pass, the removal of empty entries. OUT: rendering of the diff
+  (explainDiff and the PR comment), the cost of the quadratic table on long texts.
+PROVENANCE rederive@c41c5fcd84e0 cli/lsp/explain.mjs export wordDiff (MIT, rederive). Cut 2026-11-02 for the selfhost
+  review-system pilot, before any blind re-emission; revised the same day to the re-pinned kernel (the architect's fix of
+  the trailing-glue repeat and the empty = entries found on rederive@c452b5c6a742).

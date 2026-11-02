@@ -1,0 +1,28 @@
+UNIT annotations_text
+LANG ts
+PRIMARY-SHA256 13d76a1b9a6b77c8510c8e57fa0ce844bd57fa787d5a8a1f326338b29f291b28
+SIG export function annotations_text(findings: readonly Json[]): string
+NOTE named export annotations_text
+ABI TypeScript compiles to the js runtime and is driven exactly as js: one positional argument. Declare in the artifact
+  type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json }
+  (the abstract json). text = string; number = number (double); bool = boolean; none = null; list = an array; map = a
+  plain object (an own key toString, valueOf or __proto__ is DATA). A member read of a kept element yields
+  Json | undefined: narrow with typeof, Array.isArray and === null; undefined is ABSENT (R2). STRICT: the artifact
+  type-checks under strict: true with no any, no non-null assertions (!), no @ts-ignore and no @ts-expect-error. A throw
+  (R6, a non-list findings) is a thrown Error; the message is not graded. ES module, named export, imports nothing.
+ENVELOPE widening, as js: at runtime findings may be any value (not an array: throws), and a field value, a list element
+  inside one, or an element of findings may be undefined although Json has none: a field or nested undefined reads as
+  null, an undefined element is skipped. Graded from the js extension oracle; write the code so it holds at runtime.
+MECHANISM (restated from js — language files are self-contained) KEPT (R1) is a filter keeping f !== null &&
+  typeof f === 'object' && !Array.isArray(f) (a type guard to { readonly [key: string]: Json }). FIELD (R2) is a member
+  read. TEXT-OF (R6) is String(v) after mapping undefined and null to '' at the TOP of the value only: Number::toString for
+  NUM-TEXT (R7), Array.prototype.join(',') for a list (null/undefined elements render as ''), "[object Object]" for a
+  plain object, a TypeError for an object with an own non-callable toString. Do not hand-roll it and do not use
+  JSON.stringify. The line test (R5) is typeof L === 'number' && Number.isSafeInteger(L) && L > 0, rendered with
+  String(L). The level test (R4) is a strict comparison with the three strings. The escapes (R8) are
+  String.prototype.replace with global regexes, % first: PROP = /%/g -> %25, /\r/g -> %0D, /\n/g -> %0A, /:/g -> %3A,
+  /,/g -> %2C; DATA = the first three only. Join with '\n'.
+DEPENDS-ON none
+PINNED regex PROP-CLASS = /[%\r\n:,]/g CITED R8 TABLE ESCAPES column PROP — the characters PROP replaces
+PINNED regex DATA-CLASS = /[%\r\n]/g CITED R8 TABLE ESCAPES column DATA — the characters DATA replaces
+PROVENANCE rederive@9e2245be5f42 cli/lsp/pr-review.mjs annotations. Language file cut 2026-11-02 with the primary, before any blind re-emission.

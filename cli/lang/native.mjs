@@ -3,6 +3,7 @@
 // `export function f…` → f) — the same export the ts conformance check type-checked. rdv used to take mod[unitName] ?? run ??
 // default ?? the first function, so a ts artifact could conform on its named export and be graded on another function (#162).
 import { escapeMarkers } from '../sir/canon.mjs';
+import { encodeLegacy, decodeLegacy } from '../sir/legacy.mjs';
 import { pathToFileURL } from 'node:url';
 
 /** The export a js/ts SIG names. `export default function f…` → { name: null }; `export function f…` → { name: 'f' }. A bare
@@ -29,9 +30,12 @@ export async function resolveExport(fileOrUrl, sigLine) {
 }
 
 // js/ts artifacts are called natively; each case's args are cloned right before the call (a mutating artifact must never
-// corrupt the next case), and STATE's post is read from the clone. A RETURNED value is marker-escaped (selfhost #55 #58): only
+// corrupt the next case), and STATE's post is read from the clone. The clone is the CODEC round trip the stamp applies
+// (selfhost/stamp.mjs), never structuredClone: structuredClone turns a Node Buffer into a plain Uint8Array, so an artifact
+// was handed a different argument than the oracle was stamped from (review-system selfhost, escape_property v61: three
+// emissions identical to the authority failed; String(Buffer) decodes UTF-8, String(Uint8Array) joins the bytes). A RETURNED value is marker-escaped (selfhost #55 #58): only
 // the caller's own catch writes the bare {__threw}, so an artifact echoing that map is graded as the map it returned. The escape
 // is the VERIFIER's step, outside the artifact's try: a value it cannot carry is narrowed, never the artifact's throw (#100).
-export const nativeCaller = (fn) => async (argsList, { state } = {}) => argsList.map((a) => { const c = structuredClone(a);
+export const nativeCaller = (fn) => async (argsList, { state } = {}) => argsList.map((a) => { const c = decodeLegacy(encodeLegacy(a));
   let result; try { result = fn(...c); } catch (e) { return { __threw: String(e?.message ?? e) }; }
   try { return state ? { result: escapeMarkers(result), post: escapeMarkers(c[state.index]) } : escapeMarkers(result); } catch (e) { return { __narrowed: `result: ${e?.message ?? e}` }; } });

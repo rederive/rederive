@@ -1,0 +1,52 @@
+UNIT git_line
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@4c134cacd842 cli/lsp/pr-review.mjs gitLine, driven by selfhost/seams/git_line.mjs as one mapping per requested line; cross-checked against git's own line numbering (R6)
+ORACLE-CLASS deterministic
+SIG git_line(text: text, lines: list[f64]) -> list[i64]
+ENVELOPE text is any text (CR, LF and CRLF in any mix and position; every other character, the LINE SEPARATOR, PARAGRAPH
+  SEPARATOR, NEXT LINE, form feed and vertical tab included, is ordinary). lines is a list of numbers, each any double:
+  zero, negative zero, negative, fractional, beyond the text, NaN, plus or minus infinity. Nothing in the envelope throws.
+DEPENDS-ON none
+DESCRIPTION rederive's SIR parser counts a lone CR as a line break; git, and so GitHub's line numbers, counts only LF. For
+  each requested parser line number (1-based), give the git line number (1-based) that holds that parser line's text, so a
+  review note lands where GitHub shows the text. The result has one entry per entry of lines, in the same order.
+BEHAVIOR
+R1 BREAKS. Scan text from its start. At each position the break is taken by PINNED grammar BREAK, CR followed by LF being
+  ONE break; a CR not followed by LF is a break; an LF is a break. No other character breaks. A break is LF-BEARING when it
+  contains an LF (the CRLF and the LF break); the lone CR break is not.
+R2 PARSER LINES. With B breaks the text has P = B + 1 parser lines, numbered 1 to P; line k is the text after break k - 1
+  (the start, for k = 1) up to break k (the end of text, for k = P). The empty text has one line. A text that ends in a
+  break has an empty last line. An LF then a CR is two breaks; a CR then an LF is one.
+R3 GIT(k), for k from 1 to P, is 1 plus the number of LF-BEARING breaks among breaks 1 to k - 1. So GIT(1) = 1 and GIT never
+  decreases; a run of lines joined by lone CRs shares one git line.
+R4 FINAL is 1 plus the number of LF-BEARING breaks in the whole text. FINAL = GIT(P): a line past the end answers what the
+  last parser line answers.
+R5 Each entry x of lines is answered by TABLE LOOKUP (first matching row). Entries are answered independently: repeats,
+  any order and the empty list are all allowed, and the empty list gives the empty list.
+TABLE LOOKUP — x is the requested line, P and GIT as R2 and R3
+  x is zero (negative zero included)                                       | 0 CITED FIDELITY package — the lookup table's slot 0 holds 0
+  x is an integer and 1 <= x <= P                                          | GIT(x)
+  anything else: an integer above P, any negative, a fraction, NaN, an infinity | FINAL CITED FIDELITY package — every key without a slot falls back to the final count
+R6 Against git (the independent anchor): for every parser line k from 1 to P, git line GIT(k) holds parser line k's text, at
+  the place after the lone CRs that precede it on that git line. The parser lines past git's last line are only the empty
+  last line of a text ending in LF or CRLF, and the one line of the empty text (TABLE ENDINGS).
+TABLE ENDINGS — G is git's line count for the text (LF count, plus 1 when the text is non-empty and does not end in LF)
+  the empty text                          | P = 1; FINAL = 1, a line git does not have (G = 0)
+  text ends in LF                         | last parser line empty; FINAL = G + 1, a line git does not have
+  text ends in CRLF                       | last parser line empty; FINAL = G + 1, a line git does not have
+  text ends in CR (not followed by LF)    | last parser line empty; FINAL = G, the git line the CR ends
+  text ends in any other character        | FINAL = G
+PINNED grammar BREAK = U+000D U+000A | U+000D | U+000A CITED R1 — ordered: the two-character break is preferred at a CR, so CRLF counts once
+INVARIANT every answer is 0 (only for x = 0) or an integer from 1 to FINAL; GIT(k) <= k.
+NOTE rust is omitted. Cause: domain — the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub
+  Action); there is no Rust consumer.
+OUT-OF-DOMAIN outside the abstract SIG (the js file's envelope widening carries these as js-only observations): text that is
+  not text (none, a number) throws; lines that is not a list (none) throws; a lines entry that is text is looked up by its
+  spelling, so "2" answers GIT(2) and "02" or "x" answer FINAL.
+ORACLE value -> oracles/git_line.json  CANONICAL-SHA256 0d1478cebf9c228938d7aef8cdb49052d78c6b14393e4a63cb8d621ecc16620f
+SCOPE IN: R1–R6 over ENVELOPE, OUT-OF-DOMAIN as js-only observations. OUT: the review pipeline that calls gitLine (spans,
+  review), rendering, and any line-break convention other than CR, LF and CRLF.
+PROVENANCE rederive@4c134cacd842 (rederive, MIT), cli/lsp/pr-review.mjs export gitLine(text) returning line -> number, mapped
+  over lines by selfhost/seams/git_line.mjs. Cut cold 2026-11-02 into the v0.5 contract register; anchored against git
+  (git diff --no-index -U0) in anchor/git-anchor.mjs.

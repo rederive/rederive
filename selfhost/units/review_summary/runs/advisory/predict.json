@@ -1,0 +1,116 @@
+{
+ "status": "ok",
+ "unit": "review_summary",
+ "primary": "selfhost/units/review_summary/sir/review_summary.sir",
+ "primarySha256": "fe7f51846968e8fb812b0a909bdb5804e1a5391897addb22bca6cdf9890705c4",
+ "question": "Two careful engineers implementing this rule independently, with only this contract, would produce DIFFERENT behavior on some input (the rule is ambiguous, under-specified, or relies on unstated host facts).",
+ "mode": "live",
+ "model": "jev-latest",
+ "rules": [
+  {
+   "id": "R1",
+   "text": "An empty units list yields EMPTY_REPORT (PINNED) followed by the STOPS block of R5 (which is empty unless stops is at least 1).",
+   "ambiguity": 0.24
+  },
+  {
+   "id": "R2",
+   "text": "A row PASSES exactly when its status equals the text \"pass\" (exact comparison: case-sensitive, no trimming). Every other status, the empty text and \"fail\" included, FAILS. F = the number of failing rows, N = the number of rows. CITED FIDELITY package — the status fails closed: \"PASS\", \"pass \" and \"error\" all count as failing",
+   "ambiguity": 0.09
+  },
+  {
+   "id": "R3",
+   "text": "For N at least 1 the heading is \"## SIR review: \" followed by the VERDICT of TABLE VERDICT. NOUN is \"contract\" when N is 1 and \"contracts\" otherwise; it follows N in both rows (so \"1 of 2 contracts failing\", \"1 of 1 contract failing\").",
+   "ambiguity": 0.1
+  },
+  {
+   "id": "R4",
+   "text": "Each row, in input order, renders as ROW (PINNED): the icon is FAIL_ICON for a failing row and PASS_ICON for a passing one (R2); each of the five cells is CELL(field), defined in four steps. (a) T = the field's text scanned left to right with each match of TABLE CELL_ESCAPE replaced; a CR immediately followed by an LF is one match (one space), any other CR or LF is a match on its own; every other character is kept. (b) An empty T is the empty cell (CELL is the empty text). (c) K = the length of the longest run of consecutive backticks (U+0060) in T, 0 when there is none; FENCE = K + 1 backticks. (d) PAD = one space (U+0020) when T begins with a backtick, or ends with a backtick, or begins with a space and ends with a space and holds at least one character outside TRIM_SPACE (PINNED); otherwise PAD is empty. CELL = FENCE PAD T PAD FENCE. No other character is altered or escaped. CITED FIDELITY package — the fence rule is CommonMark's; the all-space test is the host's trim set, not CommonMark's",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R5",
+   "text": "The STOPS block is chosen by TABLE STOPS_LINE. A count renders as its decimal digits, no grouping, no plus sign, no exponent, at any magnitude of the i64 range. A zero or negative count yields no block.",
+   "ambiguity": 0.34
+  },
+  {
+   "id": "R6",
+   "text": "For N at least 1 the result is REPORT (PINNED): the heading, a blank line, the two fixed table lines, the rows joined by single LFs, a final LF, then the STOPS block when there is one (a blank line, the stops line, and a final LF).",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE VERDICT row 1",
+   "text": "F at least 1 -> FAIL_ICON \" \" F \" of \" N \" \" NOUN \" failing\"",
+   "ambiguity": 0.14
+  },
+  {
+   "id": "TABLE VERDICT row 2",
+   "text": "F is 0       -> PASS_ICON \" \" N \" \" NOUN \" passing\"",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE STOPS_LINE row 1",
+   "text": "stops at most 0  -> no block (the empty text)",
+   "ambiguity": 0.16
+  },
+  {
+   "id": "TABLE STOPS_LINE row 2",
+   "text": "stops is 1       -> LF stops \" Stop\" STOPS_TAIL LF",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE STOPS_LINE row 3",
+   "text": "stops at least 2 -> LF stops \" Stops\" STOPS_TAIL LF",
+   "ambiguity": 0.22
+  },
+  {
+   "id": "TABLE CELL_ESCAPE row 1",
+   "text": "CR LF (U+000D U+000A, as a pair)  -> \" \" (one space)",
+   "ambiguity": 0.15
+  },
+  {
+   "id": "TABLE CELL_ESCAPE row 2",
+   "text": "CR (U+000D) alone                 -> \" \"",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE CELL_ESCAPE row 3",
+   "text": "LF (U+000A)                       -> \" \"",
+   "ambiguity": 0.11
+  },
+  {
+   "id": "TABLE CELL_ESCAPE row 4",
+   "text": "LINE SEPARATOR (U+2028)           -> \" \"",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE CELL_ESCAPE row 5",
+   "text": "PARAGRAPH SEPARATOR (U+2029)      -> \" \"",
+   "ambiguity": 0.12
+  },
+  {
+   "id": "TABLE CELL_ESCAPE row 6",
+   "text": "\"|\" (U+007C)                      -> \"\\|\" (a backslash, then the vertical line)",
+   "ambiguity": 0.11
+  }
+ ],
+ "ranked": [
+  "R4",
+  "R5",
+  "R1",
+  "TABLE STOPS_LINE row 2",
+  "TABLE STOPS_LINE row 3",
+  "TABLE STOPS_LINE row 1",
+  "R6",
+  "TABLE CELL_ESCAPE row 1",
+  "TABLE VERDICT row 1",
+  "TABLE CELL_ESCAPE row 4",
+  "TABLE CELL_ESCAPE row 5",
+  "TABLE VERDICT row 2",
+  "TABLE CELL_ESCAPE row 2",
+  "TABLE CELL_ESCAPE row 3",
+  "TABLE CELL_ESCAPE row 6",
+  "R3",
+  "R2"
+ ],
+ "at": "2026-11-02T20:53:07Z"
+}

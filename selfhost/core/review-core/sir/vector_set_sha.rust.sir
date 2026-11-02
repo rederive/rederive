@@ -1,0 +1,31 @@
+UNIT vector_set_sha
+LANG rust
+PRIMARY-SHA256 8b5022fdc658ffc607a31321298cfe965b315f8427a5ff1286efbe397db4fe00
+SIG pub fn vector_set_sha(oracle: &serde_json::Value) -> String
+ABI crate shape: a LIBRARY crate ([lib], src/lib.rs exporting pub fn vector_set_sha) whose only dependency is serde_json —
+  no main, no I/O, no binary, no sha2 or hex crate. The verifier generates its own harness crate (the value parsed by
+  serde_json, the call vector_set_sha(&value), the String out). A throw (R1, R2, R4, R5) is a PANIC: the harness runs each
+  call under catch_unwind and records a panic as a throw; the panic message is free.
+ABI type mapping: text = Value::String; bool = Value::Bool; list = Value::Array; map = Value::Object (its iteration order
+  is irrelevant: R4 sorts); f64 = Value::Number and none = Value::Null, both panic when the rendering reaches them.
+ENVELOPE narrowing: serde_json::Value holds no NaN, ±Infinity, -0 or unpaired surrogates (vectors carrying one are
+  narrowed by the verifier); the js widening does not exist here. DEPTH: the harness reads each args line with
+  serde_json, whose default recursion limit is 128 nested arrays/objects; every vector sent here is inside the codec's
+  100-value cap (at most 101 nested arrays/objects), so it parses. R5's boundary (about 414 levels below args) is past the
+  codec and js-only, never sent here.
+MECHANISM R1/R2: oracle.as_object() then .get("frozen") / .get("heldout") with .as_array(), else panic; each case
+  .as_object() else panic; .get("args") and .get("expected") must be Some, else panic. Never look at any other key.
+MECHANISM R4 (canonical_string, in-crate): QUOTE = serde_json::to_string(&str) (it escapes exactly as the table). KEY ORDER
+  = a comparator over a.encode_utf16() versus b.encode_utf16() (Iterator::cmp) — NOT String's Ord or serde_json's
+  BTreeMap order (UTF-8 byte order puts U+E000 before an astral character). On an Object FIRST check get("t"): the
+  String "f64" -> bits must be a String of 16 bytes in b'0'..=b'9' | b'a'..=b'f' else panic, emit {"bits":..,"t":"f64"};
+  "throw" -> emit {"t":"throw"}; in both never recurse into other entries. Number and Null panic.
+MECHANISM R5: carry a depth: usize down the render (the projection 0, +1 per array element and per object value, the
+  texts of an emitted f64/throw node included) checked on entry to each value, and panic when it exceeds 416, even though no vector here reaches it.
+MECHANISM R6: SHA-256 written in-crate per FIPS 180-4 (the 64 round constants and 8 initial hash words, big-endian
+  message schedule, 0x80 pad + 64-bit big-endian bit length) over canon.as_bytes() (a Rust String is already UTF-8);
+  format each of the 32 digest bytes with {:02x}.
+DEPENDS-ON serde_json (crate, version 1) — the SIG's value type and nothing else
+PROVENANCE rederive@bb8ded84fa50 cli/sir/canon.mjs vectorSetSha (own code). Round 1 language file 2026-10-26, round 4
+  re-cut 2026-10-27 (the R5 nesting cap), round 5 re-cut 2026-10-27 (the cap is 416); the ABI
+  follows the lab's rust driver (json -> &serde_json::Value, a panic recorded as a throw).

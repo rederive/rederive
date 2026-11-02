@@ -1,0 +1,59 @@
+UNIT hunk_lines
+KIND FUNCTIONAL
+FIDELITY package
+ANCHOR rederive@9b9e5d24ca9d cli/lsp/pr-review.mjs hunkLines(diff), the pinned authority; its MAX_HUNK constant and hunkLines are byte-identical to rederive@65149601a522, which carries the architect's round-2 rulings (N1, N2 fixed; N3, N4 kept). Cross-checked against git itself (git diff -U0 --no-index, 5000 random file pairs, anchor/git-anchor.mjs: 5000/5000 agree)
+ORACLE-CLASS deterministic
+SIG hunk_lines(diff: text) -> list[i64]
+ENVELOPE any text, typically the output of `git diff -U0` for one file; every magnitude of start and count is in scope
+  (R5 bounds what one header can cover by MAX_HUNK). OUT: non-text input, which throws (ruling F5: declared, not
+  representable under the SIG).
+DEPENDS-ON none
+DESCRIPTION From the text of a unified diff, the new-side line numbers its hunk headers cover, ascending, each once. A
+  header "@@ -a[,b] +c[,d] @@" covers new-side lines c through c + d - 1. The review system posts inline PR notes only
+  on these lines (GitHub accepts line comments only inside the diff), so a wrong answer drops or misplaces a note. The
+  function reads ONLY headers; it never looks at the +/- body lines. In git's own output every content line begins with
+  "+", "-", " " or a backslash, so only git's real hunk headers can match (the anchor's 5000/5000).
+NOTE rust omitted — domain: the review system ships as JavaScript (rdv review and the rederive/sir-review GitHub Action); there is no Rust consumer.
+BEHAVIOR
+R1 The result is the ascending list, without repeats, of every line number covered (R5) by any header (R3) in diff.
+  Headers may arrive in any order and may overlap; the union is sorted numerically. No header -> the empty list. The
+  function never throws on in-envelope text.
+R2 diff is cut into LINES at each LINE_BREAK character and only there; a line starts at offset 0 or right after a LINE
+  FEED. CR, U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR, U+0085 NEXT LINE and every other character are ordinary
+  characters inside a line, so header-shaped text after any of them never starts a header. In a CR LF diff the CR stays
+  at the end of the earlier line, after that line's header, where R3 ignores it. CITED ruling F1 (2026-11-02)
+R3 A header is a line that BEGINS with HEADER. Only that prefix must match: whatever follows the closing " @@" in the
+  same line (git's function-context text, a CR, a third "@", further header-shaped text) is ignored and never yields a
+  second header. Every line of the whole text is examined, not only lines between hunks.
+R4 Numbers are runs of the ten ASCII digits only; leading zeros are allowed and a run of any length is read as its
+  exact decimal value. Let C be the new-side start and N the new-side count (TABLE COUNT). The old side "-a[,b]" must
+  have the shape, but its values are never read or bounded. CITED ruling F6 (kept)
+R5 Let E = C + N - 1, the header's last line, in exact integer arithmetic on the values of R4. The header covers the
+  lines L with max(C, 1) <= L <= the upper bound TABLE RANGE gives, or nothing when the table drops it. Hence N = 0
+  covers nothing; line 0 is never covered, and a start of 0 covers lines 1 through N - 1 (ruling N3, kept: git never
+  writes it); line SAFE_LIMIT itself can be covered. CITED ruling F2 F3 N1 N2 (2026-11-02)
+R6 Any line that does not begin with HEADER contributes nothing; there is no partial or lenient reading. In particular
+  each separator is exactly one ordinary space (a tab or a doubled space breaks the header); there is no sign; a comma
+  must be followed by at least one digit (",": not a header, NOT the default count); a second ",digits" on either side
+  breaks the header; "@@@" combined-diff headers are not headers. CITED ruling F4 (kept)
+INVARIANT the result is strictly ascending, every element lies in 1 .. SAFE_LIMIT, one header contributes at most
+  MAX_HUNK lines, and the result is empty when no line of diff begins with "@@ -".
+TABLE COUNT — the new-side text after the start digits, inside HEADER -> N
+  absent (the start digits are followed directly by " @@") -> 1
+  "," then digits whose value is 0 (",0", ",000")          -> 0
+  "," then digits with value d >= 1 (",3", ",0003")         -> d
+TABLE RANGE — first row that applies -> the upper bound of R5
+  N > MAX_HUNK                    -> dropped
+  E <= SAFE_LIMIT                 -> E
+  E = SAFE_LIMIT + 1              -> SAFE_LIMIT (the range is CUT one line short, not dropped) CITED ruling N4 (kept, declared)
+  E > SAFE_LIMIT + 1              -> dropped
+PINNED grammar HEADER = "@@ -" DIGIT+ [ "," DIGIT+ ] " +" DIGIT+ [ "," DIGIT+ ] " @@" CITED R3 R4 — the pr-review.mjs hunkLines pattern; DIGIT = the ASCII characters 0 through 9 only (no fullwidth, no other script's digits); the separators are the ordinary space character U+0020, one each; the first DIGIT+ after " +" is C, the optional second is N
+PINNED charset LINE_BREAK = { U+000A LINE FEED } CITED R2 — ruling F1; CR, U+2028, U+2029 and U+0085 are NOT in it
+PINNED integer SAFE_LIMIT = 9007199254740991 CITED R5 — 2^53 - 1, the largest integer an IEEE-754 double holds with every smaller integer; rulings F2, N1
+PINNED integer MAX_HUNK = 1000000 CITED R5 — the authority's MAX_HUNK; ruling N2: a longer range is dropped, never walked; N = MAX_HUNK itself is KEPT (the oracle carries only the dropped side, ruling N5)
+ORACLE value -> oracles/hunk_lines.json  CANONICAL-SHA256 9b3d87c6d5c600ebde832488b091cf07fd93b885effbd12ff52c0b3c24ac6dbe
+SCOPE IN: R1–R6 over text. OUT: anything about the diff body (the +/- lines are never read), the git call
+  (changedLines in the same module), and non-text input (ENVELOPE).
+PROVENANCE rederive@9b9e5d24ca9d (MIT), cli/lsp/pr-review.mjs, export hunkLines; selfhost seam seams/hunk_lines.mjs. Cut
+  cold 2026-11-02 on c509956a8f8a (F1–F6), re-cut on 9e2245be5f42 (rulings F1–F6) and on 65149601a522 -> 9b9e5d24ca9d (rulings N1–N6); independent anchor:
+  git (anchor/git-anchor.mjs).
