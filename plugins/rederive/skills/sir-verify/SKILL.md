@@ -34,8 +34,9 @@ verified it well enough to skip the blind leg."
   reads source; writes the SIR + input-generator, runs the harden loop), `sir-reemitter-cr` / `sir-reemitter`
   (BLIND — reconstruct from the contract alone; tool-restricted so "original-deleted" is structural, not a
   promise).
-- **`sir-factory-runner`** (agent) — drives the whole per-unit sequence *and* the role-agent spawns for you.
-  Use it to run a unit (or a worklist) end to end instead of hand-stepping the subcommands.
+- **`sir-unit-runner`** (agent) — drives the SIR v0.5 loop for ONE unit (`sir-factory prepare` → N blind
+  `sir-reemitter-cr` per language → `grade --round N`) and reports; the `tools` skill is the map. The single-file
+  loop in Step 2 below (SIR v0.2–v0.4 units, one JS artifact) has no runner agent: hand-step it.
 
 Everything below is HOW to drive these well. The oracle is the only real decision; the rest is mechanical.
 
@@ -77,7 +78,9 @@ is both author and judge of its own envelope is the vacuous-gate trap). Instead:
 
 ## Step 2 — run the loop (npm unit → `sir-factory`)
 
-Let the `sir-factory-runner` agent drive it, or hand-step the CLI:
+This is the LEGACY single-file loop (SIR v0.2–v0.4 units: one JS artifact). For a v0.5 unit — one primary plus
+per-language files, graded for js/ts/rust on one oracle — use `sir-unit-runner` and the `tools` skill instead
+(`prepare` → blind emitters per language → `grade --round N` → `pack-v05`). Hand-step the legacy CLI:
 
 1. **install** — `sir-factory install <name> <version> --out <out> --unit <unit> [--export <e>] [--hint "<h>"]`.
    Note `workdir`.

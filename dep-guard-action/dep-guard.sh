@@ -11,7 +11,7 @@
 # Only the ROOT lockfile is read (pnpm-lock.yaml, else package-lock.json). Lockfiles in
 # subdirectories (monorepo packages without a root lock) are not gated.
 set -uo pipefail
-RDV_VERSION="${DEPGUARD_RDV_VERSION:-0.5.0}"
+RDV_VERSION="${DEPGUARD_RDV_VERSION:-0.5.3}"
 RDV="${DEPGUARD_RDV:-npx --yes rederive@${RDV_VERSION}}"
 FAIL_CLOSED="${DEPGUARD_FAIL_CLOSED:-true}"
 

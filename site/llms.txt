@@ -1,5 +1,10 @@
 # rederive
 
+If you are an agent setting rederive up or running its loop for a user: fetch and follow
+https://rederive.ai/prompt.md — it is the whole workflow, written for you, including the verification
+discipline (expected values are never hand-authored; a failed gate is a finding, not retry-fodder; the
+toolkit is immutable from your seat).
+
 > Replace npm dependencies with code you own — checked against tests the AI never saw. rederive rebuilds the
 > npm packages you depend on as small, verified, zero-dependency copies in your repo, and checks code — yours or
 > AI-written — against held-back tests. Each part gets a contract: a language-neutral spec (SIR, the spec format)
@@ -19,21 +24,22 @@
 > lives in the rederive repo at `selfhost/core/rederive-core` (not published to npm) and which its own `rdv`
 > verifies. Open source, Apache-2.0, by Apilify Inc.
 
-If you are an agent setting rederive up or running its loop for a user: fetch and follow
-https://rederive.ai/prompt.md — it is the whole workflow, written for you, including the verification
-discipline (expected values are never hand-authored; a failed gate is a finding, not retry-fodder; the
-toolkit is immutable from your seat).
-
 ## Setup
 
 - [Agent setup prompt](https://rederive.ai/prompt.md): install → zero-footprint demo in a temp directory →
   ask before touching the project → `rdv init . --dry-run` → `--yes` → choose verify / re-derive / preflight /
   build → run → report
-- CLIs (Node ≥ 18): `npm i -g rederive@^0.5 sir-factory`
+- CLIs (Node ≥ 18): `npm i -g rederive@^0.5 sir-factory@^0.5`. rdv, sir-factory and the plugin keep major.minor equal to
+  the SIR spec version they target (0.5.x ↔ SIR v0.5): `rdv --version` and `sir-factory --version` both print 0.5.x,
+  and a 0.4.x on either is an older release to upgrade, not a different loop.
 - Toolchains are the user's own: TypeScript variants need `typescript` (tsc) and `@types/node` resolvable from the
   project; Rust variants need `cargo`. `rdv check` halts with an install hint rather than skip a language.
 - Claude Code plugin: `/plugin marketplace add rederive/rederive` then `/plugin install rederive@rederive`
-  (skills: sir-verify, greenfield-quorum, preflight). The older `sir@sir-toolkit` plugin is legacy (pre-0.5).
+  (skills: tools, sir-verify, greenfield-quorum, preflight; role agents: sir-decomposer, sir-reemitter-cr,
+  sir-unit-runner). The older `sir@sir-toolkit` plugin is legacy (pre-0.5).
+- The v0.5 loop in one line: `sir-decomposer` (sighted, once) → `sir-factory prepare` → N blind `sir-reemitter-cr` per
+  language → `sir-factory grade --round N` → `sir-factory pack-v05`. sir-factory never calls a model; the agent spawns
+  the emitters. Step 4b of prompt.md spells it out.
 - No global install: run the verifier as `npx -p rederive rdv <command>` (the npm package named `rdv` is unrelated)
 - First run, zero footprint: in a temp directory, `npm i @rederive/colors`, `rdv check node_modules/@rederive/colors --lang js` (`--lang` checks only the
   languages this machine has a toolchain for; the rest are reported NOT CHECKED),
@@ -41,6 +47,20 @@ toolkit is immutable from your seat).
 - Set up a project (ask the user first): `rdv init . --dry-run` to see the plan, then `rdv init . --yes` (without
   a TTY a bare `rdv init` writes nothing)
 - See how many packages npm really installed: `npx -p rederive rdv audit`
+- Gate dependency adds in a PR: `npx -p rederive rdv guard <base-lock> <head-lock> --reporter github` (RED = an install
+  hook on a non-established package); as an Action, `rederive/rederive/dep-guard-action@v0.5.3`
+
+## Tools (all of them: https://rederive.ai/tools.html)
+
+- SIR review GitHub Action: `uses: rederive/sir-review@v1` after `actions/checkout@v4` with `fetch-depth: 0`. A plain-English
+  review of SIR contract changes in pull requests. It fails on a Stop: a tested change with no test change, or a rewritten
+  hidden answer. Its own code is the selfhost-verified review-core.
+  [Marketplace](https://github.com/marketplace/actions/sir-review)
+- Any other CI: `npx -p rederive rdv review --base origin/main`. It exits 1 on a Stop; `--format summary|github|json`
+  changes the output.
+- Editors: the VS Code extension `rederive.sir-lang` ([Open VSX](https://open-vsx.org/extension/rederive/sir-lang); the VS
+  Code Marketplace listing is in review). For any LSP editor, run `rdv lsp --stdio`
+  ([setup](https://github.com/rederive/rederive/blob/main/editors/README.md)).
 
 ## Specification
 

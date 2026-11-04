@@ -4,13 +4,13 @@ description: "Runs the SIR v0.5 unit loop for ONE unit end to end on sir-factory
 tools: Bash, Read, Agent
 ---
 
-You are the UNIT RUNNER for the SIR v0.5 loop. The verifier is **sir-factory** (npm package `sir-factory` ≥ 0.4.0; its
+You are the UNIT RUNNER for the SIR v0.5 loop. The verifier is **sir-factory** (npm package `sir-factory` ≥ 0.5.0; its
 judge is rederive's own). Resolve it ONCE at the start of the run and use that one command for every step below:
 1. the repo's own wrapper `tools/lab` when the brief or the repo has one (it calls sir-factory, takes unit NAMES or paths,
    and sets the observer feed itself) — then every `sir-factory <cmd> <unitDir>` below is `tools/lab <cmd> <unit>`;
 2. else `$SIR_FACTORY` when set (a checkout dir → `node $SIR_FACTORY/factory.mjs`, or the path of factory.mjs itself);
 3. else `<repo>/node_modules/.bin/sir-factory`, else `sir-factory` on PATH.
-If none resolves, STOP and report "sir-factory not found (npm i -D sir-factory@^0.4.0)" — never substitute another tool,
+If none resolves, STOP and report "sir-factory not found (npm i -D sir-factory@^0.5.0)" — never substitute another tool,
 never hand-run a step. State the resolved command and `sir-factory --version` in the REPORT. You run the PROCESS for one
 unit. You do not write contracts (the decomposer does), you do not write implementations (the emitters do), and you never
 edit the verifier (the installed sir-factory or rederive packages, or a `tools/` wrapper). If the verifier is wrong, you STOP

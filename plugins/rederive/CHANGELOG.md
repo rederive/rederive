@@ -4,6 +4,20 @@ One line (or a short list) per released version. A version here MUST match `.cla
 `version` AND the `rederive` entry's `version` in the repo-root `.claude-plugin/marketplace.json` — see
 README.md's "Versioning" section for why that pairing is load-bearing, not just bookkeeping.
 
+## 0.5.8
+- Every `sir-factory` version pin reads 0.5: `sir-unit-runner` (≥ 0.5.0, was ≥ 0.4.0 — the number that read as "the
+  v0.4 loop") and the rust-game profile's CLAUDE section (`sir-factory@^0.5.0`; profile 0.5.1).
+- `sir-verify` no longer names `sir-factory-runner` (an agent this plugin never shipped): the roster entry is
+  `sir-unit-runner` for the v0.5 loop, and Step 2 says plainly that it walks the LEGACY single-file loop
+  (SIR v0.2–v0.4) and points v0.5 units at `sir-unit-runner` + the `tools` skill. A full v0.5 rewrite of the skill is
+  still to do.
+
+## 0.5.7
+- **sir-factory is renumbered 0.4.0 → 0.5.0 with no code change**: its major.minor now tracks the SIR spec version it
+  targets (0.5.x builds v0.5 units; the legacy loop inside still builds v0.2–v0.4 units). "sir-factory 0.4" next to
+  rederive 0.5.x / plugin 0.5.x / spec v0.5 read as "the v0.4 loop" and convinced a context-free agent the v0.5 loop
+  was not on npm. The tools skill now pins `sir-factory@^0.5.0`.
+
 ## 0.5.6
 - The public v0.5 loop is **sir-factory** (npm `sir-factory` ≥ 0.4.0); the private SIR v0.5 lab (`@rederive/lab`) is not
   published and nothing here depends on it any more. The runner role is renamed `sir-lab-runner` → **`sir-unit-runner`**

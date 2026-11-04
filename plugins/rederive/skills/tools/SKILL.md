@@ -11,7 +11,7 @@ too when one exists.
 
 ## The verifier — sir-factory, deterministic, no LLM
 
-`tools/lab` (a repo-local wrapper) or `sir-factory` (the npm package directly, `npm i -D sir-factory@^0.4.0`; its judge
+`tools/lab` (a repo-local wrapper) or `sir-factory` (the npm package directly, `npm i -D sir-factory@^0.5.0`; its judge
 is rederive's own) is the verifier. The wrapper finds sir-factory via `SIR_FACTORY` (a checkout), the repo's
 `node_modules`, or `sir-factory` on PATH, says so plainly when none exists, takes unit NAMES (`units/<unit>`), and sets
 the observer feed for you. Called directly, sir-factory takes the unit DIRECTORY (`sir-factory grade units/<unit> …`).

@@ -24,14 +24,14 @@ The guard **fails closed** by default: a crash is exit 2 and fails the check, be
 
 | input | env | default | |
 |---|---|---|---|
-| `rederive-version` | `DEPGUARD_RDV_VERSION` | `0.5.0` | the exact verifier version: runs `npx --yes rederive@<version>` |
+| `rederive-version` | `DEPGUARD_RDV_VERSION` | `0.5.3` | the exact verifier version: runs `npx --yes rederive@<version>` |
 | `fail-closed` | `DEPGUARD_FAIL_CLOSED` | `true` | see above |
 | `rdv` | `DEPGUARD_RDV` | (empty) | advanced: replace the whole invocation, e.g. `node ./dist/cli.cjs` for a local build |
 
 The guard always runs with `--reporter json`; the script renders each CI's native annotations from that JSON.
 
 ## GitHub Actions
-Copy `example-workflow.yml` to `.github/workflows/dep-guard.yml`. Needs `fetch-depth: 0`. Pin the action to a release tag (`@v0.5.0`), never `@main`.
+Copy `example-workflow.yml` to `.github/workflows/dep-guard.yml`. Needs `fetch-depth: 0`. Pin the action to a release tag (`@v0.5.3`), never `@main`. Tags `vX.Y.Z` mark the public-line commit of each rederive release; the default `rederive-version` is the rdv that release shipped.
 
 ## Azure DevOps
 Use `azure-pipelines-dep-guard.yml` as a pipeline (or fold its steps into an existing one), and add it as a **build-validation branch policy** so it runs on PRs. Needs `fetchDepth: 0`. Emits `##vso[task.logissue]` annotations + a build summary; a RED fails the task and blocks the PR.

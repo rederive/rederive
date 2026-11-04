@@ -5,11 +5,19 @@ or AI-written — against held-back tests whose answers come from running the or
 and one spec serves JavaScript, TypeScript and Rust; anyone can re-run the check offline with `rdv check`) and running its loop for me.
 Follow these steps in order.
 
-0. Install the CLIs (Node ≥ 18; this installs global tools only, nothing in my project): `npm i -g rederive@^0.5 sir-factory`. Verify with `rdv --version` (it must print
-   0.5 or later; this document is written for 0.5 and its steps differ on 0.4). Toolchains are mine, not rdv's:
+0. Install the CLIs (Node ≥ 18; this installs global tools only, nothing in my project): `npm i -g rederive@^0.5 sir-factory@^0.5`.
+   Verify with `rdv --version` and `sir-factory --version`: BOTH must print 0.5.x. rederive (`rdv`), sir-factory and
+   the Claude Code plugin keep major.minor equal to the SIR spec version they target, so 0.5.x means "builds and checks
+   SIR v0.5 contracts". A 0.4.x on either one is an older release: upgrade it before going on — this document is
+   written for 0.5 and nothing in it applies to 0.4. With no global install, run the verifier as
+   `npx -p rederive rdv <command>` (the npm package named `rdv` is unrelated). Toolchains are mine, not rdv's:
    TypeScript variants need `typescript` (tsc) and `@types/node` resolvable from the project, Rust variants need
    `cargo` — check with `npx tsc --version` / `cargo --version` and tell me what is missing rather than skipping a
    language. `rdv check` halts with an install hint on a missing toolchain, by design.
+   If you are Claude Code, install the plugin now, before the demo: `/plugin marketplace add rederive/rederive`, then
+   `/plugin install rederive@rederive`. It adds the `tools`, `sir-verify`, `greenfield-quorum` and `preflight` skills
+   and the role agents the loop in step 4 spawns (`sir-decomposer`, `sir-reemitter-cr`, `sir-unit-runner`). If
+   `sir@sir-toolkit` is installed, that is the legacy pre-0.5 plugin: tell me and prefer `rederive@rederive`.
 
 1. **Zero-footprint demo first — nothing in my project changes.** In a fresh temporary directory (e.g.
    `cd "$(mktemp -d)"`), run `npm i @rederive/colors`, then `rdv check node_modules/@rederive/colors --lang js` and show me
@@ -30,18 +38,33 @@ Follow these steps in order.
    committing what it writes. From here on, the scaffold — not this document — is your working frame; re-read
    the CLAUDE.md section it added.
 
-3. If you are Claude Code, also install the plugin: `/plugin marketplace add rederive/rederive`, then
-   `/plugin install rederive@rederive` (adds the `sir-verify`, `greenfield-quorum`, and `preflight` skills plus
-   the full role-agent roster). If `sir@sir-toolkit` is already installed, that is the legacy pre-0.5 plugin —
-   tell me and prefer `rederive@rederive`. Other agents: the CLIs + the scaffold are enough — the sources live
-   at https://github.com/rederive/rederive and the spec at https://github.com/rederive/sir-spec.
+3. Not Claude Code? The CLIs + the scaffold are enough. The role prompts the loop needs are plain Markdown — the agents
+   under `plugins/rederive/agents/` in https://github.com/rederive/rederive and `roles/` in
+   https://github.com/rederive/sir-factory — run them as your own subagents with the tool limits they state (a blind
+   re-emitter must not be able to read the original). The spec is at https://github.com/rederive/sir-spec.
 
 4. Ask me which of these I want:
    a. VERIFY — re-check a verified package against its contract: `rdv check <dir>`. Deterministic, offline,
       no tokens; safe in CI as `rdv check <dir> && deploy`.
-   b. RE-DERIVE — get a dependency out of my trust tree: decompose it into a contract + oracle, rebuild it
-      blind, and accept it only on quorum (the `sir-verify` skill drives `sir-factory`:
-      install → decompose → stamp → re-emit → grade → pack).
+   b. RE-DERIVE — get a dependency out of my trust tree as a SIR v0.5 unit (one contract; every language graded on
+      the same held-back tests). sir-factory never calls a model — it stages, stamps, grades and packs; the model work
+      is the subagents you spawn. In order:
+      b1. decompose: spawn the sighted `sir-decomposer` once. It alone reads the original. It writes the contract —
+          one language-neutral primary `sir/<unit>.sir` plus one language file per target (`<unit>.js.sir`,
+          `<unit>.ts.sir`, `<unit>.rust.sir`: signature and mechanism only, no behavior) — and captures the oracle
+          once, from the real package, into `oracles/<unit>.json`.
+      b2. `sir-factory prepare units/<unit> --n 3`: validates the family, encodes the oracle and binds its hash into
+          the primary, writes one clean room + task card per language. Exit 1 is a STOP for the decomposer, not for you.
+      b3. emit: spawn 3 blind `sir-reemitter-cr` subagents per language, all in one message, each handed its
+          `runs/<lang>/task.md` verbatim. They read the clean room only; they cannot see the original.
+      b4. `sir-factory grade units/<unit> --round 1`: every emission is graded on the held-back set (TypeScript also
+          type-checked against its signature, Rust built as a crate), the languages are cross-verified, and it prints
+          the decision: accept → b5; harden → report to me (the decomposer tightens the contract; then prepare again,
+          fresh emitters, `--round 2`); quarantine or verifier-fault → stop and report it verbatim.
+      b5. `sir-factory pack-v05 units/<unit> --packages <dir>`: ships the bundle only if its own `rdv check` passes.
+      The `sir-unit-runner` role runs b2–b5 for one unit and reports; the `tools` skill is the map of these commands.
+      The older single-file loop (`sir-factory install → stamp → stage-reemit → grade → pack`, the one the `sir-verify`
+      skill's text walks through) builds a v0.2–v0.4 single-language unit: use it only when I ask for that format.
    c. DE-DEPENDENCY A PROJECT — the whole-tree version of (b), in this order:
       c1. BASELINE (gate — do not start any decomposition before this): run the project's own test suite
           and report the counts to me (e.g. "182 passing, 1 known failure"). This number is the finish line.
@@ -90,3 +113,7 @@ Follow these steps in order.
 The toolkit is immutable from your seat: never edit `rdv` or `sir-factory` to make a check pass — if you hit a
 real tool bug, report it (github.com/rederive/sir-factory/issues) or quarantine the unit. The hooks `rdv init`
 installed enforce the same rule for this project's contracts: a red check is a finding, not an obstacle.
+
+Never: invent a spec format (SIR exists); hand-author an expected value; edit `rdv` or `sir-factory`; run the legacy
+single-file loop for a v0.5 unit; run `npx rdv` (unrelated package — it is `npx -p rederive rdv`); carry on with a
+0.4.x `rdv` or `sir-factory`.

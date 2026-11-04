@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Lane Thompson">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:url" content="https://rederive.ai/tools.html">
+<meta property="og:site_name" content="rederive">
+<meta property="og:image" content="https://rederive.ai/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="rederive tools">
+<meta name="twitter:description" content="The rdv CLI, the GitHub Action, editor support, the factory, the Claude Code plugin and the verified bundles.">
+<meta name="twitter:image" content="https://rederive.ai/og.png">
+<title>rederive tools — everything in one place</title>
+<meta name="description" content="Everything rederive ships, in one place: the rdv command-line checker, the SIR review GitHub Action, VS Code and editor support, sir-factory, the Claude Code plugin, and the verified bundles.">
+<link rel="canonical" href="https://rederive.ai/tools.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="rederive tools">
+<meta property="og:description" content="The rdv CLI, the GitHub Action, editor support, the factory, the Claude Code plugin and the verified bundles.">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;line-height:1.7;background:#0a0c12}
+a{color:#d4956a;text-decoration:none}a:hover{text-decoration:underline;color:#ecc4aa}
+code{background:#1a1d28;padding:2px 6px;border-radius:3px;font-size:0.88em;color:#e8e8e8;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace}
+
+.topnav-wrap{background:#0a0c12;border-bottom:1px solid #282c38;position:sticky;top:0;z-index:50}
+.topnav{max-width:860px;margin:0 auto;padding:0.9em 24px;display:flex;align-items:center;gap:1.8em;font-size:0.92em}
+.topnav .logo{font-weight:700;color:#fafafa;font-size:1.15em;display:flex;align-items:center;gap:0.5em;letter-spacing:-0.02em}
+.topnav .logo-mark{display:inline-flex;flex-direction:column;gap:2px;width:18px}
+.topnav .logo-mark span{display:block;height:3px;border-radius:1px;background:#c27c4e}
+.topnav .logo-mark span:nth-child(2){margin-left:4px;background:#d4956a}
+.topnav .logo-mark span:nth-child(3){margin-left:8px;background:#ecc4aa}
+.topnav a.nl{color:#b0b0b0;transition:color 0.15s}.topnav a.nl:hover{color:#fafafa;text-decoration:none}
+.topnav a.nl.active{color:#d4956a}
+.topnav .by{color:#6a6f7e;font-size:0.85em;font-weight:400}
+.topnav .cta-nav{margin-left:auto;background:#a86539;color:#fff;padding:0.4em 1.1em;border-radius:5px;font-size:0.88em;font-weight:600}
+.topnav .cta-nav:hover{background:#8b522e;color:#fff;text-decoration:none}
+
+.doc-hero{background:#0a0c12;padding:3.2em 24px 2.2em;position:relative;overflow:hidden;border-bottom:1px solid #282c38}
+.doc-hero::before{content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:760px;height:440px;background:radial-gradient(ellipse at center,rgba(40,200,64,0.07) 0%,rgba(194,124,78,0.05) 45%,transparent 72%);pointer-events:none}
+.doc-hero-inner{max-width:860px;margin:0 auto;position:relative}
+.doc-hero .eyebrow{font-size:0.8em;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#28c840;margin-bottom:0.5em}
+.doc-hero h1{font-size:2.4em;color:#fafafa;line-height:1.12;font-weight:800;letter-spacing:-0.025em;margin-bottom:0.3em}
+.doc-hero p{font-size:1.08em;color:#b0b0b0;max-width:640px}
+.vbadge{display:inline-flex;gap:0.5em;align-items:center;background:#1a1d28;color:#b0b0b0;padding:0.3em 0.9em;border-radius:999px;font-size:0.78em;font-weight:600;letter-spacing:0.04em;margin-top:1.1em;font-family:'SF Mono',ui-monospace,monospace;border:1px solid #282c38}
+
+.wrap{max-width:860px;margin:0 auto;padding:2.5em 24px 4em}
+section.s{margin-bottom:2.6em;scroll-margin-top:80px}
+section.s h2{font-size:1.4em;color:#fafafa;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5em}
+section.s h2 .n{color:#6a6f7e;font-weight:700;font-size:0.7em;margin-right:0.5em;font-family:'SF Mono',ui-monospace,monospace}
+section.s p{margin-bottom:0.9em;color:#e0e0e0}
+.lead{font-size:1.08em;color:#e8e8e8}
+strong{color:#fafafa}em{color:#ecc4aa;font-style:normal}
+
+.callout{background:#161924;border-left:4px solid #d4956a;border-radius:0 8px 8px 0;padding:1.1em 1.4em;margin:1.2em 0;font-size:0.97em}
+.callout.green{border-left-color:#28c840}
+.callout .ct{font-weight:700;color:#ecc4aa;margin-bottom:0.3em}
+.callout.green .ct{color:#28c840}
+
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:1.2em;margin:1.2em 0}
+.col{border-radius:10px;padding:1.4em 1.5em;border:1px solid #282c38;background:#1a1d28}
+.col.do{border-color:rgba(40,200,64,0.35)}
+.col.dont{border-color:rgba(255,122,114,0.3)}
+.col h3{font-size:1.02em;margin-bottom:0.7em;font-weight:700}
+.col.do h3{color:#28c840}.col.dont h3{color:#ff7a72}
+.col ul{list-style:none;margin:0;padding:0}
+.col li{font-size:0.9em;color:#e8e8e8;padding:0.32em 0 0.32em 1.5em;position:relative;line-height:1.5}
+.col.do li::before{content:'✓';position:absolute;left:0;color:#28c840;font-weight:700}
+.col.dont li::before{content:'✕';position:absolute;left:0;color:#ff7a72;font-weight:700}
+
+ul.plain{margin:0.4em 0 1em 0;padding:0;list-style:none}
+ul.plain li{position:relative;padding:0.3em 0 0.3em 1.4em;color:#e8e8e8;font-size:0.95em}
+ul.plain li::before{content:'—';position:absolute;left:0;color:#6a6f7e}
+
+.sig{margin-top:3em;padding-top:1.6em;border-top:1px solid #282c38;color:#b0b0b0;font-size:0.92em}
+.sig strong{color:#fafafa}
+
+footer{background:#080a10;color:#b0b0b0;padding:2.2em 24px;font-size:0.85em;border-top:1px solid #282c38}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1em}
+.footer-links{display:flex;gap:1.5em}.footer-links a{color:#b0b0b0}.footer-links a:hover{color:#fafafa;text-decoration:none}
+
+@media(max-width:760px){.cols{grid-template-columns:1fr}.topnav{flex-wrap:wrap;gap:1em}.footer-inner{flex-direction:column;text-align:center}}
+.skip-link{position:absolute;left:-9999px}.skip-link:focus{position:fixed;left:8px;top:8px;padding:8px 12px;background:#fff;color:#000;z-index:9999;border-radius:4px}
+
+/* responsive nav (ported from index) */
+.topnav{flex-wrap:wrap;max-width:960px;gap:1.4em;padding-left:20px;padding-right:20px}
+.topnav .navlinks{display:flex;align-items:center;gap:inherit;flex-wrap:wrap;min-width:0}
+.nav-toggle{display:none;background:none;border:1px solid #3a3f4e;border-radius:6px;color:#e8e8e8;padding:0.3em 0.55em;cursor:pointer;font-size:1.05em;line-height:1}
+.nav-toggle:hover,.nav-toggle:focus-visible{border-color:#c27c4e;color:#fff}
+@media(max-width:1040px){.topnav .by{display:none}.topnav .navlinks{order:3;flex-basis:100%;padding-top:0.1em}}
+@media(max-width:720px){.topnav .navlinks{display:none}.topnav.open .navlinks{display:flex;order:5;flex-basis:100%;flex-direction:column;align-items:flex-start;gap:0.95em;padding:0.9em 0 0.4em}.nav-toggle{display:inline-flex}}
+
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:1.1em;margin:1.1em 0 0.4em}
+.tool{border:1px solid #282c38;background:#12151f;border-radius:10px;padding:1.2em 1.3em;display:flex;flex-direction:column;gap:0.55em;min-width:0}
+.tool h3{font-size:1.05em;color:#fafafa;font-weight:750;display:flex;align-items:center;gap:0.55em;flex-wrap:wrap}
+.tool p{font-size:0.93em;color:#cfd2da;margin:0}
+.tool pre{background:#080a10;border:1px solid #1f2330;border-radius:6px;padding:0.6em 0.8em;font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;font-size:0.82em;color:#e8e8e8;overflow-x:auto;white-space:pre}
+.tool .links{display:flex;gap:1em;flex-wrap:wrap;font-size:0.88em;margin-top:auto;padding-top:0.2em}
+.chip{font-size:0.66em;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:0.2em 0.6em;border-radius:999px;border:1px solid #3a3f4e;color:#b0b0b0;font-family:'SF Mono',ui-monospace,monospace}
+.chip.new{border-color:rgba(40,200,64,0.45);color:#28c840}
+.chip.v{border-color:rgba(212,149,106,0.5);color:#ecc4aa}
+.toc{display:flex;flex-wrap:wrap;gap:0.5em 1.2em;font-size:0.9em;margin-top:1.2em}
+@media(max-width:760px){.tools{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="topnav-wrap">
+<nav class="topnav">
+  <a href="/index.html" class="logo" style="text-decoration:none">
+    <span class="logo-mark"><span></span><span></span><span></span></span>
+    rederive
+  </a>
+  <div class="navlinks" id="navlinks">
+    <a class="nl" href="/index.html#get-started">Get started</a>
+    <a class="nl" href="/index.html#how">How it works</a>
+    <a class="nl" href="/index.html#compliance">Compliance</a>
+    <a class="nl active" href="/tools.html">Tools</a>
+    <a class="nl" href="/spec.html">SIR Spec</a>
+    <a class="nl" href="/blog.html">Blog</a>
+    <a class="nl" href="/promise.html">Promise</a>
+    <a class="nl" href="https://github.com/rederive">GitHub</a>
+  </div>
+  <a class="cta-nav" href="https://calendly.com/lane-apilify/30min">Book a call</a>
+  <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="navlinks">☰</button>
+</nav>
+</div>
+
+<header class="doc-hero">
+  <div class="doc-hero-inner">
+    <div class="eyebrow">Everything we ship</div>
+    <h1>rederive tools</h1>
+    <p>One checker, and everything around it: a review that runs on your pull requests, editor support, the factory that builds verified code, and the bundles it has built. All free and open source.</p>
+    <div class="toc"><a href="#check">Check what you install</a><a href="#review">Review pull requests</a><a href="#edit">Read and write SIR</a><a href="#build">Build verified code</a><a href="#bundles">Verified bundles</a><a href="#agents">For AI agents</a></div>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+
+<section class="s" id="check">
+  <h2>Check what you install</h2>
+  <div class="tools">
+    <div class="tool">
+      <h3>rdv <span class="chip">CLI</span></h3>
+      <p>The checker. It re-runs a package's hidden tests on your machine, offline and free, and confirms nothing was swapped. It also shows how many packages npm really installed.</p>
+      <pre>npm i -g rederive
+rdv check node_modules/@rederive/colors --lang js
+rdv audit</pre>
+      <div class="links"><a href="https://www.npmjs.com/package/rederive">npm</a><a href="https://github.com/rederive/rederive">Source</a><a href="/index.html#get-started">Get started</a></div>
+    </div>
+    <div class="tool">
+      <h3>rdv guard &amp; rdv init <span class="chip">CLI</span></h3>
+      <p><code>rdv guard</code> gates the new dependencies in a pull request: green, yellow or red. <code>rdv init</code> sets a project up for the rederive way of working: agent rules, hooks and a commit seal.</p>
+      <pre>rdv guard base.lock head.lock --reporter github
+rdv init . --dry-run</pre>
+      <div class="links"><a href="https://github.com/rederive/rederive#readme">Docs</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="review">
+  <h2>Review pull requests</h2>
+  <div class="tools">
+    <div class="tool">
+      <h3>SIR review <span class="chip new">GitHub Action</span></h3>
+      <p>Reviews every change to a SIR contract in plain English, right on the pull request. It fails like a test when a tested change comes without a test change, or when a hidden answer is quietly rewritten. The Action's own code went through the same verification it enforces.</p>
+      <pre>- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }
+- uses: rederive/sir-review@v1</pre>
+      <div class="links"><a href="https://github.com/marketplace/actions/sir-review">Marketplace</a><a href="https://github.com/rederive/sir-review">Source</a></div>
+    </div>
+    <div class="tool">
+      <h3>rdv review <span class="chip new">any CI</span></h3>
+      <p>The same review on GitLab, Jenkins, Azure DevOps or your laptop. It prints the review as Markdown, a per-contract table, annotations or JSON, and exits 1 on a Stop.</p>
+      <pre>npx -p rederive rdv review --base origin/main
+npx -p rederive rdv review --base origin/main --format summary</pre>
+      <div class="links"><a href="https://github.com/rederive/rederive">Source</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="edit">
+  <h2>Read and write SIR</h2>
+  <div class="tools">
+    <div class="tool">
+      <h3>SIR for VS Code <span class="chip new">extension</span></h3>
+      <p>Colors, live checks (the same ones <code>rdv check</code> runs), binding and test status above each contract, hover for any rule, go to definition, an outline, and a formatter that can't break a binding. Open VSX covers Cursor, Windsurf and VSCodium.</p>
+      <pre>Open VSX: rederive.sir-lang
+VS Code Marketplace: in review</pre>
+      <div class="links"><a href="https://open-vsx.org/extension/rederive/sir-lang">Open VSX</a><a href="https://github.com/rederive/vscode-sir">Source</a></div>
+    </div>
+    <div class="tool">
+      <h3>rdv lsp <span class="chip new">any editor</span></h3>
+      <p>The same checks as a standard language server, with no dependencies, for Neovim, Helix, Emacs, Sublime or anything else that speaks LSP.</p>
+      <pre>rdv lsp --stdio</pre>
+      <div class="links"><a href="https://github.com/rederive/rederive/blob/main/editors/README.md">Editor setup</a></div>
+    </div>
+    <div class="tool">
+      <h3>The SIR spec <span class="chip">spec</span></h3>
+      <p>The contract format: one language-neutral contract per unit, per-language files beside it, and tests nobody upstream can move.</p>
+      <div class="links"><a href="/spec.html">Read the spec</a><a href="https://github.com/rederive/sir-spec">Canonical repo</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="build">
+  <h2>Build verified code</h2>
+  <div class="tools">
+    <div class="tool">
+      <h3>sir-factory <span class="chip">CLI</span></h3>
+      <p>The factory that turns a package into a verified bundle. It stamps tests from the original, grades independent rebuilds against tests the builders never saw, and packs only what passes.</p>
+      <pre>npm i -g sir-factory</pre>
+      <div class="links"><a href="https://www.npmjs.com/package/sir-factory">npm</a><a href="https://github.com/rederive/sir-factory">Source</a></div>
+    </div>
+    <div class="tool">
+      <h3>Claude Code plugin <span class="chip">plugin</span></h3>
+      <p>Runs the loop from Claude Code: verify a package, rebuild one from its contract, or check a change before you make it.</p>
+      <pre>/plugin marketplace add rederive/rederive
+/plugin install rederive@rederive</pre>
+      <div class="links"><a href="https://github.com/rederive/rederive/tree/main/plugins/rederive">Source</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="bundles">
+  <h2>Verified bundles</h2>
+  <div class="tools">
+    <div class="tool">
+      <h3>@rederive/colors <span class="chip v">verified</span></h3>
+      <p>The first catalog bundle: <code>strip</code> from colors.js, in JavaScript, TypeScript and Rust, all checked against the same hidden tests.</p>
+      <pre>npm i @rederive/colors</pre>
+      <div class="links"><a href="https://www.npmjs.com/package/@rederive/colors">npm</a></div>
+    </div>
+    <div class="tool">
+      <h3>rederive-core &amp; review-core <span class="chip v">verified</span></h3>
+      <p>rederive put its own code through the loop. 42 parts of the checker itself and the 12 parts of the pull-request review were re-derived blind and verified. Along the way the loop found real bugs in both, including in the checker's own grader.</p>
+      <div class="links"><a href="https://github.com/rederive/rederive/tree/main/selfhost/core/rederive-core">rederive-core</a><a href="https://github.com/rederive/rederive/tree/main/selfhost/core/review-core">review-core</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="agents">
+  <h2>For AI agents</h2>
+  <div class="tools">
+    <div class="tool">
+      <h3>Agent setup prompt <span class="chip">docs</span></h3>
+      <p>The whole workflow, written for an agent: install, a zero-footprint demo, then ask before touching your project.</p>
+      <div class="links"><a href="/prompt.md">prompt.md</a><a href="/llms.txt">llms.txt</a></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span style="color:#b0b0b0;font-weight:600">rederive &middot; by Apilify Inc.</span>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="tools.html">Tools</a>
+      <a href="spec.html">SIR Spec</a>
+      <a href="https://semcom.ai">Semcom</a>
+      <a href="mailto:lane@apilify.com">Contact</a>
+    </div>
+    <span>&copy; 2026 Apilify Inc. &middot; Open source (Apache-2.0)</span>
+  </div>
+</footer>
+
+<script>
+document.addEventListener('click',function(e){var t=e.target.closest('.nav-toggle');if(t){var n=t.closest('.topnav');var o=n.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');return}
+if(e.target.closest('.navlinks a')){var n2=document.querySelector('.topnav.open');if(n2){n2.classList.remove('open');n2.querySelector('.nav-toggle').setAttribute('aria-expanded','false')}}});
+</script>
+</body>
+</html>

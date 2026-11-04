@@ -13,7 +13,7 @@ architect:   read runs/decision.json — accept | harden (spawn decomposer in PR
 install:     copy the accepted emission byte-exact to crates/<unit>/ ; sim depends on it by path
 ```
 Deterministic steps are ONE command (`tools/lab prepare|grade|void|checkpoint|validate|status`, a wrapper that
-drives sir-factory — `npm i -D sir-factory@^0.4.0`). Roles are the plugin's agents (`rederive:sir-decomposer`,
+drives sir-factory — `npm i -D sir-factory@^0.5.0`). Roles are the plugin's agents (`rederive:sir-decomposer`,
 `rederive:sir-reemitter-cr`, `rederive:sir-unit-runner`). Judgment is the main agent's, and its report to the
 giver is a DECISIONS list, never a narrative of glue. Status lives on disk: `units/<unit>/runs/STATUS.json` and
 `observer/events.jsonl` (`tools/lab status --watch 30`).
